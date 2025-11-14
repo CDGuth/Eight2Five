@@ -1,20 +1,51 @@
 {
   "name": "eight2five-ios-android",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "lint": "expo lint",
+    "test": "jest --watchAll=false"
   },
   "dependencies": {
-    "expo": "~54.0.20",
+    "@types/jest": "29.5.14",
+    "expo": "54.0.23",
+    "expo-dev-client": "^6.0.17",
+    "expo-module-scripts": "^5.0.7",
     "expo-status-bar": "~3.0.8",
+    "jest": "~29.7.0",
+    "jest-expo": "~54.0.13",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-web": "^0.21.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/android/",
+      "/ios/"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
+    ],
+    "collectCoverage": true,
+    "collectCoverageFrom": [
+      "modules/expo-kbeaconpro/src/**/*.{ts,tsx}",
+      "!modules/expo-kbeaconpro/src/**/*.web.ts"
+    ]
+  }
 }

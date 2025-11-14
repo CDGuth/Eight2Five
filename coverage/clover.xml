@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1763098651296" clover="3.2.0">
+  <project timestamp="1763098651297" name="All files">
+    <metrics statements="16" coveredstatements="16" conditionals="0" coveredconditionals="0" methods="15" coveredmethods="15" elements="31" coveredelements="31" complexity="0" loc="16" ncloc="16" packages="1" files="2" classes="2"/>
+    <file name="ExpoKBeaconPro.types.ts" path="/mnt/c/Users/ColinGuth/Desktop/Eight2Five-iOS-Android/modules/expo-kbeaconpro/src/ExpoKBeaconPro.types.ts">
+      <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+    </file>
+    <file name="ExpoKBeaconProModule.ts" path="/mnt/c/Users/ColinGuth/Desktop/Eight2Five-iOS-Android/modules/expo-kbeaconpro/src/ExpoKBeaconProModule.ts">
+      <metrics statements="16" coveredstatements="16" conditionals="0" coveredconditionals="0" methods="15" coveredmethods="15"/>
+      <line num="30" count="1" type="stmt"/>
+      <line num="37" count="1" type="stmt"/>
+      <line num="46" count="1" type="stmt"/>
+      <line num="55" count="1" type="stmt"/>
+      <line num="62" count="1" type="stmt"/>
+      <line num="66" count="1" type="stmt"/>
+      <line num="70" count="1" type="stmt"/>
+      <line num="78" count="1" type="stmt"/>
+      <line num="91" count="1" type="stmt"/>
+      <line num="100" count="1" type="stmt"/>
+      <line num="107" count="1" type="stmt"/>
+      <line num="117" count="1" type="stmt"/>
+      <line num="129" count="1" type="stmt"/>
+      <line num="141" count="1" type="stmt"/>
+      <line num="151" count="1" type="stmt"/>
+      <line num="161" count="1" type="stmt"/>
+    </file>
+  </project>
+</coverage>
