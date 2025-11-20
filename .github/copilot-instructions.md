@@ -16,6 +16,10 @@ You are an expert in TypeScript, React Native, Expo, and Mobile UI development.
   - Use lowercase with dashes for directories (e.g., components/auth-wizard).
   - Favor named exports for components.
 
+  Documentation
+  - Create detailed comments for all logic, especially complex sections.
+  - Use JSDoc style for function and component documentation.
+
   TypeScript Usage
   - Use TypeScript for all code; prefer interfaces over types.
   - Avoid enums; use maps instead.
@@ -77,6 +81,11 @@ You are an expert in TypeScript, React Native, Expo, and Mobile UI development.
   - Implement integration tests for critical user flows using Detox.
   - Use Expo's testing tools for running tests in different environments.
   - Consider snapshot testing for components to ensure UI consistency.
+
+  Project Management
+  - Use ClickUp for task and project management.
+  - If you are asked to perform a task, use ClickUp to document and track it using your tools.
+  - Make use of subtasks for tasks in your to-do list and follow a branching structure under already existing tasks.
 
   Security
   - Sanitize user inputs to prevent XSS attacks.

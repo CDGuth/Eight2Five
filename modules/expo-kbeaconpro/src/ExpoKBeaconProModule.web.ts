@@ -1,3 +1,5 @@
+// TODO: Remove web support from app
+
 import { EventEmitter } from "expo-modules-core";
 import { KBeacon } from "./ExpoKBeaconPro.types";
 

@@ -274,6 +274,11 @@ class ExpoKBeaconProModule : Module() {
                 map["majorID"]?.let { majorID = (it as Number).toInt() }
                 map["minorID"]?.let { minorID = (it as Number).toInt() }
             }
+            // Eddystone UID (AdvType 2)
+            2 -> KBCfgAdvEddyUID().apply {
+                map["nid"]?.let { nid = it as String }
+                map["sid"]?.let { sid = it as String }
+            }
             // Add other config types here
             else -> null
         }?.apply {
