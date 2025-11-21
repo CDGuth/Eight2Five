@@ -1,11 +1,11 @@
 /**
- * Beacon UID byte-structure (documented)
+ * Beacon UID byte-structure
  *
  * Overview:
  * - We use Eddystone-UID slots to broadcast identity and high-precision position.
  * - Slot 0: Identity (NID = APP_NAMESPACE (ASCII "Eight2Five"), SID = 6 bytes)
  * - Slot 1: Position (NID = 10 bytes containing X,Y,Z encoded; SID = 6 bytes)
- * - The app stores field associations by MAC; beacons do NOT store field IDs.
+ * - The app stores field associations by MAC; beacons do NOT store field associations.
  *
  * Endianness: big-endian (network byte order) for multi-byte integer fields.
  *
@@ -22,9 +22,11 @@
  *
  * Notes:
  * - The beacon NEVER broadcasts the password itself. If PasswordIsSerialHash flag is set,
- *   the app can derive the low-security password by computing a 4-byte hash of the serial
- *   (format expected by the beacon: hex string prefixed with '0x'). The app may also
- *   instead set a custom password locally via BLE when configuring.
+ *   the app can derive the low-security password by extracting the first 4 bytes of the
+ *   SHA-256 hash of the serial number (format expected by the beacon: hex string prefixed with '0x').
+ *   This method of relies on physical access control of the serial number rather than cryptography,
+ *   hence the lower security.
+ * - The app may also instead set a custom password (or no password) locally via BLE when configuring.
  *
  * Slot 1 - Position (NID = 10 bytes, SID = 6 bytes)
  *   NID bytes (10 bytes total):
