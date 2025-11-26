@@ -35,10 +35,10 @@ export interface BeaconState {
 export interface RawBeaconData {
   mac: string;
   rssi: number;
-  advPackets: Array<{
+  advPackets: {
     advType: number;
     nid?: string;
     sid?: string;
     [key: string]: any;
-  }>;
+  }[];
 }

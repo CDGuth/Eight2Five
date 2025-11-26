@@ -54,7 +54,7 @@ describe("generateBeaconConfig", () => {
     expect(sidBytes[1] & 0x04).toBe(0x00); // Serial hash flag off
 
     const refPowerCfg = configs.find(
-      (cfg: any) => typeof cfg.refPower1Meters === "number"
+      (cfg: any) => typeof cfg.refPower1Meters === "number",
     );
     if (!refPowerCfg) throw new Error("Reference RSSI config missing");
     expect(refPowerCfg.refPower1Meters).toBe(-55);
@@ -172,9 +172,7 @@ describe("generateBeaconConfig", () => {
       undefined,
     );
     expect(mockTransport.modifyConfig).toHaveBeenCalledTimes(1);
-    expect(mockTransport.disconnect).toHaveBeenCalledWith(
-      "AA:BB:CC:DD:EE:FF",
-    );
+    expect(mockTransport.disconnect).toHaveBeenCalledWith("AA:BB:CC:DD:EE:FF");
     expect(result.provisionalApplied).toBe(true);
     expect(result.finalizedApplied).toBe(false);
   });
