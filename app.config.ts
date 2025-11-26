@@ -1,5 +1,6 @@
 module.exports = {
   expo: {
+    owner: "eight2five",
     name: "Eight2Five-iOS-Android",
     slug: "Eight2Five-iOS-Android",
     platforms: ["ios", "android"],
@@ -41,6 +42,9 @@ module.exports = {
     ],
     extra: {
       isNativeBeaconingEnabled: process.env.USE_NATIVE_BEACONING === "true",
+      eas: {
+        projectId: "18254057-4624-46db-9ea5-e35639d1ec63",
+      },
     },
   },
 };

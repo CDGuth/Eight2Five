@@ -24,6 +24,7 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "@types/react-test-renderer": "^19.1.0",
+    "eas-cli": "^16.28.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
