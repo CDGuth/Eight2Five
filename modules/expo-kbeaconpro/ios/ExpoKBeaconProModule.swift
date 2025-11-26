@@ -9,7 +9,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
     // Helper to convert KBeacon to Dictionary
     private func beaconToDict(_ beacon: KBeacon) -> [String: Any?] {
-        var dict: [String: Any?] = [
+        let dict: [String: Any?] = [
             "mac": beacon.mac(),
             "name": beacon.name(),
             "rssi": beacon.rssi(),
@@ -34,7 +34,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
             "rssi": advPacket.rssi
         ]
 
-        if let iBeaconPacket = advPacket as? KBAdvPacketIBeacon {
+        if advPacket is KBAdvPacketIBeacon {
             // No extra fields for iBeacon beyond base
         } else if let eddyUIDPacket = advPacket as? KBAdvPacketEddyUID {
             dict["nid"] = eddyUIDPacket.nid
@@ -134,8 +134,8 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         if let sensorData = data as? KBSensorDataMsg {
             eventData["data"] = [
                 "utcTime": sensorData.utcTime,
-                "temperature": sensorData.temperature,
-                "humidity": sensorData.humidity
+                "temperature": sensorData.temperature as Any,
+                "humidity": sensorData.humidity as Any
             ]
         }
         
@@ -194,7 +194,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
                 return
             }
             
-            let cfgObjects = configs.compactMap { dictToCfg($0) }
+            let cfgObjects = configs.compactMap { self.dictToCfg($0) }
             
             if cfgObjects.isEmpty && !configs.isEmpty {
                 promise.reject("INVALID_CONFIG", "Invalid configuration objects provided")
@@ -239,8 +239,8 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
                 if result, let records = records as? [KBSensorDataMsg] {
                     let recordDicts = records.map { [
                         "utcTime": $0.utcTime,
-                        "temperature": $0.temperature,
-                        "humidity": $0.humidity
+                        "temperature": $0.temperature as Any,
+                        "humidity": $0.humidity as Any
                     ] }
                     promise.resolve(recordDicts)
                 } else {
@@ -293,6 +293,8 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
                 }
             }
         }
+        
+        return ModuleDefinition()
     }
 
     private func findBeacon(mac: String) -> KBeacon? {
