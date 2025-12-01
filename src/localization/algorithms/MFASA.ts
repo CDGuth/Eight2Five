@@ -1,5 +1,5 @@
 import { DEFAULT_MFASA_OPTIONS, DEFAULT_TX_POWER_DBM } from "../config";
-import {
+import type {
   AnchorGeometry,
   LocalizationOptimizer,
   OptimizationInput,
@@ -52,17 +52,40 @@ export class MFASAOptimizer implements LocalizationOptimizer {
       timeBudgetMs: opts.timeBudgetMs ?? this.options.timeBudgetMs,
     };
 
+    const anchorMap = this.buildAnchorMap(opts.anchors);
+    const metrics = { evaluations: 0 };
+    const startTime = now();
+
     return new Promise((resolve) => {
-      const population = this.initializePopulation(config.populationSize, opts);
+      const population = this.initializePopulation(
+        config.populationSize,
+        opts,
+        anchorMap,
+        metrics,
+      );
       let best = this.extractBest(population, 0);
+      const initialError = best.errorRmse;
       let temperature = config.initialTemperature;
       let iteration = 0;
 
       const step = () => {
         const stepStart = now();
         while (iteration < config.maxIterations) {
-          this.performFireflyMoves(population, config, opts);
-          this.performSimulatedAnnealing(population, temperature, config, opts);
+          this.performFireflyMoves(
+            population,
+            config,
+            opts,
+            anchorMap,
+            metrics,
+          );
+          this.performSimulatedAnnealing(
+            population,
+            temperature,
+            config,
+            opts,
+            anchorMap,
+            metrics,
+          );
 
           iteration += 1;
           temperature *= config.coolingRate;
@@ -74,6 +97,13 @@ export class MFASAOptimizer implements LocalizationOptimizer {
           }
         }
 
+        best.diagnostics = {
+          executionTimeMs: now() - startTime,
+          evaluations: metrics.evaluations,
+          initialError,
+          finalError: best.errorRmse,
+          finalTemperature: temperature,
+        };
         resolve(best);
       };
 
@@ -84,11 +114,13 @@ export class MFASAOptimizer implements LocalizationOptimizer {
   private initializePopulation(
     size: number,
     opts: OptimizationInput,
+    anchorMap: Map<string, AnchorGeometry>,
+    metrics: { evaluations: number },
   ): Firefly[] {
     const fireflies: Firefly[] = [];
     for (let i = 0; i < size; i += 1) {
       const position = this.randomPoint(opts.bounds);
-      const error = this.evaluate(position, opts);
+      const error = this.evaluate(position, opts, anchorMap, metrics);
       fireflies.push({ position, error, intensity: -error });
     }
     return fireflies;
@@ -117,6 +149,8 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     population: Firefly[],
     config: MFASAOptions,
     opts: OptimizationInput,
+    anchorMap: Map<string, AnchorGeometry>,
+    metrics: { evaluations: number },
   ) {
     for (let i = 0; i < population.length; i += 1) {
       for (let j = 0; j < population.length; j += 1) {
@@ -126,6 +160,8 @@ export class MFASAOptimizer implements LocalizationOptimizer {
             population[j],
             config,
             opts,
+            anchorMap,
+            metrics,
           );
         }
       }
@@ -137,6 +173,8 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     attractor: Firefly,
     config: MFASAOptions,
     opts: OptimizationInput,
+    anchorMap: Map<string, AnchorGeometry>,
+    metrics: { evaluations: number },
   ): Firefly {
     const dx = attractor.position.x - target.position.x;
     const dy = attractor.position.y - target.position.y;
@@ -159,7 +197,7 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     );
 
     const position = { x: newX, y: newY };
-    const error = this.evaluate(position, opts);
+    const error = this.evaluate(position, opts, anchorMap, metrics);
     return { position, error, intensity: -error };
   }
 
@@ -168,6 +206,8 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     temperature: number,
     config: MFASAOptions,
     opts: OptimizationInput,
+    anchorMap: Map<string, AnchorGeometry>,
+    metrics: { evaluations: number },
   ) {
     for (let i = 0; i < population.length; i += 1) {
       const candidatePosition = {
@@ -185,7 +225,12 @@ export class MFASAOptimizer implements LocalizationOptimizer {
         ),
       };
 
-      const candidateError = this.evaluate(candidatePosition, opts);
+      const candidateError = this.evaluate(
+        candidatePosition,
+        opts,
+        anchorMap,
+        metrics,
+      );
       const delta = candidateError - population[i].error;
 
       if (delta < 0) {
@@ -219,13 +264,17 @@ export class MFASAOptimizer implements LocalizationOptimizer {
   private evaluate(
     position: { x: number; y: number },
     opts: OptimizationInput,
+    anchorMap: Map<string, AnchorGeometry>,
+    metrics?: { evaluations: number },
   ): number {
-    const { candidate, anchors, propagation, constants } = opts;
-    if (!candidate.length || !anchors.length) {
+    if (metrics) {
+      metrics.evaluations += 1;
+    }
+    const { candidate, propagation, constants } = opts;
+    if (!candidate.length || !anchorMap.size) {
       return Number.POSITIVE_INFINITY;
     }
 
-    const anchorMap = this.buildAnchorMap(anchors);
     let sumSq = 0;
     let used = 0;
 
