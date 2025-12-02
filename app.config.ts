@@ -4,7 +4,7 @@ module.exports = {
     name: "Eight2Five-iOS-Android",
     slug: "Eight2Five-iOS-Android",
     platforms: ["ios", "android"],
-    version: "1.0.0",
+    version: "0.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",

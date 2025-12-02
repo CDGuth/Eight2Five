@@ -45,6 +45,9 @@ jobs:
       - name: Run Expo Doctor
         run: npx expo-doctor
 
+      - name: Run type checks
+        run: npm run type-check
+
       - name: Run Linting
         run: npm run lint
 

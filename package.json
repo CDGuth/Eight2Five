@@ -7,6 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
+    "type-check": "tsc --noEmit",
     "test": "jest --watchAll=false"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "@types/react-test-renderer": "^19.1.0",
     "expo-module-scripts": "^5.0.7",
     "eslint": "^9.0.0",
+    "typescript": "^5.9.3",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
