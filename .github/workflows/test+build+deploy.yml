@@ -79,7 +79,7 @@ jobs:
         run: npm ci
 
       - name: Run expo doctor
-        run: npx expo doctor
+        run: npx expo-doctor
 
       - name: Run type checks
         run: npm run type-check
