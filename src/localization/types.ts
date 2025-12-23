@@ -122,6 +122,7 @@ export interface PositionEstimate {
  */
 export interface LocalizationOptimizer {
   solve(opts: OptimizationInput): Promise<PositionEstimate>;
+  cancel(): void;
 }
 
 /**
@@ -142,4 +143,5 @@ export interface LocalizationEngineApi {
   ingest(beacon: BeaconState): void;
   getSnapshot(): LocalizationSnapshot;
   setEnvironment(config: EnvironmentConfigUpdate): void;
+  destroy(): void;
 }

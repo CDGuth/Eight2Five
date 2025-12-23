@@ -77,8 +77,14 @@ function TestHarness({ onRender }: { onRender: RenderCallback }) {
 
 describe("useBeaconScanner", () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     mockListener = null;
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
   it("starts scanning on mount and stops on unmount", async () => {

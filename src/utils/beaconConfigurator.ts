@@ -142,8 +142,7 @@ function normalizePosition(position?: BeaconPosition): BeaconPosition {
 }
 
 export interface BeaconConfigParams
-  extends BeaconPosition,
-    BeaconIdentitySettings {
+  extends BeaconPosition, BeaconIdentitySettings {
   isConfigured?: boolean;
 }
 
@@ -176,9 +175,8 @@ let cachedTransport: BeaconConfigurationTransport | null = null;
 
 async function getDefaultTransport(): Promise<BeaconConfigurationTransport> {
   if (cachedTransport) return cachedTransport;
-  const nativeModule: NativeBeaconModule = await import(
-    "../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule"
-  );
+  const nativeModule: NativeBeaconModule =
+    await import("../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule");
   cachedTransport = {
     connect: nativeModule.connect,
     modifyConfig: nativeModule.modifyConfig,
@@ -187,8 +185,7 @@ async function getDefaultTransport(): Promise<BeaconConfigurationTransport> {
   return cachedTransport;
 }
 
-export interface ApplyBeaconConfigurationOptions
-  extends BeaconConfigurationPlanOptions {
+export interface ApplyBeaconConfigurationOptions extends BeaconConfigurationPlanOptions {
   macAddress: string;
   password?: string;
   timeout?: number;
