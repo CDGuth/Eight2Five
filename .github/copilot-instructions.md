@@ -94,11 +94,6 @@ Downstream consumers (screens or components) typically use `useBeaconScanner` to
   - Use Expo's testing tools for running tests in different environments.
   - Consider snapshot testing for components to ensure UI consistency.
 
-  Project Management
-  - Use ClickUp for task and project management.
-  - If you are asked to perform a task, use ClickUp to document and track it using your tools.
-  - Make use of subtasks for tasks in your to-do list and follow a branching structure under already existing tasks.
-
   Security
   - Sanitize user inputs to prevent XSS attacks.
   - Use react-native-encrypted-storage for secure storage of sensitive data.
@@ -131,11 +126,11 @@ This file provides guidance for GitHub Copilot on how to effectively use the doc
 
 ## Documentation Interaction Protocol
 
-Your primary role is to act as an intelligent interface to the project's documentation located in the `.github/docs/` directory. This instruction file is **not** the documentation itself; it is a guide on how to find and use the documentation.
+Your primary role is to act as an intelligent interface to the project's documentation. The primary sources of truth are Context7 and the documentation located in the `.github/docs/` directory. This instruction file is **not** the documentation itself; it is a guide on how to find and use the documentation.
 
 ### Core Rule: Consult the Source of Truth
 
-Always prioritize the content within the documentation files over any summary in this file. The documentation files are the "source of truth."
+Always prioritize the content within Context7 and the documentation files in `.github/docs/` over any summary in this file. These are the "sources of truth." If information is still missing, you should then search the web.
 
 ### Step-by-Step Protocol for Using Documentation
 
@@ -154,6 +149,29 @@ Always prioritize the content within the documentation files over any summary in
     *   If the targeted search is inconclusive, does not provide enough context, or fails to find the required information, you **must** read the entire content of the relevant documentation file. This ensures you have the complete context.
 
 6.  **Synthesize and Apply:** Use the information gathered from the documentation to generate code, answer questions, or perform the requested task.
+
+7.  **Search the Web:** If the documentation and Context7 do not provide the necessary information, use your web search tools to find up-to-date information from official sources.
+
+## Agent Usage Protocol
+
+Use the `runSubagent` tool to delegate complex, multi-step tasks. This ensures the main agent remains focused on user interaction and high-level orchestration. **Subagents must only be used for well-defined sub-tasks with clear objectives and boundaries, not for open-ended or ambiguous requests.**
+
+### Roles and Responsibilities
+
+-   **Main Agent:**
+    -   Handles all direct user communication.
+    -   Defines specific, actionable tasks for subagents.
+    -   Performs targeted file edits (e.g., `replace_string_in_file`, `create_file`) for specific, well-defined changes.
+    -   Coordinates the overall workflow and applies final fixes.
+    -   Manages the `todo` list and project state.
+-   **Subagent (`runSubagent`):**
+    -   **Research:** Performs deep, multi-step research across the workspace or documentation for a specific, well-defined query.
+    -   **Implementation:** Drafts complex logic or multi-file changes for a specific feature or refactor defined by the main agent.
+
+### Examples of When to Use a Subagent
+
+-   **Research:** Use when you need to "find all usages of X and determine how they handle Y" or "understand the interaction between module A and B across 10+ files."
+-   **Implementation:** Use for "implementing a new localization algorithm based on a research paper" or "refactoring the entire state management layer." The subagent should return a detailed report or code snippets for the main agent to apply.
 
 ---
 
@@ -181,99 +199,18 @@ Use these keywords as a starting point for searching within the documentation fi
 
 ---
 
-## 2. KBeaconPro Android SDK Documentation
-
-**File Location:** `.github/docs/KBeaconPro Android SDK/github-kkmhogen-kbeaconprodemo_android-an-android-based-demo-for-connecting-kbeaconpro-devices.md`
-
-### Overview
-
-This document provides instructions for interacting with KBeaconPro devices on Android. It covers scanning, connecting, and configuring beacons.
-
-### Key Topics for Search
-
-Use these keywords as a starting point for searching within the documentation file:
-
--   **Core Classes:** `KBeaconsMgr`, `KBeacon`, `KBConnPara`
--   **Key Operations:** `startScanning()`, `stopScanning()`, `onBeaconDiscovered()`, `connect()`, `modifyConfig()`
--   **Configuration Objects:** `KBCfgCommon`, `KBCfgAdvIBeacon`, `KBCfgTrigger`, `KBCfgSensorHT`
--   **Triggers:** `KBTriggerType`, `KBTriggerAction`, `BtnSingleClick`, `AccMotion`
-
-### How to Find Information
-
--   **To find beacons:** Search the doc for `KBeaconsMgr` and `startScanning`.
--   **To connect to a beacon:** Search for `KBeacon` and `connect()`.
--   **To change settings:** Search for `modifyConfig()` and the relevant configuration object (e.g., `KBCfgAdvIBeacon`).
--   **For sensor data:** Search for `Sensor parameters` or `readSensorDataInfo`.
+## 2. KBeaconPro Android SDK
+**Location:** `.github/docs/KBeaconPro Android SDK/github-kkmhogen-kbeaconprodemo_android-an-android-based-demo-for-connecting-kbeaconpro-devices.md`
+**Description:** Instructions for scanning, connecting, and configuring KBeaconPro devices on Android.
 
 ---
 
-## 3. KBeaconPro iOS SDK Documentation
+## 3. KBeaconPro iOS SDK
+**Location:** `.github/docs/KBeaconPro iOS SDK/github-kkmhogen-kbeaconprodemo_ios.md`
+**Description:** Instructions for scanning, connecting, and configuring KBeaconPro devices on iOS using Swift.
 
-**File Location:** `.github/docs/KBeaconPro iOS SDK/github-kkmhogen-kbeaconprodemo_ios.md`
+---
 
-### Overview
-
-This document provides instructions for interacting with KBeaconPro devices on iOS using Swift.
-
-### Key Topics for Search
-
-Use these keywords as a starting point for searching within the documentation file:
-
--   **Core Classes:** `KBeaconsMgr`, `KBeacon`, `KBConnPara`
--   **Key Operations:** `startScanning()`, `stopScanning()`, `onBeaconDiscovered()`, `connect(password:timeout:delegate:)`, `modifyConfig(obj:callback:)`
--   **Configuration Objects:** `KBCfgCommon`, `KBCfgAdvIBeacon`, `KBCfgTrigger`, `KBCfgSensorHT`
--   **Triggers:** `KBTriggerType`, `KBTriggerAction`, `BtnSingleClick`, `AccMotion`
-
-### How to Find Information
-
--   **To find beacons:** Search the doc for `KBeaconsMgr.sharedBeaconManager` and `startScanning()`.
--   **To connect to a beacon:** Search for `KBeacon` and `connect(password:timeout:delegate:)`.
--   **To change settings:** Search for `modifyConfig(obj:callback:)` and the relevant configuration object.
--   **For sensor data:** Search for `Sensor parameters` or `readSensorDataInfo(callback:)`.
-
-## BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms Documentation
-
-**Last Updated:** 2025-11-24
-
-**Documentation Location:** `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/`
-
-**Number of Pages:** 1
-
-### Overview
-
-This directory contains 1 documentation pages for BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms, converted to Markdown format.
-
-### Available Documentation Files
-
-- `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`
-
-### Key Topics
-
-The documentation covers various aspects of BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms. Reference these files when working with BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms to ensure best practices and correct usage.
-
-### Usage with Copilot
-
-When writing code related to BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms, GitHub Copilot will automatically reference these documentation files to provide:
-- Accurate API usage and examples
-- Best practices and patterns
-- Up-to-date framework features and conventions
-
-## Overview
-
-This directory contains 1 documentation pages for BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms, converted to Markdown format.
-
-### Available Documentation Files
-
-- `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`
-
-### Key Topics
-
-The documentation covers various aspects of BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms. Reference these files when working with BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms to ensure best practices and correct usage.
-
-### Usage with Copilot
-
-When writing code related to BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms, GitHub Copilot will automatically reference these documentation files to provide:
-- Accurate API usage and examples
-- Best practices and patterns
-- Up-to-date framework features and conventions
-
+## 4. Outdoor Localization (Two-Ray Model)
+**Location:** `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`
+**Description:** Technical documentation for outdoor localization using the Two-Ray Ground-Reflection model and optimization algorithms.

@@ -42,6 +42,7 @@ function now(): number {
 
 export class MFASAOptimizer implements LocalizationOptimizer {
   private readonly options: MFASAOptions;
+  private currentTimeout: any = null;
 
   constructor(options: Partial<MFASAOptions> = {}) {
     this.options = {
@@ -50,7 +51,16 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     } as MFASAOptions;
   }
 
+  cancel() {
+    if (this.currentTimeout) {
+      clearTimeout(this.currentTimeout);
+      this.currentTimeout = null;
+    }
+  }
+
   solve(opts: OptimizationInput): Promise<PositionEstimate> {
+    this.cancel(); // Cancel any previous solve
+
     const config: MFASAOptions = {
       ...this.options,
       timeBudgetMs: opts.timeBudgetMs ?? this.options.timeBudgetMs,
@@ -61,7 +71,7 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     const metrics = { evaluations: 0 };
     const startTime = now();
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const population = this.initializePopulation(
         config.populationSize,
         opts,
@@ -80,6 +90,7 @@ export class MFASAOptimizer implements LocalizationOptimizer {
       let iteration = 0;
 
       const step = () => {
+        this.currentTimeout = null;
         const stepStart = now();
         // If totalTimeLimitMs is set, we ignore maxIterations and run until time is up
         // Otherwise we respect maxIterations
@@ -113,7 +124,7 @@ export class MFASAOptimizer implements LocalizationOptimizer {
           best = this.extractBest(population, iteration, best);
 
           if (now() - stepStart >= config.timeBudgetMs) {
-            setTimeout(step, 0);
+            this.currentTimeout = setTimeout(step, 0);
             return;
           }
         }

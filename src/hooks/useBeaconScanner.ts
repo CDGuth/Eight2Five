@@ -113,6 +113,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
     return () => {
       if (subscription) subscription.remove();
       stopScanning();
+      engineRef.current?.destroy();
     };
   }, []);
 

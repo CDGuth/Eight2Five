@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "type-check": "tsc --noEmit",
-    "test": "jest --watchAll=false"
+    "test": "jest --watchAll=false",
+    "precommit-check": "npx expo-doctor && npm run type-check && npm run lint && npm run test"
   },
   "dependencies": {
     "expo": "~54.0.26",

@@ -48,6 +48,7 @@ export class LocalizationEngine implements LocalizationEngineApi {
   private solverThrottleMs: number;
   private staleBeaconMs: number;
   private pendingSolve = false;
+  private solveTimeout: any = null;
   private snapshot: LocalizationSnapshot = { beacons: [] };
 
   constructor(options: LocalizationEngineOptions = {}) {
@@ -138,11 +139,20 @@ export class LocalizationEngine implements LocalizationEngineApi {
     return this.filters.get(mac)!;
   }
 
+  destroy() {
+    if (this.solveTimeout) {
+      clearTimeout(this.solveTimeout);
+      this.solveTimeout = null;
+    }
+    this.optimizer.cancel();
+  }
+
   private scheduleSolve() {
     if (this.pendingSolve) return;
     this.pendingSolve = true;
-    setTimeout(() => {
+    this.solveTimeout = setTimeout(() => {
       this.pendingSolve = false;
+      this.solveTimeout = null;
       void this.solve();
     }, this.solverThrottleMs);
   }
