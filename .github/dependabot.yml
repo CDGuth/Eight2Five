@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Maintain dependencies for npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Maintain dependencies for Swift (Package.swift)
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Maintain dependencies for the expo-kbeaconpro Expo module
+  - package-ecosystem: "npm"
+    directory: "/modules/expo-kbeaconpro"
+    schedule:
+      interval: "daily"
