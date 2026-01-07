@@ -12,7 +12,7 @@
     "precommit-check": "npx expo-doctor && npm run type-check && npm run lint && npm run test"
   },
   "dependencies": {
-    "expo": "~54.0.25",
+    "expo": "~54.0.31",
     "expo-dev-client": "~6.0.18",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
