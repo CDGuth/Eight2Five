@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     open-pull-requests-limit: 10
 
   # Maintain dependencies for GitHub Actions
@@ -18,9 +18,3 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-
-  # Maintain dependencies for the expo-kbeaconpro Expo module
-  - package-ecosystem: "npm"
-    directory: "/modules/expo-kbeaconpro"
-    schedule:
-      interval: "daily"
