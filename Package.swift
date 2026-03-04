@@ -21,7 +21,7 @@
 import PackageDescription
 
 let package = Package(
-  name: "Eight2FiveWorkspace",
+  name: "OptimizationTestWorkspace",
   platforms: [
     .iOS(.v13)
   ],

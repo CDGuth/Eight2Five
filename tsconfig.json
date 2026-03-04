@@ -3,10 +3,18 @@
   "compilerOptions": {
     "skipLibCheck": true,
     "strict": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@eight2five/shared": ["packages/shared/src/index"],
+      "@eight2five/shared/*": ["packages/shared/src/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": [
+    "apps/**/*",
+    "packages/**/*",
+    "modules/**/*",
+    "eslint.config.js",
+    "babel.config.js"
+  ],
   "exclude": ["node_modules"]
 }

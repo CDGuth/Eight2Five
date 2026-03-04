@@ -14,6 +14,30 @@ The localization subsystem in `src/localization` smooths noisy RSSI values with 
 
 To solve this optimization problem, the project currently implements a memetic Firefly Algorithm with Simulated Annealing (MFASA) in `src/localization/algorithms/MFASA.ts`. MFASA maintains a population of candidate positions ("fireflies"), moves them toward better solutions based on relative brightness (lower RMSE), and applies simulated annealing-style random perturbations with a cooling schedule to escape local minima. The optimizer is time-sliced (using small per-step time budgets) so that iterative computation does not block the React Native UI thread. Future algorithms (e.g., GA, PSO, or simpler multilateration) can be added behind the same optimizer interface.
 
+## Monorepo Structure
+
+This project is organized as a monorepo to unify logic across mobile applications and native modules.
+
+-   **`apps/`**: Contains the primary user-facing applications.
+    -   **`apps/mobile/`**: The main Expo-based React Native application used by performers on the field. Handles real-time scanning, UI, and state management.
+    -   **`apps/testbed/`**: A sandbox application for developers to validate localization algorithms (like MFASA), visualize simulated runs, and tweak propagation constants without running the full field app.
+-   **`packages/`**: Contains shared logic and reusable components.
+    -   **`packages/shared/`**: The core logic provider for the entire repository.
+        -   `src/localization/`: Implementation of Kalman filters, path-loss models (log-normal, two-ray ground reflection), and optimization algorithms (MFASA).
+        -   `src/hooks/`: React hooks for shared functionality, such as beacon scanning subscriptions.
+        -   `src/types/`: Centralized TypeScript interfaces used by both apps and shared logic.
+        -   `src/utils/`: Generic helpers for identity parsing, coordinates, and math.
+-   **`modules/`**: Contains custom Expo modules.
+    -   **`modules/expo-kbeaconpro/`**: A native module wrapping the KBeaconPro SDKs (Android/Swift) to provide a unified BLE scanning interface to the JavaScript layer.
+
+## Monorepo Dependency Policy
+
+To maintain stability and prevent version conflicts (e.g., duplicate React instances or conflicting native modules):
+
+-   **Shared Installation**: If a dependency is used by more than one application or exists in `packages/shared`, it **MUST** be installed in `packages/shared`'s `package.json`.
+-   **Justification**: Centralizing dependencies in `packages/shared` ensures all sub-apps use the same versions, reducing bundle size and preventing hard-to-debug "multiple versions of X" runtime errors.
+-   **Command**: Use `npm install <package-name> --workspace @eight2five/shared` to add a new shared dependency.
+
 Downstream consumers (screens or components) typically use `useBeaconScanner` to obtain three views of state: the raw per-MAC beacon map for diagnostics, the filtered beacon measurements used by the localization engine, and the latest estimated performer position in meters relative to the field. Copilot suggestions should preserve this flow (native scanner → parser → Kalman filter + propagation model → MFASA optimizer → UI) and avoid breaking the public surface of the native module or hooks without a clear reason.
 
   Code Style and Structure
@@ -37,6 +61,11 @@ Downstream consumers (screens or components) typically use `useBeaconScanner` to
   - Avoid enums; use maps instead.
   - Use functional components with TypeScript interfaces.
   - Use strict mode in TypeScript for better type safety.
+
+  Vector Icons
+  - ALWAYS use `@expo/vector-icons` for icons.
+  - Use MaterialIcons for a consistent, professional design language.
+  - Centralizing icons in `packages/shared` ensures all sub-apps and modules use the same versions and icon set, reducing bundle overhead and maintenance.
 
   Syntax and Formatting
   - Use the "function" keyword for pure functions.

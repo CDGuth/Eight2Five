@@ -51,4 +51,6 @@ yarn-error.*
 # gradle
 *.gradle
 coverage/clover.xml
-coverage/clover.xml
+
+# other
+.com.facebook.react.devsupport.BundleDownloader.swp

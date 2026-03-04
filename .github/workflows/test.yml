@@ -8,20 +8,11 @@ on:
       - "docs/**"
   workflow_dispatch:
 
-env:
-  NODE_OPTIONS: --openssl-legacy-provider
-
 jobs:
-  check-skip:
-    runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
-    steps:
-      - name: Skip CI check
-        run: echo "Proceeding with workflow"
-
   test:
-    needs: check-skip
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -32,25 +23,22 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Setup npm cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Run expo doctor
+      - name: Run expo doctor (mobile)
+        working-directory: apps/mobile
         run: npx expo-doctor
 
-      - name: Run type checks
+      - name: Run expo doctor (testbed)
+        working-directory: apps/testbed
+        run: npx expo-doctor
+
+      - name: Run type checks (all workspaces)
         run: npm run type-check
 
-      - name: Run Linting
+      - name: Run lint (all workspaces)
         run: npm run lint
 
-      - name: Run tests
+      - name: Run tests (all workspaces)
         run: npm run test
