@@ -16,7 +16,7 @@
     "@eight2five/shared": "file:../../packages/shared",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.12",
-    "expo-clipboard": "~8.0.8",
+    "expo-clipboard": "~55.0.8",
     "expo-dev-client": "~6.0.20",
     "expo-file-system": "~19.0.21",
     "expo-kbeaconpro": "file:../../modules/expo-kbeaconpro",
