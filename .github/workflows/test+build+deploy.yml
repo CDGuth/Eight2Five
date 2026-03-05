@@ -161,7 +161,7 @@ jobs:
 
       - name: Upload build artifacts
         if: ${{ steps.collect-artifacts.outputs.files != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts-${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}
           path: ${{ steps.collect-artifacts.outputs.files }}
