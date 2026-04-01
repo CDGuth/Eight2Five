@@ -78,10 +78,6 @@ Reason: <high-level reason 2>
 Impact:
 - <user-visible or developer-visible outcome>
 - <risk, migration note, or compatibility note>
-
-Validation:
-- <test or command run>
-- <additional verification step>
 ```
 
 Formatting rules for commit bodies:
