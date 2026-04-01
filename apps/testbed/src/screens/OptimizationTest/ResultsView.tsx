@@ -357,6 +357,13 @@ export const ResultsView = ({
                 Est Pos: ({selectedResult.estPos.x.toFixed(2)},{" "}
                 {selectedResult.estPos.y.toFixed(2)})
               </Text>
+              <Text style={styles.resultText}>
+                Source Mode: {selectedResult.sourceMode ?? "ble-rssi"}
+              </Text>
+              <Text style={styles.resultText}>
+                Measurement Kinds:{" "}
+                {(selectedResult.measurementKinds ?? ["rssi"]).join(", ")}
+              </Text>
             </View>
           </View>
         )}

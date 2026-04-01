@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { MFASAOptimizer } from "@eight2five/shared/localization/algorithms/MFASA";
 import { LogNormalModel } from "@eight2five/shared/localization/models/LogNormalModel";
 import { TwoRayGroundModel } from "@eight2five/shared/localization/models/TwoRayGroundModel";
-import { KalmanFilter } from "@eight2five/shared/localization/filters/KalmanFilter";
 import {
   DEFAULT_PROPAGATION_CONSTANTS,
   DEFAULT_FIELD_DIMENSIONS,
@@ -10,11 +9,9 @@ import {
   DEFAULT_TX_POWER_DBM,
   DEFAULT_SIMULATION_NOISE,
   DEFAULT_ANCHOR_SIGMA,
-  DEFAULT_KALMAN_CONFIG,
 } from "@eight2five/shared/localization/LocalizationConfig";
 import {
   AnchorGeometry,
-  BeaconMeasurement,
   PropagationConstants,
 } from "@eight2five/shared/localization/types";
 import {
@@ -22,11 +19,14 @@ import {
   FIELD_PRESETS,
   LogBatch,
   LogEntry,
+  RunParameters,
   RunResult,
+  SimulationSourceMode,
   SweepConfig,
   SweepStepResult,
   TestMode,
 } from "../types";
+import { generateSimulationCandidates } from "../simulation/simulationProviders";
 
 export function useOptimizationRunner() {
   // --- Configuration State ---
@@ -91,6 +91,9 @@ export function useOptimizationRunner() {
   const [selectedModel, setSelectedModel] = useState("TwoRayGround");
   const [selectedAlgorithm, setSelectedAlgorithm] = useState("MFASA");
   const [selectedFilter, setSelectedFilter] = useState("Kalman");
+  const [sourceMode, setSourceMode] =
+    useState<SimulationSourceMode>("ble-rssi");
+  const [uwbDistanceSigma, setUwbDistanceSigma] = useState("0.15");
 
   // Algorithm Weighting
   const [isSolverWeighted, setIsSolverWeighted] = useState(false);
@@ -314,7 +317,10 @@ export function useOptimizationRunner() {
   }, [generateAnchors, currentAnchors.length]);
 
   const performSimulation = useCallback(
-    async (runId: number, paramOverrides: any = {}): Promise<RunResult> => {
+    async (
+      runId: number,
+      paramOverrides: Partial<RunParameters> = {},
+    ): Promise<RunResult> => {
       const width = fieldWidth;
       const length = fieldLength;
 
@@ -377,57 +383,20 @@ export function useOptimizationRunner() {
         trueY = parseFloat(manualTrueY) || length / 2;
       }
 
-      const candidates: BeaconMeasurement[] = [];
-      const SAMPLE_COUNT = 20;
-
-      currentAnchors.forEach((anchor) => {
-        const dist = Math.sqrt(
-          (trueX - anchor.x) ** 2 + (trueY - anchor.y) ** 2,
-        );
-        const trueRssi = model.estimateRssi({
-          distanceMeters: dist,
-          txPowerDbm: DEFAULT_TX_POWER_DBM,
-          constants,
-        });
-
-        let sigma = 0;
-        if (isNoiseEnabled) {
-          const bSigma = parseFloat(noiseBase) || 0;
-          const dSlope = parseFloat(noiseScale) || 0;
-          const param = parseFloat(noiseParameter) || 1;
-
-          sigma = bSigma + dSlope * dist;
-          if (noiseWeightingModel === "logarithmic") {
-            // e.g. base + slope * log(1 + dist) * param
-            sigma = bSigma + dSlope * Math.log(1 + dist) * param;
-          } else if (noiseWeightingModel === "exponential") {
-            // e.g. base + slope * exp(dist / param)
-            sigma = bSigma + dSlope * Math.exp(dist / (param || 20));
-          }
-        }
-
-        const kf = new KalmanFilter({
-          processNoise: DEFAULT_KALMAN_CONFIG.processNoise,
-          measurementNoise: sigma ** 2,
-        });
-
-        let filteredRssi = trueRssi;
-        for (let i = 0; i < SAMPLE_COUNT; i++) {
-          // Box-Muller transform for Gaussian noise
-          const u1 = Math.random();
-          const u2 = Math.random();
-          const z =
-            Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-          const noisyRssi = trueRssi + z * sigma;
-          filteredRssi = kf.filterSample(noisyRssi);
-        }
-
-        candidates.push({
-          mac: anchor.mac,
-          lastSeen: Date.now(),
-          filteredRssi: filteredRssi,
-          txPower: DEFAULT_TX_POWER_DBM,
-        });
+      const { candidates, measurementKinds } = generateSimulationCandidates({
+        anchors: currentAnchors,
+        truePosition: { x: trueX, y: trueY },
+        propagationModel: model,
+        constants,
+        sourceMode,
+        txPowerDbm: DEFAULT_TX_POWER_DBM,
+        sampleCount: 20,
+        isNoiseEnabled,
+        noiseWeightingModel,
+        noiseBase: parseFloat(noiseBase) || 0,
+        noiseScale: parseFloat(noiseScale) || 0,
+        noiseParameter: parseFloat(noiseParameter) || 1,
+        uwbDistanceSigma: Math.max(0, parseFloat(uwbDistanceSigma) || 0),
       });
 
       const startTime = performance.now();
@@ -480,6 +449,8 @@ export function useOptimizationRunner() {
         anchors: [...currentAnchors],
         measurements: candidates,
         modelType: selectedModel,
+        sourceMode,
+        measurementKinds,
         constants,
         diagnostics: result.diagnostics,
       };
@@ -502,6 +473,8 @@ export function useOptimizationRunner() {
       initialTemperature,
       coolingRate,
       selectedModel,
+      sourceMode,
+      uwbDistanceSigma,
       isRandomTruePos,
       manualTrueX,
       manualTrueY,
@@ -546,6 +519,7 @@ Runs: ${numRuns}
 Field: ${fieldWidth}m x ${fieldLength}m
 Anchors: ${numAnchors} (${anchorPlacementMode})
 Model: ${selectedModel}
+Source Mode: ${sourceMode}
 Algorithm: ${selectedAlgorithm}
 Filter: ${selectedFilter}
 
@@ -570,6 +544,7 @@ Cooling Rate: ${coolingRate}
 Simulation Noise:
 Enabled: ${isNoiseEnabled}
 Model: ${noiseWeightingModel} (Base: ${noiseBase}, Scale: ${noiseScale}, Param: ${noiseParameter})
+UWB Distance Sigma (m): ${uwbDistanceSigma}
 
 Solver Weighting:
 Enabled: ${isSolverWeighted}
@@ -745,6 +720,7 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
     sweepConfig,
     performSimulation,
     selectedModel,
+    sourceMode,
     addLog,
     fieldWidth,
     fieldLength,
@@ -775,6 +751,7 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
     noiseParameter,
     noiseScale,
     noiseWeightingModel,
+    uwbDistanceSigma,
     solverWeightingBase,
     solverWeightingModel,
     solverWeightingParam,
@@ -815,6 +792,8 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
         selectedModel,
         selectedAlgorithm,
         selectedFilter,
+        sourceMode,
+        uwbDistanceSigma,
         isSolverWeighted,
         solverWeightingModel,
         solverWeightingBase,
@@ -871,6 +850,8 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
         setSelectedModel,
         setSelectedAlgorithm,
         setSelectedFilter,
+        setSourceMode,
+        setUwbDistanceSigma,
         setIsSolverWeighted,
         setSolverWeightingModel,
         setSolverWeightingBase,
@@ -932,6 +913,8 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
       selectedModel,
       selectedAlgorithm,
       selectedFilter,
+      sourceMode,
+      uwbDistanceSigma,
       isSolverWeighted,
       solverWeightingModel,
       solverWeightingBase,

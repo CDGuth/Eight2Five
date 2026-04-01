@@ -156,4 +156,60 @@ describe("useOptimizationRunner", () => {
     expect(hook.state.viewMode).toBe("results");
     expect(hook.state.progress).toBeGreaterThan(0);
   });
+
+  it("generates distance-only candidates in UWB mode", async () => {
+    const hook = renderHook();
+
+    await act(async () => {
+      hook.setters.setSourceMode("uwb-distance");
+      hook.setters.setNumRuns("1");
+      hook.actions.generateAnchors();
+    });
+
+    await act(async () => {
+      await hook.actions.runOptimizationTest();
+    });
+
+    const solveInput = mockSolve.mock.calls.at(-1)?.[0];
+    expect(solveInput).toBeTruthy();
+    expect(
+      solveInput.candidate.every((c: any) => Number.isFinite(c.distanceMeters)),
+    ).toBe(true);
+    expect(
+      solveInput.candidate.every((c: any) => Number.isNaN(c.filteredRssi)),
+    ).toBe(true);
+
+    const run = hook.state.results[0];
+    expect(run.sourceMode).toBe("uwb-distance");
+    expect(run.measurementKinds).toEqual(["distance"]);
+  });
+
+  it("generates mixed candidates in hybrid mode", async () => {
+    const hook = renderHook();
+
+    await act(async () => {
+      hook.setters.setSourceMode("hybrid");
+      hook.setters.setNumRuns("1");
+      hook.actions.generateAnchors();
+    });
+
+    await act(async () => {
+      await hook.actions.runOptimizationTest();
+    });
+
+    const solveInput = mockSolve.mock.calls.at(-1)?.[0];
+    expect(solveInput).toBeTruthy();
+    const hasRssi = solveInput.candidate.some((c: any) =>
+      Number.isFinite(c.filteredRssi),
+    );
+    const hasDistance = solveInput.candidate.some((c: any) =>
+      Number.isFinite(c.distanceMeters),
+    );
+    expect(hasRssi).toBe(true);
+    expect(hasDistance).toBe(true);
+
+    const run = hook.state.results[0];
+    expect(run.sourceMode).toBe("hybrid");
+    expect(run.measurementKinds?.sort()).toEqual(["distance", "rssi"]);
+  });
 });

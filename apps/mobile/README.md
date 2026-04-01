@@ -2,6 +2,11 @@
 
 Primary production client for performer localization.
 
+### Routing
+- Uses Expo Router for file-based navigation.
+- Root layout: `app/_layout.tsx`
+- Home route: `app/index.tsx`
+
 ### Run
 ```bash
 npm run start:mobile      # from repo root
@@ -18,6 +23,7 @@ npm run test --workspace apps/mobile
 
 ### Expo config
 - Config: [app.config.ts](app.config.ts)
+- Router entry: [index.tsx](index.tsx)
 - Assets resolved from [../../assets](../../assets)
 - Native KBeaconPro plugin: [../../modules/expo-kbeaconpro](../../modules/expo-kbeaconpro)
 - Native PANS BLE plugin: [../../modules/expo-pans-ble-api](../../modules/expo-pans-ble-api)

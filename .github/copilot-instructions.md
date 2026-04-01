@@ -16,6 +16,90 @@ The localization subsystem in `src/localization` smooths RSSI values with a 1D K
 
 To solve this optimization problem, the project currently implements a memetic Firefly Algorithm with Simulated Annealing (MFASA) in `src/localization/algorithms/MFASA.ts`. MFASA maintains a population of candidate positions ("fireflies"), moves them toward better solutions based on relative brightness (lower RMSE), and applies simulated annealing-style random perturbations with a cooling schedule to escape local minima. The optimizer is time-sliced (using small per-step time budgets) so that iterative computation does not block the React Native UI thread. Future algorithms (e.g., GA, PSO, or simpler multilateration) can be added behind the same optimizer interface.
 
+## Commit Format (Conventional Commits)
+
+All commits in this repository **MUST** follow Conventional Commits.
+
+- **Required format**: `<type>(<optional-scope>): <subject>`
+- **Allowed types**: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `chore`, `ci`, `revert`
+- **Subject rules**:
+    - use imperative mood (e.g., "add", "refactor", "migrate")
+    - start lowercase
+    - no trailing period
+    - keep concise and specific
+- **Breaking changes**:
+    - append `!` after type/scope (`feat(testbed)!: ...`) **or**
+    - include `BREAKING CHANGE:` footer with migration details
+
+### Scope conventions for this monorepo
+
+- `mobile` for `apps/mobile`
+- `testbed` for `apps/testbed`
+- `shared` for `packages/shared`
+- `kbeacon` for `modules/expo-kbeaconpro`
+- `pans-ble` for `modules/expo-pans-ble-api`
+- `repo` for root tooling/config changes
+
+### Examples
+
+- `feat(testbed): migrate subapp navigation to expo-router grouped routes`
+- `fix(shared): stabilize distance observation weighting in localization engine`
+- `refactor(mobile): move home flow into file-based router layout`
+- `docs(repo): add testbed style skill usage guidelines`
+- `feat(testbed)!: replace legacy state navigator with route-driven navigation`
+
+### Multi-scope and mixed changes
+
+- Prefer splitting unrelated changes into separate commits per scope.
+- If a single change legitimately spans multiple areas, use the dominant scope and explain secondary impacts in the commit body.
+
+### Required commit body structure
+
+Every commit **MUST** include a detailed body. The body must explain both:
+
+1. why the change was made (grouped reasons), and
+2. what changed (items grouped under each reason).
+
+Do not use a one-line or unstructured body for non-trivial commits.
+
+Use this required structure for **every** commit message body:
+
+```text
+<type>(<scope>): <subject>
+
+Reason: <high-level reason 1>
+- Change: <specific modification>
+- Change: <specific modification>
+
+Reason: <high-level reason 2>
+- Change: <specific modification>
+- Change: <specific modification>
+
+Impact:
+- <user-visible or developer-visible outcome>
+- <risk, migration note, or compatibility note>
+
+Validation:
+- <test or command run>
+- <additional verification step>
+```
+
+Formatting rules for commit bodies:
+
+- Start each group with `Reason: <...>`.
+- Under each reason, list one or more `Change: <...>` bullets.
+- Keep each change bullet concrete and implementation-specific.
+- Add `Impact:` and `Validation:` sections for all commits except trivial docs-only typo fixes.
+- If no tests are run, explicitly state that in `Validation:` with a short justification.
+- Keep language concise, factual, and traceable to the actual diff.
+
+## Testbed Style Guide Skill
+
+When working inside `apps/testbed`, use the dedicated testbed style guide skill at `.github/skills/testbed-style-guide/SKILL.md`.
+
+- Treat that skill as the first source of truth for testbed route conventions, mini-app architecture, simulation UX, and test patterns.
+- Keep guidance in this file and the skill synchronized when standards change.
+
 ## Monorepo Structure
 
 This project is organized as a monorepo to unify logic across mobile applications and native modules.

@@ -23,11 +23,15 @@ import { FIELD_PRESETS } from "./types";
 
 export interface OptimizationTestScreenProps {
   onExit?: () => void;
-  onSetSubBack?: (cb: (() => void) | undefined) => void;
+  forcedViewMode?: "config" | "results";
+  onRunComplete?: () => void;
+  onBackToConfiguration?: () => void;
 }
 
 export default function OptimizationTestScreen({
-  onSetSubBack,
+  forcedViewMode,
+  onRunComplete,
+  onBackToConfiguration,
 }: OptimizationTestScreenProps) {
   const { state, setters, actions } = useOptimizationRunner();
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -35,21 +39,6 @@ export default function OptimizationTestScreen({
   const [useWhiteBackground] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
-
-  const showResultsBackButton =
-    state.viewMode === "results" && !state.isRunning;
-
-  React.useEffect(() => {
-    if (showResultsBackButton && onSetSubBack) {
-      // Wrap the callback in another function to avoid React's functional update behavior
-      onSetSubBack(() => () => {
-        setters.setViewMode("config");
-        actions.resetResults();
-      });
-    } else if (onSetSubBack) {
-      onSetSubBack(undefined);
-    }
-  }, [showResultsBackButton, setters, actions, onSetSubBack]);
 
   const visualizationRef = useRef<View>(null);
 
@@ -70,6 +59,21 @@ export default function OptimizationTestScreen({
     } finally {
       setIsCapturing(false);
     }
+  };
+
+  const effectiveViewMode = forcedViewMode ?? state.viewMode;
+
+  const handleRunOptimizationTest = async () => {
+    await actions.runOptimizationTest();
+    onRunComplete?.();
+  };
+
+  const handleBackToConfiguration = () => {
+    if (!forcedViewMode) {
+      setters.setViewMode("config");
+    }
+    actions.resetResults();
+    onBackToConfiguration?.();
   };
 
   return (
@@ -115,7 +119,7 @@ export default function OptimizationTestScreen({
               isRunning={state.isRunning}
               showHeatmap={showHeatmap}
               onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
-              isSetup={state.viewMode === "config"}
+              isSetup={effectiveViewMode === "config"}
               hideControls={isCapturing}
               useWhiteBackground={useWhiteBackground}
               heatmapResolution={state.heatmapResolution}
@@ -145,9 +149,31 @@ export default function OptimizationTestScreen({
           </View>
         </View>
 
-        {state.viewMode === "config" ? (
+        {effectiveViewMode === "config" ? (
           <>
             <CollapsibleSection title="Test Configuration & Control">
+              <Dropdown
+                label="Simulation Source"
+                value={state.sourceMode}
+                options={[
+                  { label: "BLE RSSI", value: "ble-rssi" },
+                  { label: "UWB Distance", value: "uwb-distance" },
+                  { label: "Hybrid (BLE + UWB)", value: "hybrid" },
+                ]}
+                onSelect={(v) => setters.setSourceMode(v as any)}
+                onToggle={(open) => setScrollEnabled(!open)}
+                disabled={state.isRunning}
+                tooltip="Choose the measurement source used for simulation runs. Hybrid mode feeds both RSSI and distance observations into the optimizer."
+              />
+              {state.sourceMode !== "ble-rssi" && (
+                <InputRow
+                  label="UWB Sigma (m)"
+                  value={state.uwbDistanceSigma}
+                  onChange={setters.setUwbDistanceSigma}
+                  disabled={state.isRunning}
+                  tooltip="Standard deviation applied to simulated UWB distance measurements in meters. Lower values approximate cleaner LOS measurements."
+                />
+              )}
               <Dropdown
                 label="Test Mode"
                 value={state.testMode}
@@ -255,7 +281,7 @@ export default function OptimizationTestScreen({
                 ) : (
                   <TouchableOpacity
                     style={styles.button}
-                    onPress={actions.runOptimizationTest}
+                    onPress={handleRunOptimizationTest}
                   >
                     <Text style={styles.buttonText}>Run Optimization Test</Text>
                   </TouchableOpacity>
@@ -726,18 +752,28 @@ export default function OptimizationTestScreen({
             )}
           </>
         ) : (
-          <ResultsView
-            results={state.results}
-            batchAnalysis={state.batchAnalysis}
-            logBatches={state.logBatches}
-            sweepResults={state.sweepResults}
-            sweepConfig={state.sweepConfig}
-            testMode={state.testMode}
-            selectedResultIndex={selectedResultIndex}
-            onSelectResultIndex={setSelectedResultIndex}
-            onClearLogs={() => setters.setLogBatches([])}
-            onToggleScroll={setScrollEnabled}
-          />
+          <>
+            {!state.isRunning && (
+              <TouchableOpacity
+                onPress={handleBackToConfiguration}
+                style={[styles.button, { marginBottom: 12 }]}
+              >
+                <Text style={styles.buttonText}>Back to Configuration</Text>
+              </TouchableOpacity>
+            )}
+            <ResultsView
+              results={state.results}
+              batchAnalysis={state.batchAnalysis}
+              logBatches={state.logBatches}
+              sweepResults={state.sweepResults}
+              sweepConfig={state.sweepConfig}
+              testMode={state.testMode}
+              selectedResultIndex={selectedResultIndex}
+              onSelectResultIndex={setSelectedResultIndex}
+              onClearLogs={() => setters.setLogBatches([])}
+              onToggleScroll={setScrollEnabled}
+            />
+          </>
         )}
         <View style={{ height: 40 }} />
       </ScrollView>

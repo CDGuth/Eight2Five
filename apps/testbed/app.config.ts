@@ -1,5 +1,9 @@
 import type { ExpoConfig } from "expo/config";
 
+const runtime = globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+};
+
 const config: ExpoConfig = {
   owner: "cdguth",
   name: "Eight2Five Testbed",
@@ -26,6 +30,7 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
+    "expo-router",
     "expo-asset",
     "expo-sharing",
     [
@@ -59,9 +64,11 @@ const config: ExpoConfig = {
   ],
   experiments: {
     reactCompiler: true,
+    typedRoutes: true,
   },
   extra: {
-    isNativeBeaconingEnabled: process.env.USE_NATIVE_BEACONING === "true",
+    isNativeBeaconingEnabled:
+      runtime.process?.env?.USE_NATIVE_BEACONING === "true",
     eas: {
       projectId: "eba37a43-6b79-47e1-b347-ba1bf0f40c80",
     },
