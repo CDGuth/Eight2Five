@@ -1,4 +1,4 @@
-# Agent Commit Notes Archive
+# Commit Notes Archive
 This file is repository-tracked and stores consumed commit note entries.
 
 ## Archived Entry 20260403013350-cofh

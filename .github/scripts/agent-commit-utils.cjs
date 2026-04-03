@@ -27,7 +27,7 @@ function getDefaultPaths(repoRoot) {
 
 function getWorkingNoteTemplate() {
   return [
-    "# Agent Commit Notes (local-only)",
+    "# Commit Notes (local-only)",
     "This file is generated for local agent-assisted commits.",
     "Do not commit this file.",
     "",
@@ -36,7 +36,7 @@ function getWorkingNoteTemplate() {
 
 function getArchiveTemplate() {
   return [
-    "# Agent Commit Notes Archive",
+    "# Commit Notes Archive",
     "This file is repository-tracked and stores consumed commit note entries.",
     "",
   ].join("\n");
