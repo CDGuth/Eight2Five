@@ -10,20 +10,23 @@ import {
 
 let mockListener: ((event: { beacons: any[] }) => void) | null = null;
 
-jest.mock("../../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule", () => {
-  const startScanning = jest.fn();
-  const stopScanning = jest.fn();
-  const addBeaconDiscoveredListener = jest.fn((listener: any) => {
-    mockListener = listener;
-    return { remove: jest.fn() };
-  });
+jest.mock(
+  "../../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule",
+  () => {
+    const startScanning = jest.fn();
+    const stopScanning = jest.fn();
+    const addBeaconDiscoveredListener = jest.fn((listener: any) => {
+      mockListener = listener;
+      return { remove: jest.fn() };
+    });
 
-  return {
-    startScanning,
-    stopScanning,
-    addBeaconDiscoveredListener,
-  };
-});
+    return {
+      startScanning,
+      stopScanning,
+      addBeaconDiscoveredListener,
+    };
+  },
+);
 
 const MAX_UINT32 = 4294967295;
 

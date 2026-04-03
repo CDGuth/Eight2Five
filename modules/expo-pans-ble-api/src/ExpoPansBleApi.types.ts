@@ -25,7 +25,7 @@ export enum PansCommandType {
   writeOperationMode = 0x94,
   writePersistedPosition = 0x95,
   readAnchorList = 0x96,
-  fwUpdatePush = 0xA0,
+  fwUpdatePush = 0xa0,
 }
 
 export interface PansApiCapabilities {

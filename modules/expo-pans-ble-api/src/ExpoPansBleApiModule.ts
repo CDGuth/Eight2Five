@@ -22,7 +22,10 @@ interface ExpoPansBleApiNativeModule {
   getCapabilities(): PansApiCapabilities;
   connect(macAddress: string, timeoutMs?: number): Promise<boolean>;
   disconnect(macAddress: string): Promise<boolean>;
-  executeCommand(macAddress: string, request: PansTlvRequest): Promise<PansCommandResult>;
+  executeCommand(
+    macAddress: string,
+    request: PansTlvRequest,
+  ): Promise<PansCommandResult>;
 }
 
 type EventMap = {
@@ -38,15 +41,17 @@ type EventMap = {
   [ExpoPansBleApiModuleEvents.onError]: (event: PansApiError) => void;
 };
 
-const nativeModule = requireNativeModule<ExpoPansBleApiNativeModule>(
-  "ExpoPansBleApi",
-);
+const nativeModule =
+  requireNativeModule<ExpoPansBleApiNativeModule>("ExpoPansBleApi");
 const emitter = new EventEmitter<EventMap>(nativeModule as never);
 
 export function addDeviceDiscoveredListener(
   listener: (event: { devices: PansBleDevice[] }) => void,
 ): EventSubscription {
-  return emitter.addListener(ExpoPansBleApiModuleEvents.onDeviceDiscovered, listener);
+  return emitter.addListener(
+    ExpoPansBleApiModuleEvents.onDeviceDiscovered,
+    listener,
+  );
 }
 
 export function addConnectionStateChangedListener(
@@ -143,7 +148,9 @@ export async function writeLocationDataMode(
   mode: number,
 ): Promise<PansCommandResult> {
   if (!Number.isInteger(mode) || mode < 0 || mode > 255)
-    throw new Error("INVALID_ARGUMENT: mode must be a byte integer in range 0..255.");
+    throw new Error(
+      "INVALID_ARGUMENT: mode must be a byte integer in range 0..255.",
+    );
 
   return await executeCommand(macAddress, {
     type: PansCommandType.writeLocationDataMode,
@@ -212,7 +219,10 @@ export async function writePersistedPosition(
   const xMm = Math.round(position.xMeters * 1000);
   const yMm = Math.round(position.yMeters * 1000);
   const zMm = Math.round((position.zMeters ?? 0) * 1000);
-  const quality = Math.max(1, Math.min(100, Math.round(position.quality ?? 100)));
+  const quality = Math.max(
+    1,
+    Math.min(100, Math.round(position.quality ?? 100)),
+  );
 
   const bytes = new Uint8Array(13);
   const view = new DataView(bytes.buffer);
@@ -262,9 +272,12 @@ function validateMacAddress(macAddress: string): void {
 }
 
 function validateTlvRequest(request: PansTlvRequest): void {
-  const typeInRange = Number.isInteger(request.type) && request.type >= 0 && request.type <= 255;
+  const typeInRange =
+    Number.isInteger(request.type) && request.type >= 0 && request.type <= 255;
   if (!typeInRange)
-    throw new Error("INVALID_ARGUMENT: TLV type must be an integer in range 0..255.");
+    throw new Error(
+      "INVALID_ARGUMENT: TLV type must be an integer in range 0..255.",
+    );
 
   const validValue =
     Array.isArray(request.value) &&

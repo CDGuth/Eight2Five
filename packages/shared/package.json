@@ -8,6 +8,8 @@
     "src"
   ],
   "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {

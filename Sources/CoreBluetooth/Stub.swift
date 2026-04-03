@@ -1,22 +1,10 @@
-// ============================================================================
-// ⚠️  SPM STUB - FOR SWIFT LSP ONLY - NOT USED IN PRODUCTION BUILDS  ⚠️
-// ============================================================================
-//
-// This file provides stub types for CoreBluetooth to enable SourceKit-LSP
-// (Swift Language Server) functionality in VS Code on non-macOS platforms.
-//
-// THE ACTUAL iOS BUILD:
-// - Uses CocoaPods via the .podspec file
-// - Links against the real CoreBluetooth.framework from the iOS SDK
-// - This stub is completely ignored during EAS Build / Xcode compilation
-//
-// DO NOT rely on these stubs for actual Bluetooth functionality.
-// They exist solely to satisfy the Swift compiler for editor tooling.
-// ============================================================================
+// Editor-only CoreBluetooth stubs used by SourceKit-LSP on non-macOS setups.
+// Native iOS builds use the real CoreBluetooth.framework via Xcode/CocoaPods.
+// Keep this file minimal and focused on type-checking support.
 
 import Foundation
 
-/// Stub for CBCentralManagerState - mirrors Apple's CoreBluetooth enum
+/// Minimal CBCentralManagerState shape for editor type-checking.
 public enum CBCentralManagerState: Int {
     case unknown = 0
     case resetting = 1
@@ -26,5 +14,5 @@ public enum CBCentralManagerState: Int {
     case poweredOn = 5
 }
 
-/// Stub for CBManagerState (newer API name for the same enum)
+/// Newer API name alias in Apple frameworks.
 public typealias CBManagerState = CBCentralManagerState

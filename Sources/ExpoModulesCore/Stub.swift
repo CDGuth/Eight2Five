@@ -1,18 +1,6 @@
-// ============================================================================
-// ⚠️  SPM STUB - FOR SWIFT LSP ONLY - NOT USED IN PRODUCTION BUILDS  ⚠️
-// ============================================================================
-//
-// This file provides stub types for ExpoModulesCore to enable SourceKit-LSP
-// (Swift Language Server) functionality in VS Code on non-macOS platforms.
-//
-// THE ACTUAL iOS BUILD:
-// - Uses CocoaPods: `s.dependency 'ExpoModulesCore'` in the .podspec
-// - Links against the real ExpoModulesCore from the expo package
-// - This stub is completely ignored during EAS Build / Xcode compilation
-//
-// These stubs mirror the public API surface of ExpoModulesCore but contain no
-// real implementation. DO NOT rely on them for actual Expo module functionality.
-// ============================================================================
+// Editor-only ExpoModulesCore stubs for SourceKit-LSP on non-macOS platforms.
+// Real iOS builds use the actual ExpoModulesCore dependency from CocoaPods.
+// These definitions are intentionally lightweight and not runtime-accurate.
 
 import Foundation
 

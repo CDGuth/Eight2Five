@@ -24,6 +24,16 @@ npm run ios:testbed
 ```
 
 ### Quality
+
+Preferred from repo root:
+
+```bash
+npm run validate:core
+npm run validate
+```
+
+Workspace-scoped checks:
+
 ```bash
 npm run lint --workspace apps/testbed
 npm run type-check --workspace apps/testbed

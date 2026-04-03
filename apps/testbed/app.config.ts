@@ -11,7 +11,7 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   version: "0.0.0",
   orientation: "portrait",
-  icon: "./assets/icon.png",
+  icon: "./assets/app-icons/testbed-android-legacy-icon.png",
   userInterfaceStyle: "light",
   splash: {
     image: "./assets/splash-icon.png",
@@ -21,12 +21,18 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: "com.anonymous.eight2fivetestbed",
     supportsTablet: false,
+    icon: {
+      light: "./assets/app-icons/testbed-ios-icon.png",
+      dark: "./assets/app-icons/testbed-ios-icon-dark.png",
+      tinted: "./assets/app-icons/testbed-ios-icon-tinted.png",
+    },
   },
   android: {
     package: "com.anonymous.eight2fivetestbed",
+    icon: "./assets/app-icons/testbed-android-legacy-icon.png",
     adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#ffffff",
+      foregroundImage: "./assets/app-icons/testbed-android-adaptive-foreground.png",
+      backgroundImage: "./assets/app-icons/testbed-android-adaptive-background.png",
     },
   },
   plugins: [

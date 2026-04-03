@@ -16,12 +16,6 @@ Expo native module wrapper for KKMHogen KBeaconPro BLE scanning, connection, con
 
 This monorepo already consumes the module via file dependency.
 
-If adding manually in another workspace:
-
-```bash
-npm install expo-kbeaconpro
-```
-
 Add the config plugin in app config:
 
 ```ts
@@ -41,6 +35,16 @@ plugins: [
 ```
 
 Plugin implementation: [app.plugin.js](app.plugin.js)
+
+## Validation
+
+From repo root:
+
+```bash
+npm run lint --workspace modules/expo-kbeaconpro
+npm run type-check --workspace modules/expo-kbeaconpro
+npm run test --workspace modules/expo-kbeaconpro
+```
 
 ## Runtime Event Model
 

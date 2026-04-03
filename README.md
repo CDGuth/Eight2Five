@@ -25,10 +25,24 @@ npm run start:testbed
 
 ## Validation Commands
 
+Prefer the root validation entry points for most work:
+
+```bash
+npm run validate:core
+npm run validate
+```
+
+- `npm run validate:core` runs type-check, lint, and test across workspaces.
+- `npm run validate` adds Expo doctor and Expo install checks for the Expo app workspaces.
+
+Use the lower-level commands directly when you only need a specific check:
+
 ```bash
 npm run type-check
 npm run lint
 npm run test
+npx expo-doctor
+npx expo install --check
 ```
 
 ## High-Level Architecture
@@ -232,5 +246,6 @@ loop.stop();
 ## CI and Workflow Notes
 
 - Workspace-wide checks run via root scripts.
+- Validation command policy lives in [.github/skills/validation-guide/SKILL.md](.github/skills/validation-guide/SKILL.md).
 - Expo app configs include module config plugins for Bluetooth/location permission setup.
 - Swift stubs under [Sources](Sources) support linting/tooling on non-macOS environments and are not runtime production code.

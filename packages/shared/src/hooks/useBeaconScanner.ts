@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { BeaconState, PacketType, RawBeaconData } from "../types/BeaconProtocol";
+import {
+  BeaconState,
+  PacketType,
+  RawBeaconData,
+} from "../types/BeaconProtocol";
 import { parseBeaconData } from "../utils/beaconParser";
 import { LocalizationEngine } from "../localization/LocalizationEngine";
 import {
@@ -117,10 +121,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
             const currentState = beaconsRef.current.get(mac);
 
             // Parse the raw data
-            const newState = parseBeaconData(
-              rawBeacon,
-              currentState,
-            );
+            const newState = parseBeaconData(rawBeacon, currentState);
 
             // Only update if we have meaningful data changes or new beacon
             // For now, we update on every packet to keep RSSI fresh, but in a real app
@@ -145,7 +146,8 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
                 };
 
             if (observation.measurementKind === "rssi") {
-              currentForState.rssi = observation.rssiDbm ?? currentForState.rssi;
+              currentForState.rssi =
+                observation.rssiDbm ?? currentForState.rssi;
             }
 
             if (

@@ -15,6 +15,16 @@ npm run ios:mobile        # run on iOS simulator/device
 ```
 
 ### Quality
+
+Preferred from repo root:
+
+```bash
+npm run validate:core
+npm run validate
+```
+
+Workspace-scoped checks:
+
 ```bash
 npm run lint --workspace apps/mobile
 npm run type-check --workspace apps/mobile

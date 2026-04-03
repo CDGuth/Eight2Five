@@ -29,9 +29,7 @@ type EventMap = {
 
 const nativeModule = requireNativeModule("ExpoKBeaconPro");
 
-const emitter = new EventEmitter<EventMap>(
-  nativeModule,
-);
+const emitter = new EventEmitter<EventMap>(nativeModule);
 
 export function addBeaconDiscoveredListener(
   listener: (event: { beacons: KBeacon[] }) => void,
@@ -86,7 +84,12 @@ export async function connectEnhanced(
   timeout?: number,
   connPara?: KBConnPara,
 ): Promise<boolean> {
-  return await nativeModule.connectEnhanced(macAddress, password, timeout, connPara);
+  return await nativeModule.connectEnhanced(
+    macAddress,
+    password,
+    timeout,
+    connPara,
+  );
 }
 
 export async function disconnect(macAddress: string): Promise<boolean> {

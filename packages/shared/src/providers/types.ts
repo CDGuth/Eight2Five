@@ -10,7 +10,9 @@ export interface BeaconSourceSubscription {
 export interface BeaconSource {
   start(): Promise<void> | void;
   stop(): Promise<void> | void;
-  subscribe(listener: (event: BeaconSourceEvent) => void): BeaconSourceSubscription;
+  subscribe(
+    listener: (event: BeaconSourceEvent) => void,
+  ): BeaconSourceSubscription;
   destroy?(): void;
 }
 

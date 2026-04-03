@@ -16,8 +16,16 @@
     "ios:mobile": "npm run ios --workspace apps/mobile",
     "ios:testbed": "npm run ios --workspace apps/testbed",
     "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "precommit-check": "npm run precommit-check --workspaces --if-present"
+    "validate:core": "npm run type-check && npm run lint && npm run test",
+    "validate:expo:doctor": "npm run --workspace apps/mobile expo:doctor && npm run --workspace apps/testbed expo:doctor",
+    "validate:expo:install-check": "npm run --workspace apps/mobile expo:install-check && npm run --workspace apps/testbed expo:install-check",
+    "validate": "npm run validate:core && npm run validate:expo:doctor && npm run validate:expo:install-check",
+    "agent:validate": "node .github/scripts/agent-validate.cjs",
+    "agent:commit:note": "node .github/scripts/agent-commit-note.cjs",
+    "agent:commit:from-note": "node .github/scripts/agent-commit-from-note.cjs",
+    "agent:commit:archive": "node .github/scripts/agent-commit-archive.cjs"
   }
 }

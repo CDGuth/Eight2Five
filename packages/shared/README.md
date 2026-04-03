@@ -9,6 +9,22 @@ Shared logic for localization, hooks, providers, and utilities used by apps in t
 - providers: source abstractions for beacon ingestion
 - utils: packet parsing and helper logic
 
+## Quality
+
+Preferred from repo root:
+
+```bash
+npm run validate:core
+```
+
+Workspace-scoped checks:
+
+```bash
+npm run lint --workspace @eight2five/shared
+npm run type-check --workspace @eight2five/shared
+npm run test --workspace @eight2five/shared
+```
+
 ## Provider abstractions
 
 Provider contracts live in:

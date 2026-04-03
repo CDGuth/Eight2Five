@@ -157,7 +157,7 @@ export class LocalizationEngine implements LocalizationEngineApi {
       observation.measurementKind === "rssi" &&
       typeof observation.rssiDbm === "number"
         ? this.getFilter(observation.mac).filterSample(observation.rssiDbm)
-        : previousRssi ?? Number.NaN;
+        : (previousRssi ?? Number.NaN);
 
     const distanceMeters =
       observation.measurementKind === "distance"
@@ -367,7 +367,8 @@ class GridSearchDistanceEstimator implements RssiDistanceEstimator {
     constants: PropagationConstants;
     searchBounds: SearchBounds;
   }): number {
-    const { rssiDbm, txPowerDbm, propagation, constants, searchBounds } = params;
+    const { rssiDbm, txPowerDbm, propagation, constants, searchBounds } =
+      params;
 
     const maxDistance = Math.hypot(
       searchBounds.xMax - searchBounds.xMin,

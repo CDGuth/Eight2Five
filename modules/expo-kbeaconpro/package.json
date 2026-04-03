@@ -4,6 +4,9 @@
   "main": "index.tsx",
   "types": "index.tsx",
   "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "jest __tests__/ExpoKBeaconProModule.test.ts --watchAll=false --passWithNoTests --runInBand"
   },
   "expo": {

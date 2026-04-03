@@ -2,6 +2,8 @@
 
 **ALWAYS** use your tools to implement user requests, **IF AND ONLY IF** the user requests you to make a change. **DO NOT** tell the user to make manual changes unless that is necessary. **ALWAYS PLAN YOUR CHANGES WITH A LIST OF ACTIONABLE STEPS BEFORE MAKING THEM.**
 
+When requirements are ambiguous or underspecified, use the `vscode_askQuestions` tool to ask concise clarifying questions instead of making assumptions, including while operating in agent mode.
+
 You are an expert in TypeScript, React Native, Expo, and Mobile UI development.
 
 ## Project Description
@@ -55,39 +57,146 @@ All commits in this repository **MUST** follow Conventional Commits.
 
 ### Required commit body structure
 
-Every commit **MUST** include a detailed body. The body must explain both:
-
-1. why the change was made (grouped reasons), and
-2. what changed (items grouped under each reason).
-
-Do not use a one-line or unstructured body for non-trivial commits.
+Every commit **MUST** include a detailed body with bulleted items describing each change. Do not use a one-line or unstructured body for non-trivial commits.
 
 Use this required structure for **every** commit message body:
 
 ```text
 <type>(<scope>): <subject>
 
-Reason: <high-level reason 1>
-- Change: <specific modification>
-- Change: <specific modification>
-
-Reason: <high-level reason 2>
-- Change: <specific modification>
-- Change: <specific modification>
+- <imperative verb> <specific details about a change, reference files if necessary>
+- <imperative verb> <specific details about another change, reference files if necessary>
 
 Impact:
 - <user-visible or developer-visible outcome>
 - <risk, migration note, or compatibility note>
+- <etc.>
+
+Validation:
+- <description of tests run or manual validation>
+```
+
+### Example Commit Body
+
+```text
+feat(shared): stabilize distance observation weighting in localization engine
+
+- normalize distance weights in `src/localization/optimizer.ts` to prevent outlier dominance
+- increase Kalman filter process noise in `src/localization/filters/Kalman.ts` for faster responsiveness
+- add unit tests for weighted RMSE calculation in `src/localization/__tests__/RMSE.test.ts`
+
+Impact:
+- more robust position estimates in high-interference environments
+- reduced "ghosting" effects when performers change direction rapidly
+
+Validation:
+- ran `npm run test` in `packages/shared` - all tests passing
+- manual verification in `apps/testbed` using the `Simulation` mini-app with 10% noise injection
 ```
 
 Formatting rules for commit bodies:
 
-- Start each group with `Reason: <...>`.
-- Under each reason, list one or more `Change: <...>` bullets.
-- Keep each change bullet concrete and implementation-specific.
+- Use a bulleted list of changes starting with imperative verbs.
+- Include specific details and file references where helpful for context.
 - Add `Impact:` and `Validation:` sections for all commits except trivial docs-only typo fixes.
 - If no tests are run, explicitly state that in `Validation:` with a short justification.
 - Keep language concise, factual, and traceable to the actual diff.
+
+## Agent Commit Script Workflow
+
+Use script-based entry points for agent-driven commits.
+
+- Working local notes file (local-only, ignored): `.github/.commit-notes.local.md`
+- Validation cache used for commit body inference (local-only, ignored): `.github/.agent-validation-last.json`
+- Repository archive file (tracked): `.github/commit-notes-archive.md`
+
+Required script entry points:
+
+- `npm run agent:commit:note -- --type <type> --scope <scope> --subject "<subject>" --change "<item>" --impact "<item>" --validation "<item>"`
+    - Append one pending commit-note entry.
+- `npm run agent:commit:from-note`
+    - Read the next pending note entry, generate commit message in required Conventional Commit format, run `git commit`, and archive/reset consumed note entry.
+- `npm run agent:commit:archive -- --id <entry-id> --commit <hash>`
+    - Manually archive/reset a specific entry when needed.
+
+Recommended end-to-end sequence:
+
+1. Add a pending note entry with `agent:commit:note`.
+2. Run validation (`npm run agent:validate -- --mode core` at minimum; use full mode when Expo checks are required).
+3. Run `npm run agent:commit:from-note` to generate the Conventional Commit message and execute `git commit`.
+4. Confirm the consumed entry is removed from `.github/.commit-notes.local.md` and archived in `.github/commit-notes-archive.md`.
+
+Script behavior details:
+
+- `agent:commit:note`
+    - Creates one pending entry with metadata and bullet content for changes/impact/validation.
+    - `--change`, `--impact`, and `--validation` can be repeated to form multi-bullet sections.
+- `agent:commit:from-note`
+    - Uses the next pending entry (or a specific one via `--id`).
+    - Builds the commit message in the required format.
+    - Incorporates validation bullets inferred from `.github/.agent-validation-last.json` when available.
+    - Performs archive/reset automatically after successful commit unless `--no-archive` is used.
+- `agent:commit:archive`
+    - Manual archive/reconciliation command for edge cases; not part of normal flow.
+
+Agent behavior requirements:
+
+- Always append a commit-note entry while implementing changes.
+- Always run validation before `agent:commit:from-note` unless explicitly waived.
+- Before committing, read from `.github/.commit-notes.local.md` via `agent:commit:from-note`.
+- After successful commit, ensure entry is archived to `.github/commit-notes-archive.md` and removed from the local pending file.
+- On commit failure, do not remove pending note entries.
+
+## Validation Command Policy
+
+Do not use `precommit-check`; it has been removed.
+
+Use `.github/skills/validation-guide/SKILL.md` as the source of truth for validation command selection and agent-oriented script flow.
+
+Primary root entry points:
+
+- `npm run validate:core`
+    - Runs `npm run type-check`, `npm run lint`, and `npm run test`.
+- `npm run validate`
+    - Runs `validate:core` plus Expo checks for mobile and testbed (`npx expo-doctor`, `npx expo install --check`).
+- `npm run agent:validate`
+    - Agent-oriented validation entry point that records executed checks for commit Validation section inference.
+
+Agent validation behavior notes:
+
+- `npm run agent:validate -- --mode core`
+    - Runs only type-check, lint (or lint:fix), and tests.
+    - Use as the default minimum for non-Expo-impacting changes.
+- `npm run agent:validate`
+    - Runs core checks plus Expo doctor/install checks for mobile and testbed.
+    - Use when Expo config/plugins/native settings/dependencies are affected.
+- `npm run agent:validate -- --fix`
+    - Uses `lint:fix` during the scripted run.
+- Validation report output:
+    - `.github/.agent-validation-last.json` stores executed commands and pass/fail state for commit message inference.
+
+Detailed command usage rules:
+
+- `npm run type-check`
+    - Required when changing TypeScript source, interfaces/contracts, exports, parser/model logic, shared hooks/types, or TypeScript config.
+- `npm run lint`
+    - Required for all code/config/script changes before commit and pull request.
+- `npm run lint:fix`
+    - Use first when lint issues are auto-fixable; rerun `npm run lint` after fixes.
+- `npm run test`
+    - Required for behavior changes, bug fixes, refactors, localization algorithm updates, parser/filter adjustments, and module API changes.
+- `npx expo-doctor`
+    - Required after Expo SDK/plugin/config/native project changes, and after dependency changes affecting Expo apps.
+- `npx expo install --check`
+    - Required after `package.json`/lockfile dependency updates in Expo apps to verify Expo compatibility.
+
+## Validation Guide Skill
+
+Use the validation guide skill for validation and script workflow decisions:
+
+- `.github/skills/validation-guide/SKILL.md`
+
+Keep guidance in this file and the skill synchronized when validation workflow standards change.
 
 ## Testbed Style Guide Skill
 

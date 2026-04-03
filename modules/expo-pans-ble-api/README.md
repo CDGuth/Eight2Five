@@ -14,11 +14,7 @@ This module is the low-level transport layer used by shared providers and provis
 
 ## Installation and Configuration
 
-The monorepo already links this as a file dependency. For external use:
-
-```bash
-npm install expo-pans-ble-api
-```
+The monorepo already links this as a file dependency.
 
 Add plugin in app config:
 
@@ -39,6 +35,16 @@ plugins: [
 ```
 
 Plugin source: [app.plugin.js](app.plugin.js)
+
+## Validation
+
+From repo root:
+
+```bash
+npm run lint --workspace modules/expo-pans-ble-api
+npm run type-check --workspace modules/expo-pans-ble-api
+npm run test --workspace modules/expo-pans-ble-api
+```
 
 ## Event Model
 
