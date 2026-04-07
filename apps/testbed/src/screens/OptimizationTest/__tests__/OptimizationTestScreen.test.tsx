@@ -61,6 +61,8 @@ function createBaseState() {
     selectedModel: "TwoRayGround",
     selectedAlgorithm: "MFASA",
     selectedFilter: "Kalman",
+    sourceMode: "ble-rssi",
+    uwbDistanceSigma: "0.15",
     isSolverWeighted: false,
     solverWeightingModel: "linear",
     solverWeightingBase: "120",
@@ -125,6 +127,8 @@ const setterNames = [
   "setSelectedModel",
   "setSelectedAlgorithm",
   "setSelectedFilter",
+  "setSourceMode",
+  "setUwbDistanceSigma",
   "setIsSolverWeighted",
   "setSolverWeightingModel",
   "setSolverWeightingBase",
@@ -252,7 +256,9 @@ describe("OptimizationTestScreen", () => {
               t.props.children === "Run Optimization Test",
           ),
       );
-    act(() => runButton?.props.onPress());
+    await act(async () => {
+      await runButton?.props.onPress();
+    });
     expect(mockActions.runOptimizationTest).toHaveBeenCalled();
 
     const copyButton = tree.root
@@ -272,20 +278,22 @@ describe("OptimizationTestScreen", () => {
     expect(captureRef).toHaveBeenCalled();
   });
 
-  it("registers sub-back callback in results mode and invokes navigation actions", async () => {
+  it("shows results back action and invokes navigation actions", async () => {
     mockState = { ...createBaseState(), viewMode: "results", isRunning: false };
-    const onSetSubBack = jest.fn();
-    const tree = render({ onSetSubBack });
+    const tree = render();
 
-    await act(async () => {});
+    const configBackButton = tree.root
+      .findAllByType(TouchableOpacity)
+      .find((n: TestRenderer.ReactTestInstance) =>
+        n
+          .findAllByType(Text)
+          .some(
+            (t: TestRenderer.ReactTestInstance) =>
+              t.props.children === "Back to Configuration",
+          ),
+      );
 
-    expect(onSetSubBack).toHaveBeenCalled();
-    const registered = onSetSubBack.mock.calls[0]?.[0];
-    expect(typeof registered).toBe("function");
-
-    const backCallback = registered();
-    expect(typeof backCallback).toBe("function");
-    act(() => backCallback());
+    act(() => configBackButton?.props.onPress());
 
     expect(mockSetters.setViewMode).toHaveBeenCalledWith("config");
     expect(mockActions.resetResults).toHaveBeenCalled();

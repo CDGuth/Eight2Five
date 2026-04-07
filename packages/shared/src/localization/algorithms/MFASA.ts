@@ -338,13 +338,22 @@ export class MFASAOptimizer implements LocalizationOptimizer {
         position.y - anchor.y,
       );
 
-      const txPower = measurement.txPower ?? DEFAULT_TX_POWER_DBM;
-      const estimated = propagation.estimateRssi({
-        distanceMeters: horizontalDistance,
-        txPowerDbm: txPower,
-        constants,
-      });
-      const diff = measurement.filteredRssi - estimated;
+      let diff = Number.NaN;
+      if (Number.isFinite(measurement.distanceMeters)) {
+        diff = (measurement.distanceMeters as number) - horizontalDistance;
+      } else if (Number.isFinite(measurement.filteredRssi)) {
+        const txPower = measurement.txPower ?? DEFAULT_TX_POWER_DBM;
+        const estimated = propagation.estimateRssi({
+          distanceMeters: horizontalDistance,
+          txPowerDbm: txPower,
+          constants,
+        });
+        diff = measurement.filteredRssi - estimated;
+      }
+
+      if (!Number.isFinite(diff)) {
+        return;
+      }
 
       let weight = 1.0;
       if (weighting?.enabled) {
@@ -356,10 +365,14 @@ export class MFASAOptimizer implements LocalizationOptimizer {
 
         if (weighting.model === "linear") {
           // Default: Math.max(1, 120 + rssi)
-          weight = Math.max(1, (base + rssi) * scale);
+          if (Number.isFinite(rssi)) {
+            weight = Math.max(1, (base + rssi) * scale);
+          }
         } else if (weighting.model === "inverse-rssi") {
           // Default: 1.0 / |RSSI|
-          weight = scale / Math.pow(Math.abs(Math.min(-1, rssi)), param);
+          if (Number.isFinite(rssi)) {
+            weight = scale / Math.pow(Math.abs(Math.min(-1, rssi)), param);
+          }
         }
       }
 

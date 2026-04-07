@@ -8,7 +8,7 @@ const fakeSubapps: TestbedSubapp[] = [
     id: "optimization",
     title: "optimization playground",
     description: "Run localization scenarios",
-    Component: () => null,
+    href: "/(subapps)/optimization",
   },
 ];
 

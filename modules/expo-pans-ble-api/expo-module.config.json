@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoPansBleApiModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pansbleapi.ExpoPansBleApiModule"]
+  }
+}

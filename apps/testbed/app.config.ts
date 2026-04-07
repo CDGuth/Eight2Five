@@ -1,5 +1,9 @@
 import type { ExpoConfig } from "expo/config";
 
+const runtime = globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+};
+
 const config: ExpoConfig = {
   owner: "cdguth",
   name: "Eight2Five Testbed",
@@ -7,7 +11,7 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   version: "0.0.0",
   orientation: "portrait",
-  icon: "./assets/icon.png",
+  icon: "./assets/app-icons/testbed-android-legacy-icon.png",
   userInterfaceStyle: "light",
   splash: {
     image: "./assets/splash-icon.png",
@@ -17,15 +21,22 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: "com.anonymous.eight2fivetestbed",
     supportsTablet: false,
+    icon: {
+      light: "./assets/app-icons/testbed-ios-icon.png",
+      dark: "./assets/app-icons/testbed-ios-icon-dark.png",
+      tinted: "./assets/app-icons/testbed-ios-icon-tinted.png",
+    },
   },
   android: {
     package: "com.anonymous.eight2fivetestbed",
+    icon: "./assets/app-icons/testbed-android-legacy-icon.png",
     adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#ffffff",
+      foregroundImage: "./assets/app-icons/testbed-android-adaptive-foreground.png",
+      backgroundImage: "./assets/app-icons/testbed-android-adaptive-background.png",
     },
   },
   plugins: [
+    "expo-router",
     "expo-asset",
     "expo-sharing",
     [
@@ -45,12 +56,25 @@ const config: ExpoConfig = {
           "Our app uses your location to scan for nearby KBeaconPro devices.",
       },
     ],
+    [
+      "../../modules/expo-pans-ble-api",
+      {
+        bluetoothAlwaysUsageDescription:
+          "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
+        bluetoothPeripheralUsageDescription:
+          "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
+        locationWhenInUseUsageDescription:
+          "Our app uses your location to scan for nearby DWM1001 PANS BLE devices.",
+      },
+    ],
   ],
   experiments: {
     reactCompiler: true,
+    typedRoutes: true,
   },
   extra: {
-    isNativeBeaconingEnabled: process.env.USE_NATIVE_BEACONING === "true",
+    isNativeBeaconingEnabled:
+      runtime.process?.env?.USE_NATIVE_BEACONING === "true",
     eas: {
       projectId: "eba37a43-6b79-47e1-b347-ba1bf0f40c80",
     },

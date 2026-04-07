@@ -6,6 +6,7 @@ import {
   DEFAULT_SOLVER_THROTTLE_MS,
   DEFAULT_STALE_BEACON_MS,
   DEFAULT_KALMAN_CONFIG,
+  DEFAULT_TX_POWER_DBM,
 } from "./LocalizationConfig";
 import { KalmanFilter } from "./filters/KalmanFilter";
 import { LogNormalModel } from "./models/LogNormalModel";
@@ -14,13 +15,16 @@ import {
   BeaconMeasurement,
   EnvironmentConfigUpdate,
   EnvironmentMode,
+  FieldConfiguration,
   FieldDimensions,
+  LocalizationObservation,
   LocalizationEngineApi,
   OptimizationInput,
   LocalizationOptimizer,
   LocalizationSnapshot,
   PropagationConstants,
   PropagationModel,
+  RssiDistanceEstimator,
   SearchBounds,
 } from "./types";
 
@@ -28,8 +32,10 @@ export interface LocalizationEngineOptions {
   environment?: EnvironmentMode;
   propagationConstants?: Partial<PropagationConstants>;
   fieldDimensions?: FieldDimensions;
+  fieldConfiguration?: FieldConfiguration;
   solverThrottleMs?: number;
   staleBeaconMs?: number;
+  rssiDistanceEstimator?: RssiDistanceEstimator;
 }
 
 /**
@@ -48,9 +54,14 @@ export class LocalizationEngine implements LocalizationEngineApi {
   private environment: EnvironmentMode;
   private solverThrottleMs: number;
   private staleBeaconMs: number;
+  private readonly rssiDistanceEstimator: RssiDistanceEstimator;
+  private fieldConfiguration?: FieldConfiguration;
   private pendingSolve = false;
   private solveTimeout: any = null;
   private snapshot: LocalizationSnapshot = { beacons: [] };
+  private directPositionSeenAt = 0;
+  private directPositionStaleMs: number;
+  private pansDistanceSeenAt = 0;
 
   constructor(options: LocalizationEngineOptions = {}) {
     this.optimizer = new MFASAOptimizer();
@@ -77,23 +88,106 @@ export class LocalizationEngine implements LocalizationEngineApi {
     this.solverThrottleMs =
       options.solverThrottleMs ?? DEFAULT_SOLVER_THROTTLE_MS;
     this.staleBeaconMs = options.staleBeaconMs ?? DEFAULT_STALE_BEACON_MS;
+    this.directPositionStaleMs = this.staleBeaconMs;
+    this.rssiDistanceEstimator =
+      options.rssiDistanceEstimator ?? new GridSearchDistanceEstimator();
+
+    if (options.fieldConfiguration) {
+      this.applyFieldConfiguration(options.fieldConfiguration);
+    }
   }
 
   ingest(state: BeaconState) {
-    const filter = this.getFilter(state.mac);
-    const filteredRssi = filter.filterSample(state.rssi);
-
-    const next: BeaconMeasurement = {
+    this.ingestObservation({
       mac: state.mac,
-      lastSeen: Date.now(),
-      filteredRssi,
-      txPower: state.identity?.txPower,
+      observedAtMs: Date.now(),
+      source: "kbeacon",
+      measurementKind: "rssi",
+      rssiDbm: state.rssi,
+      txPowerDbm: state.identity?.txPower,
       xPercent: state.position?.xPercent,
       yPercent: state.position?.yPercent,
       zCm: state.position?.zCm,
+    });
+  }
+
+  ingestObservation(observation: LocalizationObservation) {
+    if (
+      observation.measurementKind === "position" &&
+      typeof observation.positionXMeters === "number" &&
+      typeof observation.positionYMeters === "number"
+    ) {
+      const qf = observation.quality ?? 100;
+      const normalizedError = Math.max(0.01, (101 - qf) / 100);
+
+      this.directPositionSeenAt = observation.observedAtMs;
+      this.snapshot = {
+        ...this.snapshot,
+        position: {
+          x: observation.positionXMeters,
+          y: observation.positionYMeters,
+          errorRmse: normalizedError,
+          iterations: 0,
+        },
+      };
+      return;
+    }
+
+    const isPansDistanceObservation =
+      observation.source.startsWith("pans-ble") &&
+      observation.measurementKind === "distance";
+
+    if (isPansDistanceObservation) {
+      this.pansDistanceSeenAt = observation.observedAtMs;
+    }
+
+    const shouldDropRssiFallback =
+      this.hasFreshPansDistance() &&
+      observation.measurementKind === "rssi" &&
+      !observation.source.startsWith("pans-ble");
+
+    if (shouldDropRssiFallback) {
+      return;
+    }
+
+    const current = this.beacons.get(observation.mac);
+    const previousRssi = current?.filteredRssi;
+
+    const filteredRssi =
+      observation.measurementKind === "rssi" &&
+      typeof observation.rssiDbm === "number"
+        ? this.getFilter(observation.mac).filterSample(observation.rssiDbm)
+        : (previousRssi ?? Number.NaN);
+
+    const distanceMeters =
+      observation.measurementKind === "distance"
+        ? observation.distanceMeters
+        : observation.measurementKind === "rssi" &&
+            Number.isFinite(filteredRssi)
+          ? this.rssiDistanceEstimator.estimateDistanceMeters({
+              rssiDbm: filteredRssi,
+              txPowerDbm: observation.txPowerDbm ?? DEFAULT_TX_POWER_DBM,
+              propagation: this.currentModel,
+              constants: this.constants,
+              searchBounds: this.bounds,
+            })
+          : observation.distanceMeters;
+
+    const next: BeaconMeasurement = {
+      mac: observation.mac,
+      lastSeen: observation.observedAtMs,
+      filteredRssi,
+      measurementKind: observation.measurementKind,
+      distanceMeters,
+      quality: observation.quality,
+      source: observation.source,
+      txPower: observation.txPowerDbm,
+      xPercent: observation.xPercent,
+      yPercent: observation.yPercent,
+      zCm: observation.zCm,
     };
 
-    this.beacons.set(state.mac, next);
+    this.beacons.set(observation.mac, next);
     this.snapshot = {
       ...this.snapshot,
       beacons: Array.from(this.beacons.values()),
@@ -133,6 +227,15 @@ export class LocalizationEngine implements LocalizationEngineApi {
     }
   }
 
+  setFieldConfiguration(config?: FieldConfiguration) {
+    this.fieldConfiguration = undefined;
+    if (!config) {
+      return;
+    }
+
+    this.applyFieldConfiguration(config);
+  }
+
   private getFilter(mac: string) {
     if (!this.filters.has(mac)) {
       this.filters.set(
@@ -155,6 +258,7 @@ export class LocalizationEngine implements LocalizationEngineApi {
   }
 
   private scheduleSolve() {
+    if (this.hasFreshDirectPosition()) return;
     if (this.pendingSolve) return;
     this.pendingSolve = true;
     this.solveTimeout = setTimeout(() => {
@@ -165,6 +269,10 @@ export class LocalizationEngine implements LocalizationEngineApi {
   }
 
   private async solve() {
+    if (this.hasFreshDirectPosition()) {
+      return;
+    }
+
     const input = this.buildOptimizationInput();
     if (!input) {
       return;
@@ -182,24 +290,34 @@ export class LocalizationEngine implements LocalizationEngineApi {
   }
 
   private buildOptimizationInput(): OptimizationInput | undefined {
+    if (!this.fieldConfiguration) {
+      return undefined;
+    }
+
     const nowTs = Date.now();
     const fresh = Array.from(this.beacons.values()).filter(
-      (beacon) => nowTs - beacon.lastSeen <= this.staleBeaconMs,
+      (beacon) =>
+        nowTs - beacon.lastSeen <= this.staleBeaconMs &&
+        (Number.isFinite(beacon.distanceMeters) ||
+          Number.isFinite(beacon.filteredRssi)),
     );
 
     if (fresh.length < 3) {
       return undefined;
     }
 
+    const fieldAnchorMap = new Map(
+      this.fieldConfiguration.anchors.map((anchor) => [anchor.mac, anchor]),
+    );
+
     const anchors = fresh
-      .filter(
-        (beacon) =>
-          beacon.xPercent !== undefined && beacon.yPercent !== undefined,
-      )
-      .map((beacon) => ({
-        mac: beacon.mac,
-        x: ((beacon.xPercent ?? 0) / 100) * this.fieldDimensions.widthMeters,
-        y: ((beacon.yPercent ?? 0) / 100) * this.fieldDimensions.lengthMeters,
+      .map((measurement) => fieldAnchorMap.get(measurement.mac))
+      .filter((anchor): anchor is NonNullable<typeof anchor> => !!anchor)
+      .map((anchor) => ({
+        mac: anchor.mac,
+        x: anchor.x,
+        y: anchor.y,
+        z: anchor.z,
       }));
 
     if (anchors.length < 3) {
@@ -214,5 +332,68 @@ export class LocalizationEngine implements LocalizationEngineApi {
       bounds: this.bounds,
       timeBudgetMs: this.solverThrottleMs / 2,
     };
+  }
+
+  private applyFieldConfiguration(config: FieldConfiguration) {
+    this.fieldConfiguration = config;
+    this.fieldDimensions = config.fieldDimensions;
+    this.bounds = {
+      xMin: 0,
+      xMax: this.fieldDimensions.widthMeters,
+      yMin: 0,
+      yMax: this.fieldDimensions.lengthMeters,
+    };
+    this.environment = config.environment;
+    this.currentModel =
+      this.environment === "outdoor" ? this.outdoorModel : this.indoorModel;
+  }
+
+  private hasFreshDirectPosition() {
+    if (!this.snapshot.position) return false;
+
+    return Date.now() - this.directPositionSeenAt <= this.directPositionStaleMs;
+  }
+
+  private hasFreshPansDistance() {
+    return Date.now() - this.pansDistanceSeenAt <= this.staleBeaconMs;
+  }
+}
+
+class GridSearchDistanceEstimator implements RssiDistanceEstimator {
+  estimateDistanceMeters(params: {
+    rssiDbm: number;
+    txPowerDbm: number;
+    propagation: PropagationModel;
+    constants: PropagationConstants;
+    searchBounds: SearchBounds;
+  }): number {
+    const { rssiDbm, txPowerDbm, propagation, constants, searchBounds } =
+      params;
+
+    const maxDistance = Math.hypot(
+      searchBounds.xMax - searchBounds.xMin,
+      searchBounds.yMax - searchBounds.yMin,
+    );
+
+    let bestDistance = 0.1;
+    let bestDiff = Number.POSITIVE_INFINITY;
+
+    const samples = 120;
+    for (let i = 1; i <= samples; i += 1) {
+      const distanceMeters = (i / samples) * Math.max(1, maxDistance);
+      const estimatedRssi = propagation.estimateRssi({
+        distanceMeters,
+        txPowerDbm,
+        constants,
+      });
+
+      const diff = Math.abs(rssiDbm - estimatedRssi);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestDistance = distanceMeters;
+      }
+    }
+
+    return bestDistance;
   }
 }

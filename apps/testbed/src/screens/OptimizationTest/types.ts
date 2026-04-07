@@ -1,10 +1,27 @@
 import {
+  AlgorithmDiagnostics,
   AnchorGeometry,
   BeaconMeasurement,
   PropagationConstants,
 } from "@eight2five/shared/localization/types";
 
 export type TestMode = "standard" | "sweep";
+export type SimulationSourceMode = "ble-rssi" | "uwb-distance" | "hybrid";
+
+export interface RunParameters {
+  iterationTimeLimitMs: number;
+  maxIterations: number;
+  populationSize: number;
+  beta0: number;
+  lightAbsorption: number;
+  alpha: number;
+  initialTemperature: number;
+  coolingRate: number;
+  solverWeightingBase: number;
+  solverWeightingScale: number;
+  solverWeightingParam: number;
+  [key: string]: number;
+}
 
 export interface SweepConfig {
   param: string;
@@ -16,7 +33,7 @@ export interface SweepConfig {
 
 export interface RunResult {
   id: number;
-  params: any;
+  params: Partial<RunParameters>;
   truePos: { x: number; y: number };
   estPos: { x: number; y: number };
   error: number;
@@ -28,8 +45,10 @@ export interface RunResult {
   anchors: AnchorGeometry[];
   measurements: BeaconMeasurement[];
   modelType: string;
+  sourceMode?: SimulationSourceMode;
+  measurementKinds?: ("rssi" | "distance")[];
   constants: PropagationConstants;
-  diagnostics?: any;
+  diagnostics?: AlgorithmDiagnostics;
 }
 
 export interface SweepStepResult {

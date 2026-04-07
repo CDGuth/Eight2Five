@@ -1,22 +1,8 @@
 // swift-tools-version: 5.10
-// ============================================================================
-// ⚠️  SPM SCAFFOLDING - FOR SWIFT LSP ONLY - NOT USED IN PRODUCTION BUILDS  ⚠️
-// ============================================================================
-//
-// This Package.swift exists solely to enable SourceKit-LSP (Swift Language
-// Server) functionality in VS Code and other editors on non-macOS platforms.
-//
-// THE ACTUAL iOS BUILD:
-// - Uses CocoaPods via modules/expo-kbeaconpro/ios/ExpoKBeaconPro.podspec
-// - Is built by EAS Build / Xcode, which ignores this Package.swift entirely
-// - Links against real iOS SDK frameworks (CoreBluetooth, etc.)
-//
-// The stub targets below (ExpoModulesCore, kbeaconlib2, CoreBluetooth) provide
-// minimal type definitions so the LSP can parse and provide intellisense for
-// ExpoKBeaconProModule.swift without access to the actual CocoaPods libraries.
-//
-// DO NOT add real logic to the stubs - they are type scaffolding only.
-// ============================================================================
+
+// Note: This SwiftPM manifest is for editor tooling (SourceKit-LSP) in non-macOS
+// environments. Targets under Sources/ are stubs only and are not used by the
+// production iOS build, which resolves real dependencies via CocoaPods.
 
 import PackageDescription
 

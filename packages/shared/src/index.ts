@@ -6,6 +6,8 @@ export * from "./localization/algorithms/MFASA";
 export * from "./localization/models/LogNormalModel";
 export * from "./localization/models/TwoRayGroundModel";
 export * from "./localization/types";
+export * from "./localization/FieldConfigurationStore";
 export * from "./types/BeaconProtocol";
 export * from "./utils/beaconParser";
 export * from "./utils/beaconConfigurator";
+export * from "./providers";

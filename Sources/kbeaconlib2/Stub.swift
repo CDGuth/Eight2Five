@@ -1,21 +1,8 @@
-// ============================================================================
-// ⚠️  SPM STUB - FOR SWIFT LSP ONLY - NOT USED IN PRODUCTION BUILDS  ⚠️
-// ============================================================================
-//
-// This file provides stub types for kbeaconlib2 to enable SourceKit-LSP
-// (Swift Language Server) functionality in VS Code on non-macOS platforms.
-//
-// THE ACTUAL iOS BUILD:
-// - Uses CocoaPods: `s.dependency 'kbeaconlib2', '1.2.1'` in the .podspec
-// - Links against the real kbeaconlib2 library from CocoaPods
-// - This stub is completely ignored during EAS Build / Xcode compilation
-//
-// These stubs mirror the public API surface of kbeaconlib2 but contain no
-// real implementation. DO NOT rely on them for actual beacon functionality.
-// ============================================================================
+// Editor-only kbeaconlib2 stubs for SourceKit-LSP on non-macOS platforms.
+// Real iOS builds link the CocoaPods kbeaconlib2 dependency.
+// This file only provides enough API shape for local type-checking and navigation.
 
-// Re-export Foundation so consumers get NSNumber, etc. without explicit import
-// (matches behavior of the real kbeaconlib2 CocoaPod)
+// Re-export Foundation so NSNumber and related symbols are visible to consumers.
 @_exported import Foundation
 import CoreBluetooth
 

@@ -2,17 +2,208 @@
 
 **ALWAYS** use your tools to implement user requests, **IF AND ONLY IF** the user requests you to make a change. **DO NOT** tell the user to make manual changes unless that is necessary. **ALWAYS PLAN YOUR CHANGES WITH A LIST OF ACTIONABLE STEPS BEFORE MAKING THEM.**
 
+When requirements are ambiguous or underspecified, use the `vscode_askQuestions` tool to ask concise clarifying questions instead of making assumptions, including while operating in agent mode.
+
 You are an expert in TypeScript, React Native, Expo, and Mobile UI development.
 
 ## Project Description
 
-This repository contains an Expo-based React Native application (iOS and Android) for tracking marching band performers on a rectangular practice field. Each performer carries a mobile device that receives Bluetooth Low Energy (BLE) advertisements from fixed KBeaconPro beacons positioned around or within the field. The native module in `modules/expo-kbeaconpro` exposes scanning APIs and delivers raw advertisement payloads (MAC address, RSSI, and manufacturer data) into the JavaScript layer.
+This repository contains an Expo-based React Native application (iOS and Android) for tracking marching band performers on a rectangular practice field. The platform is evolving from a BLE-only ingestion path toward a source-agnostic localization architecture where location measurements can come from multiple providers.
 
-The app parses those advertisements into higher-level beacon state using utilities in `src/utils` (for example `beaconParser`), extracting identity information (including Tx power) and field-relative anchor coordinates (encoded as X/Y percentages and Z height in centimeters). A custom hook, `useBeaconScanner`, subscribes to the native scanner, maintains an in-memory map of visible beacons, and feeds each update into a localization pipeline.
+Today, BLE advertisements from fixed KBeaconPro beacons are ingested through `modules/expo-kbeaconpro`. The repository now also includes `modules/expo-pans-ble-api`, a new Expo module surface for BLE-accessible DWM1001/PANS workflows. In this phase, PANS support is BLE-only and intentionally excludes UART/SPI transports.
 
-The localization subsystem in `src/localization` smooths noisy RSSI values with a 1D Kalman filter, then uses a propagation model to relate distance and received power. Indoors it applies a standard log-normal path-loss model; outdoors it uses the two-ray ground-reflection model derived from the BLE-based outdoor localization paper in `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/`. Rather than converting RSSI to distance directly, the system formulates localization as an optimization problem: it searches for the 2D position that minimizes the root-mean-square error between measured RSSI at each anchor and the RSSI predicted by the chosen propagation model.
+The app parses BLE packets into higher-level beacon state using shared utilities (for example `beaconParser`). A shared hook, `useBeaconScanner`, now supports source injection through provider abstractions, allowing side-by-side migration between KBeacon and PANS BLE sources without forcing downstream UI rewrites.
+
+The localization subsystem in `src/localization` smooths RSSI values with a 1D Kalman filter and uses propagation models to compare measured and predicted signal values. Indoors it applies a log-normal path-loss model; outdoors it uses a two-ray ground-reflection model derived from `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/`. The optimizer searches for a 2D position that minimizes RMSE across active anchors.
 
 To solve this optimization problem, the project currently implements a memetic Firefly Algorithm with Simulated Annealing (MFASA) in `src/localization/algorithms/MFASA.ts`. MFASA maintains a population of candidate positions ("fireflies"), moves them toward better solutions based on relative brightness (lower RMSE), and applies simulated annealing-style random perturbations with a cooling schedule to escape local minima. The optimizer is time-sliced (using small per-step time budgets) so that iterative computation does not block the React Native UI thread. Future algorithms (e.g., GA, PSO, or simpler multilateration) can be added behind the same optimizer interface.
+
+## Commit Format (Conventional Commits)
+
+All commits in this repository **MUST** follow Conventional Commits.
+
+- **Required format**: `<type>(<optional-scope>): <subject>`
+- **Allowed types**: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `chore`, `ci`, `revert`
+- **Subject rules**:
+    - use imperative mood (e.g., "add", "refactor", "migrate")
+    - start lowercase
+    - no trailing period
+    - keep concise and specific
+- **Breaking changes**:
+    - append `!` after type/scope (`feat(testbed)!: ...`) **or**
+    - include `BREAKING CHANGE:` footer with migration details
+
+### Scope conventions for this monorepo
+
+- `mobile` for `apps/mobile`
+- `testbed` for `apps/testbed`
+- `shared` for `packages/shared`
+- `kbeacon` for `modules/expo-kbeaconpro`
+- `pans-ble` for `modules/expo-pans-ble-api`
+- `repo` for root tooling/config changes
+
+### Examples
+
+- `feat(testbed): migrate subapp navigation to expo-router grouped routes`
+- `fix(shared): stabilize distance observation weighting in localization engine`
+- `refactor(mobile): move home flow into file-based router layout`
+- `docs(repo): add testbed style skill usage guidelines`
+- `feat(testbed)!: replace legacy state navigator with route-driven navigation`
+
+### Multi-scope and mixed changes
+
+- Prefer splitting unrelated changes into separate commits per scope.
+- If a single change legitimately spans multiple areas, use the dominant scope and explain secondary impacts in the commit body.
+
+### Required commit body structure
+
+Every commit **MUST** include a detailed body with bulleted items describing each change. Do not use a one-line or unstructured body for non-trivial commits.
+
+Use this required structure for **every** commit message body:
+
+```text
+<type>(<scope>): <subject>
+
+- <imperative verb> <specific details about a change, reference files if necessary>
+- <imperative verb> <specific details about another change, reference files if necessary>
+
+Impact:
+- <user-visible or developer-visible outcome>
+- <risk, migration note, or compatibility note>
+- <etc.>
+
+Validation:
+- <description of tests run or manual validation>
+```
+
+### Example Commit Body
+
+```text
+feat(shared): stabilize distance observation weighting in localization engine
+
+- normalize distance weights in `src/localization/optimizer.ts` to prevent outlier dominance
+- increase Kalman filter process noise in `src/localization/filters/Kalman.ts` for faster responsiveness
+- add unit tests for weighted RMSE calculation in `src/localization/__tests__/RMSE.test.ts`
+
+Impact:
+- more robust position estimates in high-interference environments
+- reduced "ghosting" effects when performers change direction rapidly
+
+Validation:
+- ran `npm run test` in `packages/shared` - all tests passing
+- manual verification in `apps/testbed` using the `Simulation` mini-app with 10% noise injection
+```
+
+Formatting rules for commit bodies:
+
+- Use a bulleted list of changes starting with imperative verbs.
+- Include specific details and file references where helpful for context.
+- Add `Impact:` and `Validation:` sections for all commits except trivial docs-only typo fixes.
+- If no tests are run, explicitly state that in `Validation:` with a short justification.
+- Keep language concise, factual, and traceable to the actual diff.
+
+## Agent Commit Script Workflow
+
+Use script-based entry points for agent-driven commits.
+
+- Working local notes file (local-only, ignored): `.github/.commit-notes.local.md`
+- Validation cache used for commit body inference (local-only, ignored): `.github/.agent-validation-last.json`
+- Repository archive file (tracked): `.github/commit-notes-archive.md`
+
+Required script entry points:
+
+- `npm run agent:commit:note -- --type <type> --scope <scope> --subject "<subject>" --change "<item>" --impact "<item>" --validation "<item>"`
+    - Append one pending commit-note entry.
+- `npm run agent:commit:from-note`
+    - Read the next pending note entry, generate commit message in required Conventional Commit format, run `git commit`, and archive/reset consumed note entry.
+- `npm run agent:commit:archive -- --id <entry-id> --commit <hash>`
+    - Manually archive/reset a specific entry when needed.
+
+Recommended end-to-end sequence:
+
+1. Add a pending note entry with `agent:commit:note`.
+2. Run validation (`npm run agent:validate -- --mode core` at minimum; use full mode when Expo checks are required).
+3. Run `npm run agent:commit:from-note` to generate the Conventional Commit message and execute `git commit`.
+4. Confirm the consumed entry is removed from `.github/.commit-notes.local.md` and archived in `.github/commit-notes-archive.md`.
+
+Script behavior details:
+
+- `agent:commit:note`
+    - Creates one pending entry with metadata and bullet content for changes/impact/validation.
+    - `--change`, `--impact`, and `--validation` can be repeated to form multi-bullet sections.
+- `agent:commit:from-note`
+    - Uses the next pending entry (or a specific one via `--id`).
+    - Builds the commit message in the required format.
+    - Incorporates validation bullets inferred from `.github/.agent-validation-last.json` when available.
+    - Performs archive/reset automatically after successful commit unless `--no-archive` is used.
+- `agent:commit:archive`
+    - Manual archive/reconciliation command for edge cases; not part of normal flow.
+
+Agent behavior requirements:
+
+- Always append a commit-note entry while implementing changes.
+- Always run validation before `agent:commit:from-note` unless explicitly waived.
+- Before committing, read from `.github/.commit-notes.local.md` via `agent:commit:from-note`.
+- After successful commit, ensure entry is archived to `.github/commit-notes-archive.md` and removed from the local pending file.
+- On commit failure, do not remove pending note entries.
+
+## Validation Command Policy
+
+Do not use `precommit-check`; it has been removed.
+
+Use `.github/skills/validation-guide/SKILL.md` as the source of truth for validation command selection and agent-oriented script flow.
+
+Primary root entry points:
+
+- `npm run validate:core`
+    - Runs `npm run type-check`, `npm run lint`, and `npm run test`.
+- `npm run validate`
+    - Runs `validate:core` plus Expo checks for mobile and testbed (`npx expo-doctor`, `npx expo install --check`).
+- `npm run agent:validate`
+    - Agent-oriented validation entry point that records executed checks for commit Validation section inference.
+
+Agent validation behavior notes:
+
+- `npm run agent:validate -- --mode core`
+    - Runs only type-check, lint (or lint:fix), and tests.
+    - Use as the default minimum for non-Expo-impacting changes.
+- `npm run agent:validate`
+    - Runs core checks plus Expo doctor/install checks for mobile and testbed.
+    - Use when Expo config/plugins/native settings/dependencies are affected.
+- `npm run agent:validate -- --fix`
+    - Uses `lint:fix` during the scripted run.
+- Validation report output:
+    - `.github/.agent-validation-last.json` stores executed commands and pass/fail state for commit message inference.
+
+Detailed command usage rules:
+
+- `npm run type-check`
+    - Required when changing TypeScript source, interfaces/contracts, exports, parser/model logic, shared hooks/types, or TypeScript config.
+- `npm run lint`
+    - Required for all code/config/script changes before commit and pull request.
+- `npm run lint:fix`
+    - Use first when lint issues are auto-fixable; rerun `npm run lint` after fixes.
+- `npm run test`
+    - Required for behavior changes, bug fixes, refactors, localization algorithm updates, parser/filter adjustments, and module API changes.
+- `npx expo-doctor`
+    - Required after Expo SDK/plugin/config/native project changes, and after dependency changes affecting Expo apps.
+- `npx expo install --check`
+    - Required after `package.json`/lockfile dependency updates in Expo apps to verify Expo compatibility.
+
+## Validation Guide Skill
+
+Use the validation guide skill for validation and script workflow decisions:
+
+- `.github/skills/validation-guide/SKILL.md`
+
+Keep guidance in this file and the skill synchronized when validation workflow standards change.
+
+## Testbed Style Guide Skill
+
+When working inside `apps/testbed`, use the dedicated testbed style guide skill at `.github/skills/testbed-style-guide/SKILL.md`.
+
+- Treat that skill as the first source of truth for testbed route conventions, mini-app architecture, simulation UX, and test patterns.
+- Keep guidance in this file and the skill synchronized when standards change.
 
 ## Monorepo Structure
 
@@ -29,6 +220,7 @@ This project is organized as a monorepo to unify logic across mobile application
         -   `src/utils/`: Generic helpers for identity parsing, coordinates, and math.
 -   **`modules/`**: Contains custom Expo modules.
     -   **`modules/expo-kbeaconpro/`**: A native module wrapping the KBeaconPro SDKs (Android/Swift) to provide a unified BLE scanning interface to the JavaScript layer.
+    -   **`modules/expo-pans-ble-api/`**: A native module exposing BLE-accessible DWM1001/PANS interactions through a unified TypeScript API contract.
 
 ## Monorepo Dependency Policy
 
@@ -38,7 +230,7 @@ To maintain stability and prevent version conflicts (e.g., duplicate React insta
 -   **Justification**: Centralizing dependencies in `packages/shared` ensures all sub-apps use the same versions, reducing bundle size and preventing hard-to-debug "multiple versions of X" runtime errors.
 -   **Command**: Use `npm install <package-name> --workspace @eight2five/shared` to add a new shared dependency.
 
-Downstream consumers (screens or components) typically use `useBeaconScanner` to obtain three views of state: the raw per-MAC beacon map for diagnostics, the filtered beacon measurements used by the localization engine, and the latest estimated performer position in meters relative to the field. Copilot suggestions should preserve this flow (native scanner → parser → Kalman filter + propagation model → MFASA optimizer → UI) and avoid breaking the public surface of the native module or hooks without a clear reason.
+Downstream consumers (screens or components) should treat `useBeaconScanner` as the source-agnostic integration point. The hook returns the raw per-MAC map for diagnostics, filtered measurements consumed by localization, and the latest estimated position. Copilot suggestions should preserve this flow (provider source → parser/adapter → filter + model → MFASA optimizer → UI), avoid transport-specific coupling in UI code, and keep side-by-side migration support unless explicitly removed.
 
   Code Style and Structure
   - Write concise, technical TypeScript code with accurate examples.

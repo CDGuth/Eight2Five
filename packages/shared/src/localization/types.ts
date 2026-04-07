@@ -9,6 +9,14 @@ export interface BeaconMeasurement {
   lastSeen: number;
   /** Most recent filtered RSSI value (dBm). */
   filteredRssi: number;
+  /** Observation mode used to produce this measurement. */
+  measurementKind?: "rssi" | "distance" | "position";
+  /** Optional direct ranging distance in meters for UWB-style providers. */
+  distanceMeters?: number;
+  /** Optional quality factor on direct ranging observation. */
+  quality?: number;
+  /** Source provider identifier for diagnostics. */
+  source?: string;
   /** Tx power from identity frame if available (dBm). */
   txPower?: number;
   /**
@@ -112,6 +120,21 @@ export interface AnchorGeometry {
   z?: number;
 }
 
+export interface FieldConfiguration {
+  id: string;
+  name?: string;
+  environment: EnvironmentMode;
+  fieldDimensions: FieldDimensions;
+  anchors: AnchorGeometry[];
+}
+
+export interface FieldConfigurationStore {
+  getFieldConfiguration(fieldId: string): FieldConfiguration | undefined;
+  setFieldConfiguration(config: FieldConfiguration): void;
+  listFieldConfigurations(): FieldConfiguration[];
+  removeFieldConfiguration(fieldId: string): void;
+}
+
 export interface AlgorithmDiagnostics {
   executionTimeMs: number;
   evaluations: number;
@@ -153,9 +176,37 @@ export interface EnvironmentConfigUpdate {
   propagationConstants?: Partial<PropagationConstants>;
 }
 
+export interface RssiDistanceEstimator {
+  estimateDistanceMeters(params: {
+    rssiDbm: number;
+    txPowerDbm: number;
+    propagation: PropagationModel;
+    constants: PropagationConstants;
+    searchBounds: SearchBounds;
+  }): number;
+}
+
 export interface LocalizationEngineApi {
   ingest(beacon: BeaconState): void;
+  ingestObservation(observation: LocalizationObservation): void;
   getSnapshot(): LocalizationSnapshot;
   setEnvironment(config: EnvironmentConfigUpdate): void;
+  setFieldConfiguration(config?: FieldConfiguration): void;
   destroy(): void;
+}
+
+export interface LocalizationObservation {
+  mac: string;
+  observedAtMs: number;
+  source: string;
+  measurementKind: "rssi" | "distance" | "position";
+  rssiDbm?: number;
+  distanceMeters?: number;
+  positionXMeters?: number;
+  positionYMeters?: number;
+  quality?: number;
+  txPowerDbm?: number;
+  xPercent?: number;
+  yPercent?: number;
+  zCm?: number;
 }

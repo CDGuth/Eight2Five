@@ -8,6 +8,8 @@
     "src"
   ],
   "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {
@@ -42,6 +44,7 @@
     "expo-media-library": "^55.0.9",
     "expo-network": "^55.0.8",
     "expo-notifications": "^55.0.10",
+    "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-print": "^55.0.8",
     "expo-router": "^55.0.3",
     "expo-screen-capture": "^55.0.8",

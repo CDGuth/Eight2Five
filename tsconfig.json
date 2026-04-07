@@ -3,10 +3,9 @@
   "compilerOptions": {
     "skipLibCheck": true,
     "strict": true,
-    "baseUrl": ".",
     "paths": {
-      "@eight2five/shared": ["packages/shared/src/index"],
-      "@eight2five/shared/*": ["packages/shared/src/*"]
+      "@eight2five/shared": ["./packages/shared/src/index"],
+      "@eight2five/shared/*": ["./packages/shared/src/*"]
     }
   },
   "include": [

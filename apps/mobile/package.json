@@ -2,24 +2,31 @@
   "name": "eight2five-mobile",
   "version": "1.0.0",
   "private": true,
-  "main": "index.tsx",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
+    "lint:fix": "expo lint --fix",
     "type-check": "tsc --noEmit",
     "test": "jest --watchAll=false --passWithNoTests --runInBand",
-    "precommit-check": "npx expo-doctor && npm run type-check && npm run lint && npm run test"
+    "expo:doctor": "npx expo-doctor",
+    "expo:install-check": "npx expo install --check",
+    "validate:core": "npm run type-check && npm run lint && npm run test",
+    "validate": "npm run validate:core && npm run expo:doctor && npm run expo:install-check"
   },
   "dependencies": {
     "@eight2five/shared": "file:../../packages/shared",
     "expo": "~55.0.0",
     "expo-dev-client": "~55.0.10",
+    "expo-router": "^6.0.13",
     "expo-kbeaconpro": "file:../../modules/expo-kbeaconpro",
+    "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
-    "react-native": "0.83.2"
+    "react-native": "0.83.2",
+    "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
@@ -50,7 +57,8 @@
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
       "../../packages/shared/src/**/*.{ts,tsx}",
-      "../../modules/expo-kbeaconpro/src/**/*.{ts,tsx}"
+      "../../modules/expo-kbeaconpro/src/**/*.{ts,tsx}",
+      "../../modules/expo-pans-ble-api/src/**/*.{ts,tsx}"
     ]
   }
 }
