@@ -23,7 +23,7 @@
     "expo-clipboard": "~55.0.8",
     "expo-dev-client": "~55.0.10",
     "expo-file-system": "~55.0.10",
-    "expo-router": "^6.0.13",
+    "expo-router": "^55.0.11",
     "expo-kbeaconpro": "file:../../modules/expo-kbeaconpro",
     "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-sharing": "~55.0.11",
