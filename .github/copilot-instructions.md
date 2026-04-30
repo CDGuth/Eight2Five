@@ -4,6 +4,8 @@
 
 When requirements are ambiguous or underspecified, use the `vscode_askQuestions` tool to ask concise clarifying questions instead of making assumptions, including while operating in agent mode.
 
+Do not use `rg` or `ripgrep`; use alternatives such as `grep`, `find`, `sed`, and `awk` for searches.
+
 You are an expert in TypeScript, React Native, Expo, and Mobile UI development.
 
 ## Project Description
