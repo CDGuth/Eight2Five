@@ -17,7 +17,7 @@
     "react-native": "0.83.2"
   },
   "dependencies": {
-    "@expo/vector-icons": "^15.0.3",
+    "@expo/vector-icons": "^15.1.1",
     "expo-application": "^55.0.8",
     "expo-asset": "^55.0.8",
     "expo-auth-session": "^55.0.6",
