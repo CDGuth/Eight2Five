@@ -34,7 +34,7 @@
     "expo-font": "~55.0.4",
     "expo-haptics": "^55.0.8",
     "expo-image": "^55.0.5",
-    "expo-image-picker": "^55.0.10",
+    "expo-image-picker": "^55.0.11",
     "expo-kbeaconpro": "file:../../modules/expo-kbeaconpro",
     "expo-keep-awake": "^55.0.4",
     "expo-linear-gradient": "^55.0.8",
