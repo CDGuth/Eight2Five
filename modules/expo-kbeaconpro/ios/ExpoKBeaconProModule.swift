@@ -241,7 +241,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         beacon.connect(beaconPassword, timeout: timeoutSeconds, delegate: self)
     }
 
-    @ModuleDefinitionBuilder
     public func definition() -> ModuleDefinition {
         Name("ExpoKBeaconPro")
 
@@ -308,15 +307,15 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
                 return
             }
 
-            let normalized = self.normalizedMac(macAddress)
-            self.pendingConnectionPromises.removeValue(forKey: normalized)
-            self.connectedBeacons.removeValue(forKey: normalized)
+            let normalized = normalizedMac(macAddress)
+            pendingConnectionPromises.removeValue(forKey: normalized)
+            connectedBeacons.removeValue(forKey: normalized)
             beacon.disconnect()
             promise.resolve(true)
         }
         
         AsyncFunction("modifyConfig") { (macAddress: String, configs: [[String: Any]], promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }
@@ -338,7 +337,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         }
         
         AsyncFunction("readSensorDataInfo") { (macAddress: String, _: Int, promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }
@@ -357,7 +356,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         }
         
         AsyncFunction("readSensorHistory") { (macAddress: String, _: Int, maxRecord: Int, _: Int?, promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }
@@ -377,7 +376,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         }
         
         AsyncFunction("clearSensorHistory") { (macAddress: String, _: Int, promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }
@@ -392,7 +391,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         }
         
         AsyncFunction("subscribeSensorDataNotify") { (macAddress: String, _: Int, promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }
@@ -407,7 +406,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         }
         
         AsyncFunction("unsubscribeSensorDataNotify") { (macAddress: String, _: Int, promise: Promise) in
-            guard let beacon = self.connectedBeacons[self.normalizedMac(macAddress)] else {
+            guard let beacon = self.connectedBeacons[normalizedMac(macAddress)] else {
                 promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(macAddress) is not connected")
                 return
             }

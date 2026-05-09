@@ -6,21 +6,9 @@ import Foundation
 
 // MARK: - Module base class
 
-public protocol ModuleDefinitionProvider {
-  @ModuleDefinitionBuilder
-  func definition() -> ModuleDefinition
-}
-
-open class Module: ModuleDefinitionProvider {
+open class Module {
   public init() {}
   public func sendEvent(_ name: String, _ payload: [String: Any?]) {}
-}
-
-public extension ModuleDefinitionProvider {
-  @ModuleDefinitionBuilder
-  func definition() -> ModuleDefinition {
-    ModuleDefinition()
-  }
 }
 
 // MARK: - Module Definition DSL
@@ -60,11 +48,6 @@ public func OnCreate(_ closure: @escaping () -> Void) -> ModuleDefinitionCompone
 }
 
 @discardableResult
-public func OnDestroy(_ closure: @escaping () -> Void) -> ModuleDefinitionComponent {
-  return ModuleDefinition()
-}
-
-@discardableResult
 public func Function(_ name: String, _ closure: @escaping () -> Void) -> ModuleDefinitionComponent {
   return ModuleDefinition()
 }
@@ -91,16 +74,6 @@ public func AsyncFunction<A, B>(_ name: String, _ closure: @escaping (A, B) -> V
 
 @discardableResult
 public func AsyncFunction<A, B, C>(_ name: String, _ closure: @escaping (A, B, C) -> Void) -> ModuleDefinitionComponent {
-  return ModuleDefinition()
-}
-
-@discardableResult
-public func AsyncFunction<A, B, C, D>(_ name: String, _ closure: @escaping (A, B, C, D) -> Void) -> ModuleDefinitionComponent {
-  return ModuleDefinition()
-}
-
-@discardableResult
-public func AsyncFunction<A, B, C, D, E>(_ name: String, _ closure: @escaping (A, B, C, D, E) -> Void) -> ModuleDefinitionComponent {
   return ModuleDefinition()
 }
 
