@@ -58,3 +58,6 @@ coverage/clover.xml
 # local vendor reference docs (do not commit)
 .github/docs/DWM1001-API-Guide.md
 .github/docs/DWM1001-API-Guide.pdf
+
+# OpenCode
+.opencode/index
