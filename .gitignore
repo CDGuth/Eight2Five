@@ -58,7 +58,3 @@ coverage/clover.xml
 # local vendor reference docs (do not commit)
 .github/docs/DWM1001-API-Guide.md
 .github/docs/DWM1001-API-Guide.pdf
-
-# local-only agent commit notes
-.github/.commit-notes.local.md
-.github/.agent-validation-last.json
