@@ -115,6 +115,12 @@
       "skillPath": "skills/git-workflow-and-versioning/SKILL.md",
       "computedHash": "3e7b8cf28456abda4d7dc8cf95f0443f9ebb148dd00118361083a286d0916f90"
     },
+    "gluestack-ui-v4": {
+      "source": "gluestack/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/gluestack-ui-v4/SKILL.md",
+      "computedHash": "5f00d8934fef415e31bbae36b1cb8bfe59452eeff0e48dea27172d620a00c612"
+    },
     "native-data-fetching": {
       "source": "expo/skills",
       "sourceType": "github",
