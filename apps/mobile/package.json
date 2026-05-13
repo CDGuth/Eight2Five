@@ -11,10 +11,9 @@
     "lint:fix": "expo lint --fix",
     "type-check": "tsc --noEmit",
     "test": "jest --watchAll=false --passWithNoTests --runInBand",
-    "expo:doctor": "npx expo-doctor",
-    "expo:install-check": "npx expo install --check",
-    "validate:core": "npm run type-check && npm run lint && npm run test",
-    "validate": "npm run validate:core && npm run expo:doctor && npm run expo:install-check"
+    "validate:expo:doctor": "npx expo-doctor",
+    "validate:expo:install-check": "npx expo install --check",
+    "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   },
   "dependencies": {
     "@eight2five/shared": "file:../../packages/shared",

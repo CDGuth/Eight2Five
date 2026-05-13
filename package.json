@@ -19,8 +19,8 @@
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "validate:expo:doctor": "npm run --workspace apps/mobile expo:doctor && npm run --workspace apps/testbed expo:doctor",
-    "validate:expo:install-check": "npm run --workspace apps/mobile expo:install-check && npm run --workspace apps/testbed expo:install-check",
+    "validate:expo:doctor": "npm run --workspace apps/mobile validate:expo:doctor && npm run --workspace apps/testbed validate:expo:doctor",
+    "validate:expo:install-check": "npm run --workspace apps/mobile validate:expo:install-check && npm run --workspace apps/testbed validate:expo:install-check",
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   }
 }
