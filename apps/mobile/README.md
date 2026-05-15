@@ -1,4 +1,4 @@
-## Eight2Five Mobile App
+## Eight2Five App
 
 Primary production client for performer localization.
 

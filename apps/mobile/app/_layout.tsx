@@ -7,7 +7,7 @@ export default function MobileRootLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: "Eight2Five Mobile",
+          title: "Eight2Five",
         }}
       />
     </Stack>

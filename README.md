@@ -1,4 +1,4 @@
-# Eight2Five Mobile Monorepo
+# Eight2Five Monorepo
 
 This repository contains the production mobile client, feature testbed, shared localization engine, and custom Expo native modules used for BLE/UWB-oriented positioning workflows.
 
