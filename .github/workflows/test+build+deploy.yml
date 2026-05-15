@@ -168,7 +168,7 @@ jobs:
 
       - name: Create GitHub Release
         if: ${{ steps.collect-artifacts.outputs.files != '' && github.event.inputs.create_github_release == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           name: "Release v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}"
