@@ -29,14 +29,17 @@
     "build": {
       "disable": true
     },
+    "engineer": {
+      "prompt": "{file:./agents/engineer.md}",
+      "temperature": 0.5
+    },
     "explore": {
-      "prompt": "{file:./agents/explore.md}"
+      "prompt": "{file:./agents/explore.md}",
+      "temperature": 0.3
     },
     "general": {
-      "prompt": "{file:./agents/general.md}"
-    },
-    "engineer": {
-      "prompt": "{file:./agents/engineer.md}"
+      "prompt": "{file:./agents/general.md}",
+      "temperature": 0.1
     }
   }
 }
