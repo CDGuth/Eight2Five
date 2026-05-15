@@ -19,7 +19,7 @@ const config: ExpoConfig = {
     backgroundColor: "#ffffff",
   },
   ios: {
-    bundleIdentifier: "com.anonymous.eight2fivetestbed",
+    bundleIdentifier: "com.eight2five.app.testbed",
     supportsTablet: false,
     icon: {
       light: "./assets/app-icons/testbed-ios-icon.png",
@@ -28,11 +28,13 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: "com.anonymous.eight2fivetestbed",
+    package: "com.eight2five.app.testbed",
     icon: "./assets/app-icons/testbed-android-legacy-icon.png",
     adaptiveIcon: {
-      foregroundImage: "./assets/app-icons/testbed-android-adaptive-foreground.png",
-      backgroundImage: "./assets/app-icons/testbed-android-adaptive-background.png",
+      foregroundImage:
+        "./assets/app-icons/testbed-android-adaptive-foreground.png",
+      backgroundImage:
+        "./assets/app-icons/testbed-android-adaptive-background.png",
     },
   },
   plugins: [
@@ -49,11 +51,11 @@ const config: ExpoConfig = {
       "../../modules/expo-kbeaconpro",
       {
         bluetoothAlwaysUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
+          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
         bluetoothPeripheralUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
+          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
         locationWhenInUseUsageDescription:
-          "Our app uses your location to scan for nearby KBeaconPro devices.",
+          "This app uses your location to scan for nearby KBeaconPro devices.",
       },
     ],
     [

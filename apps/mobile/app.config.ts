@@ -6,8 +6,8 @@ const runtime = globalThis as typeof globalThis & {
 
 const config: ExpoConfig = {
   owner: "cdguth",
-  name: "Eight2Five Mobile",
-  slug: "eight2five-mobile",
+  name: "Eight2Five",
+  slug: "eight2five",
   platforms: ["ios", "android"],
   version: "0.0.0",
   orientation: "portrait",
@@ -19,7 +19,7 @@ const config: ExpoConfig = {
     backgroundColor: "#ffffff",
   },
   ios: {
-    bundleIdentifier: "com.anonymous.eight2fivemobile",
+    bundleIdentifier: "com.eight2five.app",
     supportsTablet: false,
     icon: {
       light: "./assets/app-icons/mobile-ios-icon.png",
@@ -28,7 +28,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: "com.anonymous.eight2fivemobile",
+    package: "com.eight2five.app",
     icon: "./assets/app-icons/mobile-android-legacy-icon.png",
     adaptiveIcon: {
       foregroundImage:
@@ -49,22 +49,22 @@ const config: ExpoConfig = {
       "../../modules/expo-kbeaconpro",
       {
         bluetoothAlwaysUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
+          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
         bluetoothPeripheralUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
+          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
         locationWhenInUseUsageDescription:
-          "Our app uses your location to scan for nearby KBeaconPro devices.",
+          "This app uses your location to scan for nearby KBeaconPro devices.",
       },
     ],
     [
       "../../modules/expo-pans-ble-api",
       {
         bluetoothAlwaysUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
+          "This app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
         bluetoothPeripheralUsageDescription:
-          "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
+          "This app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
         locationWhenInUseUsageDescription:
-          "Our app uses your location to scan for nearby DWM1001 PANS BLE devices.",
+          "This app uses your location to scan for nearby DWM1001 PANS BLE devices.",
       },
     ],
   ],

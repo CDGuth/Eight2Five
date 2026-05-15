@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 export default function MobileHomeRoute() {
   return (
     <View style={styles.container}>
-      <Text>Eight2Five Mobile</Text>
+      <Text>Eight2Five</Text>
       <Text style={styles.subtitle}>
         Expo Router is now configured for this app.
       </Text>
