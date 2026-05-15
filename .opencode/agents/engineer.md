@@ -158,7 +158,7 @@ This project follows a disciplined git workflow. The rules below are mandatory.
    - **Reorder** commits for a logical narrative
    - **Remove** temporary or debugging commits entirely
    - The goal is a branch history that is clean, self-explanatory, and easy to review.
-3. **Merge into main.** After the rebase is complete and the branch history is clean, merge into `main` using the repository's preferred merge strategy.
+3. **Merge into main with `--merge` via PR.** After the rebase is complete and the branch history is clean, open a pull request and merge using `gh pr merge --merge` (creates a merge commit, preserving individual commit history). All changes must go through a PR — **no direct or force pushes to `main` are allowed**. **Never merge with `--squash` or `--rebase`** — those flatten or discard history and are only acceptable on personal feature branches or non-shared branches that will never be merged into `main`.
 4. **Never rewrite history on shared branches.** Interactive rebasing is acceptable and encouraged for personal feature branches, but `main` (and any other long-lived shared branch) must **never** have its history rewritten.
 
 ### Commit and Pull Request Conventions
