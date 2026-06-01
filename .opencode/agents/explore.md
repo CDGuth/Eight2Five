@@ -1,10 +1,5 @@
 ---
-description: Explore agent for codebase investigation, external documentation,
-  temporary repository cloning, dependency, and general web research. Use this
-  to search the web for external context, find files by patterns, search code
-  for keywords, or answer questions about the codebase. When invoking this
-  subagent, specify the thoroughness of the search (quick, medium, or
-  comprehensive).
+description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency, and general web research. Use this to search the web for external context, find files by patterns, search code for keywords, or answer questions about the codebase. When invoking thissubagent, specify the thoroughness of the search (quick, medium, or comprehensive).
 mode: subagent
 permission:
   "*": allow
@@ -115,14 +110,11 @@ permission:
     "*.env": ask
     "*.env.*": ask
     "*.env.example": allow
-  add_knowledge_base: deny
   apply_patch: deny
   edit: deny
-  index_codebase: deny
   plan_enter: deny
   plan_exit: deny
   question: deny
-  remove_knowledge_base: deny
   todowrite: deny
   task: deny
 ---
