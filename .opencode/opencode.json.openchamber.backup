@@ -29,21 +29,15 @@
     },
     "engineer": {
       "prompt": "{file:./agents/engineer.md}",
-      "temperature": 0.2,
-      "top_p": 0.9,
-      "model": "openai/gpt-5.5"
+      "temperature": 0.4
     },
     "explore": {
       "prompt": "{file:./agents/explore.md}",
-      "temperature": 0.4,
-      "top_p": 0.95,
-      "model": "openai/gpt-5.4"
+      "temperature": 0.3
     },
     "general": {
       "prompt": "{file:./agents/general.md}",
-      "temperature": 0.15,
-      "top_p": 0.9,
-      "model": "openai/gpt-5.4"
+      "temperature": 0.1
     }
   }
 }
