@@ -1,6 +1,5 @@
 ---
 description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency, and general web research. Use this to search the web for external context, find files by patterns, search code for keywords, or answer questions about the codebase. When invoking thissubagent, specify the thoroughness of the search (quick, medium, or comprehensive).
-mode: subagent
 permission:
   "*": allow
   doom_loop: ask

@@ -28,22 +28,34 @@
       "disable": true
     },
     "engineer": {
+      "mode": "primary",
       "prompt": "{file:./agents/engineer.md}",
       "temperature": 0.2,
       "top_p": 0.9,
-      "model": "openai/gpt-5.5"
+      "model": "opencode-go/kimi-k2.6",
+      "options": {
+        "reasoningEffort": "high"
+      }
     },
     "explore": {
+      "mode": "subagent",
       "prompt": "{file:./agents/explore.md}",
       "temperature": 0.4,
       "top_p": 0.95,
-      "model": "openai/gpt-5.4"
+      "model": "opencode-go/kimi-k2.6",
+      "options": {
+        "reasoningEffort": "medium"
+      }
     },
     "general": {
+      "mode": "subagent",
       "prompt": "{file:./agents/general.md}",
       "temperature": 0.15,
       "top_p": 0.9,
-      "model": "openai/gpt-5.4"
+      "model": "opencode-go/kimi-k2.6",
+      "options": {
+        "reasoningEffort": "medium"
+      }
     }
   }
 }
