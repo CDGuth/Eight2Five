@@ -1,6 +1,6 @@
 {
-  "name": "eight2five-monorepo",
-  "version": "1.0.0",
+  "name": "eight2five",
+  "version": "0.0.0",
   "private": true,
   "workspaces": [
     "apps/*",
