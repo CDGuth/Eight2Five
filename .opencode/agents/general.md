@@ -132,7 +132,6 @@ permission:
     "*.env.*": ask
     "*.env.example": allow
   todowrite: deny
-top_p: 0.9
 ---
 
 ---

@@ -204,11 +204,11 @@ permission:
     /home/colin_guth/Eight2Five/.opencode/skills/context7-mcp/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/shipping-and-launch/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/expo-cicd-workflows/*: allow
-  question: deny
-  plan_enter: deny
-  plan_exit: deny
-  repo_clone: deny
-  repo_overview: deny
+  question: allow
+  plan_enter: allow
+  plan_exit: allow
+  repo_clone: allow
+  repo_overview: allow
   read:
     "*.env": ask
     "*.env.*": ask

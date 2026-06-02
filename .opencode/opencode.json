@@ -32,10 +32,6 @@
       "prompt": "{file:./agents/engineer.md}",
       "temperature": 0.2,
       "top_p": 0.9,
-      "model": "opencode-go/kimi-k2.6",
-      "options": {
-        "reasoningEffort": "high"
-      }
     },
     "explore": {
       "mode": "subagent",
