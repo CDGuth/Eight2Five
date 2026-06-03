@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@eight2five/shared": "file:../../packages/shared",
+    "@eight2five/ui": "*",
     "expo": "~55.0.0",
     "expo-asset": "~55.0.8",
     "expo-clipboard": "~55.0.8",
