@@ -40,13 +40,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     [
-      "expo-build-properties",
-      {
-        useHermesV1: true,
-      },
-    ],
-    [
-      "../../modules/expo-kbeaconpro",
+      "../../modules/expo-kbeaconpro/app.plugin.js",
       {
         bluetoothAlwaysUsageDescription:
           "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
@@ -57,7 +51,7 @@ const config: ExpoConfig = {
       },
     ],
     [
-      "../../modules/expo-pans-ble-api",
+      "../../modules/expo-pans-ble-api/app.plugin.js",
       {
         bluetoothAlwaysUsageDescription:
           "This app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",

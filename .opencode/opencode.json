@@ -1,8 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "opencode-codebase-index"
-  ],
+  "plugin": [],
   "default_agent": "engineer",
   "permission": {
     "websearch": "allow",
@@ -30,16 +28,30 @@
       "disable": true
     },
     "engineer": {
+      "mode": "primary",
       "prompt": "{file:./agents/engineer.md}",
-      "temperature": 0.5
+      "temperature": 0.2,
+      "top_p": 0.9,
     },
     "explore": {
+      "mode": "subagent",
       "prompt": "{file:./agents/explore.md}",
-      "temperature": 0.3
+      "temperature": 0.4,
+      "top_p": 0.95,
+      "model": "opencode-go/kimi-k2.6",
+      "options": {
+        "reasoningEffort": "medium"
+      }
     },
     "general": {
+      "mode": "subagent",
       "prompt": "{file:./agents/general.md}",
-      "temperature": 0.1
+      "temperature": 0.15,
+      "top_p": 0.9,
+      "model": "opencode-go/kimi-k2.6",
+      "options": {
+        "reasoningEffort": "medium"
+      }
     }
   }
 }

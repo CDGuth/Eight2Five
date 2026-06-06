@@ -1,6 +1,6 @@
 {
   "name": "eight2five-testbed",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -16,34 +16,26 @@
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   },
   "dependencies": {
-    "@eight2five/shared": "file:../../packages/shared",
-    "expo": "~55.0.0",
-    "expo-asset": "~55.0.8",
-    "expo-clipboard": "~55.0.8",
-    "expo-dev-client": "~55.0.10",
-    "expo-file-system": "~55.0.10",
-    "expo-router": "^6.0.13",
-    "expo-kbeaconpro": "file:../../modules/expo-kbeaconpro",
-    "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
-    "expo-sharing": "~55.0.11",
-    "expo-status-bar": "~55.0.4",
+    "@eight2five/mobile": "*",
+    "@eight2five/ui": "*",
+    "expo": "~55.0.26",
+    "expo-dev-client": "~55.0.35",
+    "expo-router": "~55.0.16",
     "react": "19.2.0",
-    "react-native": "0.83.2",
-    "react-native-screens": "~4.16.0",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-view-shot": "4.0.3"
+    "react-native": "0.83.6",
+    "react-native-safe-area-context": "~5.6.0"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.10",
     "@types/react-test-renderer": "^19.1.0",
     "eslint": "^9.0.0",
-    "eslint-config-expo": "~55.0.0",
+    "eslint-config-expo": "~55.0.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "expo-module-scripts": "^55.0.2",
     "jest": "~29.7.0",
-    "jest-expo": "~55.0.9",
+    "jest-expo": "~55.0.18",
     "prettier": "^3.6.2",
     "react-test-renderer": "19.2.0",
     "typescript": "^5.9.3"
@@ -59,12 +51,12 @@
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
     ],
     "moduleNameMapper": {
-      "^@eight2five/shared/(.*)$": "<rootDir>/../../packages/shared/src/$1"
+      "^@eight2five/mobile/(.*)$": "<rootDir>/../../packages/mobile/src/$1"
     },
     "collectCoverage": true,
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
-      "../../packages/shared/src/**/*.{ts,tsx}",
+      "../../packages/mobile/src/**/*.{ts,tsx}",
       "../../modules/expo-kbeaconpro/src/**/*.{ts,tsx}",
       "../../modules/expo-pans-ble-api/src/**/*.{ts,tsx}"
     ],

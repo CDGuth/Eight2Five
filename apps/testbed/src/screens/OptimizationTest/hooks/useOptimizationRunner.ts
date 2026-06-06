@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { MFASAOptimizer } from "@eight2five/shared/localization/algorithms/MFASA";
-import { LogNormalModel } from "@eight2five/shared/localization/models/LogNormalModel";
-import { TwoRayGroundModel } from "@eight2five/shared/localization/models/TwoRayGroundModel";
+import { MFASAOptimizer } from "@eight2five/mobile/localization/algorithms/MFASA";
+import { LogNormalModel } from "@eight2five/mobile/localization/models/LogNormalModel";
+import { TwoRayGroundModel } from "@eight2five/mobile/localization/models/TwoRayGroundModel";
 import {
   DEFAULT_PROPAGATION_CONSTANTS,
   DEFAULT_FIELD_DIMENSIONS,
@@ -9,11 +9,11 @@ import {
   DEFAULT_TX_POWER_DBM,
   DEFAULT_SIMULATION_NOISE,
   DEFAULT_ANCHOR_SIGMA,
-} from "@eight2five/shared/localization/LocalizationConfig";
+} from "@eight2five/mobile/localization/LocalizationConfig";
 import {
   AnchorGeometry,
   PropagationConstants,
-} from "@eight2five/shared/localization/types";
+} from "@eight2five/mobile/localization/types";
 import {
   BatchAnalysis,
   FIELD_PRESETS,

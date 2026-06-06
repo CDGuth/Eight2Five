@@ -5,7 +5,7 @@ Expo-based React Native monorepo for tracking marching band performers through t
 ## Architecture & Boundaries
 - **`apps/mobile`**: Main React Native application used on the field.
 - **`apps/testbed`**: Sandbox app to validate localization algorithms (MFASA, path-loss models) and new features independent of the main app.
-- **`packages/shared`** (`@eight2five/shared`): Core logic provider. Includes localization (Kalman filter, MFASA optimizer), hooks, and utils. 
+- **`packages/mobile`** (`@eight2five/mobile`): Shared mobile logic provider. Includes localization (Kalman filter, MFASA optimizer), hooks, utils, and mobile dependency surface shared by the Expo apps.
 - **`modules/expo-kbeaconpro`**: Native Expo module wrapping KBeaconPro SDKs (BLE).
 - **`modules/expo-pans-ble-api`**: Native Expo module for DWM1001/PANS interaction (UWB).
 
@@ -14,8 +14,8 @@ Expo-based React Native monorepo for tracking marching band performers through t
 - Data Flow: `Provider Source → Parser/Adapter → Filter & Model → MFASA Optimizer → UI`. Keep side-by-side KBeacon BLE and PANS UWB support unless told otherwise.
 
 ## Dependency Management
-- **Shared Dependency Policy**: If a package is used by >1 app, or belongs in shared logic, it **MUST** be installed in `packages/shared` to prevent duplicate React instances.
-- Command: `npm install <package> --workspace @eight2five/shared`
+- **Shared Mobile Dependency Policy**: If a mobile package is used by both Expo apps, or belongs in shared mobile logic, install it in `packages/mobile` to keep future web/backend apps isolated from mobile dependencies.
+- Command: `npm install <package> --workspace @eight2five/mobile`
 
 ## Development & Verification
 Run from the root of the repository:

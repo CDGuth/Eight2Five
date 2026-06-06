@@ -1,6 +1,6 @@
 {
-  "name": "eight2five-monorepo",
-  "version": "1.0.0",
+  "name": "eight2five",
+  "version": "0.0.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -19,8 +19,10 @@
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "validate:expo:doctor": "npm run --workspace apps/mobile validate:expo:doctor && npm run --workspace apps/testbed validate:expo:doctor",
-    "validate:expo:install-check": "npm run --workspace apps/mobile validate:expo:install-check && npm run --workspace apps/testbed validate:expo:install-check",
+    "validate:expo:doctor": "npm run validate:expo:doctor --workspaces --if-present",
+    "validate:expo:install-check": "npm run validate:expo:install-check --workspaces --if-present",
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
-  }
+  },
+  "dependencies": {},
+  "devDependencies": {}
 }

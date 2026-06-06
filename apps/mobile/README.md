@@ -37,7 +37,7 @@ npm run test --workspace apps/mobile
 - Assets resolved from [../../assets](../../assets)
 - Native KBeaconPro plugin: [../../modules/expo-kbeaconpro](../../modules/expo-kbeaconpro)
 - Native PANS BLE plugin: [../../modules/expo-pans-ble-api](../../modules/expo-pans-ble-api)
-- Shared localization stack: [../../packages/shared](../../packages/shared)
+- Shared mobile localization stack: [../../packages/mobile](../../packages/mobile)
 
 ### Environment
 - `USE_NATIVE_BEACONING=true` enables native beaconing flag (read via `extra.isNativeBeaconingEnabled`).

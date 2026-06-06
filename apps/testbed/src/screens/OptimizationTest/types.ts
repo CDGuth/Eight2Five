@@ -3,7 +3,7 @@ import {
   AnchorGeometry,
   BeaconMeasurement,
   PropagationConstants,
-} from "@eight2five/shared/localization/types";
+} from "@eight2five/mobile/localization/types";
 
 export type TestMode = "standard" | "sweep";
 export type SimulationSourceMode = "ble-rssi" | "uwb-distance" | "hybrid";

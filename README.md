@@ -8,7 +8,7 @@ This repository contains the production mobile client, feature testbed, shared l
 	- [apps/mobile](apps/mobile): production app used on-field.
 	- [apps/testbed](apps/testbed): sandbox for algorithm and model experiments.
 - Shared package
-	- [packages/shared](packages/shared): scanner hook, provider abstraction layer, localization engine, parsers, and provisioning helpers.
+	- [packages/mobile](packages/mobile): scanner hook, provider abstraction layer, localization engine, parsers, provisioning helpers, and shared mobile dependency surface.
 - Native modules
 	- [modules/expo-kbeaconpro](modules/expo-kbeaconpro): KBeaconPro scan/connect/configure module.
 	- [modules/expo-pans-ble-api](modules/expo-pans-ble-api): BLE TLV command/event interface for DWM1001/PANS.
@@ -81,7 +81,7 @@ flowchart LR
 
 - `expo-kbeaconpro` emits scanned beacon advertisements.
 - `expo-pans-ble-api` emits discovered BLE devices and notification payloads for PANS location frames.
-- `@eight2five/shared` providers normalize both into source-agnostic events.
+- `@eight2five/mobile` providers normalize both into source-agnostic events.
 
 ### 2) Normalization and Ingestion
 
@@ -172,7 +172,7 @@ Anchor geometry is static configuration, but anchor presence is dynamic. To prev
 2. Reconcile observed anchor keys/node IDs against stored field configuration.
 3. Flag unresolved observed anchors and stale configured anchors.
 
-Use shared helpers from [packages/shared/src/providers/PansProvisioning.ts](packages/shared/src/providers/PansProvisioning.ts):
+Use shared mobile helpers from [packages/mobile/src/providers/PansProvisioning.ts](packages/mobile/src/providers/PansProvisioning.ts):
 
 - `observeTagAnchors`
 - `reconcileFieldAnchorsFromTag`
@@ -183,7 +183,7 @@ Example:
 ```ts
 import {
 	startAnchorReconciliationLoop,
-} from "@eight2five/shared";
+} from "@eight2five/mobile";
 
 const loop = startAnchorReconciliationLoop({
 	fieldId: "practice-field-a",

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, LayoutChangeEvent } from "react-native";
-import { AnchorGeometry } from "@eight2five/shared/localization/types";
+import { AnchorGeometry } from "@eight2five/mobile/localization/types";
 import { RunResult } from "../types";
 import { styles, ACCENT_COLOR } from "../styles";
 import { DraggableMarker } from "./DraggableMarker";

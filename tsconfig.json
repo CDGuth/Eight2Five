@@ -4,8 +4,8 @@
     "skipLibCheck": true,
     "strict": true,
     "paths": {
-      "@eight2five/shared": ["./packages/shared/src/index"],
-      "@eight2five/shared/*": ["./packages/shared/src/*"]
+      "@eight2five/mobile": ["./packages/mobile/src/index"],
+      "@eight2five/mobile/*": ["./packages/mobile/src/*"]
     }
   },
   "include": [
