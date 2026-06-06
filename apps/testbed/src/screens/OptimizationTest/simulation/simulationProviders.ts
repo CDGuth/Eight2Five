@@ -1,11 +1,11 @@
-import { KalmanFilter } from "@eight2five/shared/localization/filters/KalmanFilter";
-import { DEFAULT_KALMAN_CONFIG } from "@eight2five/shared/localization/LocalizationConfig";
+import { KalmanFilter } from "@eight2five/mobile/localization/filters/KalmanFilter";
+import { DEFAULT_KALMAN_CONFIG } from "@eight2five/mobile/localization/LocalizationConfig";
 import {
   AnchorGeometry,
   BeaconMeasurement,
   PropagationConstants,
   PropagationModel,
-} from "@eight2five/shared/localization/types";
+} from "@eight2five/mobile/localization/types";
 import { SimulationSourceMode } from "../types";
 
 interface SimulationGenerationInput {

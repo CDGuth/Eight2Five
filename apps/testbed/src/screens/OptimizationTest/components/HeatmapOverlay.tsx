@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import { RunResult } from "../types";
-import { TwoRayGroundModel } from "@eight2five/shared/localization/models/TwoRayGroundModel";
-import { LogNormalModel } from "@eight2five/shared/localization/models/LogNormalModel";
-import { DEFAULT_TX_POWER_DBM } from "@eight2five/shared/localization/LocalizationConfig";
+import { TwoRayGroundModel } from "@eight2five/mobile/localization/models/TwoRayGroundModel";
+import { LogNormalModel } from "@eight2five/mobile/localization/models/LogNormalModel";
+import { DEFAULT_TX_POWER_DBM } from "@eight2five/mobile/localization/LocalizationConfig";
 
 export const HeatmapOverlay = ({
   width,

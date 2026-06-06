@@ -13,28 +13,28 @@ const mockSolve = jest.fn(async ({ anchors, initialPopulation }) => ({
   },
 }));
 
-jest.mock("@eight2five/shared/localization/algorithms/MFASA", () => ({
+jest.mock("@eight2five/mobile/localization/algorithms/MFASA", () => ({
   MFASAOptimizer: jest.fn().mockImplementation(() => ({
     solve: mockSolve,
     cancel: jest.fn(),
   })),
 }));
 
-jest.mock("@eight2five/shared/localization/models/TwoRayGroundModel", () => ({
+jest.mock("@eight2five/mobile/localization/models/TwoRayGroundModel", () => ({
   TwoRayGroundModel: jest.fn().mockImplementation(() => ({
     estimateRssi: ({ distanceMeters }: { distanceMeters: number }) =>
       -50 - distanceMeters * 0.5,
   })),
 }));
 
-jest.mock("@eight2five/shared/localization/models/LogNormalModel", () => ({
+jest.mock("@eight2five/mobile/localization/models/LogNormalModel", () => ({
   LogNormalModel: jest.fn().mockImplementation(() => ({
     estimateRssi: ({ distanceMeters }: { distanceMeters: number }) =>
       -55 - distanceMeters * 0.25,
   })),
 }));
 
-jest.mock("@eight2five/shared/localization/filters/KalmanFilter", () => ({
+jest.mock("@eight2five/mobile/localization/filters/KalmanFilter", () => ({
   KalmanFilter: jest.fn().mockImplementation(() => ({
     filterSample: (v: number) => v,
   })),

@@ -47,7 +47,7 @@ npm run test --workspace apps/testbed
 - Router root layout: [app/_layout.tsx](app/_layout.tsx)
 - Router home route: [app/index.tsx](app/index.tsx)
 - Router subapp route: [app/(subapps)/optimization.tsx](app/(subapps)/optimization.tsx)
-- Shared localization + models: [../../packages/shared](../../packages/shared)
+- Shared mobile localization + models: [../../packages/mobile](../../packages/mobile)
 - PANS BLE module: [../../modules/expo-pans-ble-api](../../modules/expo-pans-ble-api)
 
 ### Optimization Source Modes

@@ -1,4 +1,4 @@
-# @eight2five/shared
+# @eight2five/mobile
 
 Shared logic for localization, hooks, providers, and utilities used by apps in this monorepo.
 
@@ -20,9 +20,9 @@ npm run validate:core
 Workspace-scoped checks:
 
 ```bash
-npm run lint --workspace @eight2five/shared
-npm run type-check --workspace @eight2five/shared
-npm run test --workspace @eight2five/shared
+npm run lint --workspace @eight2five/mobile
+npm run type-check --workspace @eight2five/mobile
+npm run test --workspace @eight2five/mobile
 ```
 
 ## Provider abstractions

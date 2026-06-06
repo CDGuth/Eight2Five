@@ -4,13 +4,13 @@ import { View } from "react-native";
 import { HeatmapOverlay } from "../components/HeatmapOverlay";
 import { RunResult } from "../types";
 
-jest.mock("@eight2five/shared/localization/models/TwoRayGroundModel", () => ({
+jest.mock("@eight2five/mobile/localization/models/TwoRayGroundModel", () => ({
   TwoRayGroundModel: jest.fn().mockImplementation(() => ({
     estimateRssi: () => -50,
   })),
 }));
 
-jest.mock("@eight2five/shared/localization/models/LogNormalModel", () => ({
+jest.mock("@eight2five/mobile/localization/models/LogNormalModel", () => ({
   LogNormalModel: jest.fn().mockImplementation(() => ({
     estimateRssi: () => -52,
   })),
