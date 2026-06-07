@@ -17,7 +17,24 @@
       "enabled": true,
       "headers": {
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
-      }
+      },
+    },
+    "docling": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "docling-mcp[local]",
+        "docling-mcp-server",
+        "--transport",
+        "stdio"
+      ],
+      "environment": {
+        "DOCLING_CONVERSION_MODE": "local",
+        "CUDA_VISIBLE_DEVICES": ""
+      },
+      "enabled": true,
+      "timeout": 1800000
     }
   },
   "agent": {
@@ -31,7 +48,7 @@
       "mode": "primary",
       "prompt": "{file:./agents/engineer.md}",
       "temperature": 0.2,
-      "top_p": 0.9,
+      "top_p": 0.9
     },
     "explore": {
       "mode": "subagent",
