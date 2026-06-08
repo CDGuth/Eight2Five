@@ -5,29 +5,26 @@ const {
 } = require("@expo/config-plugins");
 const pkg = require("./package.json");
 
-const BLE_PERMISSIONS = [
-  "android.permission.BLUETOOTH",
-  "android.permission.BLUETOOTH_ADMIN",
-  "android.permission.BLUETOOTH_SCAN",
-  "android.permission.BLUETOOTH_CONNECT",
-  "android.permission.ACCESS_COARSE_LOCATION",
-  "android.permission.ACCESS_FINE_LOCATION",
+const ANDROID_PERMISSIONS = [
+  { name: "android.permission.BLUETOOTH_SCAN" },
+  { name: "android.permission.BLUETOOTH_CONNECT" },
+  { name: "android.permission.BLUETOOTH", maxSdkVersion: "30" },
+  { name: "android.permission.BLUETOOTH_ADMIN", maxSdkVersion: "30" },
+  { name: "android.permission.ACCESS_FINE_LOCATION" },
 ];
 
 const withPansBleApi = (config, props = {}) => {
   config = withAndroidManifest(config, (androidConfig) => {
-    const androidPermissions =
-      androidConfig.modResults.manifest.permission || [];
+    const manifest = androidConfig.modResults.manifest;
+    manifest.permission = manifest.permission || [];
 
-    BLE_PERMISSIONS.forEach((permission) => {
-      if (!androidPermissions.find((p) => p.$["android:name"] === permission)) {
-        androidPermissions.push({
-          $: { "android:name": permission },
-        });
-      }
+    ANDROID_PERMISSIONS.forEach((permission) => {
+      upsertPermission(manifest.permission, permission);
     });
 
-    androidConfig.modResults.manifest.permission = androidPermissions;
+    manifest["uses-feature"] = manifest["uses-feature"] || [];
+    upsertBleFeature(manifest["uses-feature"]);
+
     return androidConfig;
   });
 
@@ -49,5 +46,41 @@ const withPansBleApi = (config, props = {}) => {
 
   return config;
 };
+
+function upsertPermission(permissions, permission) {
+  const existing = permissions.find(
+    (entry) => entry.$?.["android:name"] === permission.name,
+  );
+  const attributes = {
+    "android:name": permission.name,
+    ...(permission.maxSdkVersion
+      ? { "android:maxSdkVersion": permission.maxSdkVersion }
+      : {}),
+  };
+
+  if (existing) {
+    existing.$ = { ...existing.$, ...attributes };
+    return;
+  }
+
+  permissions.push({ $: attributes });
+}
+
+function upsertBleFeature(features) {
+  const existing = features.find(
+    (entry) => entry.$?.["android:name"] === "android.hardware.bluetooth_le",
+  );
+  const attributes = {
+    "android:name": "android.hardware.bluetooth_le",
+    "android:required": "false",
+  };
+
+  if (existing) {
+    existing.$ = { ...existing.$, ...attributes };
+    return;
+  }
+
+  features.push({ $: attributes });
+}
 
 module.exports = createRunOncePlugin(withPansBleApi, pkg.name, pkg.version);

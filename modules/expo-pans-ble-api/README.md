@@ -1,233 +1,95 @@
 # expo-pans-ble-api
 
-Expo native module for BLE-based DWM1001/PANS command and event integration.
+Expo native module for DWM1001/PANS BLE GATT integration.
 
-## Scope and Intent
+This module is BLE-only. It does **not** expose the DWM1001 SPI/UART TLV host API over BLE. Normal reads, writes, notifications, and indications map directly to documented PANS GATT characteristics.
 
-- Transport support: BLE only
-- Command mode: TLV command wrappers over BLE service/characteristic operations
-- Out of scope in this phase:
-	- UART host API transport
-	- SPI host API transport
+## Native platforms
 
-This module is the low-level transport layer used by shared providers and provisioning helpers.
+- Android: platform BLE GATT APIs (`BluetoothGatt`, `BluetoothLeScanner`)
+- iOS: CoreBluetooth (`CBCentralManager`, `CBPeripheral`)
 
-## Installation and Configuration
+Development builds are required; Expo Go cannot load this custom native module.
 
-The monorepo already links this as a file dependency.
+## Config plugin
 
-Add plugin in app config:
+Both app configs already invoke the plugin. It adds:
 
-```ts
-plugins: [
-	[
-		"expo-pans-ble-api",
-		{
-			bluetoothAlwaysUsageDescription:
-				"This app uses Bluetooth to communicate with nearby DWM1001 devices.",
-			bluetoothPeripheralUsageDescription:
-				"This app uses Bluetooth to communicate with nearby DWM1001 devices.",
-			locationWhenInUseUsageDescription:
-				"Location permission is required for BLE scanning.",
-		},
-	],
-];
-```
+- Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`
+- Android 11 and lower: legacy Bluetooth permissions with `maxSdkVersion=30`
+- `ACCESS_FINE_LOCATION` for BLE scanning/location behavior
+- BLE hardware feature with `required=false`
+- iOS Bluetooth usage descriptions
 
-Plugin source: [app.plugin.js](app.plugin.js)
-
-## Validation
-
-From repo root:
-
-```bash
-npm run lint --workspace modules/expo-pans-ble-api
-npm run type-check --workspace modules/expo-pans-ble-api
-npm run test --workspace modules/expo-pans-ble-api
-```
-
-## Event Model
-
-Events are defined in [src/ExpoPansBleApi.types.ts](src/ExpoPansBleApi.types.ts):
+## Event model
 
 - `onDeviceDiscovered`
 - `onConnectionStateChanged`
-- `onNotificationReceived`
+- `onCharacteristicNotification`
 - `onError`
 
-Listener APIs in [src/ExpoPansBleApiModule.ts](src/ExpoPansBleApiModule.ts):
+Discovery uses cross-platform `deviceId`:
 
-- `addDeviceDiscoveredListener`
-- `addConnectionStateChangedListener`
-- `addNotificationReceivedListener`
-- `addErrorListener`
+- Android: normalized MAC address, also exposed as `macAddress`
+- iOS: `CBPeripheral.identifier.uuidString`; no fake MAC address is produced
 
-## Public API Reference
+## Public API shape
 
-### Discovery and Capability
+Low-level bridge:
 
-- `startScanning(): void`
-- `stopScanning(): void`
-- `clearDevices(): void`
-- `getCapabilities(): PansApiCapabilities`
+- `startScanning()`, `stopScanning()`, `clearDevices()`
+- `getCapabilities()`, `getPermissionStatus()`, `requestPermissions()`
+- `connect(deviceId, timeoutMs?)`, `disconnect(deviceId)`
+- `readCharacteristic(deviceId, characteristicUuid)`
+- `writeCharacteristic(deviceId, characteristicUuid, payload, writeType?)`
+- `setCharacteristicNotifications(deviceId, characteristicUuid, enabled)`
+- `requestMtu(deviceId, mtu)` on Android
+- `getMaximumWriteValueLength(deviceId, writeType)` on iOS
 
-### Connection Lifecycle
+Typed helpers include label, operation mode, PAN ID, location-data mode, location data, proxy positions, device info, statistics, persisted position, anchor MAC stats, cluster info, anchor list, tag update rate, explicit disconnect, and raw firmware-update packet primitives.
 
-- `connect(macAddress: string, timeoutMs?: number): Promise<boolean>`
-- `disconnect(macAddress: string): Promise<boolean>`
+Codec helpers live in TypeScript and are covered by Jest tests.
 
-### Generic TLV Execution
-
-- `executeCommand(macAddress: string, request: PansTlvRequest): Promise<PansCommandResult>`
-
-### Command Helpers
-
-- `readLocationData(macAddress)`
-- `readProxyPositions(macAddress)`
-- `readOperationMode(macAddress)`
-- `writeLocationDataMode(macAddress, mode)`
-- `writeOperationMode(macAddress, [byte0, byte1])`
-- `setTagLocationEngineEnabled(macAddress, enabled)`
-- `writePersistedPosition(macAddress, { xMeters, yMeters, zMeters?, quality? })`
-- `readAnchorList(macAddress)`
-- `pushFwUpdatePayload(macAddress, payload)`
-
-## TLV Command Type Mapping
-
-Defined in `PansCommandType` enum:
-
-- `0x90`: `readLocationData`
-- `0x91`: `readProxyPositions`
-- `0x92`: `readOperationMode`
-- `0x93`: `writeLocationDataMode`
-- `0x94`: `writeOperationMode`
-- `0x95`: `writePersistedPosition`
-- `0x96`: `readAnchorList`
-- `0xA0`: `fwUpdatePush`
-
-## Core Types
-
-Key interfaces in [src/ExpoPansBleApi.types.ts](src/ExpoPansBleApi.types.ts):
-
-- `PansBleDevice`
-	- `mac`
-	- `name?`
-	- `rssi`
-	- `lastSeenMs`
-- `PansTlvRequest`
-- `PansTlvResponse`
-- `PansCommandResult`
-- `PansApiCapabilities`
-- `ConnectionStateChangeEvent`
-- `NotifyDataEvent`
-- `PansApiError`
-
-## Data and Validation Constraints
-
-Wrapper validations in [src/ExpoPansBleApiModule.ts](src/ExpoPansBleApiModule.ts):
-
-- MAC address validation:
-	- Colon-delimited MAC (typical Android)
-	- iOS peripheral UUID format
-- TLV request validation:
-	- command type: integer `0..255`
-	- payload bytes: each integer `0..255`
-	- payload length: max `253`
-
-## Discovery to Ranging Flow
-
-```mermaid
-%%{init: {'sequence': {'mirrorActors': false, 'showSequenceNumbers': true}}}%%
-sequenceDiagram
-	participant App as App (mobile/testbed)
-	participant Module as expo-pans-ble-api
-	participant Node as PANS Tag/Anchor
-
-	App->>Module: startScanning()
-	loop scan window
-		Module-->>App: onDeviceDiscovered({ devices })
-	end
-
-	App->>Module: connect(mac, timeoutMs?)
-	Module-->>App: onConnectionStateChanged(connecting)
-	Module-->>App: onConnectionStateChanged(connected)
-
-	opt configure operating mode
-		App->>Module: writeOperationMode(...)
-		App->>Module: writeLocationDataMode(...)
-		App->>Module: setTagLocationEngineEnabled(...)
-	end
-
-	par command-response reads
-		App->>Module: readLocationData(mac)
-		Module-->>App: PansCommandResult { response | error }
-	and async notifications
-		Node-->>Module: notify payload
-		Module-->>App: onNotificationReceived(payload)
-	end
-
-	opt housekeeping
-		App->>Module: readAnchorList(mac)
-		App->>Module: disconnect(mac)
-		Module-->>App: onConnectionStateChanged(disconnected)
-	end
-```
-
-## Advertisement Data Limits
-
-Current device-discovery payloads expose:
-
-- `mac`
-- `name`
-- `rssi`
-- `lastSeenMs`
-
-This is sufficient for liveness/freshness checks, but not sufficient to derive full anchor geometry directly from BLE advertisements alone. In this project, PANS discovery RSSI is treated as metadata and is not used as a localization RSSI input.
-
-Recommended approach for geometry freshness in shared logic:
-
-1. Use periodic `observeTagAnchors` calls from a connected tag.
-2. Reconcile observed anchors with stored field config via `reconcileFieldAnchorsFromTag`.
-3. Run continuously with `startAnchorReconciliationLoop`.
-
-## Example Usage
+## Example
 
 ```ts
 import {
-	addDeviceDiscoveredListener,
-	addNotificationReceivedListener,
-	connect,
-	readLocationData,
-	startScanning,
-	stopScanning,
+  addDeviceDiscoveredListener,
+  addLocationDataListener,
+  connect,
+  readLocationData,
+  startScanning,
+  subscribeLocationData,
 } from "expo-pans-ble-api";
 
-const discoveredSub = addDeviceDiscoveredListener(async ({ devices }) => {
-	const device = devices[0];
-	if (!device) return;
+addDeviceDiscoveredListener(async ({ devices }) => {
+  const tag = devices.find((device) => device.presence?.role === "tag");
+  if (!tag) return;
 
-	const ok = await connect(device.mac, 10_000);
-	if (!ok) return;
+  const connected = await connect(tag.deviceId, 10_000);
+  if (!connected) return;
 
-	const frame = await readLocationData(device.mac);
-	console.log(frame);
+  await subscribeLocationData(tag.deviceId);
+  console.log(await readLocationData(tag.deviceId));
 });
 
-const notifySub = addNotificationReceivedListener((event) => {
-	console.log("Notify payload", event.macAddress, event.payload);
+addLocationDataListener((event) => {
+  console.log(event.deviceId, event.payload);
 });
 
-startScanning();
-
-// cleanup
-stopScanning();
-discoveredSub.remove();
-notifySub.remove();
+await startScanning();
 ```
 
-## Source Files
+## Validation
 
-- Entry exports: [index.ts](index.ts)
-- Wrapper implementation: [src/ExpoPansBleApiModule.ts](src/ExpoPansBleApiModule.ts)
-- Types: [src/ExpoPansBleApi.types.ts](src/ExpoPansBleApi.types.ts)
-- Expo module config: [expo-module.config.json](expo-module.config.json)
+From the repository root:
+
+```bash
+npm run type-check --workspace modules/expo-pans-ble-api
+npm run lint --workspace modules/expo-pans-ble-api
+npm run test --workspace modules/expo-pans-ble-api
+npm run validate:expo:doctor
+npm run validate:expo:install-check
+```
+
+Hardware verification still requires recently woken DWM1001-DEV/MDEK1001 nodes running PANS firmware.

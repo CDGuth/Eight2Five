@@ -6,26 +6,66 @@ import {
 import {
   ConnectionStateChangeEvent,
   ExpoPansBleApiModuleEvents,
-  NotifyDataEvent,
+  PANS_BLE_UUIDS,
+  PansAnchorList,
   PansApiError,
-  PansApiCapabilities,
+  PansBleCapabilities,
   PansBleDevice,
-  PansCommandType,
-  PansCommandResult,
-  PansTlvRequest,
+  PansBlePermissionStatus,
+  PansCharacteristicNotificationEvent,
+  PansClusterInfo,
+  PansDeviceInfo,
+  PansDistance,
+  PansFirmwareUpdateOffer,
+  PansFirmwareUpdatePoll,
+  PansLocationData,
+  PansLocationDataMode,
+  PansOperationMode,
+  PansOperationModePatch,
+  PansPosition,
+  PansPresenceData,
+  PansProxyPosition,
+  PansResult,
+  PansTagUpdateRate,
+  PansUwbMode,
+  PansWriteType,
 } from "./ExpoPansBleApi.types";
 
 interface ExpoPansBleApiNativeModule {
-  startScanning(): void;
+  startScanning(): Promise<void> | void;
   stopScanning(): void;
   clearDevices(): void;
-  getCapabilities(): PansApiCapabilities;
-  connect(macAddress: string, timeoutMs?: number): Promise<boolean>;
-  disconnect(macAddress: string): Promise<boolean>;
-  executeCommand(
-    macAddress: string,
-    request: PansTlvRequest,
-  ): Promise<PansCommandResult>;
+
+  getCapabilities(): PansBleCapabilities;
+  getPermissionStatus(): PansBlePermissionStatus;
+  requestPermissions(): Promise<PansBlePermissionStatus>;
+
+  connect(deviceId: string, timeoutMs?: number): Promise<boolean>;
+  disconnect(deviceId: string): Promise<boolean>;
+
+  readCharacteristic(
+    deviceId: string,
+    characteristicUuid: string,
+  ): Promise<number[]>;
+
+  writeCharacteristic(
+    deviceId: string,
+    characteristicUuid: string,
+    payload: number[],
+    writeType?: PansWriteType,
+  ): Promise<boolean>;
+
+  setCharacteristicNotifications(
+    deviceId: string,
+    characteristicUuid: string,
+    enabled: boolean,
+  ): Promise<boolean>;
+
+  requestMtu?(deviceId: string, mtu: number): Promise<number>;
+  getMaximumWriteValueLength?(
+    deviceId: string,
+    writeType: PansWriteType,
+  ): Promise<number>;
 }
 
 type EventMap = {
@@ -35,8 +75,8 @@ type EventMap = {
   [ExpoPansBleApiModuleEvents.onConnectionStateChanged]: (
     event: ConnectionStateChangeEvent,
   ) => void;
-  [ExpoPansBleApiModuleEvents.onNotificationReceived]: (
-    event: NotifyDataEvent,
+  [ExpoPansBleApiModuleEvents.onCharacteristicNotification]: (
+    event: PansCharacteristicNotificationEvent,
   ) => void;
   [ExpoPansBleApiModuleEvents.onError]: (event: PansApiError) => void;
 };
@@ -44,6 +84,9 @@ type EventMap = {
 const nativeModule =
   requireNativeModule<ExpoPansBleApiNativeModule>("ExpoPansBleApi");
 const emitter = new EventEmitter<EventMap>(nativeModule as never);
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 export function addDeviceDiscoveredListener(
   listener: (event: { devices: PansBleDevice[] }) => void,
@@ -63,11 +106,38 @@ export function addConnectionStateChangedListener(
   );
 }
 
-export function addNotificationReceivedListener(
-  listener: (event: NotifyDataEvent) => void,
+export function addCharacteristicNotificationListener(
+  listener: (event: PansCharacteristicNotificationEvent) => void,
 ): EventSubscription {
   return emitter.addListener(
-    ExpoPansBleApiModuleEvents.onNotificationReceived,
+    ExpoPansBleApiModuleEvents.onCharacteristicNotification,
+    listener,
+  );
+}
+
+export function addLocationDataListener(
+  listener: (event: PansCharacteristicNotificationEvent) => void,
+): EventSubscription {
+  return addFilteredCharacteristicListener(
+    PANS_BLE_UUIDS.characteristics.locationData,
+    listener,
+  );
+}
+
+export function addProxyPositionsListener(
+  listener: (event: PansCharacteristicNotificationEvent) => void,
+): EventSubscription {
+  return addFilteredCharacteristicListener(
+    PANS_BLE_UUIDS.characteristics.proxyPositions,
+    listener,
+  );
+}
+
+export function addFirmwareUpdatePollListener(
+  listener: (event: PansCharacteristicNotificationEvent) => void,
+): EventSubscription {
+  return addFilteredCharacteristicListener(
+    PANS_BLE_UUIDS.characteristics.firmwareUpdatePoll,
     listener,
   );
 }
@@ -78,217 +148,839 @@ export function addErrorListener(
   return emitter.addListener(ExpoPansBleApiModuleEvents.onError, listener);
 }
 
-export function startScanning(): void {
-  return nativeModule.startScanning();
+export async function startScanning(): Promise<void> {
+  await nativeModule.startScanning();
 }
 
 export function stopScanning(): void {
-  return nativeModule.stopScanning();
+  nativeModule.stopScanning();
 }
 
 export function clearDevices(): void {
-  return nativeModule.clearDevices();
+  nativeModule.clearDevices();
 }
 
-export function getCapabilities(): PansApiCapabilities {
+export function getCapabilities(): PansBleCapabilities {
   return nativeModule.getCapabilities();
 }
 
+export function getPermissionStatus(): PansBlePermissionStatus {
+  return nativeModule.getPermissionStatus();
+}
+
+export async function requestPermissions(): Promise<PansBlePermissionStatus> {
+  return await nativeModule.requestPermissions();
+}
+
 export async function connect(
-  macAddress: string,
+  deviceId: string,
   timeoutMs?: number,
 ): Promise<boolean> {
-  validateMacAddress(macAddress);
-  return await nativeModule.connect(macAddress, timeoutMs);
+  validateDeviceId(deviceId);
+  return await nativeModule.connect(deviceId, timeoutMs);
 }
 
-export async function disconnect(macAddress: string): Promise<boolean> {
-  validateMacAddress(macAddress);
-  return await nativeModule.disconnect(macAddress);
+export async function disconnect(deviceId: string): Promise<boolean> {
+  validateDeviceId(deviceId);
+  return await nativeModule.disconnect(deviceId);
 }
 
-export async function executeCommand(
-  macAddress: string,
-  request: PansTlvRequest,
-): Promise<PansCommandResult> {
-  validateMacAddress(macAddress);
-  validateTlvRequest(request);
-  return await nativeModule.executeCommand(macAddress, request);
+export async function readCharacteristic(
+  deviceId: string,
+  characteristicUuid: string,
+): Promise<number[]> {
+  validateDeviceId(deviceId);
+  return validateBytes(
+    await nativeModule.readCharacteristic(deviceId, characteristicUuid),
+  );
 }
 
-export async function readLocationData(
-  macAddress: string,
-): Promise<PansCommandResult> {
-  return await executeCommand(macAddress, {
-    type: PansCommandType.readLocationData,
-    value: [],
-  });
+export async function writeCharacteristic(
+  deviceId: string,
+  characteristicUuid: string,
+  payload: number[],
+  writeType: PansWriteType = "withResponse",
+): Promise<boolean> {
+  validateDeviceId(deviceId);
+  validateByteArray(payload, "payload");
+  return await nativeModule.writeCharacteristic(
+    deviceId,
+    characteristicUuid,
+    payload,
+    writeType,
+  );
 }
 
-export async function readProxyPositions(
-  macAddress: string,
-): Promise<PansCommandResult> {
-  return await executeCommand(macAddress, {
-    type: PansCommandType.readProxyPositions,
-    value: [],
-  });
+export async function setCharacteristicNotifications(
+  deviceId: string,
+  characteristicUuid: string,
+  enabled: boolean,
+): Promise<boolean> {
+  validateDeviceId(deviceId);
+  return await nativeModule.setCharacteristicNotifications(
+    deviceId,
+    characteristicUuid,
+    enabled,
+  );
+}
+
+export async function requestMtu(
+  deviceId: string,
+  mtu: number,
+): Promise<number> {
+  validateDeviceId(deviceId);
+  if (!nativeModule.requestMtu) return mtu;
+  return await nativeModule.requestMtu(deviceId, mtu);
+}
+
+export async function getMaximumWriteValueLength(
+  deviceId: string,
+  writeType: PansWriteType,
+): Promise<number | undefined> {
+  validateDeviceId(deviceId);
+  return await nativeModule.getMaximumWriteValueLength?.(deviceId, writeType);
+}
+
+export async function readLabel(deviceId: string): Promise<string> {
+  const payload = await readCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.label,
+  );
+  return textDecoder.decode(Uint8Array.from(payload));
+}
+
+export async function writeLabel(
+  deviceId: string,
+  label: string,
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.label,
+    Array.from(textEncoder.encode(label)),
+  );
 }
 
 export async function readOperationMode(
-  macAddress: string,
-): Promise<PansCommandResult> {
-  return await executeCommand(macAddress, {
-    type: PansCommandType.readOperationMode,
-    value: [],
-  });
-}
-
-export async function writeLocationDataMode(
-  macAddress: string,
-  mode: number,
-): Promise<PansCommandResult> {
-  if (!Number.isInteger(mode) || mode < 0 || mode > 255)
-    throw new Error(
-      "INVALID_ARGUMENT: mode must be a byte integer in range 0..255.",
-    );
-
-  return await executeCommand(macAddress, {
-    type: PansCommandType.writeLocationDataMode,
-    value: [mode],
-  });
+  deviceId: string,
+): Promise<PansOperationMode> {
+  return decodeOperationMode(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.operationMode,
+    ),
+  );
 }
 
 export async function writeOperationMode(
-  macAddress: string,
-  operationModeBytes: [number, number],
-): Promise<PansCommandResult> {
-  const [byte0, byte1] = operationModeBytes;
-  const isValid =
-    Number.isInteger(byte0) &&
-    Number.isInteger(byte1) &&
-    byte0 >= 0 &&
-    byte0 <= 255 &&
-    byte1 >= 0 &&
-    byte1 <= 255;
+  deviceId: string,
+  nextMode: PansOperationMode | [number, number],
+): Promise<boolean> {
+  const payload = Array.isArray(nextMode)
+    ? validateOperationModeTuple(nextMode)
+    : encodeOperationMode(nextMode);
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.operationMode,
+    payload,
+  );
+}
 
-  if (!isValid)
-    throw new Error(
-      "INVALID_ARGUMENT: operation mode requires two bytes in range 0..255.",
-    );
-
-  return await executeCommand(macAddress, {
-    type: PansCommandType.writeOperationMode,
-    value: [byte0, byte1],
-  });
+export async function patchOperationMode(
+  deviceId: string,
+  patch: PansOperationModePatch,
+): Promise<PansOperationMode> {
+  const current = await readOperationMode(deviceId);
+  const next = { ...current, ...patch, raw: current.raw };
+  await writeOperationMode(deviceId, next);
+  return next;
 }
 
 export async function setTagLocationEngineEnabled(
-  macAddress: string,
+  deviceId: string,
   enabled: boolean,
-): Promise<PansCommandResult> {
-  const readResult = await readOperationMode(macAddress);
-  if (!readResult.ok) {
-    return readResult;
-  }
+): Promise<PansResult<PansOperationMode>> {
+  return toResult(
+    async () =>
+      await patchOperationMode(deviceId, {
+        role: "tag",
+        locationEngineEnabled: enabled,
+      }),
+  );
+}
 
-  const bytes = readResult.response?.value ?? [];
-  if (bytes.length < 2) {
-    return {
-      ok: false,
-      error: {
-        code: "OPERATION_FAILED",
-        message:
-          "Operation mode read returned an invalid payload. Expected at least 2 bytes.",
-      },
-    };
-  }
+export async function readNetworkId(deviceId: string): Promise<number> {
+  const payload = await readCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.networkId,
+  );
+  ensureLength(payload, 2, "network ID");
+  return dataView(payload).getUint16(0, true);
+}
 
-  const nextByte1 = enabled ? bytes[1] | 0x20 : bytes[1] & ~0x20;
-  return await writeOperationMode(macAddress, [bytes[0], nextByte1]);
+export async function writeNetworkId(
+  deviceId: string,
+  panId: number,
+): Promise<boolean> {
+  assertUintRange(panId, 0xffff, "PAN ID");
+  const bytes = new Uint8Array(2);
+  new DataView(bytes.buffer).setUint16(0, panId, true);
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.networkId,
+    Array.from(bytes),
+  );
+}
+
+export async function readLocationDataMode(
+  deviceId: string,
+): Promise<PansLocationDataMode> {
+  const payload = await readCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.locationDataMode,
+  );
+  ensureLength(payload, 1, "location-data mode");
+  return normalizeLocationDataMode(payload[0]);
+}
+
+export async function writeLocationDataMode(
+  deviceId: string,
+  mode: PansLocationDataMode,
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.locationDataMode,
+    [normalizeLocationDataMode(mode)],
+  );
+}
+
+export async function readLocationData(
+  deviceId: string,
+): Promise<PansLocationData> {
+  return decodeLocationData(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.locationData,
+    ),
+  );
+}
+
+export async function subscribeLocationData(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.locationData,
+    true,
+  );
+}
+
+export async function unsubscribeLocationData(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.locationData,
+    false,
+  );
+}
+
+export async function readProxyPositions(
+  deviceId: string,
+): Promise<PansProxyPosition[]> {
+  return decodeProxyPositions(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.proxyPositions,
+    ),
+  );
+}
+
+export async function subscribeProxyPositions(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.proxyPositions,
+    true,
+  );
+}
+
+export async function unsubscribeProxyPositions(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.proxyPositions,
+    false,
+  );
+}
+
+export async function readDeviceInfo(
+  deviceId: string,
+): Promise<PansDeviceInfo> {
+  return decodeDeviceInfo(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.deviceInfo,
+    ),
+  );
+}
+
+export async function readStatistics(deviceId: string): Promise<number[]> {
+  return await readCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.statistics,
+  );
 }
 
 export async function writePersistedPosition(
-  macAddress: string,
-  position: {
-    xMeters: number;
-    yMeters: number;
+  deviceId: string,
+  position: Omit<PansPosition, "zMeters" | "quality"> & {
     zMeters?: number;
     quality?: number;
   },
-): Promise<PansCommandResult> {
-  const xMm = Math.round(position.xMeters * 1000);
-  const yMm = Math.round(position.yMeters * 1000);
-  const zMm = Math.round((position.zMeters ?? 0) * 1000);
-  const quality = Math.max(
-    1,
-    Math.min(100, Math.round(position.quality ?? 100)),
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.persistedPosition,
+    encodePersistedPosition(position),
   );
+}
 
-  const bytes = new Uint8Array(13);
-  const view = new DataView(bytes.buffer);
-  view.setInt32(0, xMm, true);
-  view.setInt32(4, yMm, true);
-  view.setInt32(8, zMm, true);
-  bytes[12] = quality;
+export async function readAnchorMacStats(deviceId: string): Promise<number[]> {
+  return await readCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.macStats,
+  );
+}
 
-  return await executeCommand(macAddress, {
-    type: PansCommandType.writePersistedPosition,
-    value: Array.from(bytes),
-  });
+export async function readClusterInfo(
+  deviceId: string,
+): Promise<PansClusterInfo> {
+  return decodeClusterInfo(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.clusterInfo,
+    ),
+  );
 }
 
 export async function readAnchorList(
-  macAddress: string,
-): Promise<PansCommandResult> {
-  return await executeCommand(macAddress, {
-    type: PansCommandType.readAnchorList,
-    value: [],
-  });
-}
-
-export async function pushFwUpdatePayload(
-  macAddress: string,
-  payload: number[],
-): Promise<PansCommandResult> {
-  return await executeCommand(macAddress, {
-    type: PansCommandType.fwUpdatePush,
-    value: payload,
-  });
-}
-
-function validateMacAddress(macAddress: string): void {
-  const isMac = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(macAddress);
-  const isIosPeripheralId =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      macAddress,
-    );
-
-  const isValid = isMac || isIosPeripheralId;
-  if (isValid) return;
-
-  throw new Error(
-    "INVALID_ARGUMENT: address must be a colon-delimited MAC or iOS peripheral UUID string.",
+  deviceId: string,
+): Promise<PansAnchorList> {
+  return decodeAnchorList(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.anchorList,
+    ),
   );
 }
 
-function validateTlvRequest(request: PansTlvRequest): void {
-  const typeInRange =
-    Number.isInteger(request.type) && request.type >= 0 && request.type <= 255;
-  if (!typeInRange)
+export async function readTagUpdateRate(
+  deviceId: string,
+): Promise<PansTagUpdateRate> {
+  return decodeTagUpdateRate(
+    await readCharacteristic(
+      deviceId,
+      PANS_BLE_UUIDS.characteristics.updateRate,
+    ),
+  );
+}
+
+export async function requestExplicitDisconnect(
+  deviceId: string,
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.explicitDisconnect,
+    [1],
+  );
+}
+
+export async function subscribeFirmwareUpdatePoll(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.firmwareUpdatePoll,
+    true,
+  );
+}
+
+export async function unsubscribeFirmwareUpdatePoll(
+  deviceId: string,
+): Promise<boolean> {
+  return await setCharacteristicNotifications(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.firmwareUpdatePoll,
+    false,
+  );
+}
+
+export async function writeFirmwareUpdateOffer(
+  deviceId: string,
+  offer: PansFirmwareUpdateOffer,
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
+    encodeFirmwareUpdateOffer(offer),
+    "withResponse",
+  );
+}
+
+export async function writeFirmwareUpdateChunk(
+  deviceId: string,
+  offset: number,
+  data: number[],
+): Promise<boolean> {
+  return await writeCharacteristic(
+    deviceId,
+    PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
+    encodeFirmwareUpdateChunk(offset, data),
+    "withoutResponse",
+  );
+}
+
+export function encodeOperationMode(mode: PansOperationMode): number[] {
+  const raw = mode.raw ?? [0, 0];
+  let byte0 = raw[0] & 0x01;
+  let byte1 = raw[1] & 0x1f;
+
+  if (mode.role === "anchor") byte0 |= 0x80;
+  byte0 |= uwbModeToBits(mode.uwbMode) << 5;
+  if (mode.selectedFirmware === 2) byte0 |= 0x10;
+  if (mode.accelerometerEnabled) byte0 |= 0x08;
+  if (mode.ledEnabled) byte0 |= 0x04;
+  if (mode.firmwareUpdateEnabled) byte0 |= 0x02;
+  if (mode.initiatorEnabled) byte1 |= 0x80;
+  if (mode.lowPowerModeEnabled) byte1 |= 0x40;
+  if (mode.locationEngineEnabled) byte1 |= 0x20;
+
+  return [byte0, byte1];
+}
+
+export function decodeOperationMode(payload: number[]): PansOperationMode {
+  ensureLength(payload, 2, "operation mode");
+  const byte0 = payload[0];
+  const byte1 = payload[1];
+  return {
+    role: byte0 & 0x80 ? "anchor" : "tag",
+    uwbMode: bitsToUwbMode((byte0 >> 5) & 0x03),
+    selectedFirmware: byte0 & 0x10 ? 2 : 1,
+    accelerometerEnabled: Boolean(byte0 & 0x08),
+    ledEnabled: Boolean(byte0 & 0x04),
+    firmwareUpdateEnabled: Boolean(byte0 & 0x02),
+    initiatorEnabled: Boolean(byte1 & 0x80),
+    lowPowerModeEnabled: Boolean(byte1 & 0x40),
+    locationEngineEnabled: Boolean(byte1 & 0x20),
+    raw: [byte0, byte1],
+  };
+}
+
+export function encodePersistedPosition(
+  position: Omit<PansPosition, "zMeters" | "quality"> & {
+    zMeters?: number;
+    quality?: number;
+  },
+): number[] {
+  const bytes = new Uint8Array(13);
+  const view = new DataView(bytes.buffer);
+  view.setInt32(0, metersToMillimeters(position.xMeters), true);
+  view.setInt32(4, metersToMillimeters(position.yMeters), true);
+  view.setInt32(8, metersToMillimeters(position.zMeters ?? 0), true);
+  const quality = Math.round(position.quality ?? 100);
+  if (quality < 1 || quality > 100) {
     throw new Error(
-      "INVALID_ARGUMENT: TLV type must be an integer in range 0..255.",
+      "INVALID_ARGUMENT: persisted position quality must be in range 1..100.",
     );
+  }
+  bytes[12] = quality;
+  return Array.from(bytes);
+}
 
-  const validValue =
-    Array.isArray(request.value) &&
-    request.value.length <= 253 &&
-    request.value.every(
-      (byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255,
+export function decodePosition(payload: number[], offset = 0): PansPosition {
+  if (offset + 13 > payload.length) {
+    throw new Error("MALFORMED_PAYLOAD: position requires 13 bytes.");
+  }
+  const view = dataView(payload);
+  return {
+    xMeters: view.getInt32(offset, true) / 1000,
+    yMeters: view.getInt32(offset + 4, true) / 1000,
+    zMeters: view.getInt32(offset + 8, true) / 1000,
+    quality: payload[offset + 12],
+  };
+}
+
+export function decodeLocationData(payload: number[]): PansLocationData {
+  const raw = validateBytes(payload);
+  const diagnostics: string[] = [];
+  if (!raw.length) return { distances: [], raw, diagnostics };
+
+  const frameType = raw[0];
+  if (frameType !== 0 && frameType !== 1 && frameType !== 2) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: unknown location-data frame type ${frameType}.`,
     );
+  }
 
-  if (validValue) return;
+  let position: PansPosition | undefined;
+  let distancesOffset = 1;
 
-  throw new Error(
-    "INVALID_ARGUMENT: TLV value must be an array of byte integers in range 0..255 with max length 253.",
-  );
+  if (frameType === 0 || frameType === 2) {
+    if (raw.length >= 14) {
+      position = decodePosition(raw, 1);
+      distancesOffset = 14;
+    } else if (frameType === 0) {
+      diagnostics.push("position frame is shorter than 14 bytes");
+    }
+  }
+
+  const distances: PansDistance[] = [];
+  if ((frameType === 1 || frameType === 2) && raw.length > distancesOffset) {
+    const count = raw[distancesOffset];
+    let index = distancesOffset + 1;
+    for (let i = 0; i < count; i += 1) {
+      if (index + 7 > raw.length) {
+        diagnostics.push(`truncated distance entry ${i + 1} of ${count}`);
+        break;
+      }
+      distances.push(decodeDistance(raw, index));
+      index += 7;
+    }
+  } else if (frameType === 1 && raw.length <= distancesOffset) {
+    diagnostics.push("distance frame is missing count byte");
+  }
+
+  return { frameType, position, distances, raw, diagnostics };
+}
+
+export function decodeProxyPositions(payload: number[]): PansProxyPosition[] {
+  const raw = validateBytes(payload);
+  if (!raw.length) return [];
+  const view = dataView(raw);
+  const count = raw[0];
+  const positions: PansProxyPosition[] = [];
+  let index = 1;
+  for (let i = 0; i < count; i += 1) {
+    if (index + 15 > raw.length) {
+      throw new Error(
+        `MALFORMED_PAYLOAD: truncated proxy-position entry ${i + 1} of ${count}.`,
+      );
+    }
+    positions.push({
+      nodeId: view.getUint16(index, true),
+      position: decodePosition(raw, index + 2),
+    });
+    index += 15;
+  }
+  return positions;
+}
+
+export function decodeDeviceInfo(payload: number[]): PansDeviceInfo {
+  ensureLength(payload, 29, "device info");
+  const raw = validateBytes(payload);
+  const view = dataView(raw);
+  const nodeIdHex = readUint64Hex(raw, 0);
+  return {
+    nodeIdHex,
+    lowNodeId: view.getUint16(0, true),
+    hardwareVersion: view.getUint32(8, true),
+    firmware1Version: view.getUint32(12, true),
+    firmware2Version: view.getUint32(16, true),
+    firmware1Checksum: view.getUint32(20, true),
+    firmware2Checksum: view.getUint32(24, true),
+    operationFlags: raw[28],
+    raw,
+  };
+}
+
+export function decodeClusterInfo(payload: number[]): PansClusterInfo {
+  ensureLength(payload, 5, "cluster info");
+  const raw = validateBytes(payload);
+  const view = dataView(raw);
+  return {
+    seatNumber: raw[0],
+    clusterMap: view.getUint16(1, true),
+    clusterNeighborMap: view.getUint16(3, true),
+    raw,
+  };
+}
+
+export function decodeAnchorList(payload: number[]): PansAnchorList {
+  const raw = validateBytes(payload);
+  const diagnostics: string[] = [];
+  if (!raw.length) return { anchors: [], raw, diagnostics };
+  const count = raw[0];
+  const view = dataView(raw);
+  const anchors = [];
+  let index = 1;
+  for (let i = 0; i < count; i += 1) {
+    if (index + 8 > raw.length) {
+      diagnostics.push(`truncated anchor-list entry ${i + 1} of ${count}`);
+      break;
+    }
+    anchors.push({
+      nodeIdHex: readUint64Hex(raw, index),
+      lowNodeId: view.getUint16(index, true),
+    });
+    index += 8;
+  }
+  return { anchors, raw, diagnostics };
+}
+
+export function decodeTagUpdateRate(payload: number[]): PansTagUpdateRate {
+  ensureLength(payload, 8, "tag update rate");
+  const raw = validateBytes(payload);
+  const view = dataView(raw);
+  return {
+    movingUpdateRateMs: view.getUint32(0, true),
+    stationaryUpdateRateMs: view.getUint32(4, true),
+    raw,
+  };
+}
+
+export function decodePresenceData(payload: number[]): PansPresenceData {
+  ensureLength(payload, 2, "presence data");
+  const rawOperationModeByte = payload[0];
+  return {
+    rawOperationModeByte,
+    role: rawOperationModeByte & 0x80 ? "anchor" : "tag",
+    errorIndicated: Boolean(rawOperationModeByte & 0x10),
+    initiator: Boolean(rawOperationModeByte & 0x08),
+    bridge: Boolean(rawOperationModeByte & 0x04),
+    uwbMode: bitsToUwbMode(rawOperationModeByte & 0x03),
+    changeCounter: payload[1],
+  };
+}
+
+export function encodeFirmwareUpdateOffer(
+  offer: PansFirmwareUpdateOffer,
+): number[] {
+  const bytes = new Uint8Array(17);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0;
+  view.setUint32(1, offer.hardwareVersion, true);
+  view.setUint32(5, offer.firmwareVersion, true);
+  view.setUint32(9, offer.firmwareChecksum, true);
+  view.setUint32(13, offer.totalBinarySize, true);
+  return Array.from(bytes);
+}
+
+export function encodeFirmwareUpdateChunk(
+  offset: number,
+  chunk: number[],
+): number[] {
+  assertUintRange(offset, 0xffffffff, "firmware update offset");
+  validateByteArray(chunk, "firmware update chunk");
+  if (chunk.length > 32) {
+    throw new Error(
+      "INVALID_ARGUMENT: firmware update chunk data must be at most 32 bytes.",
+    );
+  }
+  const bytes = new Uint8Array(5 + chunk.length);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 1;
+  view.setUint32(1, offset, true);
+  bytes.set(chunk, 5);
+  return Array.from(bytes);
+}
+
+export function decodeFirmwareUpdatePoll(
+  payload: number[],
+): PansFirmwareUpdatePoll {
+  const raw = validateBytes(payload);
+  ensureMinLength(raw, 1, "firmware update poll");
+  const type = raw[0];
+  if (type === 1) {
+    ensureMinLength(raw, 9, "firmware update poll request");
+    const view = dataView(raw);
+    return {
+      type,
+      kind: "request",
+      requestedOffset: view.getUint32(1, true),
+      requestedSize: view.getUint32(5, true),
+      raw,
+    };
+  }
+  if (type === 0) return { type, kind: "refused", raw };
+  if (type === 2) return { type, kind: "complete", raw };
+  if (type === 3) return { type, kind: "saveFailed", raw };
+  if (type === 14) return { type, kind: "invalidChecksum", raw };
+  return { type, kind: "unknown", raw };
+}
+
+function addFilteredCharacteristicListener(
+  characteristicUuid: string,
+  listener: (event: PansCharacteristicNotificationEvent) => void,
+): EventSubscription {
+  return addCharacteristicNotificationListener((event) => {
+    if (sameUuid(event.characteristicUuid, characteristicUuid)) listener(event);
+  });
+}
+
+function validateOperationModeTuple(tuple: [number, number]): number[] {
+  validateByteArray(tuple, "operation mode");
+  if (tuple.length !== 2) {
+    throw new Error(
+      "INVALID_ARGUMENT: operation mode requires exactly 2 bytes.",
+    );
+  }
+  return tuple;
+}
+
+function normalizeLocationDataMode(mode: number): PansLocationDataMode {
+  if (mode !== 0 && mode !== 1 && mode !== 2) {
+    throw new Error("INVALID_ARGUMENT: location-data mode must be 0, 1, or 2.");
+  }
+  return mode;
+}
+
+function decodeDistance(payload: number[], offset: number): PansDistance {
+  const view = dataView(payload);
+  const nodeId = view.getUint16(offset, true);
+  return {
+    nodeId,
+    anchorKey: toAnchorKey(nodeId),
+    distanceMeters: view.getUint32(offset + 2, true) / 1000,
+    quality: payload[offset + 6],
+  };
+}
+
+function readUint64Hex(payload: number[], offset: number): string {
+  let hex = "";
+  for (let i = 7; i >= 0; i -= 1) {
+    hex += payload[offset + i].toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function uwbModeToBits(mode: PansUwbMode): number {
+  if (mode === "off") return 0;
+  if (mode === "passive") return 1;
+  return 2;
+}
+
+function bitsToUwbMode(bits: number): PansUwbMode {
+  if (bits === 0) return "off";
+  if (bits === 1) return "passive";
+  if (bits === 2) return "active";
+  throw new Error(`MALFORMED_PAYLOAD: unsupported UWB mode bits ${bits}.`);
+}
+
+function metersToMillimeters(value: number): number {
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      "INVALID_ARGUMENT: position coordinates must be finite numbers.",
+    );
+  }
+  return Math.round(value * 1000);
+}
+
+function assertUintRange(value: number, max: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0 || value > max) {
+    throw new Error(
+      `INVALID_ARGUMENT: ${label} must be an unsigned integer in range 0..${max}.`,
+    );
+  }
+}
+
+function ensureLength(payload: number[], length: number, label: string): void {
+  validateByteArray(payload, label);
+  if (payload.length !== length) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: ${label} requires exactly ${length} bytes.`,
+    );
+  }
+}
+
+function ensureMinLength(
+  payload: number[],
+  length: number,
+  label: string,
+): void {
+  validateByteArray(payload, label);
+  if (payload.length < length) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: ${label} requires at least ${length} bytes.`,
+    );
+  }
+}
+
+function validateBytes(payload: number[]): number[] {
+  validateByteArray(payload, "payload");
+  return payload.slice();
+}
+
+function validateByteArray(payload: number[], label: string): void {
+  if (
+    !Array.isArray(payload) ||
+    !payload.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+  ) {
+    throw new Error(
+      `INVALID_ARGUMENT: ${label} must be an array of byte integers in range 0..255.`,
+    );
+  }
+}
+
+function dataView(payload: number[]): DataView {
+  const bytes = Uint8Array.from(payload);
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function sameUuid(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function validateDeviceId(deviceId: string): void {
+  if (typeof deviceId !== "string" || deviceId.trim().length === 0) {
+    throw new Error("INVALID_ARGUMENT: deviceId must be a non-empty string.");
+  }
+}
+
+function toAnchorKey(nodeId: number): string {
+  return `uwb-anchor-${nodeId.toString(16).padStart(4, "0")}`;
+}
+
+async function toResult<T>(
+  operation: () => Promise<T>,
+): Promise<PansResult<T>> {
+  try {
+    return { ok: true, value: await operation() };
+  } catch (error) {
+    return { ok: false, error: normalizeError(error) };
+  }
+}
+
+function normalizeError(error: unknown): PansApiError {
+  if (
+    typeof error === "object" &&
+    error &&
+    "code" in error &&
+    "message" in error
+  ) {
+    const coded = error as PansApiError;
+    return { code: coded.code, message: coded.message };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  const maybeCode = message.split(":", 1)[0];
+  const code = isPansApiErrorCode(maybeCode) ? maybeCode : "OPERATION_FAILED";
+  return { code, message };
+}
+
+function isPansApiErrorCode(code: string): code is PansApiError["code"] {
+  return [
+    "UNSUPPORTED",
+    "PERMISSION_DENIED",
+    "BLUETOOTH_UNAVAILABLE",
+    "DEVICE_NOT_FOUND",
+    "NOT_CONNECTED",
+    "SERVICE_NOT_FOUND",
+    "CHARACTERISTIC_NOT_FOUND",
+    "INVALID_ARGUMENT",
+    "MALFORMED_PAYLOAD",
+    "GATT_ERROR",
+    "TIMEOUT",
+    "OPERATION_FAILED",
+  ].includes(code);
 }

@@ -204,6 +204,7 @@ export interface LocalizationObservation {
   distanceMeters?: number;
   positionXMeters?: number;
   positionYMeters?: number;
+  positionZMeters?: number;
   quality?: number;
   txPowerDbm?: number;
   xPercent?: number;
