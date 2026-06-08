@@ -18,6 +18,7 @@ import {
   PansDistance,
   PansFirmwareUpdateOffer,
   PansFirmwareUpdatePoll,
+  PansFirmwareTransportLimits,
   PansLocationData,
   PansLocationDataMode,
   PansOperationMode,
@@ -203,6 +204,7 @@ export async function writeCharacteristic(
 ): Promise<boolean> {
   validateDeviceId(deviceId);
   validateByteArray(payload, "payload");
+  validateWriteType(writeType);
   return await nativeModule.writeCharacteristic(
     deviceId,
     characteristicUuid,
@@ -229,6 +231,9 @@ export async function requestMtu(
   mtu: number,
 ): Promise<number> {
   validateDeviceId(deviceId);
+  if (!Number.isInteger(mtu) || mtu < 23 || mtu > 517) {
+    throw new Error("INVALID_ARGUMENT: MTU must be in range 23..517.");
+  }
   if (!nativeModule.requestMtu) return mtu;
   return await nativeModule.requestMtu(deviceId, mtu);
 }
@@ -238,7 +243,33 @@ export async function getMaximumWriteValueLength(
   writeType: PansWriteType,
 ): Promise<number | undefined> {
   validateDeviceId(deviceId);
+  validateWriteType(writeType);
   return await nativeModule.getMaximumWriteValueLength?.(deviceId, writeType);
+}
+
+export async function prepareFirmwareUpdateTransport(
+  deviceId: string,
+): Promise<PansFirmwareTransportLimits> {
+  validateDeviceId(deviceId);
+  const capabilities = getCapabilities();
+  let maxPacketBytes = 0;
+
+  if (capabilities.supportsMtuRequest) {
+    const negotiatedMtu = await requestMtu(deviceId, 64);
+    maxPacketBytes = Math.max(0, negotiatedMtu - 3);
+  } else if (capabilities.supportsMaximumWriteValueLength) {
+    maxPacketBytes =
+      (await getMaximumWriteValueLength(deviceId, "withoutResponse")) ?? 0;
+  }
+
+  const maxChunkDataBytes = Math.min(32, Math.max(0, maxPacketBytes - 5));
+  if (maxChunkDataBytes <= 0) {
+    throw new Error(
+      "OPERATION_FAILED: firmware update transport cannot carry data chunks.",
+    );
+  }
+
+  return { maxPacketBytes, maxChunkDataBytes };
 }
 
 export async function readLabel(deviceId: string): Promise<string> {
@@ -533,7 +564,13 @@ export async function writeFirmwareUpdateChunk(
   deviceId: string,
   offset: number,
   data: number[],
+  limits?: PansFirmwareTransportLimits,
 ): Promise<boolean> {
+  if (limits && 5 + data.length > limits.maxPacketBytes) {
+    throw new Error(
+      "INVALID_ARGUMENT: firmware update chunk exceeds transport packet size.",
+    );
+  }
   return await writeCharacteristic(
     deviceId,
     PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
@@ -743,13 +780,16 @@ export function decodeTagUpdateRate(payload: number[]): PansTagUpdateRate {
 export function decodePresenceData(payload: number[]): PansPresenceData {
   ensureLength(payload, 2, "presence data");
   const rawOperationModeByte = payload[0];
+  const rawUwbModeBits = rawOperationModeByte & 0x03;
+  const uwbMode = tryBitsToUwbMode(rawUwbModeBits);
   return {
     rawOperationModeByte,
+    rawUwbModeBits,
     role: rawOperationModeByte & 0x80 ? "anchor" : "tag",
     errorIndicated: Boolean(rawOperationModeByte & 0x10),
     initiator: Boolean(rawOperationModeByte & 0x08),
     bridge: Boolean(rawOperationModeByte & 0x04),
-    uwbMode: bitsToUwbMode(rawOperationModeByte & 0x03),
+    ...(uwbMode ? { uwbMode } : {}),
     changeCounter: payload[1],
   };
 }
@@ -923,6 +963,14 @@ function validateByteArray(payload: number[], label: string): void {
   }
 }
 
+function validateWriteType(writeType: PansWriteType): void {
+  if (writeType !== "withResponse" && writeType !== "withoutResponse") {
+    throw new Error(
+      "INVALID_ARGUMENT: write type must be withResponse or withoutResponse.",
+    );
+  }
+}
+
 function dataView(payload: number[]): DataView {
   const bytes = Uint8Array.from(payload);
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -930,6 +978,13 @@ function dataView(payload: number[]): DataView {
 
 function sameUuid(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function tryBitsToUwbMode(bits: number): PansUwbMode | undefined {
+  if (bits === 0) return "off";
+  if (bits === 1) return "passive";
+  if (bits === 2) return "active";
+  return undefined;
 }
 
 function validateDeviceId(deviceId: string): void {

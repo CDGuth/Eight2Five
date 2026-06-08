@@ -9,7 +9,11 @@ import {
   writeNetworkId,
   writePersistedPosition,
 } from "expo-pans-ble-api";
-import type { PansApiError, PansCommandResult } from "expo-pans-ble-api";
+import type {
+  PansApiError,
+  PansCommandResult,
+  PansAnchorListEntry,
+} from "expo-pans-ble-api";
 import {
   AnchorGeometry,
   EnvironmentMode,
@@ -297,7 +301,7 @@ export async function observeTagAnchors(
 export async function readAnchorNeighbors(
   anchorDeviceId: string,
   options: DeviceCommandOptions = {},
-): Promise<PansCommandResult<number[]>> {
+): Promise<PansCommandResult<PansAnchorListEntry[]>> {
   const connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
   const disconnectAfterCommand = options.disconnectAfterCommand ?? true;
 
@@ -312,13 +316,28 @@ export async function readAnchorNeighbors(
     const anchorList = await readAnchorList(anchorDeviceId);
     return {
       ok: true,
-      value: anchorList.anchors.map((anchor) => anchor.lowNodeId),
+      value: anchorList.anchors,
     };
   } catch (error) {
     return { ok: false, error: normalizeError(error) };
   } finally {
     if (disconnectAfterCommand) await disconnect(anchorDeviceId);
   }
+}
+
+export async function readAnchorNeighborLowIds(
+  anchorDeviceId: string,
+  options: DeviceCommandOptions = {},
+): Promise<PansCommandResult<number[]>> {
+  const result = await readAnchorNeighbors(anchorDeviceId, options);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  return {
+    ok: true,
+    value: result.value?.map((entry) => entry.lowNodeId) ?? [],
+  };
 }
 
 export async function reconcileFieldAnchorsFromTag(

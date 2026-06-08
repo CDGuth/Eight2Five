@@ -40,11 +40,12 @@ export type PansWriteType = "withResponse" | "withoutResponse";
 
 export interface PansPresenceData {
   rawOperationModeByte: number;
+  rawUwbModeBits: number;
   role: PansNodeRole;
   errorIndicated: boolean;
   initiator: boolean;
   bridge: boolean;
-  uwbMode: PansUwbMode;
+  uwbMode?: PansUwbMode;
   changeCounter: number;
 }
 
@@ -210,6 +211,11 @@ export interface PansFirmwareUpdateOffer {
   firmwareVersion: number;
   firmwareChecksum: number;
   totalBinarySize: number;
+}
+
+export interface PansFirmwareTransportLimits {
+  maxPacketBytes: number;
+  maxChunkDataBytes: number;
 }
 
 export type PansFirmwareUpdatePoll =

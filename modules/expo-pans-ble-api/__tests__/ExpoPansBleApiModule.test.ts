@@ -18,11 +18,26 @@ import {
   encodeOperationMode,
   encodePersistedPosition,
   getCapabilities,
+  patchOperationMode,
+  prepareFirmwareUpdateTransport,
+  readAnchorList,
+  readAnchorMacStats,
+  readClusterInfo,
   readDeviceInfo,
+  readLabel,
   readLocationData,
+  readOperationMode,
+  readProxyPositions,
+  readStatistics,
+  readTagUpdateRate,
+  requestExplicitDisconnect,
   startScanning,
+  subscribeFirmwareUpdatePoll,
   stopScanning,
   subscribeLocationData,
+  writeFirmwareUpdateChunk,
+  writeFirmwareUpdateOffer,
+  writeLabel,
   writeLocationDataMode,
   writeNetworkId,
   writeOperationMode,
@@ -31,6 +46,7 @@ import {
   ExpoPansBleApiModuleEvents,
   PANS_BLE_UUIDS,
 } from "../src/ExpoPansBleApi.types";
+import type { PansBleCapabilities } from "../src/ExpoPansBleApi.types";
 
 type NativeModuleMock = {
   startScanning: jest.Mock;
@@ -45,6 +61,16 @@ type NativeModuleMock = {
   writeCharacteristic: jest.Mock;
   setCharacteristicNotifications: jest.Mock;
   requestMtu: jest.Mock;
+  getMaximumWriteValueLength: jest.Mock;
+};
+
+let mockCapabilities: PansBleCapabilities = {
+  transport: "ble",
+  supportsScanning: true,
+  supportsConnection: true,
+  supportsNotifications: true,
+  supportsMtuRequest: true,
+  supportsMaximumWriteValueLength: false,
 };
 
 jest.mock("expo-modules-core", () => {
@@ -54,14 +80,7 @@ jest.mock("expo-modules-core", () => {
     startScanning: jest.fn(async () => undefined),
     stopScanning: jest.fn(),
     clearDevices: jest.fn(),
-    getCapabilities: jest.fn(() => ({
-      transport: "ble",
-      supportsScanning: true,
-      supportsConnection: true,
-      supportsNotifications: true,
-      supportsMtuRequest: true,
-      supportsMaximumWriteValueLength: false,
-    })),
+    getCapabilities: jest.fn(() => mockCapabilities),
     getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
     requestPermissions: jest.fn(async () => ({ bluetooth: "granted" })),
     connect: jest.fn(async () => true),
@@ -70,6 +89,7 @@ jest.mock("expo-modules-core", () => {
     writeCharacteristic: jest.fn(async () => true),
     setCharacteristicNotifications: jest.fn(async () => true),
     requestMtu: jest.fn(async (_deviceId, mtu: number) => mtu),
+    getMaximumWriteValueLength: jest.fn(async () => 64),
   };
 
   return {
@@ -100,6 +120,16 @@ function resetMocks(): void {
   mockNativeModule.readCharacteristic.mockResolvedValue([]);
   mockNativeModule.writeCharacteristic.mockResolvedValue(true);
   mockNativeModule.setCharacteristicNotifications.mockResolvedValue(true);
+  mockNativeModule.requestMtu.mockResolvedValue(64);
+  mockNativeModule.getMaximumWriteValueLength.mockResolvedValue(64);
+  mockCapabilities = {
+    transport: "ble",
+    supportsScanning: true,
+    supportsConnection: true,
+    supportsNotifications: true,
+    supportsMtuRequest: true,
+    supportsMaximumWriteValueLength: false,
+  };
 }
 
 describe("PANS BLE codecs", () => {
@@ -126,6 +156,10 @@ describe("PANS BLE codecs", () => {
     expect(encodeOperationMode({ ...mode, ledEnabled: true })).toEqual([
       0x05, 0x1f,
     ]);
+  });
+
+  test("rejects malformed operation-mode UWB bits", () => {
+    expect(() => decodeOperationMode([0x60, 0])).toThrow("UWB mode bits");
   });
 
   test("rejects invalid operation-mode length", () => {
@@ -193,6 +227,33 @@ describe("PANS BLE codecs", () => {
     expect(truncated.diagnostics[0]).toContain("truncated distance");
   });
 
+  test("handles combined distance-only and declared count overrun", () => {
+    const combinedDistanceOnly = decodeLocationData([
+      2, 1, 0x01, 0x00, 0xe8, 0x03, 0, 0, 80,
+    ]);
+
+    expect(combinedDistanceOnly.position).toBeUndefined();
+    expect(combinedDistanceOnly.distances).toHaveLength(1);
+
+    const overrun = decodeLocationData([
+      1, 2, 0x01, 0x00, 0xe8, 0x03, 0, 0, 80,
+    ]);
+    expect(overrun.distances).toHaveLength(1);
+    expect(overrun.diagnostics[0]).toContain("truncated distance");
+  });
+
+  test("decodes maximum distance entries", () => {
+    const entries = Array.from({ length: 15 }, (_, index) => [
+      ...u16(index + 1),
+      ...u32((index + 1) * 1000),
+      90,
+    ]).flat();
+
+    const decoded = decodeLocationData([1, 15, ...entries]);
+    expect(decoded.distances).toHaveLength(15);
+    expect(decoded.distances[14].distanceMeters).toBe(15);
+  });
+
   test("decodes proxy positions", () => {
     const decoded = decodeProxyPositions([
       1,
@@ -211,6 +272,19 @@ describe("PANS BLE codecs", () => {
         },
       },
     ]);
+  });
+
+  test("handles proxy zero, maximum, and truncated payloads", () => {
+    expect(decodeProxyPositions([0])).toEqual([]);
+    const entries = Array.from({ length: 5 }, (_, index) => [
+      ...u16(index + 1),
+      ...positionBytes(index, index + 1, index + 2, 50),
+    ]).flat();
+
+    expect(decodeProxyPositions([5, ...entries])).toHaveLength(5);
+    expect(() => decodeProxyPositions([2, ...entries.slice(0, 15)])).toThrow(
+      "truncated proxy-position",
+    );
   });
 
   test("decodes device info with fixed-width node ID", () => {
@@ -259,12 +333,44 @@ describe("PANS BLE codecs", () => {
     });
 
     expect(decodePresenceData([0x9a, 7])).toMatchObject({
+      rawUwbModeBits: 2,
       role: "anchor",
       errorIndicated: true,
       initiator: true,
       uwbMode: "active",
       changeCounter: 7,
     });
+
+    const unknownPresence = decodePresenceData([0x03, 1]);
+    expect(unknownPresence.rawUwbModeBits).toBe(3);
+    expect(unknownPresence.uwbMode).toBeUndefined();
+  });
+
+  test("preserves anchor-list identities and diagnostics", () => {
+    expect(decodeAnchorList([0]).anchors).toEqual([]);
+    const maxEntries = Array.from({ length: 16 }, (_, index) => [
+      ...u64(index + 1),
+    ]).flat();
+    expect(decodeAnchorList([16, ...maxEntries]).anchors).toHaveLength(16);
+    const multiple = decodeAnchorList([
+      2,
+      0xef,
+      0xcd,
+      0xab,
+      0x89,
+      0x67,
+      0x45,
+      0x23,
+      0x01,
+      ...u64(2),
+    ]);
+    expect(multiple.anchors[0]).toEqual({
+      nodeIdHex: "0123456789abcdef",
+      lowNodeId: 0xcdef,
+    });
+    const truncated = decodeAnchorList([2, ...u64(1), 0xff]);
+    expect(truncated.anchors).toHaveLength(1);
+    expect(truncated.diagnostics[0]).toContain("truncated anchor-list");
   });
 
   test("encodes and decodes firmware update packets", () => {
@@ -293,6 +399,13 @@ describe("PANS BLE codecs", () => {
     );
     expect(decodeFirmwareUpdatePoll([2]).kind).toBe("complete");
     expect(decodeFirmwareUpdatePoll([14]).kind).toBe("invalidChecksum");
+    expect(encodeFirmwareUpdateChunk(0, new Array(32).fill(1))).toHaveLength(
+      37,
+    );
+    expect(() => encodeFirmwareUpdateChunk(0, new Array(33).fill(1))).toThrow(
+      "at most 32 bytes",
+    );
+    expect(decodeFirmwareUpdatePoll([0, 99]).raw).toEqual([0, 99]);
   });
 });
 
@@ -379,6 +492,160 @@ describe("ExpoPansBleApiModule wrapper", () => {
       PANS_BLE_UUIDS.characteristics.deviceInfo,
     );
   });
+
+  test("maps all public helpers to documented UUIDs", async () => {
+    mockNativeModule.readCharacteristic.mockImplementation(
+      async (_deviceId, uuid) => {
+        if (uuid === PANS_BLE_UUIDS.characteristics.label) return [65];
+        if (uuid === PANS_BLE_UUIDS.characteristics.operationMode)
+          return [0x40, 0];
+        if (uuid === PANS_BLE_UUIDS.characteristics.proxyPositions) return [0];
+        if (uuid === PANS_BLE_UUIDS.characteristics.deviceInfo)
+          return new Array(29).fill(0);
+        if (uuid === PANS_BLE_UUIDS.characteristics.statistics) return [1, 2];
+        if (uuid === PANS_BLE_UUIDS.characteristics.macStats) return [3, 4];
+        if (uuid === PANS_BLE_UUIDS.characteristics.clusterInfo)
+          return [1, 0, 0, 0, 0];
+        if (uuid === PANS_BLE_UUIDS.characteristics.anchorList) return [0];
+        if (uuid === PANS_BLE_UUIDS.characteristics.updateRate)
+          return [...u32(100), ...u32(200)];
+        return [];
+      },
+    );
+
+    await readLabel("device-1");
+    await writeLabel("device-1", "A");
+    await readOperationMode("device-1");
+    await patchOperationMode("device-1", { ledEnabled: true });
+    await readProxyPositions("device-1");
+    await readStatistics("device-1");
+    await readAnchorMacStats("device-1");
+    await readClusterInfo("device-1");
+    await readAnchorList("device-1");
+    await readTagUpdateRate("device-1");
+    await requestExplicitDisconnect("device-1");
+    await writeFirmwareUpdateOffer("device-1", {
+      hardwareVersion: 1,
+      firmwareVersion: 2,
+      firmwareChecksum: 3,
+      totalBinarySize: 4,
+    });
+    await writeFirmwareUpdateChunk("device-1", 0, [1, 2, 3]);
+    await subscribeFirmwareUpdatePoll("device-1");
+
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.label,
+    );
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.label,
+      [65],
+      "withResponse",
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.operationMode,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.proxyPositions,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.statistics,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.macStats,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.clusterInfo,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.anchorList,
+    );
+    expect(mockNativeModule.readCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.updateRate,
+    );
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.explicitDisconnect,
+      [1],
+      "withResponse",
+    );
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
+      [0, ...u32(1), ...u32(2), ...u32(3), ...u32(4)],
+      "withResponse",
+    );
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
+      [1, ...u32(0), 1, 2, 3],
+      "withoutResponse",
+    );
+    expect(
+      mockNativeModule.setCharacteristicNotifications,
+    ).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.firmwareUpdatePoll,
+      true,
+    );
+  });
+
+  test("prepares and enforces firmware transport sizing", async () => {
+    expect(await prepareFirmwareUpdateTransport("device-1")).toEqual({
+      maxPacketBytes: 61,
+      maxChunkDataBytes: 32,
+    });
+
+    mockCapabilities = {
+      transport: "ble",
+      supportsScanning: true,
+      supportsConnection: true,
+      supportsNotifications: true,
+      supportsMtuRequest: false,
+      supportsMaximumWriteValueLength: true,
+    };
+    mockNativeModule.getMaximumWriteValueLength.mockResolvedValueOnce(20);
+    expect(await prepareFirmwareUpdateTransport("device-1")).toEqual({
+      maxPacketBytes: 20,
+      maxChunkDataBytes: 15,
+    });
+
+    await expect(
+      writeFirmwareUpdateChunk("device-1", 0, new Array(16).fill(1), {
+        maxPacketBytes: 20,
+        maxChunkDataBytes: 15,
+      }),
+    ).rejects.toThrow("packet size");
+
+    mockNativeModule.getMaximumWriteValueLength.mockResolvedValueOnce(5);
+    await expect(prepareFirmwareUpdateTransport("device-1")).rejects.toThrow(
+      "cannot carry data chunks",
+    );
+  });
+
+  test("validates wrapper arguments", async () => {
+    await expect(connect("")).rejects.toThrow("deviceId");
+    await expect(writeLocationDataMode("device-1", 3 as 0)).rejects.toThrow(
+      "location-data mode",
+    );
+    await expect(writeNetworkId("device-1", 0x1_0000)).rejects.toThrow(
+      "PAN ID",
+    );
+    await expect(
+      writeFirmwareUpdateChunk("device-1", 0, [256]),
+    ).rejects.toThrow("byte integers");
+    expect(() =>
+      encodePersistedPosition({ xMeters: 0, yMeters: 0, quality: 0 }),
+    ).toThrow("quality");
+  });
 });
 
 function positionBytes(
@@ -399,5 +666,17 @@ function i32(value: number): number[] {
 function u32(value: number): number[] {
   const bytes = new Uint8Array(4);
   new DataView(bytes.buffer).setUint32(0, value, true);
+  return Array.from(bytes);
+}
+
+function u16(value: number): number[] {
+  const bytes = new Uint8Array(2);
+  new DataView(bytes.buffer).setUint16(0, value, true);
+  return Array.from(bytes);
+}
+
+function u64(value: number): number[] {
+  const bytes = new Uint8Array(8);
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(value), true);
   return Array.from(bytes);
 }

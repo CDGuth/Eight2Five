@@ -4,11 +4,21 @@ import ExpoModulesCore
 public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeripheralDelegate {
   private let pansServiceUuid = CBUUID(string: "680c21d9-c946-4c1f-9c11-baa1c21329e7")
   private let gapServiceUuid = CBUUID(string: "00001800-0000-1000-8000-00805f9b34fb")
+  private let requiredCommonCharacteristicUuids = Set([
+    CBUUID(string: "3f0afd88-7770-46b0-b5e7-9fc099598964"),
+    CBUUID(string: "80f9d8bc-3bff-45bb-a181-2d6a37991208"),
+    CBUUID(string: "a02b947e-df97-4516-996a-1882521e0ead"),
+    CBUUID(string: "003bbdf2-c634-4b3d-ab56-7ec889b89a37"),
+    CBUUID(string: "1e63b1eb-d4ed-444e-af54-c1e965192501"),
+  ])
+
   private var centralManager: CBCentralManager?
   private var shouldScanWhenPoweredOn = false
+  private var isScanning = false
   private var discoveredPeripherals = [String: CBPeripheral]()
   private var discoveredMetadata = [String: [String: Any?]]()
   private var connections = [String: PeripheralContext]()
+  private var nextOperationId: UInt64 = 1
 
   public func definition() -> ModuleDefinition {
     Name("ExpoPansBleApi")
@@ -26,7 +36,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
 
     OnDestroy {
       self.stopScanningInternal()
-      self.connections.keys.forEach { self.closeConnection(deviceId: $0, reason: "module destroyed") }
+      self.connections.keys.forEach { self.closeConnection(deviceId: $0, reason: "module destroyed", rejectConnect: true) }
       self.discoveredPeripherals.removeAll()
       self.discoveredMetadata.removeAll()
       self.centralManager?.delegate = nil
@@ -39,8 +49,12 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
         promise.reject("BLUETOOTH_UNAVAILABLE", "CoreBluetooth central manager is unavailable.")
         return
       }
+      if self.isScanning {
+        promise.resolve(nil)
+        return
+      }
       if manager.state == .poweredOn {
-        manager.scanForPeripherals(withServices: [self.pansServiceUuid], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        self.startScan(manager)
         promise.resolve(nil)
       } else if manager.state == .unknown || manager.state == .resetting {
         self.shouldScanWhenPoweredOn = true
@@ -66,7 +80,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
         "supportsConnection": true,
         "supportsNotifications": true,
         "supportsMtuRequest": false,
-        "supportsMaximumWriteValueLength": true
+        "supportsMaximumWriteValueLength": true,
       ] as [String: Any]
     }
 
@@ -80,6 +94,10 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     }
 
     AsyncFunction("connect") { (deviceId: String, timeoutMs: Int?, promise: Promise) in
+      guard !deviceId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        promise.reject("INVALID_ARGUMENT", "deviceId must be non-empty.")
+        return
+      }
       guard let manager = self.centralManager else {
         promise.reject("BLUETOOTH_UNAVAILABLE", "CoreBluetooth central manager is unavailable.")
         return
@@ -93,47 +111,55 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
         return
       }
 
-      self.connections[deviceId]?.connectPromise?.resolve(false)
+      if let existing = self.connections[deviceId], existing.state == "connected" {
+        promise.resolve(true)
+        return
+      }
+      self.connections[deviceId]?.connectPromise?.reject("OPERATION_FAILED", "A newer connection request replaced the previous request.")
+      self.connections[deviceId]?.connectPromise = nil
+
       let context = PeripheralContext(deviceId: deviceId, peripheral: peripheral)
       context.connectPromise = promise
       self.connections[deviceId] = context
       peripheral.delegate = self
       self.sendConnectionState(deviceId: deviceId, state: "connecting", reason: nil)
-      context.connectTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeoutMs ?? 15000) / 1000.0, repeats: false) { _ in
-        if self.connections[deviceId]?.connectPromise != nil {
-          self.connections[deviceId]?.connectPromise?.reject("TIMEOUT", "Timed out connecting to \(deviceId).")
-          self.connections[deviceId]?.connectPromise = nil
-          self.closeConnection(deviceId: deviceId, reason: "timeout")
-        }
+      context.connectTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeoutMs ?? 15000) / 1000.0, repeats: false) { [weak self, weak context] _ in
+        guard let self, let context, context.connectPromise != nil else { return }
+        context.connectPromise?.reject("TIMEOUT", "Timed out connecting to \(deviceId).")
+        context.connectPromise = nil
+        self.closeConnection(deviceId: deviceId, reason: "timeout", rejectConnect: true)
       }
       manager.connect(peripheral)
     }
 
     AsyncFunction("disconnect") { (deviceId: String, promise: Promise) in
-      self.closeConnection(deviceId: deviceId, reason: "local disconnect")
+      self.closeConnection(deviceId: deviceId, reason: "local disconnect", rejectConnect: false)
       promise.resolve(true)
     }
 
     AsyncFunction("readCharacteristic") { (deviceId: String, characteristicUuid: String, promise: Promise) in
-      self.enqueue(deviceId: deviceId, operation: .read(CBUUID(string: characteristicUuid), promise))
+      guard let uuid = self.parseUuid(characteristicUuid, promise: promise) else { return }
+      self.enqueue(deviceId: deviceId, operation: .read(id: self.allocateOperationId(), uuid, promise))
     }
 
     AsyncFunction("writeCharacteristic") { (deviceId: String, characteristicUuid: String, payload: [Int], writeType: String?, promise: Promise) in
-      let data = Data(payload.map { UInt8(truncatingIfNeeded: $0) })
-      let type: CBCharacteristicWriteType = writeType == "withoutResponse" ? .withoutResponse : .withResponse
-      self.enqueue(deviceId: deviceId, operation: .write(CBUUID(string: characteristicUuid), data, type, promise))
+      guard let uuid = self.parseUuid(characteristicUuid, promise: promise),
+            let data = self.validatePayload(payload, promise: promise),
+            let type = self.normalizeWriteType(writeType, promise: promise) else { return }
+      self.enqueue(deviceId: deviceId, operation: .write(id: self.allocateOperationId(), uuid, data, type, promise))
     }
 
     AsyncFunction("setCharacteristicNotifications") { (deviceId: String, characteristicUuid: String, enabled: Bool, promise: Promise) in
-      self.enqueue(deviceId: deviceId, operation: .notify(CBUUID(string: characteristicUuid), enabled, promise))
+      guard let uuid = self.parseUuid(characteristicUuid, promise: promise) else { return }
+      self.enqueue(deviceId: deviceId, operation: .notify(id: self.allocateOperationId(), uuid, enabled, promise))
     }
 
     AsyncFunction("getMaximumWriteValueLength") { (deviceId: String, writeType: String, promise: Promise) in
-      guard let context = self.connections[deviceId] else {
+      guard let context = self.connections[deviceId], context.state == "connected" else {
         promise.reject("NOT_CONNECTED", "Device \(deviceId) is not connected.")
         return
       }
-      let type: CBCharacteristicWriteType = writeType == "withoutResponse" ? .withoutResponse : .withResponse
+      guard let type = self.normalizeWriteType(writeType, promise: promise) else { return }
       promise.resolve(context.peripheral.maximumWriteValueLength(for: type))
     }
   }
@@ -141,32 +167,31 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   public func centralManagerDidUpdateState(_ central: CBCentralManager) {
     if central.state == .poweredOn && shouldScanWhenPoweredOn {
       shouldScanWhenPoweredOn = false
-      central.scanForPeripherals(withServices: [pansServiceUuid], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+      startScan(central)
     } else if central.state == .unauthorized {
       sendError(code: "PERMISSION_DENIED", message: "Bluetooth permission is not authorized.")
     } else if central.state == .unsupported || central.state == .poweredOff {
+      isScanning = false
       sendError(code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off.")
     }
   }
 
-  public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+  public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+    guard let pansData = extractPansServiceData(advertisementData: advertisementData) else { return }
     let deviceId = peripheral.identifier.uuidString
     discoveredPeripherals[deviceId] = peripheral
-    let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
-    let presence = serviceData?[pansServiceUuid].flatMap { decodePresence($0) }
     let name = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String
     discoveredMetadata[deviceId] = [
       "deviceId": deviceId,
       "name": name,
       "rssi": RSSI.intValue,
       "lastSeenMs": Date().timeIntervalSince1970 * 1000.0,
-      "presence": presence
+      "presence": decodePresence(pansData),
     ]
     sendEvent("onDeviceDiscovered", ["devices": Array(discoveredMetadata.values)])
   }
 
   public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-    let deviceId = peripheral.identifier.uuidString
     peripheral.discoverServices([pansServiceUuid, gapServiceUuid])
   }
 
@@ -174,26 +199,26 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     let deviceId = peripheral.identifier.uuidString
     connections[deviceId]?.connectPromise?.reject("GATT_ERROR", error?.localizedDescription ?? "Failed to connect.")
     connections[deviceId]?.connectPromise = nil
-    closeConnection(deviceId: deviceId, reason: "connect failed")
+    closeConnection(deviceId: deviceId, reason: "connect failed", rejectConnect: true)
   }
 
   public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-    closeConnection(deviceId: peripheral.identifier.uuidString, reason: error?.localizedDescription ?? "remote disconnect")
+    closeConnection(deviceId: peripheral.identifier.uuidString, reason: error?.localizedDescription ?? "remote disconnect", rejectConnect: true)
   }
 
   public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
     let deviceId = peripheral.identifier.uuidString
     guard let context = connections[deviceId] else { return }
-    if let error = error {
-      context.connectPromise?.reject("GATT_ERROR", error.localizedDescription)
+    if let error {
+      context.connectPromise?.reject("GATT_ERROR", "Service discovery failed: \(error.localizedDescription)")
       context.connectPromise = nil
-      closeConnection(deviceId: deviceId, reason: "service discovery failed")
+      closeConnection(deviceId: deviceId, reason: "service discovery failed", rejectConnect: true)
       return
     }
     guard let services = peripheral.services, services.contains(where: { $0.uuid == pansServiceUuid }) else {
       context.connectPromise?.reject("SERVICE_NOT_FOUND", "PANS network-node service was not discovered.")
       context.connectPromise = nil
-      closeConnection(deviceId: deviceId, reason: "service missing")
+      closeConnection(deviceId: deviceId, reason: "service missing", rejectConnect: true)
       return
     }
     context.pendingServiceCount = services.count
@@ -203,10 +228,24 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
     let deviceId = peripheral.identifier.uuidString
     guard let context = connections[deviceId] else { return }
+    if let error {
+      context.connectPromise?.reject("GATT_ERROR", "Characteristic discovery failed: \(error.localizedDescription)")
+      context.connectPromise = nil
+      closeConnection(deviceId: deviceId, reason: "characteristic discovery failed", rejectConnect: true)
+      return
+    }
     service.characteristics?.forEach { context.characteristics[$0.uuid] = $0 }
     context.pendingServiceCount -= 1
     if context.pendingServiceCount <= 0 {
+      let missing = requiredCommonCharacteristicUuids.filter { context.characteristics[$0] == nil }
+      if !missing.isEmpty {
+        context.connectPromise?.reject("CHARACTERISTIC_NOT_FOUND", "PANS service is missing required characteristics: \(missing.map { $0.uuidString }.joined(separator: ", ")).")
+        context.connectPromise = nil
+        closeConnection(deviceId: deviceId, reason: "required characteristics missing", rejectConnect: true)
+        return
+      }
       context.connectTimer?.invalidate()
+      context.connectTimer = nil
       context.state = "connected"
       context.connectPromise?.resolve(true)
       context.connectPromise = nil
@@ -218,9 +257,9 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
     let deviceId = peripheral.identifier.uuidString
     guard let context = connections[deviceId] else { return }
-    if case .read(let uuid, let promise)? = context.activeOperation, uuid == characteristic.uuid {
-      context.activeOperation = nil
-      if let error = error {
+    if case .read(_, let uuid, let promise)? = context.activeOperation, uuid == characteristic.uuid {
+      clearActiveOperation(context)
+      if let error {
         promise.reject("GATT_ERROR", error.localizedDescription)
       } else {
         promise.resolve(Array(characteristic.value ?? Data()).map { Int($0) })
@@ -231,22 +270,42 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     sendEvent("onCharacteristicNotification", [
       "deviceId": deviceId,
       "characteristicUuid": characteristic.uuid.uuidString.lowercased(),
-      "payload": Array(characteristic.value ?? Data()).map { Int($0) }
+      "payload": Array(characteristic.value ?? Data()).map { Int($0) },
     ])
   }
 
   public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-    finishActiveOperation(deviceId: peripheral.identifier.uuidString, error: error)
+    let deviceId = peripheral.identifier.uuidString
+    guard let context = connections[deviceId],
+          case .write(_, let uuid, _, let type, let promise)? = context.activeOperation,
+          uuid == characteristic.uuid,
+          type == .withResponse else { return }
+    clearActiveOperation(context)
+    if let error {
+      promise.reject("GATT_ERROR", error.localizedDescription)
+    } else {
+      promise.resolve(true)
+    }
+    startNextOperation(context)
   }
 
   public func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-    finishActiveOperation(deviceId: peripheral.identifier.uuidString, error: error)
+    let deviceId = peripheral.identifier.uuidString
+    guard let context = connections[deviceId],
+          case .notify(_, let uuid, _, let promise)? = context.activeOperation,
+          uuid == characteristic.uuid else { return }
+    clearActiveOperation(context)
+    if let error {
+      promise.reject("GATT_ERROR", error.localizedDescription)
+    } else {
+      promise.resolve(true)
+    }
+    startNextOperation(context)
   }
 
   public func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
-    if let context = connections[peripheral.identifier.uuidString] {
-      startNextOperation(context)
-    }
+    guard let context = connections[peripheral.identifier.uuidString] else { return }
+    attemptActiveWriteWithoutResponse(context)
   }
 
   private func ensureCentralManager() {
@@ -255,13 +314,31 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     }
   }
 
+  private func startScan(_ manager: CBCentralManager) {
+    guard !isScanning else { return }
+    manager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+    isScanning = true
+  }
+
   private func stopScanningInternal() {
     shouldScanWhenPoweredOn = false
     centralManager?.stopScan()
+    isScanning = false
+  }
+
+  private func extractPansServiceData(advertisementData: [String: Any]) -> Data? {
+    guard let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data],
+          let pansData = serviceData[pansServiceUuid],
+          pansData.count >= 2 else { return nil }
+    return pansData
   }
 
   private func enqueue(deviceId: String, operation: GattOperation) {
-    guard let context = connections[deviceId], context.state == "connected" else {
+    guard !deviceId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      operation.promise.reject("INVALID_ARGUMENT", "deviceId must be non-empty.")
+      return
+    }
+    guard let context = connections[deviceId], context.state == "connected", !context.isClosed else {
       operation.promise.reject("NOT_CONNECTED", "Device \(deviceId) is not connected.")
       return
     }
@@ -270,37 +347,42 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   }
 
   private func startNextOperation(_ context: PeripheralContext) {
-    guard context.activeOperation == nil, !context.queue.isEmpty else { return }
+    guard !context.isClosed, context.activeOperation == nil, !context.queue.isEmpty else { return }
     let operation = context.queue.removeFirst()
     context.activeOperation = operation
+    context.activeOperationTimer?.invalidate()
+    context.activeOperationTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self, weak context] _ in
+      guard let self, let context, context.activeOperation?.id == operation.id else { return }
+      let timedOut = context.activeOperation
+      self.clearActiveOperation(context)
+      timedOut?.promise.reject("TIMEOUT", "GATT operation timed out.")
+      self.startNextOperation(context)
+    }
+
     switch operation {
-    case .read(let uuid, let promise):
+    case .read(_, let uuid, let promise):
       guard let characteristic = context.characteristics[uuid] else {
-        context.activeOperation = nil
+        clearActiveOperation(context)
         promise.reject("CHARACTERISTIC_NOT_FOUND", "Characteristic \(uuid.uuidString) was not discovered.")
         startNextOperation(context)
         return
       }
       context.peripheral.readValue(for: characteristic)
-    case .write(let uuid, let data, let type, let promise):
+    case .write(_, let uuid, let data, let type, let promise):
       guard let characteristic = context.characteristics[uuid] else {
-        context.activeOperation = nil
+        clearActiveOperation(context)
         promise.reject("CHARACTERISTIC_NOT_FOUND", "Characteristic \(uuid.uuidString) was not discovered.")
         startNextOperation(context)
         return
       }
       if type == .withoutResponse {
-        guard context.peripheral.canSendWriteWithoutResponse else { return }
-        context.peripheral.writeValue(data, for: characteristic, type: type)
-        context.activeOperation = nil
-        promise.resolve(true)
-        startNextOperation(context)
+        attemptActiveWriteWithoutResponse(context)
       } else {
         context.peripheral.writeValue(data, for: characteristic, type: type)
       }
-    case .notify(let uuid, let enabled, let promise):
+    case .notify(_, let uuid, let enabled, let promise):
       guard let characteristic = context.characteristics[uuid] else {
-        context.activeOperation = nil
+        clearActiveOperation(context)
         promise.reject("CHARACTERISTIC_NOT_FOUND", "Characteristic \(uuid.uuidString) was not discovered.")
         startNextOperation(context)
         return
@@ -309,23 +391,44 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     }
   }
 
-  private func finishActiveOperation(deviceId: String, error: Error?) {
-    guard let context = connections[deviceId], let operation = context.activeOperation else { return }
-    context.activeOperation = nil
-    if let error = error {
-      operation.promise.reject("GATT_ERROR", error.localizedDescription)
-    } else {
-      operation.promise.resolve(true)
+  private func attemptActiveWriteWithoutResponse(_ context: PeripheralContext) {
+    guard case .write(_, let uuid, let data, let type, let promise)? = context.activeOperation,
+          type == .withoutResponse else { return }
+    guard let characteristic = context.characteristics[uuid] else {
+      clearActiveOperation(context)
+      promise.reject("CHARACTERISTIC_NOT_FOUND", "Characteristic \(uuid.uuidString) was not discovered.")
+      startNextOperation(context)
+      return
     }
+    guard context.peripheral.canSendWriteWithoutResponse else { return }
+    context.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+    clearActiveOperation(context)
+    promise.resolve(true)
     startNextOperation(context)
   }
 
-  private func closeConnection(deviceId: String, reason: String) {
-    guard let context = connections.removeValue(forKey: deviceId) else { return }
+  private func clearActiveOperation(_ context: PeripheralContext) {
+    context.activeOperationTimer?.invalidate()
+    context.activeOperationTimer = nil
+    context.activeOperation = nil
+  }
+
+  private func closeConnection(deviceId: String, reason: String, rejectConnect: Bool) {
+    guard let context = connections.removeValue(forKey: deviceId), !context.isClosed else { return }
+    context.isClosed = true
     context.connectTimer?.invalidate()
-    context.connectPromise?.resolve(false)
-    context.activeOperation?.promise.reject("NOT_CONNECTED", "Device disconnected.")
+    context.connectTimer = nil
+    let activeOperation = context.activeOperation
+    clearActiveOperation(context)
+    activeOperation?.promise.reject("NOT_CONNECTED", "Device disconnected.")
+    if rejectConnect {
+      context.connectPromise?.reject("NOT_CONNECTED", "Device disconnected.")
+    } else {
+      context.connectPromise?.resolve(false)
+    }
+    context.connectPromise = nil
     context.queue.forEach { $0.promise.reject("NOT_CONNECTED", "Device disconnected.") }
+    context.queue.removeAll()
     centralManager?.cancelPeripheralConnection(context.peripheral)
     sendConnectionState(deviceId: deviceId, state: "disconnected", reason: reason)
   }
@@ -342,32 +445,63 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     return ["bluetooth": bluetooth, "canAskAgain": authorization == .notDetermined]
   }
 
-  private func decodePresence(_ data: Data) -> [String: Any]? {
-    guard data.count >= 2 else { return nil }
+  private func decodePresence(_ data: Data) -> [String: Any?] {
     let op = Int(data[0])
-    let change = Int(data[1])
-    let uwbMode: String
-    switch op & 0x03 {
-    case 1: uwbMode = "passive"
-    case 2: uwbMode = "active"
-    default: uwbMode = "off"
-    }
-    return [
+    let uwbBits = op & 0x03
+    var presence: [String: Any?] = [
       "rawOperationModeByte": op,
+      "rawUwbModeBits": uwbBits,
       "role": (op & 0x80) != 0 ? "anchor" : "tag",
       "errorIndicated": (op & 0x10) != 0,
       "initiator": (op & 0x08) != 0,
       "bridge": (op & 0x04) != 0,
-      "uwbMode": uwbMode,
-      "changeCounter": change
+      "changeCounter": Int(data[1]),
     ]
+    switch uwbBits {
+    case 0: presence["uwbMode"] = "off"
+    case 1: presence["uwbMode"] = "passive"
+    case 2: presence["uwbMode"] = "active"
+    default: break
+    }
+    return presence
+  }
+
+  private func parseUuid(_ value: String, promise: Promise) -> CBUUID? {
+    guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      promise.reject("INVALID_ARGUMENT", "UUID string must be non-empty.")
+      return nil
+    }
+    return CBUUID(string: value)
+  }
+
+  private func validatePayload(_ payload: [Int], promise: Promise) -> Data? {
+    guard payload.allSatisfy({ 0...255 ~= $0 }) else {
+      promise.reject("INVALID_ARGUMENT", "Payload must contain byte values in range 0..255.")
+      return nil
+    }
+    return Data(payload.map { UInt8($0) })
+  }
+
+  private func normalizeWriteType(_ writeType: String?, promise: Promise) -> CBCharacteristicWriteType? {
+    switch writeType ?? "withResponse" {
+    case "withResponse": return .withResponse
+    case "withoutResponse": return .withoutResponse
+    default:
+      promise.reject("INVALID_ARGUMENT", "writeType must be withResponse or withoutResponse.")
+      return nil
+    }
+  }
+
+  private func allocateOperationId() -> UInt64 {
+    defer { nextOperationId += 1 }
+    return nextOperationId
   }
 
   private func sendConnectionState(deviceId: String, state: String, reason: String?) {
     sendEvent("onConnectionStateChanged", [
       "deviceId": deviceId,
       "state": state,
-      "reason": reason as Any
+      "reason": reason as Any,
     ])
   }
 
@@ -386,6 +520,8 @@ private final class PeripheralContext {
   var pendingServiceCount = 0
   var queue = [GattOperation]()
   var activeOperation: GattOperation?
+  var activeOperationTimer: Timer?
+  var isClosed = false
 
   init(deviceId: String, peripheral: CBPeripheral) {
     self.deviceId = deviceId
@@ -394,15 +530,23 @@ private final class PeripheralContext {
 }
 
 private enum GattOperation {
-  case read(CBUUID, Promise)
-  case write(CBUUID, Data, CBCharacteristicWriteType, Promise)
-  case notify(CBUUID, Bool, Promise)
+  case read(id: UInt64, CBUUID, Promise)
+  case write(id: UInt64, CBUUID, Data, CBCharacteristicWriteType, Promise)
+  case notify(id: UInt64, CBUUID, Bool, Promise)
+
+  var id: UInt64 {
+    switch self {
+    case .read(let id, _, _): return id
+    case .write(let id, _, _, _, _): return id
+    case .notify(let id, _, _, _): return id
+    }
+  }
 
   var promise: Promise {
     switch self {
-    case .read(_, let promise): return promise
-    case .write(_, _, _, let promise): return promise
-    case .notify(_, _, let promise): return promise
+    case .read(_, _, let promise): return promise
+    case .write(_, _, _, _, let promise): return promise
+    case .notify(_, _, _, let promise): return promise
     }
   }
 }
