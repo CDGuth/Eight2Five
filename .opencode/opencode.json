@@ -17,21 +17,23 @@
       "enabled": true,
       "headers": {
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
-      },
+      }
     },
     "docling": {
       "type": "local",
       "command": [
         "uvx",
         "--from",
-        "docling-mcp[local]",
+        "docling-mcp",
         "docling-mcp-server",
         "--transport",
         "stdio"
       ],
       "environment": {
-        "DOCLING_CONVERSION_MODE": "local",
-        "CUDA_VISIBLE_DEVICES": ""
+        "DOCLING_CONVERSION_MODE": "remote",
+        "DOCLING_SERVICE_URL": "https://cdguth-hf-docling-serve.hf.space",
+        "DOCLING_SERVICE_API_KEY": "{env:DOCLING_SERVICE_API_KEY}",
+        "DOCLING_FALLBACK_TO_LOCAL": "false",
       },
       "enabled": true,
       "timeout": 1800000
