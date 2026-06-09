@@ -18,6 +18,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   private var discoveredPeripherals = [String: CBPeripheral]()
   private var discoveredMetadata = [String: [String: Any?]]()
   private var connections = [String: PeripheralContext]()
+  private var disconnectingDeviceIds = Set<String>()
   private var nextOperationId: UInt64 = 1
 
   public func definition() -> ModuleDefinition {
@@ -37,6 +38,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     OnDestroy {
       self.stopScanningInternal()
       self.connections.keys.forEach { self.closeConnection(deviceId: $0, reason: "module destroyed", rejectConnect: true) }
+      self.disconnectingDeviceIds.removeAll()
       self.discoveredPeripherals.removeAll()
       self.discoveredMetadata.removeAll()
       self.centralManager?.delegate = nil
@@ -114,13 +116,22 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
       if let existing = self.connections[deviceId] {
         if existing.state == "connected" {
           promise.resolve(true)
-          return
+        } else {
+          promise.reject(
+            "OPERATION_FAILED",
+            "A connection attempt is already in progress."
+          )
         }
 
-        self.discardPendingConnectionContext(
-          deviceId: deviceId,
-          reason: "A newer connection request replaced the previous request."
+        return
+      }
+
+      guard !self.disconnectingDeviceIds.contains(deviceId) else {
+        promise.reject(
+          "OPERATION_FAILED",
+          "Device disconnect is still in progress."
         )
+        return
       }
 
       let context = PeripheralContext(deviceId: deviceId, peripheral: peripheral)
@@ -208,13 +219,16 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
 
   public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
     let deviceId = peripheral.identifier.uuidString
+    disconnectingDeviceIds.remove(deviceId)
     connections[deviceId]?.connectPromise?.reject("GATT_ERROR", error?.localizedDescription ?? "Failed to connect.")
     connections[deviceId]?.connectPromise = nil
     closeConnection(deviceId: deviceId, reason: "connect failed", rejectConnect: true)
   }
 
   public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-    closeConnection(deviceId: peripheral.identifier.uuidString, reason: error?.localizedDescription ?? "remote disconnect", rejectConnect: true)
+    let deviceId = peripheral.identifier.uuidString
+    disconnectingDeviceIds.remove(deviceId)
+    closeConnection(deviceId: deviceId, reason: error?.localizedDescription ?? "remote disconnect", rejectConnect: true)
   }
 
   public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
@@ -450,33 +464,11 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     context.connectPromise = nil
     context.queue.forEach { $0.promise.reject("NOT_CONNECTED", "Device disconnected.") }
     context.queue.removeAll()
+    if context.peripheral.state != .disconnected {
+      disconnectingDeviceIds.insert(deviceId)
+    }
     centralManager?.cancelPeripheralConnection(context.peripheral)
     sendConnectionState(deviceId: deviceId, state: "disconnected", reason: reason)
-  }
-
-  private func discardPendingConnectionContext(deviceId: String, reason: String) {
-    guard let existing = connections.removeValue(forKey: deviceId) else {
-      return
-    }
-
-    existing.isClosed = true
-    existing.connectTimer?.invalidate()
-    existing.connectTimer = nil
-    existing.activeOperationTimer?.invalidate()
-    existing.activeOperationTimer = nil
-
-    existing.connectPromise?.reject("OPERATION_FAILED", reason)
-    existing.connectPromise = nil
-
-    existing.activeOperation?.promise.reject("NOT_CONNECTED", "Connection replaced.")
-    existing.activeOperation = nil
-
-    existing.queue.forEach {
-      $0.promise.reject("NOT_CONNECTED", "Connection replaced.")
-    }
-    existing.queue.removeAll()
-
-    centralManager?.cancelPeripheralConnection(existing.peripheral)
   }
 
   private func permissionStatusMap() -> [String: Any] {

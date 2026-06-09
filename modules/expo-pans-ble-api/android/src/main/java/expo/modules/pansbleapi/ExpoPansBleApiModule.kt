@@ -285,7 +285,7 @@ class ExpoPansBleApiModule : Module() {
   private val gattCallback = object : BluetoothGattCallback() {
     override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
       val deviceId = normalizeDeviceId(gatt.device.address)
-      val context = connections[deviceId] ?: return
+      val context = connectionFor(gatt) ?: return
       if (status != BluetoothGatt.GATT_SUCCESS) {
         context.pendingConnectPromise?.reject("GATT_ERROR", "GATT connection failed with status $status.", null)
         context.pendingConnectPromise = null
@@ -317,7 +317,7 @@ class ExpoPansBleApiModule : Module() {
 
     override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
       val deviceId = normalizeDeviceId(gatt.device.address)
-      val context = connections[deviceId] ?: return
+      val context = connectionFor(gatt) ?: return
       if (status != BluetoothGatt.GATT_SUCCESS) {
         context.pendingConnectPromise?.reject("GATT_ERROR", "Service discovery failed with status $status.", null)
         context.pendingConnectPromise = null
@@ -366,14 +366,14 @@ class ExpoPansBleApiModule : Module() {
     }
 
     override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-      connections[normalizeDeviceId(gatt.device.address)]?.let {
-        finishWrite(it, characteristic.uuid, status)
+      connectionFor(gatt)?.let { context ->
+        finishWrite(context, characteristic.uuid, status)
       }
     }
 
     override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-      connections[normalizeDeviceId(gatt.device.address)]?.let {
-        finishNotify(it, descriptor, status)
+      connectionFor(gatt)?.let { context ->
+        finishNotify(context, descriptor, status)
       }
     }
 
@@ -387,20 +387,21 @@ class ExpoPansBleApiModule : Module() {
     }
 
     override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-      connections[normalizeDeviceId(gatt.device.address)]?.let {
-        finishMtu(it, mtu, status)
+      connectionFor(gatt)?.let { context ->
+        finishMtu(context, mtu, status)
       }
     }
   }
 
   private fun onCharacteristicReadValue(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
-    connections[normalizeDeviceId(gatt.device.address)]?.let {
-      finishRead(it, characteristic.uuid, status, value)
+    connectionFor(gatt)?.let { context ->
+      finishRead(context, characteristic.uuid, status, value)
     }
   }
 
   private fun emitCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-    val deviceId = normalizeDeviceId(gatt.device.address)
+    val context = connectionFor(gatt) ?: return
+    val deviceId = context.deviceId
     sendEvent("onCharacteristicNotification", mapOf(
       "deviceId" to deviceId,
       "macAddress" to deviceId,
@@ -521,13 +522,20 @@ class ExpoPansBleApiModule : Module() {
       @Suppress("DEPRECATION")
       gatt.writeCharacteristic(characteristic)
     }
-    if (!started) return StartResult.Failed("OPERATION_FAILED", "Failed to start characteristic write.")
-    if (operation.writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) {
-      clearActiveOperation(context)
-      operation.promise.resolve(true)
-      startNextOperation(context)
+    return if (started) {
+      StartResult.Started
+    } else {
+      StartResult.Failed("OPERATION_FAILED", "Failed to start characteristic write.")
     }
-    return StartResult.Started
+  }
+
+  private fun connectionFor(gatt: BluetoothGatt): ConnectionContext? {
+    val deviceId = normalizeDeviceId(gatt.device.address)
+    val context = connections[deviceId] ?: return null
+
+    return context.takeIf {
+      !it.isClosed && it.bluetoothGatt === gatt
+    }
   }
 
   private fun startNotify(context: ConnectionContext, gatt: BluetoothGatt, operation: GattOperation.Notify): StartResult {
