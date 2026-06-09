@@ -476,11 +476,12 @@ class ExpoPansBleApiModule : Module() {
     context.activeOperation = operation
     context.activeOperationTimeoutRunnable = Runnable {
       val active = context.activeOperation
+      if (connections[context.deviceId] !== context) return@Runnable
       if (active?.id != operation.id) return@Runnable
       context.activeOperation = null
       context.activeOperationTimeoutRunnable = null
       active.promise.reject("TIMEOUT", "GATT operation timed out.", null)
-      startNextOperation(context)
+      closeConnection(context.deviceId, "gatt operation timeout", rejectConnect = true)
     }
     mainHandler.postDelayed(context.activeOperationTimeoutRunnable!!, 10_000)
 

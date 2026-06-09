@@ -321,9 +321,11 @@ export async function patchOperationMode(
   patch: PansOperationModePatch,
 ): Promise<PansOperationMode> {
   const current = await readOperationMode(deviceId);
-  const next = { ...current, ...patch, raw: current.raw };
-  await writeOperationMode(deviceId, next);
-  return next;
+  const next: PansOperationMode = { ...current, ...patch, raw: current.raw };
+  const encoded = encodeOperationMode(next);
+  const raw: [number, number] = [encoded[0], encoded[1]];
+  await writeOperationMode(deviceId, raw);
+  return { ...next, raw };
 }
 
 export async function setTagLocationEngineEnabled(
@@ -566,11 +568,28 @@ export async function writeFirmwareUpdateChunk(
   data: number[],
   limits?: PansFirmwareTransportLimits,
 ): Promise<boolean> {
-  if (limits && 5 + data.length > limits.maxPacketBytes) {
-    throw new Error(
-      "INVALID_ARGUMENT: firmware update chunk exceeds transport packet size.",
-    );
+  if (limits) {
+    if (
+      !Number.isInteger(limits.maxPacketBytes) ||
+      !Number.isInteger(limits.maxChunkDataBytes) ||
+      limits.maxPacketBytes < 5 ||
+      limits.maxChunkDataBytes < 0
+    ) {
+      throw new Error(
+        "INVALID_ARGUMENT: firmware transport limits are invalid.",
+      );
+    }
+
+    if (
+      data.length > limits.maxChunkDataBytes ||
+      5 + data.length > limits.maxPacketBytes
+    ) {
+      throw new Error(
+        "INVALID_ARGUMENT: firmware update chunk exceeds transport limits.",
+      );
+    }
   }
+
   return await writeCharacteristic(
     deviceId,
     PANS_BLE_UUIDS.characteristics.firmwareUpdatePush,
@@ -662,34 +681,55 @@ export function decodeLocationData(payload: number[]): PansLocationData {
   }
 
   let position: PansPosition | undefined;
-  let distancesOffset = 1;
 
-  if (frameType === 0 || frameType === 2) {
+  if (frameType === 0) {
     if (raw.length >= 14) {
       position = decodePosition(raw, 1);
-      distancesOffset = 14;
-    } else if (frameType === 0) {
+    } else {
       diagnostics.push("position frame is shorter than 14 bytes");
     }
+
+    return { frameType, position, distances: [], raw, diagnostics };
   }
 
-  const distances: PansDistance[] = [];
-  if ((frameType === 1 || frameType === 2) && raw.length > distancesOffset) {
-    const count = raw[distancesOffset];
-    let index = distancesOffset + 1;
-    for (let i = 0; i < count; i += 1) {
-      if (index + 7 > raw.length) {
-        diagnostics.push(`truncated distance entry ${i + 1} of ${count}`);
-        break;
-      }
-      distances.push(decodeDistance(raw, index));
-      index += 7;
-    }
-  } else if (frameType === 1 && raw.length <= distancesOffset) {
-    diagnostics.push("distance frame is missing count byte");
+  if (frameType === 1) {
+    return {
+      frameType,
+      distances: decodeDistances(raw, 1, diagnostics),
+      raw,
+      diagnostics,
+    };
   }
 
-  return { frameType, position, distances, raw, diagnostics };
+  const combinedLayoutIsValid =
+    raw.length >= 15 && isExactDistanceSection(raw, 14);
+  const distanceOnlyFallbackIsValid = isExactDistanceSection(raw, 1);
+
+  if (combinedLayoutIsValid) {
+    position = decodePosition(raw, 1);
+
+    return {
+      frameType,
+      position,
+      distances: decodeDistances(raw, 14, diagnostics),
+      raw,
+      diagnostics,
+    };
+  }
+
+  if (distanceOnlyFallbackIsValid) {
+    return {
+      frameType,
+      distances: decodeDistances(raw, 1, diagnostics),
+      raw,
+      diagnostics,
+    };
+  }
+
+  diagnostics.push(
+    "combined frame does not match position-plus-distances or distance-only layout",
+  );
+  return { frameType, distances: [], raw, diagnostics };
 }
 
 export function decodeProxyPositions(payload: number[]): PansProxyPosition[] {
@@ -797,6 +837,11 @@ export function decodePresenceData(payload: number[]): PansPresenceData {
 export function encodeFirmwareUpdateOffer(
   offer: PansFirmwareUpdateOffer,
 ): number[] {
+  assertUintRange(offer.hardwareVersion, 0xffffffff, "hardware version");
+  assertUintRange(offer.firmwareVersion, 0xffffffff, "firmware version");
+  assertUintRange(offer.firmwareChecksum, 0xffffffff, "firmware checksum");
+  assertUintRange(offer.totalBinarySize, 0xffffffff, "firmware binary size");
+
   const bytes = new Uint8Array(17);
   const view = new DataView(bytes.buffer);
   bytes[0] = 0;
@@ -885,6 +930,40 @@ function decodeDistance(payload: number[], offset: number): PansDistance {
     distanceMeters: view.getUint32(offset + 2, true) / 1000,
     quality: payload[offset + 6],
   };
+}
+
+function isExactDistanceSection(raw: number[], countOffset: number): boolean {
+  if (countOffset >= raw.length) return false;
+
+  const count = raw[countOffset];
+  return countOffset + 1 + count * 7 === raw.length;
+}
+
+function decodeDistances(
+  raw: number[],
+  countOffset: number,
+  diagnostics: string[],
+): PansDistance[] {
+  if (countOffset >= raw.length) {
+    diagnostics.push("distance frame is missing count byte");
+    return [];
+  }
+
+  const count = raw[countOffset];
+  const distances: PansDistance[] = [];
+  let index = countOffset + 1;
+
+  for (let i = 0; i < count; i += 1) {
+    if (index + 7 > raw.length) {
+      diagnostics.push(`truncated distance entry ${i + 1} of ${count}`);
+      break;
+    }
+
+    distances.push(decodeDistance(raw, index));
+    index += 7;
+  }
+
+  return distances;
 }
 
 function readUint64Hex(payload: number[], offset: number): string {

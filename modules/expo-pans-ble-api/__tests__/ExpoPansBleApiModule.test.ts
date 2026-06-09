@@ -221,6 +221,25 @@ describe("PANS BLE codecs", () => {
     expect(combined.distances[0].nodeId).toBe(0x5678);
   });
 
+  test("decodes type-2 distance-only fallback with multiple anchors", () => {
+    const decoded = decodeLocationData([
+      2,
+      2,
+      ...u16(1),
+      ...u32(1000),
+      80,
+      ...u16(2),
+      ...u32(2000),
+      81,
+    ]);
+
+    expect(decoded.position).toBeUndefined();
+    expect(decoded.distances).toEqual([
+      expect.objectContaining({ nodeId: 1, distanceMeters: 1 }),
+      expect.objectContaining({ nodeId: 2, distanceMeters: 2 }),
+    ]);
+  });
+
   test("reports malformed location diagnostics", () => {
     expect(() => decodeLocationData([9])).toThrow("unknown location-data");
     const truncated = decodeLocationData([1, 2, 0x01]);
@@ -406,6 +425,53 @@ describe("PANS BLE codecs", () => {
       "at most 32 bytes",
     );
     expect(decodeFirmwareUpdatePoll([0, 99]).raw).toEqual([0, 99]);
+  });
+
+  test("rejects invalid firmware update offer fields", () => {
+    expect(() =>
+      encodeFirmwareUpdateOffer({
+        hardwareVersion: -1,
+        firmwareVersion: 1,
+        firmwareChecksum: 1,
+        totalBinarySize: 1,
+      }),
+    ).toThrow("hardware version");
+
+    expect(() =>
+      encodeFirmwareUpdateOffer({
+        hardwareVersion: 1,
+        firmwareVersion: 1.5,
+        firmwareChecksum: 1,
+        totalBinarySize: 1,
+      }),
+    ).toThrow("firmware version");
+
+    expect(() =>
+      encodeFirmwareUpdateOffer({
+        hardwareVersion: Number.NaN,
+        firmwareVersion: 1,
+        firmwareChecksum: 1,
+        totalBinarySize: 1,
+      }),
+    ).toThrow("hardware version");
+
+    expect(() =>
+      encodeFirmwareUpdateOffer({
+        hardwareVersion: 1,
+        firmwareVersion: Number.POSITIVE_INFINITY,
+        firmwareChecksum: 1,
+        totalBinarySize: 1,
+      }),
+    ).toThrow("firmware version");
+
+    expect(() =>
+      encodeFirmwareUpdateOffer({
+        hardwareVersion: 1,
+        firmwareVersion: 1,
+        firmwareChecksum: 0x1_0000_0000,
+        totalBinarySize: 1,
+      }),
+    ).toThrow("firmware checksum");
   });
 });
 
@@ -598,6 +664,24 @@ describe("ExpoPansBleApiModule wrapper", () => {
     );
   });
 
+  test("patchOperationMode returns updated raw bytes", async () => {
+    mockNativeModule.readCharacteristic.mockResolvedValueOnce([0x40, 0x00]);
+
+    await expect(
+      patchOperationMode("device-1", { ledEnabled: true }),
+    ).resolves.toMatchObject({
+      ledEnabled: true,
+      raw: [0x44, 0x00],
+    });
+
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.operationMode,
+      [0x44, 0x00],
+      "withResponse",
+    );
+  });
+
   test("prepares and enforces firmware transport sizing", async () => {
     expect(await prepareFirmwareUpdateTransport("device-1")).toEqual({
       maxPacketBytes: 61,
@@ -620,10 +704,24 @@ describe("ExpoPansBleApiModule wrapper", () => {
 
     await expect(
       writeFirmwareUpdateChunk("device-1", 0, new Array(16).fill(1), {
-        maxPacketBytes: 20,
+        maxPacketBytes: 64,
         maxChunkDataBytes: 15,
       }),
-    ).rejects.toThrow("packet size");
+    ).rejects.toThrow("transport limits");
+
+    await expect(
+      writeFirmwareUpdateChunk("device-1", 0, new Array(16).fill(1), {
+        maxPacketBytes: 20,
+        maxChunkDataBytes: 32,
+      }),
+    ).rejects.toThrow("transport limits");
+
+    await expect(
+      writeFirmwareUpdateChunk("device-1", 0, [1], {
+        maxPacketBytes: 4,
+        maxChunkDataBytes: 32,
+      }),
+    ).rejects.toThrow("transport limits");
 
     mockNativeModule.getMaximumWriteValueLength.mockResolvedValueOnce(5);
     await expect(prepareFirmwareUpdateTransport("device-1")).rejects.toThrow(

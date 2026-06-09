@@ -69,6 +69,7 @@ jest.mock("expo-pans-ble-api", () => ({
 
 const pans = jest.requireMock("expo-pans-ble-api") as {
   PANS_BLE_UUIDS: { characteristics: Record<string, string> };
+  startScanning: jest.Mock;
   connect: jest.Mock;
   disconnect: jest.Mock;
   patchOperationMode: jest.Mock;
@@ -83,6 +84,7 @@ describe("PansBleSource", () => {
     jest.clearAllMocks();
     discoveryListener = undefined;
     locationListener = undefined;
+    pans.startScanning.mockResolvedValue(undefined);
     pans.connect.mockResolvedValue(true);
     pans.readLocationData.mockResolvedValue({
       distances: [],
@@ -190,6 +192,55 @@ describe("PansBleSource", () => {
     expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
   });
 
+  test("cleanup during a pending connection disconnects after connect resolves", async () => {
+    const pending = deferred<boolean>();
+    pans.connect.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource().subscribe(jest.fn());
+
+    discoveryListener?.({
+      devices: [device("tag-1", "tag")],
+    });
+
+    subscription.remove();
+    pending.resolve(true);
+    await flushPromises();
+
+    expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
+    expect(pans.subscribeLocationData).not.toHaveBeenCalled();
+  });
+
+  test("cleanup during a pending connection preserves connection when disconnectOnTeardown is false", async () => {
+    const pending = deferred<boolean>();
+    pans.connect.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource({
+      disconnectOnTeardown: false,
+    }).subscribe(jest.fn());
+
+    discoveryListener?.({
+      devices: [device("tag-1", "tag")],
+    });
+
+    subscription.remove();
+    pending.resolve(true);
+    await flushPromises();
+
+    expect(pans.disconnect).not.toHaveBeenCalled();
+    expect(pans.subscribeLocationData).not.toHaveBeenCalled();
+  });
+
+  test("start forwards scan failures to onError", async () => {
+    const onError = jest.fn();
+    const error = new Error("Bluetooth disabled");
+    pans.startScanning.mockRejectedValueOnce(error);
+
+    createPansBleSource({ onError }).start();
+    await flushPromises();
+
+    expect(onError).toHaveBeenCalledWith(error);
+  });
+
   test("cleanup can preserve connection and errors are surfaced", async () => {
     const onError = jest.fn();
     const subscription = createPansBleSource({
@@ -210,12 +261,25 @@ describe("PansBleSource", () => {
     expect(onError).toHaveBeenCalled();
     subscription.remove();
     await flushPromises();
+    expect(pans.unsubscribeLocationData).toHaveBeenCalledWith("tag-1");
     expect(pans.disconnect).not.toHaveBeenCalled();
   });
 });
 
 function device(deviceId: string, role: "tag" | "anchor"): PansDevice {
   return { deviceId, rssi: -50, lastSeenMs: 1, presence: { role } };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
 }
 
 async function flushPromises(): Promise<void> {

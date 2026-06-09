@@ -111,12 +111,17 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
         return
       }
 
-      if let existing = self.connections[deviceId], existing.state == "connected" {
-        promise.resolve(true)
-        return
+      if let existing = self.connections[deviceId] {
+        if existing.state == "connected" {
+          promise.resolve(true)
+          return
+        }
+
+        self.discardPendingConnectionContext(
+          deviceId: deviceId,
+          reason: "A newer connection request replaced the previous request."
+        )
       }
-      self.connections[deviceId]?.connectPromise?.reject("OPERATION_FAILED", "A newer connection request replaced the previous request.")
-      self.connections[deviceId]?.connectPromise = nil
 
       let context = PeripheralContext(deviceId: deviceId, peripheral: peripheral)
       context.connectPromise = promise
@@ -124,7 +129,13 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
       peripheral.delegate = self
       self.sendConnectionState(deviceId: deviceId, state: "connecting", reason: nil)
       context.connectTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeoutMs ?? 15000) / 1000.0, repeats: false) { [weak self, weak context] _ in
-        guard let self, let context, context.connectPromise != nil else { return }
+        guard
+          let self,
+          let context,
+          let current = self.connections[deviceId],
+          current === context,
+          context.connectPromise != nil
+        else { return }
         context.connectPromise?.reject("TIMEOUT", "Timed out connecting to \(deviceId).")
         context.connectPromise = nil
         self.closeConnection(deviceId: deviceId, reason: "timeout", rejectConnect: true)
@@ -352,11 +363,21 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     context.activeOperation = operation
     context.activeOperationTimer?.invalidate()
     context.activeOperationTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self, weak context] _ in
-      guard let self, let context, context.activeOperation?.id == operation.id else { return }
+      guard
+        let self,
+        let context,
+        let current = self.connections[context.deviceId],
+        current === context,
+        context.activeOperation?.id == operation.id
+      else { return }
       let timedOut = context.activeOperation
       self.clearActiveOperation(context)
       timedOut?.promise.reject("TIMEOUT", "GATT operation timed out.")
-      self.startNextOperation(context)
+      self.closeConnection(
+        deviceId: context.deviceId,
+        reason: "gatt operation timeout",
+        rejectConnect: true
+      )
     }
 
     switch operation {
@@ -431,6 +452,31 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     context.queue.removeAll()
     centralManager?.cancelPeripheralConnection(context.peripheral)
     sendConnectionState(deviceId: deviceId, state: "disconnected", reason: reason)
+  }
+
+  private func discardPendingConnectionContext(deviceId: String, reason: String) {
+    guard let existing = connections.removeValue(forKey: deviceId) else {
+      return
+    }
+
+    existing.isClosed = true
+    existing.connectTimer?.invalidate()
+    existing.connectTimer = nil
+    existing.activeOperationTimer?.invalidate()
+    existing.activeOperationTimer = nil
+
+    existing.connectPromise?.reject("OPERATION_FAILED", reason)
+    existing.connectPromise = nil
+
+    existing.activeOperation?.promise.reject("NOT_CONNECTED", "Connection replaced.")
+    existing.activeOperation = nil
+
+    existing.queue.forEach {
+      $0.promise.reject("NOT_CONNECTED", "Connection replaced.")
+    }
+    existing.queue.removeAll()
+
+    centralManager?.cancelPeripheralConnection(existing.peripheral)
   }
 
   private func permissionStatusMap() -> [String: Any] {
