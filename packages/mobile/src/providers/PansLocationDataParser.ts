@@ -1,81 +1,38 @@
+import {
+  decodeAnchorList,
+  decodeLocationData,
+  decodeOperationMode,
+  decodePresenceData,
+  decodeProxyPositions,
+} from "expo-pans-ble-api";
+import type {
+  PansAnchorList,
+  PansLocationData,
+  PansOperationMode,
+  PansPresenceData,
+  PansProxyPosition,
+} from "expo-pans-ble-api";
 import { LocalizationObservation } from "../localization/types";
 
-export interface PansDistanceSample {
-  nodeId: number;
-  anchorKey: string;
-  distanceMeters: number;
-  quality: number;
-}
+export type PansDistanceSample = PansLocationData["distances"][number];
+export type PansPositionSample = NonNullable<PansLocationData["position"]> & {
+  /** Deprecated compatibility alias. Prefer zMeters. */
+  zCm?: number;
+};
+export type PansLocationDataFrame = PansLocationData;
+export type PansProxyPositionSample = PansProxyPosition;
+export type PansOperationModeSample = PansOperationMode;
+export type PansPresenceSample = PansPresenceData;
+export type PansAnchorListSample = PansAnchorList;
 
-export interface PansPositionSample {
-  xMeters: number;
-  yMeters: number;
-  zCm: number;
-  quality: number;
-}
-
-export interface PansLocationDataFrame {
-  position?: PansPositionSample;
-  distances: PansDistanceSample[];
-}
-
-export function parsePansLocationDataPayload(
-  payload: number[],
-): PansLocationDataFrame {
-  if (!payload.length) {
-    return { distances: [] };
-  }
-
-  const view = new DataView(Uint8Array.from(payload).buffer);
-  const frameType = payload[0];
-
-  let position: PansPositionSample | undefined;
-  let distancesOffset = 1;
-
-  if ((frameType === 0 || frameType === 2) && payload.length >= 14) {
-    position = {
-      xMeters: view.getInt32(1, true) / 1000,
-      yMeters: view.getInt32(5, true) / 1000,
-      zCm: view.getInt32(9, true),
-      quality: payload[13] ?? 100,
-    };
-    distancesOffset = 14;
-  }
-
-  const distances: PansDistanceSample[] = [];
-  if (
-    (frameType === 1 || frameType === 2) &&
-    payload.length > distancesOffset
-  ) {
-    const count = payload[distancesOffset] ?? 0;
-    let index = distancesOffset + 1;
-
-    for (let i = 0; i < count; i += 1) {
-      if (index + 7 > payload.length) break;
-
-      const nodeId = view.getUint16(index, true);
-      const distMm = view.getUint32(index + 2, true);
-      const quality = payload[index + 6] ?? 0;
-
-      distances.push({
-        nodeId,
-        anchorKey: toAnchorKey(nodeId),
-        distanceMeters: distMm / 1000,
-        quality,
-      });
-
-      index += 7;
-    }
-  }
-
-  return {
-    position,
-    distances,
-  };
-}
+export const parsePansLocationDataPayload = decodeLocationData;
+export const parsePansProxyPositionsPayload = decodeProxyPositions;
+export const parsePansOperationModePayload = decodeOperationMode;
+export const parsePansPresencePayload = decodePresenceData;
+export const parseAnchorListPayload = decodeAnchorList;
 
 export function locationFrameToObservations(
-  macAddress: string,
+  deviceId: string,
   frame: PansLocationDataFrame,
   observedAtMs: number = Date.now(),
 ): LocalizationObservation[] {
@@ -83,13 +40,14 @@ export function locationFrameToObservations(
 
   if (frame.position) {
     observations.push({
-      mac: macAddress,
+      mac: deviceId,
       observedAtMs,
       source: "pans-ble-uwb",
       measurementKind: "position",
       positionXMeters: frame.position.xMeters,
       positionYMeters: frame.position.yMeters,
-      zCm: frame.position.zCm,
+      positionZMeters: frame.position.zMeters,
+      zCm: Math.round(frame.position.zMeters * 100),
       quality: frame.position.quality,
     });
   }

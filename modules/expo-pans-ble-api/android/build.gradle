@@ -1,0 +1,10 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+android {
+  namespace 'expo.modules.pansbleapi'
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+}

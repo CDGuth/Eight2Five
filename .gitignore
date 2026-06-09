@@ -47,16 +47,21 @@ yarn-error.*
 # generated native folders
 **/ios
 **/android
+!modules/expo-pans-ble-api/ios
+!modules/expo-pans-ble-api/ios/**
+!modules/expo-pans-ble-api/android
+!modules/expo-pans-ble-api/android/**
 
 # gradle
 *.gradle
+!modules/expo-pans-ble-api/android/build.gradle
 coverage/clover.xml
 
 # other
 .com.facebook.react.devsupport.BundleDownloader.swp
 
 # local vendor reference docs (do not commit)
-docs/DWM1001_DWM1001-DEV_MDEK1001_Sources_and_Docs_v11
+docs/local-only
 
 # OpenCode
 .opencode/index

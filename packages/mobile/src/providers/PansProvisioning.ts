@@ -4,12 +4,16 @@ import {
   readAnchorList,
   readLocationData,
   readOperationMode as readDeviceOperationMode,
-  setTagLocationEngineEnabled,
+  patchOperationMode,
   writeLocationDataMode,
-  writeOperationMode,
+  writeNetworkId,
   writePersistedPosition,
 } from "expo-pans-ble-api";
-import type { PansApiError, PansCommandResult } from "expo-pans-ble-api";
+import type {
+  PansApiError,
+  PansCommandResult,
+  PansAnchorListEntry,
+} from "expo-pans-ble-api";
 import {
   AnchorGeometry,
   EnvironmentMode,
@@ -17,24 +21,16 @@ import {
   FieldConfigurationStore,
   FieldDimensions,
 } from "../localization/types";
-import {
-  parsePansLocationDataPayload,
-  toAnchorKey,
-} from "./PansLocationDataParser";
+import { toAnchorKey } from "./PansLocationDataParser";
 
 export type UwbMode = "off" | "passive" | "active";
-
-const UWB_MODE_BITS: Record<UwbMode, number> = {
-  off: 0,
-  passive: 1,
-  active: 2,
-};
 
 export interface SetupTagOptions {
   connectTimeoutMs?: number;
   useInternalLocationSolver?: boolean;
   locationDataMode?: 0 | 1 | 2;
   disconnectAfterSetup?: boolean;
+  panId?: number;
 }
 
 export interface SetupAnchorOptions {
@@ -50,6 +46,7 @@ export interface SetupAnchorOptions {
     quality?: number;
   };
   disconnectAfterSetup?: boolean;
+  panId?: number;
 }
 
 export interface CommissionFieldFromTagOptions {
@@ -180,32 +177,19 @@ export async function configureTag(
   }
 
   try {
-    const modeResult = await readDeviceOperationMode(tagAddress);
-    if (!modeResult.ok) return modeResult;
+    await patchOperationMode(tagAddress, {
+      role: "tag",
+      uwbMode: "active",
+      initiatorEnabled: false,
+      locationEngineEnabled: useInternalLocationSolver,
+    });
 
-    const modeBytes = modeResult.response?.value ?? [];
-    if (modeBytes.length < 2)
-      return buildOperationFailed(
-        "Invalid operation mode payload while configuring tag.",
-      );
+    if (options.panId !== undefined) {
+      await writeNetworkId(tagAddress, options.panId);
+    }
 
-    const [byte0, byte1] = modeBytes;
-    const nextByte0 = (byte0 & ~0x80) | (UWB_MODE_BITS.active << 5);
-    const nextByte1 = byte1 & ~0x80;
-
-    const writeModeResult = await writeOperationMode(tagAddress, [
-      nextByte0,
-      nextByte1,
-    ]);
-    if (!writeModeResult.ok) return writeModeResult;
-
-    const solverResult = await setTagLocationEngineEnabled(
-      tagAddress,
-      useInternalLocationSolver,
-    );
-    if (!solverResult.ok) return solverResult;
-
-    return await writeLocationDataMode(tagAddress, locationDataMode);
+    await writeLocationDataMode(tagAddress, locationDataMode);
+    return buildSuccess();
   } finally {
     if (options.disconnectAfterSetup) {
       await disconnect(tagAddress);
@@ -233,50 +217,24 @@ export async function configureAnchorNode(
   }
 
   try {
-    const modeResult = await readDeviceOperationMode(anchorAddress);
-    if (!modeResult.ok) return modeResult;
+    await patchOperationMode(anchorAddress, {
+      role: "anchor",
+      uwbMode,
+      ledEnabled: options.ledEnabled,
+      firmwareUpdateEnabled: options.firmwareUpdateEnabled,
+      initiatorEnabled: options.initiator,
+    });
 
-    const modeBytes = modeResult.response?.value ?? [];
-    if (modeBytes.length < 2)
-      return buildOperationFailed(
-        "Invalid operation mode payload while configuring anchor.",
-      );
-
-    const [byte0, byte1] = modeBytes;
-
-    let nextByte0 = byte0 | 0x80;
-    nextByte0 &= ~(0b11 << 5);
-    nextByte0 |= UWB_MODE_BITS[uwbMode] << 5;
-
-    if (options.ledEnabled !== undefined)
-      nextByte0 = options.ledEnabled ? nextByte0 | 0x04 : nextByte0 & ~0x04;
-
-    if (options.firmwareUpdateEnabled !== undefined)
-      nextByte0 = options.firmwareUpdateEnabled
-        ? nextByte0 | 0x02
-        : nextByte0 & ~0x02;
-
-    const nextByte1 =
-      options.initiator === undefined
-        ? byte1
-        : options.initiator
-          ? byte1 | 0x80
-          : byte1 & ~0x80;
-
-    const writeModeResult = await writeOperationMode(anchorAddress, [
-      nextByte0,
-      nextByte1,
-    ]);
-    if (!writeModeResult.ok) return writeModeResult;
-
-    if (!options.persistedPosition) {
-      return writeModeResult;
+    if (options.panId !== undefined) {
+      await writeNetworkId(anchorAddress, options.panId);
     }
 
-    return await writePersistedPosition(
-      anchorAddress,
-      options.persistedPosition,
-    );
+    if (!options.persistedPosition) {
+      return buildSuccess();
+    }
+
+    await writePersistedPosition(anchorAddress, options.persistedPosition);
+    return buildSuccess();
   } finally {
     if (options.disconnectAfterSetup) {
       await disconnect(anchorAddress);
@@ -312,26 +270,18 @@ export async function observeTagAnchors(
 
   try {
     for (let i = 0; i < sampleReads; i += 1) {
-      const readResult = await readLocationData(tagAddress);
-      if (readResult.ok && readResult.response?.value) {
-        const frame = parsePansLocationDataPayload(readResult.response.value);
+      try {
+        const frame = await readLocationData(tagAddress);
         frame.distances.forEach((distance) => {
           observedNodeIds.add(distance.nodeId);
         });
+      } catch {
+        // Continue sampling; a transient malformed/empty read should not abort the observation loop.
       }
 
       if (i < sampleReads - 1) {
         await sleep(readIntervalMs);
       }
-    }
-
-    const anchorListResult = await readAnchorList(tagAddress);
-    if (anchorListResult.ok && anchorListResult.response?.value) {
-      parseAnchorListLowNodeIds(anchorListResult.response.value).forEach(
-        (nodeId) => {
-          observedNodeIds.add(nodeId);
-        },
-      );
     }
   } finally {
     if (disconnectAfterCommand) {
@@ -345,6 +295,48 @@ export async function observeTagAnchors(
     ok: true,
     nodeIds,
     anchorKeys: nodeIds.map((nodeId) => toAnchorKey(nodeId)),
+  };
+}
+
+export async function readAnchorNeighbors(
+  anchorDeviceId: string,
+  options: DeviceCommandOptions = {},
+): Promise<PansCommandResult<PansAnchorListEntry[]>> {
+  const connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
+  const disconnectAfterCommand = options.disconnectAfterCommand ?? true;
+
+  const connected = await connect(anchorDeviceId, connectTimeoutMs);
+  if (!connected) {
+    return buildOperationFailed(
+      "Failed to connect to anchor while reading neighbors.",
+    );
+  }
+
+  try {
+    const anchorList = await readAnchorList(anchorDeviceId);
+    return {
+      ok: true,
+      value: anchorList.anchors,
+    };
+  } catch (error) {
+    return { ok: false, error: normalizeError(error) };
+  } finally {
+    if (disconnectAfterCommand) await disconnect(anchorDeviceId);
+  }
+}
+
+export async function readAnchorNeighborLowIds(
+  anchorDeviceId: string,
+  options: DeviceCommandOptions = {},
+): Promise<PansCommandResult<number[]>> {
+  const result = await readAnchorNeighbors(anchorDeviceId, options);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  return {
+    ok: true,
+    value: result.value?.map((entry) => entry.lowNodeId) ?? [],
   };
 }
 
@@ -606,31 +598,13 @@ export async function commissionFieldFromTag(
   };
 }
 
-function parseAnchorListLowNodeIds(payload: number[]): number[] {
-  if (!payload.length) {
-    return [];
-  }
-
-  const count = payload[0] ?? 0;
-  const bytes = Uint8Array.from(payload);
-  const view = new DataView(bytes.buffer);
-  const nodeIds: number[] = [];
-
-  let index = 1;
-  for (let i = 0; i < count; i += 1) {
-    if (index + 8 > payload.length) {
-      break;
-    }
-
-    const fullId = view.getBigUint64(index, true);
-    nodeIds.push(Number(fullId & 0xffffn));
-    index += 8;
-  }
-
-  return nodeIds;
+function buildSuccess<T = void>(value?: T): PansCommandResult<T> {
+  return { ok: true, value };
 }
 
-function buildOperationFailed(message: string): PansCommandResult {
+function buildOperationFailed<T = unknown>(
+  message: string,
+): PansCommandResult<T> {
   return {
     ok: false,
     error: {
@@ -654,12 +628,27 @@ async function readOperationModeWithConnection(
   }
 
   try {
-    return await readDeviceOperationMode(macAddress);
+    return buildSuccess(await readDeviceOperationMode(macAddress));
   } finally {
     if (disconnectAfterCommand) {
       await disconnect(macAddress);
     }
   }
+}
+
+function normalizeError(error: unknown): PansApiError {
+  if (
+    typeof error === "object" &&
+    error &&
+    "code" in error &&
+    "message" in error
+  ) {
+    return error as PansApiError;
+  }
+  return {
+    code: "OPERATION_FAILED",
+    message: error instanceof Error ? error.message : String(error),
+  };
 }
 
 function isSameAnchorGeometry(

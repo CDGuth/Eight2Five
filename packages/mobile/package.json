@@ -10,7 +10,8 @@
   "scripts": {
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
-    "type-check": "tsc --noEmit -p tsconfig.json"
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "jest src/providers src/utils --watchAll=false --passWithNoTests --runInBand"
   },
   "peerDependencies": {
     "react": "19.2.0",
@@ -88,6 +89,17 @@
     "react-stately": "^3.47.0",
     "tailwind-variants": "^0.1.20",
     "uniwind": "^1.7.0"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/android/",
+      "/ios/"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
+    ]
   },
   "devDependencies": {
     "@react-native/assets-registry": "^0.79.7",

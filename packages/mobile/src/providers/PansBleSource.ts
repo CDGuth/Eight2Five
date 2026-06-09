@@ -1,14 +1,19 @@
 import {
   addConnectionStateChangedListener,
   addDeviceDiscoveredListener,
-  addNotificationReceivedListener,
+  addLocationDataListener,
   connect,
+  disconnect,
+  PANS_BLE_UUIDS,
+  patchOperationMode,
   readLocationData,
-  setTagLocationEngineEnabled,
+  subscribeLocationData,
+  unsubscribeLocationData,
   writeLocationDataMode,
   startScanning,
   stopScanning,
 } from "expo-pans-ble-api";
+import type { PansBleDevice } from "expo-pans-ble-api";
 import { BeaconSource } from "./types";
 import {
   locationFrameToObservations,
@@ -17,109 +22,198 @@ import {
 
 export interface PansBleSourceOptions {
   useInternalLocationSolver?: boolean;
+  tagDeviceId?: string;
+  selectTag?: (device: PansBleDevice) => boolean;
+  disconnectOnTeardown?: boolean;
+  onError?: (error: unknown) => void;
 }
 
 export function createPansBleSource(
   options: PansBleSourceOptions = {},
 ): BeaconSource {
   const useInternalLocationSolver = options.useInternalLocationSolver ?? true;
-
-  const connectingDevices = new Set<string>();
-  const connectedDevices = new Set<string>();
+  let activeTagDeviceId: string | undefined;
+  let connectingDeviceId: string | undefined;
   const configuredDevices = new Set<string>();
+  const subscribedDevices = new Set<string>();
 
   return {
     start() {
-      startScanning();
+      void startScanning().catch((error) => {
+        options.onError?.(error);
+      });
     },
     stop() {
       stopScanning();
     },
     subscribe(listener) {
-      async function ensureUwbSession(macAddress: string) {
-        if (
-          connectedDevices.has(macAddress) ||
-          connectingDevices.has(macAddress)
-        )
-          return;
+      let isRemoved = false;
+      const teardownDevices = new Set<string>();
 
-        connectingDevices.add(macAddress);
+      async function disconnectAfterRemoval(deviceId: string): Promise<void> {
+        if (teardownDevices.has(deviceId)) return;
+        teardownDevices.add(deviceId);
+        const shouldDisconnect = options.disconnectOnTeardown ?? true;
+
         try {
-          const isConnected = await connect(macAddress, 10_000);
-          if (!isConnected) return;
+          if (subscribedDevices.has(deviceId)) {
+            await unsubscribeLocationData(deviceId);
+            subscribedDevices.delete(deviceId);
+          }
+        } finally {
+          if (activeTagDeviceId === deviceId) activeTagDeviceId = undefined;
+          configuredDevices.delete(deviceId);
+          if (shouldDisconnect) await disconnect(deviceId);
+        }
+      }
 
-          connectedDevices.add(macAddress);
-          if (!configuredDevices.has(macAddress)) {
-            await setTagLocationEngineEnabled(
-              macAddress,
-              useInternalLocationSolver,
-            );
+      async function ensureUwbSession(device: PansBleDevice) {
+        if (isRemoved) return;
+        if (!isSelectableTag(device, options)) return;
+        if (activeTagDeviceId && activeTagDeviceId !== device.deviceId) return;
+        if (connectingDeviceId && connectingDeviceId !== device.deviceId)
+          return;
+        if (
+          activeTagDeviceId === device.deviceId &&
+          subscribedDevices.has(device.deviceId)
+        ) {
+          return;
+        }
+
+        connectingDeviceId = device.deviceId;
+        try {
+          const isConnected = await connect(device.deviceId, 10_000);
+          if (isRemoved) {
+            if (isConnected) await disconnectAfterRemoval(device.deviceId);
+            return;
+          }
+          if (!isConnected) return;
+          activeTagDeviceId = device.deviceId;
+
+          if (!configuredDevices.has(device.deviceId)) {
+            await patchOperationMode(device.deviceId, {
+              role: "tag",
+              uwbMode: "active",
+              locationEngineEnabled: useInternalLocationSolver,
+            });
+            if (isRemoved) {
+              await disconnectAfterRemoval(device.deviceId);
+              return;
+            }
             await writeLocationDataMode(
-              macAddress,
+              device.deviceId,
               useInternalLocationSolver ? 0 : 1,
             );
-            configuredDevices.add(macAddress);
+            if (isRemoved) {
+              await disconnectAfterRemoval(device.deviceId);
+              return;
+            }
+            configuredDevices.add(device.deviceId);
           }
 
-          const readResult = await readLocationData(macAddress);
-          if (readResult.ok && readResult.response?.value) {
-            const frame = parsePansLocationDataPayload(
-              readResult.response.value,
-            );
-            const observations = locationFrameToObservations(macAddress, frame);
-            if (observations.length) {
-              try {
-                listener({ observations });
-              } catch {
-                // Ignore listener errors from host app.
-              }
+          await subscribeLocationData(device.deviceId);
+          subscribedDevices.add(device.deviceId);
+          if (isRemoved) {
+            await disconnectAfterRemoval(device.deviceId);
+            return;
+          }
+
+          const frame = await readLocationData(device.deviceId);
+          if (isRemoved) {
+            await disconnectAfterRemoval(device.deviceId);
+            return;
+          }
+          const observations = locationFrameToObservations(
+            device.deviceId,
+            frame,
+          );
+          if (observations.length) {
+            try {
+              listener({ observations });
+            } catch (error) {
+              options.onError?.(error);
             }
           }
-        } catch {
-          // Best effort connection path.
+        } catch (error) {
+          options.onError?.(error);
         } finally {
-          connectingDevices.delete(macAddress);
+          if (connectingDeviceId === device.deviceId)
+            connectingDeviceId = undefined;
         }
       }
 
       const discoverySubscription = addDeviceDiscoveredListener((event) => {
         event.devices.forEach((device) => {
-          void ensureUwbSession(device.mac);
+          void ensureUwbSession(device);
         });
       });
 
       const connectionSubscription = addConnectionStateChangedListener(
         (event) => {
-          if (event.state === "connected") {
-            connectedDevices.add(event.macAddress);
-            return;
-          }
-
           if (event.state === "disconnected") {
-            connectedDevices.delete(event.macAddress);
-            configuredDevices.delete(event.macAddress);
+            if (activeTagDeviceId === event.deviceId)
+              activeTagDeviceId = undefined;
+            if (connectingDeviceId === event.deviceId)
+              connectingDeviceId = undefined;
+            configuredDevices.delete(event.deviceId);
+            subscribedDevices.delete(event.deviceId);
           }
         },
       );
 
-      const notifySubscription = addNotificationReceivedListener((event) => {
-        const frame = parsePansLocationDataPayload(event.payload);
-        const observations = locationFrameToObservations(
-          event.macAddress,
-          frame,
-        );
-        if (observations.length) {
-          listener({ observations });
+      const notifySubscription = addLocationDataListener((event) => {
+        if (isRemoved) return;
+        if (activeTagDeviceId !== event.deviceId) return;
+        if (
+          !sameUuid(
+            event.characteristicUuid,
+            PANS_BLE_UUIDS.characteristics.locationData,
+          )
+        )
+          return;
+
+        try {
+          const frame = parsePansLocationDataPayload(event.payload);
+          const observations = locationFrameToObservations(
+            event.deviceId,
+            frame,
+          );
+          if (observations.length) listener({ observations });
+        } catch (error) {
+          options.onError?.(error);
         }
       });
 
       return {
         remove() {
+          if (isRemoved) return;
+          isRemoved = true;
           discoverySubscription.remove();
           connectionSubscription.remove();
           notifySubscription.remove();
+          const deviceId = activeTagDeviceId;
+          if (deviceId) {
+            void disconnectAfterRemoval(deviceId).catch((error) => {
+              options.onError?.(error);
+            });
+          }
         },
       };
     },
   };
+}
+
+function isSelectableTag(
+  device: PansBleDevice,
+  options: PansBleSourceOptions,
+): boolean {
+  if (options.tagDeviceId && options.tagDeviceId !== device.deviceId)
+    return false;
+  if (device.presence?.role && device.presence.role !== "tag") return false;
+  if (options.selectTag) return options.selectTag(device);
+  return device.presence?.role === "tag";
+}
+
+function sameUuid(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
 }
