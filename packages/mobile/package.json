@@ -60,7 +60,7 @@
     "expo-router": "~55.0.16",
     "expo-screen-capture": "~55.0.14",
     "expo-screen-orientation": "~55.0.16",
-    "expo-secure-store": "~55.0.14",
+    "expo-secure-store": "~56.0.4",
     "expo-sensors": "~55.0.15",
     "expo-sharing": "~55.0.20",
     "expo-splash-screen": "~55.0.21",
