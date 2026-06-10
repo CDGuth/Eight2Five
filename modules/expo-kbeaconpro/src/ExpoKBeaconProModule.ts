@@ -1,8 +1,4 @@
-import {
-  requireNativeModule,
-  EventEmitter,
-  EventSubscription,
-} from "expo-modules-core";
+import { requireNativeModule, EventSubscription } from "expo-modules-core";
 import {
   BeaconDiscoveredEvent,
   ConnectionStateChangeEvent,
@@ -41,7 +37,14 @@ type EventMap = {
   [ExpoKBeaconProModuleEvents.onError]: (event: KBeaconErrorEvent) => void;
 };
 
-interface ExpoKBeaconProNativeModule {
+interface ExpoKBeaconProEventEmitter {
+  addListener<EventName extends keyof EventMap>(
+    eventName: EventName,
+    listener: EventMap[EventName],
+  ): EventSubscription;
+}
+
+interface ExpoKBeaconProNativeModule extends ExpoKBeaconProEventEmitter {
   startScanning(): Promise<void>;
   stopScanning(): void;
   clearBeacons(): void;
@@ -95,7 +98,7 @@ interface ExpoKBeaconProNativeModule {
 const nativeModule =
   requireNativeModule<ExpoKBeaconProNativeModule>("ExpoKBeaconPro");
 
-const emitter = new EventEmitter<EventMap>(nativeModule);
+const emitter: ExpoKBeaconProEventEmitter = nativeModule;
 
 const ADV_TYPE_VALUES = new Set<number>(
   Object.values(KBAdvType).filter(
