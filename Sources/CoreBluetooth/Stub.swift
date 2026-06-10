@@ -16,3 +16,14 @@ public enum CBCentralManagerState: Int {
 
 /// Newer API name alias in Apple frameworks.
 public typealias CBManagerState = CBCentralManagerState
+
+public enum CBManagerAuthorization: Int {
+    case notDetermined = 0
+    case restricted = 1
+    case denied = 2
+    case allowedAlways = 3
+}
+
+public enum CBManager {
+    public static var authorization: CBManagerAuthorization { .allowedAlways }
+}

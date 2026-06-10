@@ -33,12 +33,13 @@ export interface BeaconState {
 }
 
 export interface RawBeaconData {
+  deviceId?: string;
   mac: string;
   rssi: number;
   advPackets: {
     advType: number;
     nid?: string;
     sid?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }[];
 }

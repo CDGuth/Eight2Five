@@ -109,7 +109,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
 
     const start = async () => {
       try {
-        source.start();
+        await source.start();
 
         subscription = source.subscribe((event: BeaconSourceEvent) => {
           let hasUpdates = false;
@@ -117,7 +117,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
           const discoveredBeacons: RawBeaconData[] = event.rawBeacons ?? [];
 
           discoveredBeacons.forEach((rawBeacon: RawBeaconData) => {
-            const mac = rawBeacon.mac;
+            const mac = rawBeacon.mac.toUpperCase();
             const currentState = beaconsRef.current.get(mac);
 
             // Parse the raw data

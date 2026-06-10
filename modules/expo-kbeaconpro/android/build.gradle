@@ -1,0 +1,11 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+android {
+  namespace 'expo.modules.kbeaconpro'
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation 'com.kkmcn.kbeaconlib2:kbeaconlib2:1.3.3'
+}

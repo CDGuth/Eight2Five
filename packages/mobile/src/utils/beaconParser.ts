@@ -35,6 +35,7 @@ import {
   BeaconState,
   RawBeaconData,
 } from "../types/BeaconProtocol";
+import { KBAdvType } from "expo-kbeaconpro";
 
 // Helper to convert hex string "0x..." to Buffer/Uint8Array
 function hexToBytes(hex: string): Uint8Array {
@@ -57,18 +58,25 @@ function asciiToHex(str: string): string {
 
 const NAMESPACE_HEX = asciiToHex(APP_NAMESPACE);
 
+function normalizeMac(mac: string): string {
+  return mac.toUpperCase();
+}
+
 export function parseBeaconData(
   raw: RawBeaconData,
   existingState?: BeaconState,
 ): BeaconState {
+  const mac = normalizeMac(raw.mac);
   const newState: BeaconState = existingState
-    ? { ...existingState, lastSeen: Date.now(), rssi: raw.rssi }
-    : { mac: raw.mac, lastSeen: Date.now(), rssi: raw.rssi };
+    ? { ...existingState, mac, lastSeen: Date.now(), rssi: raw.rssi }
+    : { mac, lastSeen: Date.now(), rssi: raw.rssi };
 
   for (const packet of raw.advPackets ?? []) {
-    // Check for Eddystone-UID (advType usually 0 for UID in some libs, but check KBeacon types)
-    // Based on ExpoKBeaconProModule.kt, KBAdvPacketEddyUID has nid and sid.
-    if (packet.nid && packet.sid) {
+    if (
+      packet.advType === KBAdvType.EddyUID &&
+      typeof packet.nid === "string" &&
+      typeof packet.sid === "string"
+    ) {
       const nid = packet.nid;
       const sid = packet.sid;
 

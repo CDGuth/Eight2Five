@@ -6,27 +6,58 @@ import {
   startScanning,
   stopScanning,
   addBeaconDiscoveredListener,
-} from "../../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule";
+  KBAdvType,
+} from "expo-kbeaconpro";
+import { BeaconSource } from "../../providers";
 
 let mockListener: ((event: { beacons: any[] }) => void) | null = null;
 
-jest.mock(
-  "../../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule",
-  () => {
-    const startScanning = jest.fn();
-    const stopScanning = jest.fn();
-    const addBeaconDiscoveredListener = jest.fn((listener: any) => {
-      mockListener = listener;
-      return { remove: jest.fn() };
-    });
+const mockRemove = jest.fn();
 
-    return {
-      startScanning,
-      stopScanning,
-      addBeaconDiscoveredListener,
-    };
+jest.mock("expo-kbeaconpro", () => {
+  const startScanning = jest.fn(async () => undefined);
+  const stopScanning = jest.fn();
+  const addBeaconDiscoveredListener = jest.fn((listener: any) => {
+    mockListener = listener;
+    return { remove: mockRemove };
+  });
+
+  return {
+    KBAdvType: {
+      IBeacon: 0,
+      EddyTLM: 1,
+      EddyUID: 2,
+      EddyURL: 3,
+      Sensor: 4,
+      System: 5,
+      EBeacon: 6,
+      Unknown: 255,
+    },
+    startScanning,
+    stopScanning,
+    addBeaconDiscoveredListener,
+  };
+});
+
+jest.mock("expo-pans-ble-api", () => ({
+  addConnectionStateChangedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addDeviceDiscoveredListener: jest.fn(() => ({ remove: jest.fn() })),
+  addLocationDataListener: jest.fn(() => ({ remove: jest.fn() })),
+  connect: jest.fn(async () => false),
+  disconnect: jest.fn(async () => true),
+  PANS_BLE_UUIDS: {
+    characteristics: {
+      locationData: "00000000-0000-0000-0000-000000000000",
+    },
   },
-);
+  patchOperationMode: jest.fn(async () => undefined),
+  readLocationData: jest.fn(async () => new Uint8Array()),
+  subscribeLocationData: jest.fn(async () => true),
+  unsubscribeLocationData: jest.fn(async () => true),
+  writeLocationDataMode: jest.fn(async () => true),
+  startScanning: jest.fn(async () => undefined),
+  stopScanning: jest.fn(),
+}));
 
 const MAX_UINT32 = 4294967295;
 
@@ -68,8 +99,14 @@ function buildPositionPacket(xPercent: number, yPercent: number, zCm: number) {
 
 type RenderCallback = (map: Map<string, BeaconState>) => void;
 
-function TestHarness({ onRender }: { onRender: RenderCallback }) {
-  const { beacons } = useBeaconScanner();
+function TestHarness({
+  onRender,
+  source,
+}: {
+  onRender: RenderCallback;
+  source?: BeaconSource;
+}) {
+  const { beacons } = useBeaconScanner({ source, sourceKind: "kbeacon" });
 
   useEffect(() => {
     onRender(beacons);
@@ -83,6 +120,7 @@ describe("useBeaconScanner", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     mockListener = null;
+    mockRemove.mockClear();
   });
 
   afterEach(() => {
@@ -102,7 +140,73 @@ describe("useBeaconScanner", () => {
     await act(async () => {
       renderer!.unmount();
     });
+    expect(mockRemove).toHaveBeenCalledTimes(1);
     expect(stopScanning).toHaveBeenCalledTimes(1);
+  });
+
+  it("awaits source startup before subscribing", async () => {
+    let resolveStart: (() => void) | null = null;
+    const source: BeaconSource = {
+      start: jest.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveStart = resolve;
+          }),
+      ),
+      stop: jest.fn(),
+      subscribe: jest.fn(() => ({ remove: jest.fn() })),
+    };
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TestHarness onRender={() => {}} source={source} />,
+      );
+    });
+
+    expect(source.start).toHaveBeenCalledTimes(1);
+    expect(source.subscribe).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveStart?.();
+      await Promise.resolve();
+    });
+
+    expect(source.subscribe).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it("catches rejected source startup", async () => {
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+    const source: BeaconSource = {
+      start: jest.fn(async () => {
+        throw new Error("scan failed");
+      }),
+      stop: jest.fn(),
+      subscribe: jest.fn(() => ({ remove: jest.fn() })),
+    };
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TestHarness onRender={() => {}} source={source} />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(source.subscribe).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Failed to start scanning:",
+      expect.any(Error),
+    );
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+    consoleSpy.mockRestore();
   });
 
   it("updates beacon map when discovery events fire", async () => {
@@ -130,8 +234,8 @@ describe("useBeaconScanner", () => {
             mac: "AA:BB:CC:DD:EE:FF",
             rssi: -65,
             advPackets: [
-              { advType: 2, ...identity },
-              { advType: 2, ...position },
+              { advType: KBAdvType.EddyUID, ...identity },
+              { advType: KBAdvType.EddyUID, ...position },
             ],
           },
         ],

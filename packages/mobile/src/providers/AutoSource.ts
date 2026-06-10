@@ -14,13 +14,17 @@ export function createAutoBeaconSource(
   let pansSeenAt = 0;
 
   return {
-    start() {
-      safelyRun(() => kbeaconSource.start());
-      safelyRun(() => pansSource.start());
+    async start() {
+      await Promise.all([
+        safelyRun(() => kbeaconSource.start()),
+        safelyRun(() => pansSource.start()),
+      ]);
     },
-    stop() {
-      safelyRun(() => kbeaconSource.stop());
-      safelyRun(() => pansSource.stop());
+    async stop() {
+      await Promise.all([
+        safelyRun(() => kbeaconSource.stop()),
+        safelyRun(() => pansSource.stop()),
+      ]);
     },
     subscribe(listener) {
       const kbeaconSubscription = safelySubscribe(kbeaconSource, (event) => {
@@ -46,8 +50,8 @@ export function createAutoBeaconSource(
       };
     },
     destroy() {
-      safelyRun(() => kbeaconSource.destroy?.());
-      safelyRun(() => pansSource.destroy?.());
+      void safelyRun(() => kbeaconSource.destroy?.());
+      void safelyRun(() => pansSource.destroy?.());
     },
   };
 }
@@ -69,9 +73,9 @@ function safelySubscribe(
   }
 }
 
-function safelyRun(action: () => unknown) {
+async function safelyRun(action: () => Promise<unknown> | unknown) {
   try {
-    action();
+    await action();
   } catch {
     // Best effort for optional provider behavior.
   }
