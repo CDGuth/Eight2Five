@@ -54,7 +54,7 @@
     "expo-location": "~55.1.10",
     "expo-media-library": "~55.0.17",
     "expo-network": "~55.0.14",
-    "expo-notifications": "~55.0.23",
+    "expo-notifications": "~56.0.16",
     "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-print": "~55.0.15",
     "expo-router": "~55.0.16",
