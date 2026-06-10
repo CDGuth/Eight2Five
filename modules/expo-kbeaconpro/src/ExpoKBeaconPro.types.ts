@@ -425,7 +425,7 @@ export interface KBeaconDeviceSnapshot {
     supportsPir?: boolean;
     supportsLight?: boolean;
   };
-  slots: KBCfgAdvBase[];
+  slots?: KBCfgAdvBase[];
   triggers?: KBCfgTrigger[];
   sensors?: (
     | KBCfgSensorHT
@@ -439,7 +439,7 @@ export interface KBeaconDeviceSnapshot {
 export interface KBSensorDataInfo {
   totalRecordNum: number;
   unreadRecordNum: number;
-  readIndex: number;
+  readIndex?: number;
 }
 
 export interface KBSensorRecordRequest {

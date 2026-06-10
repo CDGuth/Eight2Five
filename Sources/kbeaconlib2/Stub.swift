@@ -112,7 +112,7 @@ public class KBAdvPacketSystem: KBAdvPacketBase {
 
 public class KBAdvPacketEBeacon: KBAdvPacketBase {
   public var mac: String?
-  public var uuidValue: String?
+  public var uuid: String?
   public var utcSecCount: NSNumber?
   public var refTxPower: NSNumber?
   public var measurePower: NSNumber?

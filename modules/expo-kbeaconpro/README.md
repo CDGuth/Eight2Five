@@ -154,18 +154,22 @@ Config writes are strict: if any element is unsupported or malformed, the entire
 
 After enhanced connect, `readDeviceSnapshot(mac)` returns values available in the vendor SDK cache:
 
-- `common`: name, model/version metadata, slot/trigger limits, tx-power limits, and capability booleans when common parameters were loaded.
-- `slots`: advertisement slot configs when slot parameters were loaded.
-- `triggers`: trigger configs when trigger parameters were loaded.
-- `sensors`: sensor configs when sensor parameters were loaded.
+- `common`: name, model/version metadata, slot/trigger limits, tx-power limits, and capability booleans when common parameters were loaded. Omitted when common parameters were not loaded.
+- `slots`: advertisement slot configs when slot parameters were loaded. **Optional** — omitted when slot configuration was not loaded or the SDK returns no cached slot list. Loaded empty lists remain representable as empty arrays and are distinguishable from omitted metadata.
+- `triggers`: trigger configs when trigger parameters were loaded. Omitted when not loaded.
+- `sensors`: sensor configs when sensor parameters were loaded. Omitted when not loaded.
 
-Eight2Five provisioning uses enhanced connect with `readCommPara: true` and `readSlotPara: true`; provisioning rejects snapshots missing required `supportsEddyUid` or `maxSlots` metadata instead of assuming the beacon is compatible.
+All snapshot sections may be omitted when not loaded or unavailable. The bridge never fabricates missing sections.
+
+Eight2Five provisioning uses enhanced connect with `readCommPara: true` and `readSlotPara: true`; provisioning rejects snapshots missing required `supportsEddyUid`, `maxSlots`, or slot configuration metadata instead of assuming the beacon is compatible.
 
 ## Sensor records and notifications
 
-Use `readSensorRecords(mac, request)` with an explicit `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. `readOption` is intentionally not accepted because the previous bridge contract did not honor it consistently. `nextReadPosition` is also not exposed by the cross-platform response; callers that need richer cursor semantics should add a platform-specific API after native validation.
+Use `readSensorRecords(mac, request)` with an explicit `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. When `readPosition` is omitted, the bridge reads forward starting from position 0. Negative `readPosition` values are rejected by both the TypeScript wrapper and the native iOS bridge. `readOption` is intentionally not accepted because the previous bridge contract did not honor it consistently. `nextReadPosition` is also not exposed by the cross-platform response; callers that need richer cursor semantics should add a platform-specific API after native validation.
 
-`readSensorDataInfo(mac, sensorType)` and `clearSensorHistory(mac, sensorType)` forward the requested sensor type on both platforms. Android uses its native sensor-type values directly; iOS maps the JavaScript enum values to the CocoaPods SDK constants before forwarding.
+`readSensorDataInfo(mac, sensorType)` returns `totalRecordNum` and `unreadRecordNum` on both platforms. The `readIndex` field is **optional and platform-dependent**: Android may provide an SDK-derived `readIndex`; iOS omits `readIndex` when the SDK does not expose it. Callers must not assume `readIndex` is always present.
+
+`clearSensorHistory(mac, sensorType)` forwards the requested sensor type on both platforms. Android uses its native sensor-type values directly; iOS maps the JavaScript enum values to the CocoaPods SDK constants before forwarding.
 
 Unknown or partially modeled sensor payloads preserve `raw` bytes when available. Known fields may include `utcTime`, `sensorType`, `temperature`, `humidity`, `luxValue`, `pirIndication`, and `alarmStatus`.
 
@@ -173,13 +177,13 @@ Use `subscribeNotify` and `unsubscribeNotify` for live notifications. Notificati
 
 ## Editor-only iOS stub
 
-`Sources/kbeaconlib2/Stub.swift` exists only to help SourceKit-LSP on development machines that do not have the CocoaPods SDK available. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS build must still be run before release.
+`Sources/kbeaconlib2/Stub.swift` exists only to help SourceKit-LSP on development machines that do not have the CocoaPods SDK available. The stub mirrors only real APIs used by production Swift code and must not be used as the source of truth for production API signatures. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS CocoaPods build **must** be run before release to verify that all protocol conformances, callback signatures, and SDK method calls compile against the real pod.
 
 ## Deferred scope
 
 DFU is intentionally not implemented in this pass. The vendor SDK ecosystem includes Nordic-based update support, but this module currently reports `supportsDfu: false`.
 
-Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, native Android build validation, native iOS CocoaPods build validation, or PANS BLE changes.
+Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, or PANS BLE changes.
 
 ## Validation
 

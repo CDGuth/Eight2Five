@@ -439,4 +439,10 @@ function validateSnapshotForEight2Five(snapshot: KBeaconDeviceSnapshot): void {
       `Beacon ${snapshot.macAddress} does not expose the two advertisement slots required by Eight2Five`,
     );
   }
+
+  if (snapshot.slots === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot does not include slot configuration metadata`,
+    );
+  }
 }

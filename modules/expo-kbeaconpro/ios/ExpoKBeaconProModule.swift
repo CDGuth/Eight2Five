@@ -494,7 +494,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
           promise.resolve([
             "totalRecordNum": info.totalRecordNumber,
             "unreadRecordNum": info.unreadRecordNumber,
-            "readIndex": 0,
           ])
         } else {
           promise.reject("READ_FAILED", "Failed to read sensor data info. \(err?.errorDescription ?? "Unknown error")")
@@ -512,11 +511,18 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         promise.reject("INVALID_ARGUMENT", "Invalid sensor record request")
         return
       }
-      let readPosition = UInt32(request["readPosition"] as? Int ?? 0)
+      let readPosition = request["readPosition"] as? Int ?? 0
+
+      guard readPosition >= 0 else {
+        promise.reject("INVALID_ARGUMENT", "readPosition must be non-negative")
+        return
+      }
+
+      let nativeReadPosition = UInt32(readPosition)
 
       beacon.readSensorRecord(
         self.nativeSensorType(sensorType),
-        number: readPosition,
+        number: nativeReadPosition,
         option: KBSensorReadOption.NormalOrder,
         max: maxRecords
       ) { result, recordRsp, err in

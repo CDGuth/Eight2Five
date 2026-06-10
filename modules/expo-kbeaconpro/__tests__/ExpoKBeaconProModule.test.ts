@@ -401,6 +401,39 @@ describe("ExpoKBeaconProModule", () => {
       });
     });
 
+    test("readDeviceSnapshot accepts snapshot without slots", async () => {
+      mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
+        macAddress: "AA:BB",
+        common: { name: "Field Beacon" },
+      });
+
+      const snapshot = await readDeviceSnapshot("AA:BB");
+
+      expect(snapshot).toEqual({
+        macAddress: "AA:BB",
+        common: { name: "Field Beacon" },
+      });
+      expect(snapshot).not.toHaveProperty("slots");
+    });
+
+    test("readDeviceSnapshot distinguishes omitted slots from empty loaded slots", async () => {
+      mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
+        macAddress: "AA:BB",
+        slots: [],
+      });
+
+      const snapshotWithEmptySlots = await readDeviceSnapshot("AA:BB");
+      expect(snapshotWithEmptySlots.slots).toEqual([]);
+      expect(snapshotWithEmptySlots).toHaveProperty("slots");
+
+      mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
+        macAddress: "AA:BB",
+      });
+
+      const snapshotWithoutSlots = await readDeviceSnapshot("AA:BB");
+      expect(snapshotWithoutSlots).not.toHaveProperty("slots");
+    });
+
     test("readSensorDataInfo returns the native payload", async () => {
       const info = await readSensorDataInfo("AA:BB", KBSensorType.HTHumidity);
 
@@ -412,6 +445,37 @@ describe("ExpoKBeaconProModule", () => {
         totalRecordNum: 5,
         unreadRecordNum: 2,
         readIndex: 1,
+      });
+    });
+
+    test("readSensorDataInfo accepts iOS-shaped response without readIndex", async () => {
+      mockNativeModule.readSensorDataInfo.mockResolvedValueOnce({
+        totalRecordNum: 10,
+        unreadRecordNum: 3,
+      });
+
+      const info = await readSensorDataInfo("AA:BB", KBSensorType.HTHumidity);
+
+      expect(info).toEqual({
+        totalRecordNum: 10,
+        unreadRecordNum: 3,
+      });
+      expect(info).not.toHaveProperty("readIndex");
+    });
+
+    test("readSensorDataInfo accepts Android-shaped response with readIndex", async () => {
+      mockNativeModule.readSensorDataInfo.mockResolvedValueOnce({
+        totalRecordNum: 20,
+        unreadRecordNum: 5,
+        readIndex: 15,
+      });
+
+      const info = await readSensorDataInfo("AA:BB", KBSensorType.Light);
+
+      expect(info).toEqual({
+        totalRecordNum: 20,
+        unreadRecordNum: 5,
+        readIndex: 15,
       });
     });
 
@@ -458,6 +522,20 @@ describe("ExpoKBeaconProModule", () => {
           maxRecords: 10,
         }),
       ).rejects.toThrow("readPosition");
+    });
+
+    test("readSensorRecords forwards omitted readPosition without validation error", async () => {
+      const request = {
+        sensorType: KBSensorType.PIR,
+        maxRecords: 10,
+      };
+
+      await readSensorRecords("AA:BB", request);
+
+      expect(mockNativeModule.readSensorRecords).toHaveBeenCalledWith(
+        "AA:BB",
+        request,
+      );
     });
 
     test("readSensorRecords preserves raw unknown payload data", async () => {

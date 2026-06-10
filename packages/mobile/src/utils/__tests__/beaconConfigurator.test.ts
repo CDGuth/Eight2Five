@@ -392,4 +392,97 @@ describe("generateBeaconConfig", () => {
 
     expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
   });
+
+  it("rejects snapshots missing slot configuration metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2 },
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not include slot configuration metadata");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes omitted slots from empty loaded slots", async () => {
+    const mockTransportWithEmptySlots: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    // Empty loaded slots should pass validation (slots is defined, just empty)
+    const result = await applyBeaconConfiguration(
+      {
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        txPower: 4,
+        isPasswordProtected: false,
+        isPasswordSerialHash: false,
+        finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+      },
+      mockTransportWithEmptySlots,
+    );
+
+    expect(result.provisionalApplied).toBe(true);
+    expect(mockTransportWithEmptySlots.modifyConfig).toHaveBeenCalled();
+  });
+
+  it("accepts valid two-slot snapshot for provisioning", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 5 },
+        slots: [
+          {
+            configType: "advertisement" as const,
+            slotIndex: 0,
+            advType: KBAdvType.EddyUID,
+          },
+          {
+            configType: "advertisement" as const,
+            slotIndex: 1,
+            advType: KBAdvType.EddyUID,
+          },
+        ],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    const result = await applyBeaconConfiguration(
+      {
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        txPower: 4,
+        isPasswordProtected: false,
+        isPasswordSerialHash: false,
+        finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+      },
+      mockTransport,
+    );
+
+    expect(result.provisionalApplied).toBe(true);
+    expect(mockTransport.modifyConfig).toHaveBeenCalledTimes(1);
+  });
 });
