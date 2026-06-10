@@ -68,10 +68,7 @@ interface ExpoKBeaconProNativeModule extends ExpoKBeaconProEventEmitter {
 
   disconnect(macAddress: string): Promise<boolean>;
 
-  modifyConfig(
-    macAddress: string,
-    configs: KBeaconConfig[],
-  ): Promise<boolean>;
+  modifyConfig(macAddress: string, configs: KBeaconConfig[]): Promise<boolean>;
 
   readDeviceSnapshot(macAddress: string): Promise<KBeaconDeviceSnapshot>;
 
@@ -415,7 +412,10 @@ export async function subscribeNotify(
 ): Promise<boolean> {
   if (eventType !== undefined) assertNonNegativeInteger("eventType", eventType);
 
-  return await nativeModule.subscribeNotify(assertNonEmptyMac(macAddress), eventType);
+  return await nativeModule.subscribeNotify(
+    assertNonEmptyMac(macAddress),
+    eventType,
+  );
 }
 
 export async function unsubscribeNotify(
