@@ -27,7 +27,7 @@
     "@legendapp/motion": "^2.5.3",
     "@react-native-community/datetimepicker": "8.6.0",
     "ai": "^6.0.197",
-    "dom-helpers": "^5.2.1",
+    "dom-helpers": "^6.0.1",
     "expo-application": "~55.0.15",
     "expo-asset": "^55.0.8",
     "expo-auth-session": "~55.0.16",
