@@ -271,7 +271,6 @@ class ExpoKBeaconProModule : Module() {
           val records = data?.map { record -> sensorRecordToMap(record, sensorType) } ?: emptyList()
           promise.resolve(
             mapOf(
-              "nextReadPosition" to (readPosition + records.size),
               "records" to records
             )
           )
@@ -671,6 +670,25 @@ class ExpoKBeaconProModule : Module() {
     return runCatching { target.javaClass.getMethod(methodName).invoke(target) }.getOrNull()
   }
 
+  private fun firstValueFromMethods(target: Any, vararg methodNames: String): Any? {
+    methodNames.forEach { methodName ->
+      valueFromMethod(target, methodName)?.let { return it }
+    }
+    return null
+  }
+
+  private fun numberFromMethods(target: Any, vararg methodNames: String): Number? {
+    return firstValueFromMethods(target, *methodNames) as? Number
+  }
+
+  private fun booleanFromMethods(target: Any, vararg methodNames: String): Boolean? {
+    return firstValueFromMethods(target, *methodNames) as? Boolean
+  }
+
+  private fun stringFromMethods(target: Any, vararg methodNames: String): String? {
+    return firstValueFromMethods(target, *methodNames) as? String
+  }
+
   private fun sensorRecordToMap(record: Any, sensorType: Int): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>("sensorType" to sensorType)
     runCatching { map["utcTime"] = record.javaClass.getField("utcTime").get(record) }
@@ -683,18 +701,161 @@ class ExpoKBeaconProModule : Module() {
       val data = record.javaClass.getField("data").get(record)
       if (data is ByteArray) map["raw"] = data.map { it.toInt() and 0xff }
     }
+    runCatching {
+      val raw = record.javaClass.getField("raw").get(record)
+      if (raw is ByteArray) map["raw"] = raw.map { it.toInt() and 0xff }
+    }
     return map.filterValues { it != null }
   }
 
   private fun deviceSnapshot(beacon: KBeacon): Map<String, Any?> {
     val normalized = normalizedMac(beacon.mac)
+    val snapshot = mutableMapOf<String, Any?>("macAddress" to normalized)
+
+    valueFromMethod(beacon, "getCommonCfg")?.let { commonCfg ->
+      snapshot["common"] = commonConfigToMap(commonCfg)
+    }
+
+    val slotCfgList = valueFromMethod(beacon, "getSlotCfgList")
+    if (slotCfgList is Iterable<*>) {
+      snapshot["slots"] = slotCfgList.mapNotNull { slotCfg ->
+        slotCfg?.let { slotConfigToMap(it) }
+      }
+    }
+
+    val triggerCfgList = valueFromMethod(beacon, "getTriggerCfgList")
+    if (triggerCfgList is Iterable<*>) {
+      snapshot["triggers"] = triggerCfgList.mapNotNull { triggerCfg ->
+        triggerCfg?.let { triggerConfigToMap(it) }
+      }
+    }
+
+    val sensorCfgList = valueFromMethod(beacon, "getSensorCfgList")
+    if (sensorCfgList is Iterable<*>) {
+      snapshot["sensors"] = sensorCfgList.mapNotNull { sensorCfg ->
+        sensorCfg?.let { sensorConfigToMap(it) }
+      }
+    }
+
+    return snapshot.filterValues { it != null }
+  }
+
+  private fun commonConfigToMap(commonCfg: Any): Map<String, Any?> {
     return mapOf(
-      "macAddress" to normalized,
-      "common" to mapOf(
-        "name" to beacon.name
-      ).filterValues { it != null },
-      "slots" to emptyList<Map<String, Any?>>()
+      "name" to stringFromMethods(commonCfg, "getName"),
+      "model" to stringFromMethods(commonCfg, "getModel"),
+      "version" to stringFromMethods(commonCfg, "getVersion"),
+      "hardwareVersion" to stringFromMethods(commonCfg, "getHardwareVersion"),
+      "maxSlots" to numberFromMethods(commonCfg, "getMaxSlot")?.toInt(),
+      "maxTriggers" to numberFromMethods(commonCfg, "getMaxTrigger")?.toInt(),
+      "minTxPower" to numberFromMethods(commonCfg, "getMinTxPower")?.toInt(),
+      "maxTxPower" to numberFromMethods(commonCfg, "getMaxTxPower")?.toInt(),
+      "supportsIBeacon" to booleanFromMethods(commonCfg, "isSupportIBeacon"),
+      "supportsEddyUid" to booleanFromMethods(commonCfg, "isSupportEddyUID"),
+      "supportsEddyUrl" to booleanFromMethods(commonCfg, "isSupportEddyURL"),
+      "supportsEddyTlm" to booleanFromMethods(commonCfg, "isSupportEddyTLM"),
+      "supportsSensorAdvertisement" to booleanFromMethods(commonCfg, "isSupportKBSensor"),
+      "supportsSystemAdvertisement" to booleanFromMethods(commonCfg, "isSupportKBSystem"),
+      "supportsButton" to booleanFromMethods(commonCfg, "isSupportButton"),
+      "supportsBeep" to booleanFromMethods(commonCfg, "isSupportBeep"),
+      "supportsAccelerometer" to booleanFromMethods(commonCfg, "isSupportAccSensor"),
+      "supportsHumidity" to booleanFromMethods(commonCfg, "isSupportHumiditySensor"),
+      "supportsPir" to booleanFromMethods(commonCfg, "isSupportPIRSensor"),
+      "supportsLight" to booleanFromMethods(commonCfg, "isSupportLightSensor")
+    ).filterValues { it != null }
+  }
+
+  private fun slotConfigToMap(slotCfg: Any): Map<String, Any?> {
+    val advType = numberFromMethods(slotCfg, "getAdvType")?.toInt()
+      ?: advTypeFromConfigClass(slotCfg)
+    val map = mutableMapOf<String, Any?>(
+      "configType" to "advertisement",
+      "slotIndex" to numberFromMethods(slotCfg, "getSlotIndex")?.toInt(),
+      "advType" to advType,
+      "txPower" to numberFromMethods(slotCfg, "getTxPower")?.toInt(),
+      "advPeriod" to numberFromMethods(slotCfg, "getAdvPeriod")?.toDouble(),
+      "advMode" to numberFromMethods(slotCfg, "getAdvMode")?.toInt(),
+      "advTriggerOnly" to booleanFromMethods(slotCfg, "isAdvTriggerOnly", "getAdvTriggerOnly"),
+      "advConnectable" to booleanFromMethods(slotCfg, "isAdvConnectable", "getAdvConnectable")
     )
+
+    when (advType) {
+      ADV_TYPE_IBEACON -> {
+        map["uuid"] = stringFromMethods(slotCfg, "getUuid", "getUUID")
+        map["majorID"] = numberFromMethods(slotCfg, "getMajorID")?.toInt()
+        map["minorID"] = numberFromMethods(slotCfg, "getMinorID")?.toInt()
+      }
+      ADV_TYPE_EDDY_UID -> {
+        map["nid"] = normalizeHexString(stringFromMethods(slotCfg, "getNid", "getNID"))
+        map["sid"] = normalizeHexString(stringFromMethods(slotCfg, "getSid", "getSID"))
+      }
+      ADV_TYPE_EDDY_URL -> map["url"] = stringFromMethods(slotCfg, "getUrl", "getURL")
+      ADV_TYPE_EBEACON -> {
+        map["uuid"] = stringFromMethods(slotCfg, "getUuid", "getUUID")
+        map["encryptInterval"] = numberFromMethods(slotCfg, "getEncryptInterval")?.toInt()
+        map["aesType"] = numberFromMethods(slotCfg, "getAesType", "getAESType")?.toInt()
+      }
+      ADV_TYPE_SENSOR -> map["aesType"] = numberFromMethods(slotCfg, "getAesType", "getAESType")?.toInt()
+    }
+
+    return map.filterValues { it != null }
+  }
+
+  private fun advTypeFromConfigClass(slotCfg: Any): Int {
+    val className = slotCfg.javaClass.simpleName
+    return when {
+      className.contains("IBeacon") -> ADV_TYPE_IBEACON
+      className.contains("EddyUID") -> ADV_TYPE_EDDY_UID
+      className.contains("EddyURL") -> ADV_TYPE_EDDY_URL
+      className.contains("EddyTLM") -> ADV_TYPE_EDDY_TLM
+      className.contains("KSensor") -> ADV_TYPE_SENSOR
+      className.contains("EBeacon") -> ADV_TYPE_EBEACON
+      else -> ADV_TYPE_UNKNOWN
+    }
+  }
+
+  private fun triggerConfigToMap(triggerCfg: Any): Map<String, Any?> {
+    return mapOf(
+      "configType" to "trigger",
+      "triggerIndex" to numberFromMethods(triggerCfg, "getTriggerIndex")?.toInt(),
+      "triggerType" to numberFromMethods(triggerCfg, "getTriggerType")?.toInt(),
+      "triggerAction" to numberFromMethods(triggerCfg, "getTriggerAction")?.toInt(),
+      "triggerAdvSlot" to numberFromMethods(triggerCfg, "getTriggerAdvSlot")?.toInt(),
+      "triggerAdvTime" to numberFromMethods(triggerCfg, "getTriggerAdvTime")?.toInt(),
+      "triggerPara" to numberFromMethods(triggerCfg, "getTriggerPara")?.toInt(),
+      "triggerAdvPeriod" to numberFromMethods(triggerCfg, "getTriggerAdvPeriod")?.toInt(),
+      "triggerTxPower" to numberFromMethods(triggerCfg, "getTriggerAdvTxPower", "getTriggerTxPower")?.toInt(),
+      "triggerAdvChangeMode" to numberFromMethods(triggerCfg, "getTriggerAdvChangeMode")?.toInt(),
+      "accODR" to numberFromMethods(triggerCfg, "getAccODR")?.toInt(),
+      "wakeupDuration" to numberFromMethods(triggerCfg, "getWakeupDuration")?.toInt(),
+      "aboveAngle" to numberFromMethods(triggerCfg, "getAboveAngle")?.toInt(),
+      "reportInterval" to numberFromMethods(triggerCfg, "getReportingInterval", "getReportInterval")?.toInt()
+    ).filterValues { it != null }
+  }
+
+  private fun sensorConfigToMap(sensorCfg: Any): Map<String, Any?> {
+    return mapOf(
+      "configType" to "sensor",
+      "sensorType" to numberFromMethods(sensorCfg, "getSensorType")?.toInt(),
+      "logEnable" to booleanFromMethods(sensorCfg, "isLogEnable", "getLogEnable"),
+      "sensorHtMeasureInterval" to numberFromMethods(sensorCfg, "getSensorHtMeasureInterval")?.toInt(),
+      "humidityChangeThreshold" to numberFromMethods(sensorCfg, "getHumidityChangeThreshold")?.toInt(),
+      "temperatureChangeThreshold" to numberFromMethods(sensorCfg, "getTemperatureChangeThreshold")?.toInt(),
+      "measureInterval" to numberFromMethods(sensorCfg, "getMeasureInterval")?.toInt(),
+      "logChangeThreshold" to numberFromMethods(sensorCfg, "getLogChangeThreshold")?.toInt(),
+      "parkingTag" to booleanFromMethods(sensorCfg, "isParkingTag", "getParkingTag"),
+      "parkingThreshold" to numberFromMethods(sensorCfg, "getParkingThreshold")?.toInt(),
+      "parkingDelay" to numberFromMethods(sensorCfg, "getParkingDelay")?.toInt(),
+      "scanInterval" to numberFromMethods(sensorCfg, "getScanInterval")?.toInt(),
+      "motionScanInterval" to numberFromMethods(sensorCfg, "getMotionScanInterval")?.toInt(),
+      "scanDuration" to numberFromMethods(sensorCfg, "getScanDuration")?.toInt(),
+      "scanModel" to numberFromMethods(sensorCfg, "getScanModel")?.toInt(),
+      "scanRssi" to numberFromMethods(sensorCfg, "getScanRssi")?.toInt(),
+      "scanChanelMask" to numberFromMethods(sensorCfg, "getScanChanelMask")?.toInt(),
+      "scanMax" to numberFromMethods(sensorCfg, "getScanMax")?.toInt(),
+      "scanResultAdvSlot" to numberFromMethods(sensorCfg, "getScanResultAdvSlot")?.toInt(),
+      "logBackoffTime" to numberFromMethods(sensorCfg, "getLogBackoffTime")?.toInt()
+    ).filterValues { it != null }
   }
 
   private fun sendConnectionState(macAddress: String, state: KBConnState, reason: Int) {

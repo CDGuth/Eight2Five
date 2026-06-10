@@ -442,16 +442,9 @@ export interface KBSensorDataInfo {
   readIndex: number;
 }
 
-export enum KBSensorReadOption {
-  NewRecord = 0,
-  NormalOrder = 1,
-  ReverseOrder = 2,
-}
-
 export interface KBSensorRecordRequest {
   sensorType: KBSensorType;
   readPosition?: number;
-  readOption: KBSensorReadOption;
   maxRecords: number;
 }
 
@@ -468,6 +461,5 @@ export interface KBSensorDataRecord {
 }
 
 export interface KBSensorRecordResponse {
-  nextReadPosition?: number;
   records: KBSensorDataRecord[];
 }

@@ -38,10 +38,13 @@ export function createPansBleSource(
   const subscribedDevices = new Set<string>();
 
   return {
-    start() {
-      void startScanning().catch((error) => {
+    async start() {
+      try {
+        await startScanning();
+      } catch (error) {
         options.onError?.(error);
-      });
+        throw error;
+      }
     },
     stop() {
       stopScanning();

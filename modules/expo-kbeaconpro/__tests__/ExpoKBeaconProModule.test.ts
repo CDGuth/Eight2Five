@@ -29,7 +29,6 @@ import {
   KBAdvType,
   KBConnPara,
   KBeaconConfig,
-  KBSensorReadOption,
   KBSensorType,
 } from "../src/ExpoKBeaconPro.types";
 
@@ -85,14 +84,31 @@ jest.mock("expo-modules-core", () => {
     modifyConfig: jest.fn(async () => true),
     readDeviceSnapshot: jest.fn(async () => ({
       macAddress: "AA:BB",
-      slots: [],
+      common: {
+        name: "Field Beacon",
+        model: "K15",
+        version: "1.2.3",
+        maxSlots: 5,
+        supportsEddyUid: true,
+      },
+      slots: [
+        {
+          configType: "advertisement",
+          slotIndex: 0,
+          advType: 2,
+          nid: "0x45696768743246697665",
+          sid: "0x010000000000",
+        },
+      ],
     })),
     readSensorDataInfo: jest.fn(async () => ({
       totalRecordNum: 5,
       unreadRecordNum: 2,
       readIndex: 1,
     })),
-    readSensorRecords: jest.fn(async () => ({ records: [] })),
+    readSensorRecords: jest.fn(async () => ({
+      records: [{ utcTime: 123, raw: [1, 2, 3] }],
+    })),
     clearSensorHistory: jest.fn(async () => true),
     subscribeNotify: jest.fn(async () => true),
     unsubscribeNotify: jest.fn(async () => true),
@@ -353,9 +369,36 @@ describe("ExpoKBeaconProModule", () => {
     test("readDeviceSnapshot returns the native snapshot", async () => {
       await expect(readDeviceSnapshot("AA:BB")).resolves.toEqual({
         macAddress: "AA:BB",
-        slots: [],
+        common: {
+          name: "Field Beacon",
+          model: "K15",
+          version: "1.2.3",
+          maxSlots: 5,
+          supportsEddyUid: true,
+        },
+        slots: [
+          {
+            configType: "advertisement",
+            slotIndex: 0,
+            advType: 2,
+            nid: "0x45696768743246697665",
+            sid: "0x010000000000",
+          },
+        ],
       });
       expect(mockNativeModule.readDeviceSnapshot).toHaveBeenCalledWith("AA:BB");
+    });
+
+    test("readDeviceSnapshot preserves omitted optional fields", async () => {
+      mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
+        macAddress: "AA:BB",
+        slots: [{ configType: "advertisement", slotIndex: 1, advType: 2 }],
+      });
+
+      await expect(readDeviceSnapshot("AA:BB")).resolves.toEqual({
+        macAddress: "AA:BB",
+        slots: [{ configType: "advertisement", slotIndex: 1, advType: 2 }],
+      });
     });
 
     test("readSensorDataInfo returns the native payload", async () => {
@@ -376,7 +419,6 @@ describe("ExpoKBeaconProModule", () => {
       const request = {
         sensorType: KBSensorType.PIR,
         readPosition: 10,
-        readOption: KBSensorReadOption.NormalOrder,
         maxRecords: 50,
       };
 
@@ -392,10 +434,39 @@ describe("ExpoKBeaconProModule", () => {
       await expect(
         readSensorRecords("AA:BB", {
           sensorType: KBSensorType.PIR,
-          readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 0,
         }),
       ).rejects.toThrow("maxRecords");
+    });
+
+    test("readSensorRecords rejects unsupported read options", async () => {
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          readOption: 1,
+          maxRecords: 10,
+        } as never),
+      ).rejects.toThrow("readOption is not supported");
+      expect(mockNativeModule.readSensorRecords).not.toHaveBeenCalled();
+    });
+
+    test("readSensorRecords rejects invalid read positions", async () => {
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          readPosition: -1,
+          maxRecords: 10,
+        }),
+      ).rejects.toThrow("readPosition");
+    });
+
+    test("readSensorRecords preserves raw unknown payload data", async () => {
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          maxRecords: 10,
+        }),
+      ).resolves.toEqual({ records: [{ utcTime: 123, raw: [1, 2, 3] }] });
     });
 
     test("clearSensorHistory delegates to the native bridge", async () => {

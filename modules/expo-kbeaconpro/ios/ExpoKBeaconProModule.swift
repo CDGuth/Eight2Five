@@ -11,7 +11,7 @@ private enum ConfigMappingError: Error {
   case invalid(index: Int)
 }
 
-public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDelegate, KBNotifyDataDelegate {
+public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDelegate, NotifyDataDelegate {
   private var beaconManager: KBeaconsMgr?
   private var discoveredBeacons = [String: KBeacon]()
   private var activeConnections = [String: KBeacon]()
@@ -321,14 +321,12 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
     if state == .Connected {
       activeConnections[macAddress] = beacon
-      beacon.notifyDataDelegate = self
       pendingConnectionPromises.removeValue(forKey: macAddress)?.resolve(true)
       return
     }
 
     if state == .Disconnected || state == .ConnectTimeout {
       activeConnections.removeValue(forKey: macAddress)
-      beacon.notifyDataDelegate = nil
       notificationSubscriptions = notificationSubscriptions.filter { !$0.hasPrefix("\(macAddress):") }
 
       guard let promise = pendingConnectionPromises.removeValue(forKey: macAddress) else {
@@ -345,11 +343,11 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     }
   }
 
-  public func onNotifyData(_ beacon: KBeacon, type: KBNotifyDataType, data: Any) {
+  public func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data) {
     let payload = notifyPayload(data)
     sendEvent("onNotifyDataReceived", [
       "macAddress": normalizedMac(beacon.mac()),
-      "eventType": type.rawValue,
+      "eventType": evt,
       "raw": payload.raw as Any,
       "data": payload.data as Any,
     ])
@@ -440,7 +438,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
       self.pendingConnectionPromises.removeValue(forKey: normalized)?.reject("OPERATION_FAILED", "Connection was cancelled by disconnect")
       self.notificationSubscriptions = self.notificationSubscriptions.filter { !$0.hasPrefix("\(normalized):") }
-      beacon.notifyDataDelegate = nil
       beacon.disconnect()
       promise.resolve(true)
     }
@@ -489,18 +486,18 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
       promise.resolve(self.deviceSnapshot(beacon))
     }
 
-    AsyncFunction("readSensorDataInfo") { (macAddress: String, _: Int, promise: Promise) in
+    AsyncFunction("readSensorDataInfo") { (macAddress: String, sensorType: Int, promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
 
-      beacon.readSensorDataInfo { result, info, err in
+      beacon.readSensorDataInfo(self.nativeSensorType(sensorType)) { result, info, err in
         if result, let info {
           promise.resolve([
-            "totalRecordNum": info.saveNum,
-            "unreadRecordNum": info.unreadNum,
-            "readIndex": info.readNextPos,
+            "totalRecordNum": info.totalRecordNumber,
+            "unreadRecordNum": info.unreadRecordNumber,
+            "readIndex": 0,
           ])
         } else {
-          promise.reject("READ_FAILED", "Failed to read sensor data info. Error: \(err.rawValue)")
+          promise.reject("READ_FAILED", "Failed to read sensor data info. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
@@ -511,30 +508,38 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         promise.reject("INVALID_ARGUMENT", "Invalid sensor record request")
         return
       }
-      let sensorType = request["sensorType"] as? Int
-      let readPosition = request["readPosition"] as? Int
+      guard let sensorType = request["sensorType"] as? Int else {
+        promise.reject("INVALID_ARGUMENT", "Invalid sensor record request")
+        return
+      }
+      let readPosition = UInt32(request["readPosition"] as? Int ?? 0)
 
-      beacon.readSensorHistory(maxRecord: maxRecords) { result, records, err in
+      beacon.readSensorRecord(
+        self.nativeSensorType(sensorType),
+        number: readPosition,
+        option: KBSensorReadOption.NormalOrder,
+        max: maxRecords
+      ) { result, recordRsp, err in
         if result {
-          let recordDicts = (records ?? []).map { self.sensorRecordToDict($0, sensorType: sensorType) }
+          let records = recordRsp?.readDataRspList ?? []
+          let recordDicts = records.map { self.sensorRecordToDict($0, sensorType: sensorType) }
           promise.resolve([
-            "nextReadPosition": (readPosition ?? 0) + recordDicts.count,
             "records": recordDicts,
           ])
         } else {
-          promise.reject("READ_FAILED", "Failed to read sensor records. Error: \(err.rawValue)")
+          promise.reject("READ_FAILED", "Failed to read sensor records. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
 
-    AsyncFunction("clearSensorHistory") { (macAddress: String, _: Int, promise: Promise) in
+    AsyncFunction("clearSensorHistory") { (macAddress: String, sensorType: Int, promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
 
-      beacon.clearSensorHistoryData { result, err in
+      beacon.clearSensorRecord(self.nativeSensorType(sensorType)) { result, _, err in
         if result {
           promise.resolve(true)
         } else {
-          promise.reject("OPERATION_FAILED", "Failed to clear sensor history. Error: \(err.rawValue)")
+          promise.reject("OPERATION_FAILED", "Failed to clear sensor history. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
@@ -542,13 +547,13 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     AsyncFunction("subscribeNotify") { (macAddress: String, eventType: Int?, promise: Promise) in
       let normalized = self.normalizedMac(macAddress)
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
-      beacon.notifyDataDelegate = self
-      beacon.subscribeSensorDataNotify { result, err in
+      let notifyEventType = eventType ?? 0
+      beacon.subscribeSensorDataNotify(notifyEventType, notifyDelegate: self) { result, err in
         if result {
-          self.notificationSubscriptions.insert("\(normalized):\(eventType ?? 0)")
+          self.notificationSubscriptions.insert("\(normalized):\(notifyEventType)")
           promise.resolve(true)
         } else {
-          promise.reject("SUBSCRIBE_FAILED", "Failed to subscribe to notifications. Error: \(err.rawValue)")
+          promise.reject("SUBSCRIBE_FAILED", "Failed to subscribe to notifications. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
@@ -556,12 +561,13 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     AsyncFunction("unsubscribeNotify") { (macAddress: String, eventType: Int?, promise: Promise) in
       let normalized = self.normalizedMac(macAddress)
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
-      beacon.unsubscribeSensorDataNotify { result, err in
+      let notifyEventType = eventType ?? 0
+      beacon.removeSubscribeSensorDataNotify(notifyEventType) { result, err in
         if result {
-          self.notificationSubscriptions.remove("\(normalized):\(eventType ?? 0)")
+          self.notificationSubscriptions.remove("\(normalized):\(notifyEventType)")
           promise.resolve(true)
         } else {
-          promise.reject("UNSUBSCRIBE_FAILED", "Failed to unsubscribe from notifications. Error: \(err.rawValue)")
+          promise.reject("UNSUBSCRIBE_FAILED", "Failed to unsubscribe from notifications. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
@@ -637,7 +643,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     beaconManager?.delegate = nil
 
     activeConnections.values.forEach { beacon in
-      beacon.notifyDataDelegate = nil
       beacon.disconnect()
     }
 
@@ -710,27 +715,191 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     ]
   }
 
+  private func nativeSensorType(_ sensorType: Int) -> Int {
+    switch sensorType {
+    case 1: return KBSensorType.HTHumidity
+    case 2: return KBSensorType.PIR
+    case 3: return KBSensorType.Light
+    case 4: return KBSensorType.VOC
+    case 5: return KBSensorType.GEO
+    case 6: return KBSensorType.SCAN
+    case 7: return KBSensorType.Alarm
+    default: return sensorType
+    }
+  }
+
   private func deviceSnapshot(_ beacon: KBeacon) -> [String: Any] {
+    var snapshot: [String: Any] = ["macAddress": normalizedMac(beacon.mac())]
+
+    if let commonCfg = beacon.getCommonCfg() {
+      snapshot["common"] = commonConfigToDict(commonCfg)
+    }
+
+    if let slotCfgList = beacon.getSlotCfgList() {
+      snapshot["slots"] = slotCfgList.map(slotConfigToDict)
+    }
+
+    if let triggerCfgList = beacon.getTriggerCfgList() {
+      snapshot["triggers"] = triggerCfgList.map(triggerConfigToDict)
+    }
+
+    if let sensorCfgList = beacon.getSensorCfgList() {
+      snapshot["sensors"] = sensorCfgList.map(sensorConfigToDict)
+    }
+
+    return snapshot
+  }
+
+  private func commonConfigToDict(_ commonCfg: KBCfgCommon) -> [String: Any] {
     [
-      "macAddress": normalizedMac(beacon.mac()),
-      "common": [
-        "name": beacon.name(),
-      ],
-      "slots": [],
+      "name": commonCfg.getName() as Any,
+      "model": commonCfg.getModel() as Any,
+      "version": commonCfg.getVersion() as Any,
+      "hardwareVersion": commonCfg.getHardwareVersion() as Any,
+      "maxSlots": commonCfg.getMaxSlot(),
+      "maxTriggers": commonCfg.getMaxTrigger(),
+      "minTxPower": commonCfg.getMinTxPower(),
+      "maxTxPower": commonCfg.getMaxTxPower(),
+      "supportsIBeacon": commonCfg.isSupportIBeacon(),
+      "supportsEddyUid": commonCfg.isSupportEddyUID(),
+      "supportsEddyUrl": commonCfg.isSupportEddyURL(),
+      "supportsEddyTlm": commonCfg.isSupportEddyTLM(),
+      "supportsSensorAdvertisement": commonCfg.isSupportKBSensor(),
+      "supportsSystemAdvertisement": commonCfg.isSupportKBSystem(),
+      "supportsButton": commonCfg.isSupportButton(),
+      "supportsBeep": commonCfg.isSupportBeep(),
+      "supportsAccelerometer": commonCfg.isSupportAccSensor(),
+      "supportsHumidity": commonCfg.isSupportHumiditySensor(),
+      "supportsPir": commonCfg.isSupportPIRSensor(),
+      "supportsLight": commonCfg.isSupportLightSensor(),
+    ].filter { !isNil($0.value) }
+  }
+
+  private func slotConfigToDict(_ slotCfg: KBCfgAdvBase) -> [String: Any] {
+    var dict: [String: Any?] = [
+      "configType": "advertisement",
+      "slotIndex": slotCfg.getSlotIndex(),
+      "advType": slotCfg.getAdvType(),
+      "txPower": slotCfg.getTxPower(),
+      "advPeriod": slotCfg.getAdvPeriod(),
+      "advMode": slotCfg.getAdvMode(),
+      "advTriggerOnly": slotCfg.isAdvTriggerOnly(),
+      "advConnectable": slotCfg.isAdvConnectable(),
     ]
+
+    if let iBeaconCfg = slotCfg as? KBCfgAdvIBeacon {
+      dict["uuid"] = iBeaconCfg.getUuid()
+      dict["majorID"] = iBeaconCfg.getMajorID()
+      dict["minorID"] = iBeaconCfg.getMinorID()
+    } else if let uidCfg = slotCfg as? KBCfgAdvEddyUID {
+      dict["nid"] = normalizeHexString(uidCfg.getNid())
+      dict["sid"] = normalizeHexString(uidCfg.getSid())
+    } else if let urlCfg = slotCfg as? KBCfgAdvEddyURL {
+      dict["url"] = urlCfg.getUrl()
+    } else if let sensorCfg = slotCfg as? KBCfgAdvKSensor {
+      dict["aesType"] = sensorCfg.getAesType()
+    } else if let eBeaconCfg = slotCfg as? KBCfgAdvEBeacon {
+      dict["uuid"] = eBeaconCfg.getUuid()
+      dict["encryptInterval"] = eBeaconCfg.getEncryptInterval()
+      dict["aesType"] = eBeaconCfg.getAESType()
+    }
+
+    return dict.filter { !isNil($0.value) }.mapValues { $0 as Any }
+  }
+
+  private func triggerConfigToDict(_ triggerCfg: KBCfgTrigger) -> [String: Any] {
+    var dict: [String: Any?] = [
+      "configType": "trigger",
+      "triggerIndex": triggerCfg.getTriggerIndex(),
+      "triggerType": triggerCfg.getTriggerType(),
+      "triggerAction": triggerCfg.getTriggerAction(),
+      "triggerAdvSlot": triggerCfg.getTriggerAdvSlot(),
+      "triggerAdvTime": triggerCfg.getTriggerAdvTime(),
+      "triggerPara": triggerCfg.getTriggerPara(),
+      "triggerAdvPeriod": triggerCfg.getTriggerAdvPeriod(),
+      "triggerTxPower": triggerCfg.getTriggerAdvTxPower(),
+      "triggerAdvChangeMode": triggerCfg.getTriggerAdvChangeMode(),
+    ]
+
+    if let motionCfg = triggerCfg as? KBCfgTriggerMotion {
+      dict["accODR"] = motionCfg.getAccODR()
+      dict["wakeupDuration"] = motionCfg.getWakeupDuration()
+    } else if let angleCfg = triggerCfg as? KBCfgTriggerAngle {
+      dict["aboveAngle"] = angleCfg.getAboveAngle()
+      dict["reportInterval"] = angleCfg.getReportingInterval()
+    }
+
+    return dict.filter { !isNil($0.value) }.mapValues { $0 as Any }
+  }
+
+  private func sensorConfigToDict(_ sensorCfg: KBCfgSensorBase) -> [String: Any] {
+    var dict: [String: Any?] = [
+      "configType": "sensor",
+      "sensorType": sensorCfg.getSensorType(),
+    ]
+
+    if let htCfg = sensorCfg as? KBCfgSensorHT {
+      dict["logEnable"] = htCfg.getLogEnable()
+      dict["sensorHtMeasureInterval"] = htCfg.getMeasureInterval()
+      dict["humidityChangeThreshold"] = htCfg.getHumidityLogThreshold()
+      dict["temperatureChangeThreshold"] = htCfg.getTemperatureLogThreshold()
+    } else if let lightCfg = sensorCfg as? KBCfgSensorLight {
+      dict["logEnable"] = lightCfg.getLogEnable()
+      dict["measureInterval"] = lightCfg.getMeasureInterval()
+      dict["logChangeThreshold"] = lightCfg.getLogChangeThreshold()
+    } else if let geoCfg = sensorCfg as? KBCfgSensorGEO {
+      dict["parkingTag"] = geoCfg.isParkingTaged()
+      dict["parkingThreshold"] = geoCfg.getParkingThreshold()
+      dict["parkingDelay"] = geoCfg.getParkingDelay()
+    } else if let scanCfg = sensorCfg as? KBCfgSensorScan {
+      dict["scanInterval"] = scanCfg.getScanInterval()
+      dict["motionScanInterval"] = scanCfg.getMotionScanInterval()
+      dict["scanDuration"] = scanCfg.getScanDuration()
+      dict["scanModel"] = scanCfg.getScanModel()
+      dict["scanRssi"] = scanCfg.getScanRssi()
+      dict["scanChanelMask"] = scanCfg.getScanChanelMask()
+      dict["scanMax"] = scanCfg.getScanMax()
+      dict["scanResultAdvSlot"] = scanCfg.getScanResultAdvSlot()
+    } else if let pirCfg = sensorCfg as? KBCfgSensorPIR {
+      dict["logEnable"] = pirCfg.getLogEnable()
+      dict["measureInterval"] = pirCfg.getMeasureInterval()
+      dict["logBackoffTime"] = pirCfg.getLogBackoffTime()
+    }
+
+    return dict.filter { !isNil($0.value) }.mapValues { $0 as Any }
   }
 
   private func sensorRecordToDict(_ record: Any, sensorType: Int?) -> [String: Any?] {
-    if let sensorRecord = record as? KBSensorDataMsg {
+    if let humidityRecord = record as? KBRecordHumidity {
       return [
-        "utcTime": sensorRecord.utcTime,
+        "utcTime": humidityRecord.utcTime,
         "sensorType": sensorType as Any,
-        "raw": sensorRecord.raw,
-        "temperature": sensorRecord.temperature,
-        "humidity": sensorRecord.humidity,
-        "luxValue": sensorRecord.luxValue,
-        "pirIndication": sensorRecord.pirIndication,
-        "alarmStatus": sensorRecord.alarmStatus,
+        "temperature": humidityRecord.temperature,
+        "humidity": humidityRecord.humidity,
+      ].filter { !isNil($0.value) }
+    }
+
+    if let lightRecord = record as? KBRecordLight {
+      return [
+        "utcTime": lightRecord.utcTime,
+        "sensorType": sensorType as Any,
+        "luxValue": lightRecord.lightLevel,
+      ].filter { !isNil($0.value) }
+    }
+
+    if let pirRecord = record as? KBRecordPIR {
+      return [
+        "utcTime": pirRecord.utcTime,
+        "sensorType": sensorType as Any,
+        "pirIndication": pirRecord.pirIndication,
+      ].filter { !isNil($0.value) }
+    }
+
+    if let alarmRecord = record as? KBRecordAlarm {
+      return [
+        "utcTime": alarmRecord.utcTime,
+        "sensorType": sensorType as Any,
+        "alarmStatus": alarmRecord.alarmStatus,
       ].filter { !isNil($0.value) }
     }
 
@@ -752,10 +921,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
     if let numberArray = data as? [NSNumber] {
       return (numberArray.map { $0.intValue }, nil)
-    }
-
-    if let sensorData = data as? KBSensorDataMsg {
-      return (sensorData.raw, sensorRecordToDict(sensorData, sensorType: nil) as? [String: Any])
     }
 
     if let dict = data as? [String: Any] {

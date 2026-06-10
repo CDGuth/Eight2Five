@@ -235,8 +235,9 @@ describe("PansBleSource", () => {
     const error = new Error("Bluetooth disabled");
     pans.startScanning.mockRejectedValueOnce(error);
 
-    createPansBleSource({ onError }).start();
-    await flushPromises();
+    await expect(createPansBleSource({ onError }).start()).rejects.toThrow(
+      "Bluetooth disabled",
+    );
 
     expect(onError).toHaveBeenCalledWith(error);
   });

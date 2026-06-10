@@ -9,6 +9,7 @@ import {
   KBAdvType,
 } from "expo-kbeaconpro";
 import { BeaconSource } from "../../providers";
+import { startScanning as startPansScanning } from "expo-pans-ble-api";
 
 let mockListener: ((event: { beacons: any[] }) => void) | null = null;
 
@@ -101,16 +102,24 @@ type RenderCallback = (map: Map<string, BeaconState>) => void;
 
 function TestHarness({
   onRender,
+  onStartupError,
   source,
+  sourceKind = "kbeacon",
 }: {
   onRender: RenderCallback;
+  onStartupError?: (error: unknown) => void;
   source?: BeaconSource;
+  sourceKind?: "auto" | "kbeacon" | "pans-ble";
 }) {
-  const { beacons } = useBeaconScanner({ source, sourceKind: "kbeacon" });
+  const { beacons, startupError } = useBeaconScanner({ source, sourceKind });
 
   useEffect(() => {
     onRender(beacons);
   }, [beacons, onRender]);
+
+  useEffect(() => {
+    if (startupError) onStartupError?.(startupError);
+  }, [onStartupError, startupError]);
 
   return null;
 }
@@ -119,6 +128,8 @@ describe("useBeaconScanner", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    (startScanning as jest.Mock).mockResolvedValue(undefined);
+    (startPansScanning as jest.Mock).mockResolvedValue(undefined);
     mockListener = null;
     mockRemove.mockClear();
   });
@@ -207,6 +218,67 @@ describe("useBeaconScanner", () => {
       renderer!.unmount();
     });
     consoleSpy.mockRestore();
+  });
+
+  it("surfaces rejected auto source startup when all providers fail", async () => {
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+    const startupErrors: unknown[] = [];
+    (startScanning as jest.Mock).mockRejectedValueOnce(
+      new Error("kbeacon failed"),
+    );
+    (startPansScanning as jest.Mock).mockRejectedValueOnce(
+      new Error("pans failed"),
+    );
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TestHarness
+          onRender={() => {}}
+          onStartupError={(error) => startupErrors.push(error)}
+          sourceKind="auto"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(startupErrors).toHaveLength(1);
+    expect(startupErrors[0]).toEqual(expect.any(Error));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Failed to start scanning:",
+      expect.any(Error),
+    );
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+    consoleSpy.mockRestore();
+  });
+
+  it("does not surface an auto startup error when one provider starts", async () => {
+    const startupErrors: unknown[] = [];
+    (startScanning as jest.Mock).mockRejectedValueOnce(
+      new Error("kbeacon failed"),
+    );
+    (startPansScanning as jest.Mock).mockResolvedValueOnce(undefined);
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TestHarness
+          onRender={() => {}}
+          onStartupError={(error) => startupErrors.push(error)}
+          sourceKind="auto"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(startupErrors).toHaveLength(0);
+
+    await act(async () => {
+      renderer!.unmount();
+    });
   });
 
   it("updates beacon map when discovery events fire", async () => {

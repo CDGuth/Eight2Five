@@ -5,6 +5,10 @@ import { BeaconSource, BeaconSourceKind } from "./types";
 
 export interface BeaconSourceFactoryOptions {
   pans?: PansBleSourceOptions;
+  onError?: (
+    error: unknown,
+    sourceKind: Exclude<BeaconSourceKind, "auto">,
+  ) => void;
 }
 
 export function createBeaconSource(

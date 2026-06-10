@@ -25,8 +25,10 @@ jest.mock("expo-kbeaconpro", () => ({
   modifyConfig: jest.fn(async () => true),
   readDeviceSnapshot: jest.fn(async () => ({
     macAddress: "AA:BB",
+    common: { supportsEddyUid: true, maxSlots: 2 },
     slots: [],
   })),
+  connectEnhanced: jest.fn(async () => true),
   disconnect: jest.fn(async () => true),
 }));
 
@@ -305,5 +307,89 @@ describe("generateBeaconConfig", () => {
 
     expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
     expect(mockTransport.disconnect).toHaveBeenCalledWith("AA:BB:CC:DD:EE:FF");
+  });
+
+  it("rejects snapshots missing Eddystone UID capability metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("Eddystone UID capability metadata");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects snapshots missing maxSlots metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not include maxSlots");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects snapshots that report no Eddystone UID support", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: false, maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not report Eddystone UID support");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@ Expo native module wrapper for KKM KBeaconPro BLE devices used by Eight2Five fie
 
 ## Config plugin behavior
 
-The config plugin injects foreground BLE permissions only.
+The config plugin injects foreground BLE permissions only and is non-destructive: it adds KBeaconPro requirements but does not remove host-app permissions or usage descriptions owned by other features.
 
 Android:
 
@@ -22,12 +22,33 @@ Android:
 - `android.permission.ACCESS_FINE_LOCATION` with `maxSdkVersion=30`
 - BLE feature declaration: `android.hardware.bluetooth_le` with `required=false`
 
+These are written as `<uses-permission>` entries (`manifest["uses-permission"]` in Expo config-plugin XML form), not `<permission>` declarations.
+
 iOS:
 
 - `NSBluetoothAlwaysUsageDescription`
 - `NSBluetoothPeripheralUsageDescription`
 
-The plugin does not inject iOS location usage text. CoreBluetooth scanning does not require iOS location permission.
+The plugin does not inject iOS location usage text. CoreBluetooth scanning does not require iOS location permission, and any existing `NSLocationWhenInUseUsageDescription` is preserved.
+
+## Implementation status
+
+Implemented:
+
+- Foreground scanning and cached rotating advertisement packet emission.
+- Normalized uppercase MAC output.
+- Eddystone UID `nid`/`sid` parity across Android and iOS.
+- Connection, enhanced connection, and disconnect cleanup.
+- Typed config writes with strict invalid-config rejection.
+- Capability and permission APIs.
+- Bluetooth state and error events.
+- Typed provider integration for the shared mobile scanner.
+
+Partially implemented / requires native validation:
+
+- `readDeviceSnapshot` maps SDK-cached common, slot, trigger, and sensor configuration sections when those sections were loaded by enhanced connect. Missing sections remain omitted rather than fabricated.
+- Sensor history uses the shared fields that are supported by the bridged SDK calls: `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. `readOption` and `nextReadPosition` are not part of the cross-platform contract.
+- Notification subscription accepts an optional `eventType`; Android forwards it to the vendor SDK and iOS now forwards it to `subscribeSensorDataNotify(_:notifyDelegate:callback:)` / `removeSubscribeSensorDataNotify(_:callback:)`.
 
 ## Public API summary
 
@@ -131,19 +152,34 @@ Config writes are strict: if any element is unsupported or malformed, the entire
 }
 ```
 
-After enhanced connect, `readDeviceSnapshot(mac)` returns values available in the vendor SDK cache, including common metadata and available slot/trigger/sensor information when exposed by the SDK.
+After enhanced connect, `readDeviceSnapshot(mac)` returns values available in the vendor SDK cache:
+
+- `common`: name, model/version metadata, slot/trigger limits, tx-power limits, and capability booleans when common parameters were loaded.
+- `slots`: advertisement slot configs when slot parameters were loaded.
+- `triggers`: trigger configs when trigger parameters were loaded.
+- `sensors`: sensor configs when sensor parameters were loaded.
+
+Eight2Five provisioning uses enhanced connect with `readCommPara: true` and `readSlotPara: true`; provisioning rejects snapshots missing required `supportsEddyUid` or `maxSlots` metadata instead of assuming the beacon is compatible.
 
 ## Sensor records and notifications
 
-Use `readSensorRecords(mac, request)` with an explicit sensor type, read option, optional read position, and maximum record count. Unknown or partially modeled payloads preserve `raw` bytes when available.
+Use `readSensorRecords(mac, request)` with an explicit `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. `readOption` is intentionally not accepted because the previous bridge contract did not honor it consistently. `nextReadPosition` is also not exposed by the cross-platform response; callers that need richer cursor semantics should add a platform-specific API after native validation.
+
+`readSensorDataInfo(mac, sensorType)` and `clearSensorHistory(mac, sensorType)` forward the requested sensor type on both platforms. Android uses its native sensor-type values directly; iOS maps the JavaScript enum values to the CocoaPods SDK constants before forwarding.
+
+Unknown or partially modeled sensor payloads preserve `raw` bytes when available. Known fields may include `utcTime`, `sensorType`, `temperature`, `humidity`, `luxValue`, `pirIndication`, and `alarmStatus`.
 
 Use `subscribeNotify` and `unsubscribeNotify` for live notifications. Notification events preserve byte arrays in `raw`, map known sensor record fields into `data`, and emit `data: null` for unsupported payload objects.
+
+## Editor-only iOS stub
+
+`Sources/kbeaconlib2/Stub.swift` exists only to help SourceKit-LSP on development machines that do not have the CocoaPods SDK available. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS build must still be run before release.
 
 ## Deferred scope
 
 DFU is intentionally not implemented in this pass. The vendor SDK ecosystem includes Nordic-based update support, but this module currently reports `supportsDfu: false`.
 
-Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, or PANS BLE changes.
+Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, native Android build validation, native iOS CocoaPods build validation, or PANS BLE changes.
 
 ## Validation
 

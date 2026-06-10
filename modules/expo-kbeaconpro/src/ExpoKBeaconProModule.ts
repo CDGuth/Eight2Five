@@ -241,8 +241,10 @@ function assertValidSensorRecordRequest(
     throw new Error("INVALID_ARGUMENT: request.sensorType is invalid");
   }
 
-  if (typeof request.readOption !== "number" || request.readOption < 0) {
-    throw new Error("INVALID_ARGUMENT: request.readOption is invalid");
+  if ("readOption" in request) {
+    throw new Error(
+      "INVALID_ARGUMENT: request.readOption is not supported by the cross-platform sensor history API",
+    );
   }
 
   assertPositiveInteger("request.maxRecords", request.maxRecords);

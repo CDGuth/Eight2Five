@@ -183,7 +183,11 @@ async function getDefaultTransport(): Promise<BeaconConfigurationTransport> {
   if (cachedTransport) return cachedTransport;
   const nativeModule: NativeBeaconModule = await import("expo-kbeaconpro");
   cachedTransport = {
-    connect: nativeModule.connect,
+    connect: (macAddress, password, timeoutMs) =>
+      nativeModule.connectEnhanced(macAddress, password, timeoutMs, {
+        readCommPara: true,
+        readSlotPara: true,
+      }),
     modifyConfig: nativeModule.modifyConfig,
     readDeviceSnapshot: nativeModule.readDeviceSnapshot,
     disconnect: nativeModule.disconnect,
@@ -412,9 +416,21 @@ export async function applyBeaconConfiguration(
 function validateSnapshotForEight2Five(snapshot: KBeaconDeviceSnapshot): void {
   const common = snapshot.common;
 
+  if (common?.supportsEddyUid === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot for ${snapshot.macAddress} does not include required Eddystone UID capability metadata`,
+    );
+  }
+
   if (common?.supportsEddyUid === false) {
     throw new Error(
       `Beacon ${snapshot.macAddress} does not report Eddystone UID support`,
+    );
+  }
+
+  if (common?.maxSlots === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot for ${snapshot.macAddress} does not include maxSlots`,
     );
   }
 

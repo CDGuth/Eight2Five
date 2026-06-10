@@ -54,12 +54,6 @@ function upsertBleFeature(features) {
   features.push({ $: attributes });
 }
 
-function removePermission(permissions, permissionName) {
-  return permissions.filter(
-    (entry) => entry.$?.["android:name"] !== permissionName,
-  );
-}
-
 /**
  * Config plugin to add the Bluetooth permissions required by KBeaconPro.
  * Host apps remain responsible for any unrelated location or background-scan
@@ -68,24 +62,15 @@ function removePermission(permissions, permissionName) {
 const withKBeaconPro = (config, props = {}) => {
   config = withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
-    let androidPermissions = manifest.permission || [];
+    const androidPermissions = manifest["uses-permission"] || [];
     const androidFeatures = manifest["uses-feature"] || [];
-
-    androidPermissions = removePermission(
-      androidPermissions,
-      "android.permission.ACCESS_COARSE_LOCATION",
-    );
-    androidPermissions = removePermission(
-      androidPermissions,
-      "android.permission.BLUETOOTH_ADVERTISE",
-    );
 
     ANDROID_PERMISSIONS.forEach((permission) => {
       upsertPermission(androidPermissions, permission);
     });
     upsertBleFeature(androidFeatures);
 
-    manifest.permission = androidPermissions;
+    manifest["uses-permission"] = androidPermissions;
     manifest["uses-feature"] = androidFeatures;
     return config;
   });
@@ -99,8 +84,6 @@ const withKBeaconPro = (config, props = {}) => {
       props.bluetoothPeripheralUsageDescription ||
       DEFAULT_BLUETOOTH_USAGE_DESCRIPTION;
 
-    delete config.modResults.NSLocationWhenInUseUsageDescription;
-
     return config;
   });
 
@@ -108,3 +91,9 @@ const withKBeaconPro = (config, props = {}) => {
 };
 
 module.exports = createRunOncePlugin(withKBeaconPro, pkg.name, pkg.version);
+module.exports.withKBeaconPro = withKBeaconPro;
+module.exports._internal = {
+  ANDROID_PERMISSIONS,
+  upsertBleFeature,
+  upsertPermission,
+};
