@@ -89,6 +89,13 @@ const emitter = new EventEmitter<EventMap>(nativeModule as never);
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+const CANONICAL_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_PROXY_POSITION_ENTRIES = 5;
+const MAX_ANCHOR_LIST_ENTRIES = 16;
+const MAX_DISTANCE_ONLY_ENTRIES = 15;
+const MAX_COMBINED_DISTANCE_ENTRIES = 4;
+
 export function addDeviceDiscoveredListener(
   listener: (event: { devices: PansBleDevice[] }) => void,
 ): EventSubscription {
@@ -178,6 +185,7 @@ export async function connect(
   timeoutMs?: number,
 ): Promise<boolean> {
   validateDeviceId(deviceId);
+  validateTimeoutMs(timeoutMs);
   return await nativeModule.connect(deviceId, timeoutMs);
 }
 
@@ -191,6 +199,7 @@ export async function readCharacteristic(
   characteristicUuid: string,
 ): Promise<number[]> {
   validateDeviceId(deviceId);
+  validateCharacteristicUuid(characteristicUuid);
   return validateBytes(
     await nativeModule.readCharacteristic(deviceId, characteristicUuid),
   );
@@ -203,6 +212,7 @@ export async function writeCharacteristic(
   writeType: PansWriteType = "withResponse",
 ): Promise<boolean> {
   validateDeviceId(deviceId);
+  validateCharacteristicUuid(characteristicUuid);
   validateByteArray(payload, "payload");
   validateWriteType(writeType);
   return await nativeModule.writeCharacteristic(
@@ -219,6 +229,7 @@ export async function setCharacteristicNotifications(
   enabled: boolean,
 ): Promise<boolean> {
   validateDeviceId(deviceId);
+  validateCharacteristicUuid(characteristicUuid);
   return await nativeModule.setCharacteristicNotifications(
     deviceId,
     characteristicUuid,
@@ -234,7 +245,11 @@ export async function requestMtu(
   if (!Number.isInteger(mtu) || mtu < 23 || mtu > 517) {
     throw new Error("INVALID_ARGUMENT: MTU must be in range 23..517.");
   }
-  if (!nativeModule.requestMtu) return mtu;
+  if (!nativeModule.requestMtu) {
+    throw new Error(
+      "UNSUPPORTED: explicit MTU requests are not supported on this platform.",
+    );
+  }
   return await nativeModule.requestMtu(deviceId, mtu);
 }
 
@@ -685,6 +700,11 @@ export function decodeLocationData(payload: number[]): PansLocationData {
   if (frameType === 0) {
     if (raw.length >= 14) {
       position = decodePosition(raw, 1);
+      if (raw.length > 14) {
+        diagnostics.push(
+          `unexpected ${raw.length - 14} trailing byte(s) after position frame`,
+        );
+      }
     } else {
       diagnostics.push("position frame is shorter than 14 bytes");
     }
@@ -695,15 +715,25 @@ export function decodeLocationData(payload: number[]): PansLocationData {
   if (frameType === 1) {
     return {
       frameType,
-      distances: decodeDistances(raw, 1, diagnostics),
+      distances: decodeDistances(
+        raw,
+        1,
+        diagnostics,
+        MAX_DISTANCE_ONLY_ENTRIES,
+      ),
       raw,
       diagnostics,
     };
   }
 
   const combinedLayoutIsValid =
-    raw.length >= 15 && isExactDistanceSection(raw, 14);
-  const distanceOnlyFallbackIsValid = isExactDistanceSection(raw, 1);
+    raw.length >= 15 &&
+    isExactDistanceSection(raw, 14, MAX_COMBINED_DISTANCE_ENTRIES);
+  const distanceOnlyFallbackIsValid = isExactDistanceSection(
+    raw,
+    1,
+    MAX_DISTANCE_ONLY_ENTRIES,
+  );
 
   if (combinedLayoutIsValid) {
     position = decodePosition(raw, 1);
@@ -711,7 +741,12 @@ export function decodeLocationData(payload: number[]): PansLocationData {
     return {
       frameType,
       position,
-      distances: decodeDistances(raw, 14, diagnostics),
+      distances: decodeDistances(
+        raw,
+        14,
+        diagnostics,
+        MAX_COMBINED_DISTANCE_ENTRIES,
+      ),
       raw,
       diagnostics,
     };
@@ -720,7 +755,12 @@ export function decodeLocationData(payload: number[]): PansLocationData {
   if (distanceOnlyFallbackIsValid) {
     return {
       frameType,
-      distances: decodeDistances(raw, 1, diagnostics),
+      distances: decodeDistances(
+        raw,
+        1,
+        diagnostics,
+        MAX_DISTANCE_ONLY_ENTRIES,
+      ),
       raw,
       diagnostics,
     };
@@ -737,6 +777,11 @@ export function decodeProxyPositions(payload: number[]): PansProxyPosition[] {
   if (!raw.length) return [];
   const view = dataView(raw);
   const count = raw[0];
+  if (count > MAX_PROXY_POSITION_ENTRIES) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: proxy positions count ${count} exceeds maximum ${MAX_PROXY_POSITION_ENTRIES}.`,
+    );
+  }
   const positions: PansProxyPosition[] = [];
   let index = 1;
   for (let i = 0; i < count; i += 1) {
@@ -750,6 +795,11 @@ export function decodeProxyPositions(payload: number[]): PansProxyPosition[] {
       position: decodePosition(raw, index + 2),
     });
     index += 15;
+  }
+  if (index < raw.length) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: unexpected ${raw.length - index} trailing byte(s) after proxy-position entries.`,
+    );
   }
   return positions;
 }
@@ -789,6 +839,11 @@ export function decodeAnchorList(payload: number[]): PansAnchorList {
   const diagnostics: string[] = [];
   if (!raw.length) return { anchors: [], raw, diagnostics };
   const count = raw[0];
+  if (count > MAX_ANCHOR_LIST_ENTRIES) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: anchor-list count ${count} exceeds maximum ${MAX_ANCHOR_LIST_ENTRIES}.`,
+    );
+  }
   const view = dataView(raw);
   const anchors = [];
   let index = 1;
@@ -802,6 +857,11 @@ export function decodeAnchorList(payload: number[]): PansAnchorList {
       lowNodeId: view.getUint16(index, true),
     });
     index += 8;
+  }
+  if (index < raw.length) {
+    diagnostics.push(
+      `unexpected ${raw.length - index} trailing byte(s) after anchor-list entries`,
+    );
   }
   return { anchors, raw, diagnostics };
 }
@@ -932,10 +992,15 @@ function decodeDistance(payload: number[], offset: number): PansDistance {
   };
 }
 
-function isExactDistanceSection(raw: number[], countOffset: number): boolean {
+function isExactDistanceSection(
+  raw: number[],
+  countOffset: number,
+  maxCount: number,
+): boolean {
   if (countOffset >= raw.length) return false;
 
   const count = raw[countOffset];
+  if (count > maxCount) return false;
   return countOffset + 1 + count * 7 === raw.length;
 }
 
@@ -943,6 +1008,7 @@ function decodeDistances(
   raw: number[],
   countOffset: number,
   diagnostics: string[],
+  maxCount: number,
 ): PansDistance[] {
   if (countOffset >= raw.length) {
     diagnostics.push("distance frame is missing count byte");
@@ -950,6 +1016,11 @@ function decodeDistances(
   }
 
   const count = raw[countOffset];
+  if (count > maxCount) {
+    throw new Error(
+      `MALFORMED_PAYLOAD: distance count ${count} exceeds maximum ${maxCount}.`,
+    );
+  }
   const distances: PansDistance[] = [];
   let index = countOffset + 1;
 
@@ -961,6 +1032,12 @@ function decodeDistances(
 
     distances.push(decodeDistance(raw, index));
     index += 7;
+  }
+
+  if (index < raw.length) {
+    diagnostics.push(
+      `unexpected ${raw.length - index} trailing byte(s) after distance entries`,
+    );
   }
 
   return distances;
@@ -1046,6 +1123,22 @@ function validateWriteType(writeType: PansWriteType): void {
   if (writeType !== "withResponse" && writeType !== "withoutResponse") {
     throw new Error(
       "INVALID_ARGUMENT: write type must be withResponse or withoutResponse.",
+    );
+  }
+}
+
+function validateTimeoutMs(timeoutMs: number | undefined): void {
+  if (timeoutMs === undefined) return;
+
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("INVALID_ARGUMENT: timeoutMs must be a positive integer.");
+  }
+}
+
+function validateCharacteristicUuid(uuid: string): void {
+  if (typeof uuid !== "string" || !CANONICAL_UUID_PATTERN.test(uuid)) {
+    throw new Error(
+      "INVALID_ARGUMENT: characteristicUuid must be a canonical 128-bit UUID string.",
     );
   }
 }

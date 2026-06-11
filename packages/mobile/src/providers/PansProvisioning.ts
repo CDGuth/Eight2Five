@@ -223,6 +223,8 @@ export async function configureAnchorNode(
       ledEnabled: options.ledEnabled,
       firmwareUpdateEnabled: options.firmwareUpdateEnabled,
       initiatorEnabled: options.initiator,
+      lowPowerModeEnabled: false,
+      locationEngineEnabled: false,
     });
 
     if (options.panId !== undefined) {

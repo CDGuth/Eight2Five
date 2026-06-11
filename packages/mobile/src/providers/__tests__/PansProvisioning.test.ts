@@ -95,6 +95,8 @@ describe("PansProvisioning", () => {
       ledEnabled: false,
       firmwareUpdateEnabled: true,
       initiatorEnabled: true,
+      lowPowerModeEnabled: false,
+      locationEngineEnabled: false,
     });
     expect(pans.writeNetworkId).toHaveBeenCalledWith("anchor-1", 0x4567);
     expect(pans.writePersistedPosition).toHaveBeenCalledWith(

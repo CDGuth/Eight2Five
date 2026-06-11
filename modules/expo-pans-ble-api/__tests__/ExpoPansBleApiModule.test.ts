@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   addCharacteristicNotificationListener,
   addDeviceDiscoveredListener,
@@ -30,6 +32,7 @@ import {
   readProxyPositions,
   readStatistics,
   readTagUpdateRate,
+  requestMtu,
   requestExplicitDisconnect,
   startScanning,
   subscribeFirmwareUpdatePoll,
@@ -37,6 +40,7 @@ import {
   subscribeLocationData,
   writeFirmwareUpdateChunk,
   writeFirmwareUpdateOffer,
+  writeCharacteristic,
   writeLabel,
   writeLocationDataMode,
   writeNetworkId,
@@ -261,6 +265,16 @@ describe("PANS BLE codecs", () => {
     expect(overrun.diagnostics[0]).toContain("truncated distance");
   });
 
+  test("reports location-data trailing bytes and rejects excessive distance counts", () => {
+    const trailing = decodeLocationData([
+      1, 1, 0x01, 0x00, 0xe8, 0x03, 0, 0, 80, 0xff,
+    ]);
+    expect(trailing.distances).toHaveLength(1);
+    expect(trailing.diagnostics[0]).toContain("trailing byte");
+
+    expect(() => decodeLocationData([1, 16])).toThrow("exceeds maximum 15");
+  });
+
   test("decodes maximum distance entries", () => {
     const entries = Array.from({ length: 15 }, (_, index) => [
       ...u16(index + 1),
@@ -304,6 +318,12 @@ describe("PANS BLE codecs", () => {
     expect(() => decodeProxyPositions([2, ...entries.slice(0, 15)])).toThrow(
       "truncated proxy-position",
     );
+    expect(() => decodeProxyPositions([6, ...entries])).toThrow(
+      "exceeds maximum 5",
+    );
+    expect(() =>
+      decodeProxyPositions([1, ...entries.slice(0, 15), 0xff]),
+    ).toThrow("trailing byte");
   });
 
   test("decodes device info with fixed-width node ID", () => {
@@ -390,6 +410,9 @@ describe("PANS BLE codecs", () => {
     const truncated = decodeAnchorList([2, ...u64(1), 0xff]);
     expect(truncated.anchors).toHaveLength(1);
     expect(truncated.diagnostics[0]).toContain("truncated anchor-list");
+    expect(() => decodeAnchorList([17])).toThrow("exceeds maximum 16");
+    const trailing = decodeAnchorList([1, ...u64(1), 0xff]);
+    expect(trailing.diagnostics[0]).toContain("trailing byte");
   });
 
   test("encodes and decodes firmware update packets", () => {
@@ -505,6 +528,45 @@ describe("ExpoPansBleApiModule wrapper", () => {
     expect(mockNativeModule.connect).toHaveBeenCalledWith("device-1", 5000);
     expect(mockNativeModule.disconnect).toHaveBeenCalledWith("device-1");
     expect(getCapabilities().transport).toBe("ble");
+  });
+
+  test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid connect timeout %p before native call",
+    async (timeoutMs) => {
+      await expect(connect("device-1", timeoutMs)).rejects.toThrow(
+        "timeoutMs must be a positive integer",
+      );
+      expect(mockNativeModule.connect).not.toHaveBeenCalled();
+    },
+  );
+
+  test("rejects unsupported explicit MTU requests when native method is absent", async () => {
+    const originalRequestMtu = mockNativeModule.requestMtu;
+    try {
+      (mockNativeModule as unknown as { requestMtu?: jest.Mock }).requestMtu =
+        undefined;
+      await expect(requestMtu("device-1", 64)).rejects.toThrow("UNSUPPORTED");
+    } finally {
+      mockNativeModule.requestMtu = originalRequestMtu;
+    }
+  });
+
+  test("validates characteristic UUIDs before native calls", async () => {
+    await expect(
+      writeCharacteristic("device-1", "not-a-uuid", []),
+    ).rejects.toThrow("characteristicUuid");
+    await expect(writeCharacteristic("device-1", "2a00", [])).rejects.toThrow(
+      "canonical 128-bit UUID",
+    );
+    expect(mockNativeModule.writeCharacteristic).not.toHaveBeenCalled();
+
+    await expect(
+      writeCharacteristic(
+        "device-1",
+        PANS_BLE_UUIDS.characteristics.operationMode,
+        [0x40, 0],
+      ),
+    ).resolves.toBe(true);
   });
 
   test("maps typed helpers to documented characteristic UUIDs", async () => {
@@ -743,6 +805,43 @@ describe("ExpoPansBleApiModule wrapper", () => {
     expect(() =>
       encodePersistedPosition({ xMeters: 0, yMeters: 0, quality: 0 }),
     ).toThrow("quality");
+  });
+});
+
+describe("native source hardening regressions", () => {
+  const moduleRoot = join(__dirname, "..");
+  const androidSource = readFileSync(
+    join(
+      moduleRoot,
+      "android/src/main/java/expo/modules/pansbleapi/ExpoPansBleApiModule.kt",
+    ),
+    "utf8",
+  );
+  const iosSource = readFileSync(
+    join(moduleRoot, "ios/ExpoPansBleApiModule.swift"),
+    "utf8",
+  );
+
+  test("Android connectGatt immediate failures use cleanup helper", () => {
+    expect(androidSource).toContain("failImmediateConnect(");
+    expect(androidSource).toContain("connectGatt returned null");
+    expect(androidSource).toContain("connections.remove(deviceId)");
+    expect(androidSource).toContain("mainHandler.removeCallbacks(it)");
+  });
+
+  test("Android permission and notification rollback remain hardened", () => {
+    expect(androidSource).toContain("denied.isNotEmpty()");
+    expect(androidSource).toContain("rollbackLocalNotificationState");
+    expect(androidSource).toContain("activeNotifyPreviousLocalState");
+  });
+
+  test("iOS snapshots bulk closes and defers scan promises", () => {
+    expect(iosSource).toContain("Array(self.connections.keys).forEach");
+    expect(iosSource).toContain("private var pendingScanPromise: Promise?");
+    expect(iosSource).toContain("A scan start is already pending");
+    expect(iosSource).toContain(
+      'closeAllConnections(reason: "bluetooth unavailable")',
+    );
   });
 });
 
