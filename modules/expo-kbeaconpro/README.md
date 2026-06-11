@@ -9,6 +9,20 @@ Expo native module wrapper for KKM KBeaconPro BLE devices used by Eight2Five fie
 - Android SDK dependency: `com.kkmcn.kbeaconlib2:kbeaconlib2:1.3.3`.
 - iOS CocoaPods dependency: `kbeaconlib2 1.2.1`.
 
+## Native dependency pins
+
+Android:
+
+```text
+com.kkmcn.kbeaconlib2:kbeaconlib2:1.3.3
+```
+
+iOS:
+
+```text
+kbeaconlib2 1.2.1
+```
+
 ## Config plugin behavior
 
 The config plugin injects foreground BLE permissions only and is non-destructive: it adds KBeaconPro requirements but does not remove host-app permissions or usage descriptions owned by other features.
@@ -47,8 +61,8 @@ Implemented:
 Partially implemented / requires native validation:
 
 - `readDeviceSnapshot` maps SDK-cached common, slot, trigger, and sensor configuration sections when those sections were loaded by enhanced connect. Missing sections remain omitted rather than fabricated.
-- Sensor history uses the shared fields that are supported by the bridged SDK calls: `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. `readOption` and `nextReadPosition` are not part of the cross-platform contract.
-- Notification subscription accepts an optional `eventType`; Android forwards it to the vendor SDK and iOS now forwards it to `subscribeSensorDataNotify(_:notifyDelegate:callback:)` / `removeSubscribeSensorDataNotify(_:callback:)`.
+- Sensor history uses the shared fields that are supported by the pinned SDK calls: `sensorType`, optional `readPosition`, required `readOption`, positive `maxRecords`, and optional `nextReadPosition`.
+- Notification subscription requires an explicit `eventType`; Android forwards it to the vendor SDK and iOS forwards it to `subscribeSensorDataNotify(_:notifyDelegate:callback:)` / `removeSubscribeSensorDataNotify(_:callback:)`.
 
 ## Public API summary
 
@@ -59,7 +73,7 @@ Partially implemented / requires native validation:
 - Configuration: `modifyConfig(mac, configs, options?)`.
 - Snapshot: `readDeviceSnapshot(mac)`.
 - Sensor records: `readSensorDataInfo(mac, sensorType)`, `readSensorRecords(mac, request)`, `clearSensorHistory(mac, sensorType)`.
-- Notifications: `subscribeNotify(mac, eventType?)`, `unsubscribeNotify(mac, eventType?)`.
+- Notifications: `subscribeNotify(mac, eventType)`, `unsubscribeNotify(mac, eventType)`.
 - Compatibility notification wrappers are retained: `subscribeSensorDataNotify`, `unsubscribeSensorDataNotify`.
 
 Timeout values are always milliseconds. The default is `15000` ms.
@@ -165,19 +179,46 @@ Eight2Five provisioning uses enhanced connect with `readCommPara: true` and `rea
 
 ## Sensor records and notifications
 
-Use `readSensorRecords(mac, request)` with an explicit `sensorType`, optional non-negative `readPosition`, and positive `maxRecords`. When `readPosition` is omitted, the bridge reads forward starting from position 0. Negative `readPosition` values are rejected by both the TypeScript wrapper and the native iOS bridge. `readOption` is intentionally not accepted because the previous bridge contract did not honor it consistently. `nextReadPosition` is also not exposed by the cross-platform response; callers that need richer cursor semantics should add a platform-specific API after native validation.
+`readSensorDataInfo(mac, sensorType)` returns:
 
-`readSensorDataInfo(mac, sensorType)` returns `totalRecordNum` and `unreadRecordNum` on both platforms. The `readIndex` field is **optional and platform-dependent**: Android may provide an SDK-derived `readIndex`; iOS omits `readIndex` when the SDK does not expose it. Callers must not assume `readIndex` is always present.
+- `sensorType` when exposed by the native SDK.
+- `totalRecordNum`.
+- `unreadRecordNum`.
+- `readInfoUtcSeconds` when exposed by the native SDK.
+
+It does not return `readIndex`.
+
+Use `readSensorRecords(mac, request)` with:
+
+- `sensorType`.
+- `readOption`.
+- `maxRecords`.
+
+`readPosition` is optional. When omitted, the native bridge uses the SDK invalid-position sentinel, `INVALID_DATA_RECORD_POS` (`4294967295`), instead of defaulting to `0`.
+
+Read options:
+
+- `NormalOrder = 0`.
+- `ReverseOrder = 1`.
+- `NewRecord = 2`.
+
+`nextReadPosition` is omitted when the native SDK returns `INVALID_DATA_RECORD_POS`, which means the requested read is complete.
 
 `clearSensorHistory(mac, sensorType)` forwards the requested sensor type on both platforms. Android uses its native sensor-type values directly; iOS maps the JavaScript enum values to the CocoaPods SDK constants before forwarding.
 
 Unknown or partially modeled sensor payloads preserve `raw` bytes when available. Known fields may include `utcTime`, `sensorType`, `temperature`, `humidity`, `luxValue`, `pirIndication`, and `alarmStatus`.
 
-Use `subscribeNotify` and `unsubscribeNotify` for live notifications. Notification events preserve byte arrays in `raw`, map known sensor record fields into `data`, and emit `data: null` for unsupported payload objects.
+Use `subscribeNotify` and `unsubscribeNotify` for live notifications. Both methods require an explicit `eventType` on both platforms. Notification events preserve byte arrays in `raw`, map known sensor record fields into `data`, and emit `data: null` for unsupported payload objects.
+
+Android's vendor SDK also supports passing `null` to subscribe to all notifications, but that platform-specific behavior is intentionally not overloaded into the cross-platform API. If needed later, expose it separately (for example, `subscribeAllNotificationsAndroid(...)`).
 
 ## Editor-only iOS stub
 
-`Sources/kbeaconlib2/Stub.swift` exists only to help SourceKit-LSP on development machines that do not have the CocoaPods SDK available. The stub mirrors only real APIs used by production Swift code and must not be used as the source of truth for production API signatures. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS CocoaPods build **must** be run before release to verify that all protocol conformances, callback signatures, and SDK method calls compile against the real pod.
+`Sources/kbeaconlib2/Stub.swift` is editor-only.
+
+Production iOS code is written against the CocoaPods `kbeaconlib2` `1.2.1` API.
+
+The stub must mirror the pod after production Swift is updated, never the other way around. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS CocoaPods build **must** be run before release to verify that all protocol conformances, callback signatures, and SDK method calls compile against the real pod.
 
 ## Deferred scope
 

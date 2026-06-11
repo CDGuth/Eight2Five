@@ -34,7 +34,9 @@ import com.kkmcn.kbeaconlib2.KBCfgPackage.KBCfgTriggerAngle
 import com.kkmcn.kbeaconlib2.KBCfgPackage.KBCfgTriggerMotion
 import com.kkmcn.kbeaconlib2.KBConnPara
 import com.kkmcn.kbeaconlib2.KBConnState
-import com.kkmcn.kbeaconlib2.KBScanProcessMgr
+import com.kkmcn.kbeaconlib2.KBConnectionEvent
+import com.kkmcn.kbeaconlib2.KBSensorHistoryData.KBRecordDataRsp
+import com.kkmcn.kbeaconlib2.KBSensorHistoryData.KBSensorReadOption
 import com.kkmcn.kbeaconlib2.KBeacon
 import com.kkmcn.kbeaconlib2.KBeaconsMgr
 import expo.modules.interfaces.permissions.PermissionsResponse
@@ -54,8 +56,7 @@ private const val ADV_TYPE_EDDY_URL = 3
 private const val ADV_TYPE_SENSOR = 4
 private const val ADV_TYPE_EBEACON = 6
 private const val ADV_TYPE_UNKNOWN = 255
-private const val CONN_REASON_TIMEOUT = 2
-private const val CONN_REASON_AUTH_FAILED = 3
+private const val MAX_SENSOR_RECORD_POSITION = 0xffffffffL
 
 class ExpoKBeaconProModule : Module() {
   private var beaconManager: KBeaconsMgr? = null
@@ -64,6 +65,7 @@ class ExpoKBeaconProModule : Module() {
   private val activeConnections = mutableMapOf<String, KBeacon>()
   private val pendingConnectionPromises = mutableMapOf<String, Promise>()
   private val notificationSubscriptions = mutableSetOf<String>()
+  private val notificationDelegates = mutableMapOf<String, KBeacon.NotifyDataDelegate>()
 
   override fun definition() = ModuleDefinition {
     Name("ExpoKBeaconPro")
@@ -80,8 +82,8 @@ class ExpoKBeaconProModule : Module() {
       isDestroyed = false
       val context = appContext.reactContext ?: return@OnCreate
       beaconManager = KBeaconsMgr.sharedBeaconManager(context)
-      beaconManager?.delegate = object : KBScanProcessMgr.KBScanProcessDelegate {
-        override fun onBeaconDiscovered(beacons: ArrayList<KBeacon>?) {
+      beaconManager?.delegate = object : KBeaconsMgr.KBeaconMgrDelegate {
+        override fun onBeaconDiscovered(beacons: Array<KBeacon>?) {
           val beaconData = beacons?.map { beacon ->
             val mac = normalizedMac(beacon.mac)
             discoveredBeacons[mac] = beacon
@@ -91,10 +93,20 @@ class ExpoKBeaconProModule : Module() {
           sendEvent("onBeaconDiscovered", mapOf("beacons" to beaconData))
         }
 
-        override fun onCentralBleStateChange(newState: Int) {
+        override fun onCentralBleStateChang(newState: Int) {
           sendEvent(
             "onBluetoothStateChanged",
             mapOf("state" to androidBleStateToString(newState))
+          )
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+          sendEvent(
+            "onError",
+            mapOf(
+              "code" to "SCAN_FAILED",
+              "message" to "KBeacon scan failed with code $errorCode"
+            )
           )
         }
       }
@@ -185,6 +197,7 @@ class ExpoKBeaconProModule : Module() {
         "Connection was cancelled by disconnect",
         null
       )
+      notificationDelegates.keys.removeAll { it.startsWith("$normalized:") }
       notificationSubscriptions.removeAll { it.startsWith("$normalized:") }
 
       if (beacon == null) {
@@ -241,48 +254,86 @@ class ExpoKBeaconProModule : Module() {
 
     AsyncFunction("readSensorDataInfo") { macAddress: String, sensorType: Int, promise: Promise ->
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
-      beacon.readSensorDataInfo(sensorType) { success, dataInfo, exception ->
-        if (success) {
-          promise.resolve(
-            mapOf(
-              "totalRecordNum" to (dataInfo?.totalRecordNum ?: 0),
-              "unreadRecordNum" to (dataInfo?.unreadRecordNum ?: 0),
-              "readIndex" to (dataInfo?.readIndex ?: 0)
-            )
+      beacon.readSensorDataInfo(sensorType) { success, info, exception ->
+        if (!success || info == null) {
+          promise.reject(
+            "READ_FAILED",
+            exception?.description ?: "Failed to read sensor data info",
+            null
           )
-        } else {
-          promise.reject("READ_FAILED", exception?.description ?: "Failed to read sensor data info", null)
+          return@readSensorDataInfo
         }
+
+        val payload = mutableMapOf<String, Any>(
+          "totalRecordNum" to (info.totalRecordNumber ?: 0),
+          "unreadRecordNum" to (info.unreadRecordNumber ?: 0)
+        )
+        info.sensorType?.let { payload["sensorType"] = it }
+        info.readInfoUtcSeconds?.let { payload["readInfoUtcSeconds"] = it }
+
+        promise.resolve(payload)
       }
     }
 
     AsyncFunction("readSensorRecords") { macAddress: String, request: Map<String, Any?>, promise: Promise ->
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
-      val sensorType = numberValue(request, "sensorType")?.toInt()
-      val maxRecords = numberValue(request, "maxRecords")?.toInt()
-      val readPosition = numberValue(request, "readPosition")?.toInt() ?: 0
-      if (sensorType == null || maxRecords == null || maxRecords <= 0 || readPosition < 0) {
-        promise.reject("INVALID_ARGUMENT", "Invalid sensor record request", null)
+      val sensorType = integerLongValue(request, "sensorType")?.toInt()
+      if (sensorType == null || !isSupportedSensorType(sensorType)) {
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid", null)
         return@AsyncFunction
       }
 
-      beacon.readSensorHistory(sensorType, maxRecords, readPosition) { success, data, exception ->
-        if (success) {
-          val records = data?.map { record -> sensorRecordToMap(record, sensorType) } ?: emptyList()
-          promise.resolve(
-            mapOf(
-              "records" to records
-            )
+      val readOption = integerLongValue(request, "readOption")?.toInt()
+      if (readOption == null) {
+        promise.reject("INVALID_ARGUMENT", "readOption is required", null)
+        return@AsyncFunction
+      }
+      if (!isSupportedReadOption(readOption)) {
+        promise.reject("INVALID_ARGUMENT", "readOption must be 0, 1, or 2", null)
+        return@AsyncFunction
+      }
+
+      val maxRecords = integerLongValue(request, "maxRecords")?.toInt()
+      if (maxRecords == null || maxRecords <= 0) {
+        promise.reject("INVALID_ARGUMENT", "maxRecords must be a positive integer", null)
+        return@AsyncFunction
+      }
+
+      val readPosition = integerLongValue(request, "readPosition")
+        ?: KBRecordDataRsp.INVALID_DATA_RECORD_POS
+      if (readPosition < 0 || readPosition > MAX_SENSOR_RECORD_POSITION) {
+        promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295", null)
+        return@AsyncFunction
+      }
+
+      beacon.readSensorRecord(sensorType, readPosition, readOption, maxRecords) { success, response, exception ->
+        if (!success || response == null) {
+          promise.reject(
+            "READ_FAILED",
+            exception?.description ?: "Failed to read sensor records",
+            null
           )
-        } else {
-          promise.reject("READ_FAILED", exception?.description ?: "Failed to read sensor records", null)
+          return@readSensorRecord
         }
+
+        val records = response.readDataRspList.map { record ->
+          sensorRecordToMap(record, sensorType)
+        }
+        val payload = mutableMapOf<String, Any>("records" to records)
+
+        response.readDataNextPos?.let { next ->
+          if (next != KBRecordDataRsp.INVALID_DATA_RECORD_POS) {
+            payload["nextReadPosition"] = next
+          }
+        }
+
+        promise.resolve(payload)
       }
     }
 
     AsyncFunction("clearSensorHistory") { macAddress: String, sensorType: Int, promise: Promise ->
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
-      beacon.clearSensorHistory(sensorType) { success, exception ->
+      beacon.clearSensorRecord(sensorType) { success, exception ->
         if (success) {
           promise.resolve(true)
         } else {
@@ -294,22 +345,34 @@ class ExpoKBeaconProModule : Module() {
     AsyncFunction("subscribeNotify") { macAddress: String, eventType: Int?, promise: Promise ->
       val normalized = normalizedMac(macAddress)
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
-      val notifyEventType = eventType ?: 0
-      beacon.subscribeSensorDataNotify(notifyEventType, { receivedEventType, data ->
-        sendEvent(
-          "onNotifyDataReceived",
-          mapOf(
-            "macAddress" to normalized,
-            "eventType" to receivedEventType,
-            "raw" to data.toList(),
-            "data" to null
+      if (eventType == null) {
+        promise.reject("INVALID_ARGUMENT", "eventType is required", null)
+        return@AsyncFunction
+      }
+
+      val key = notificationKey(normalized, eventType)
+      val delegate = object : KBeacon.NotifyDataDelegate {
+        override fun onNotifyDataReceived(beacon: KBeacon, nEventType: Int, sensorData: ByteArray) {
+          val mac = beacon.mac?.let { normalizedMac(it) } ?: normalized
+          sendEvent(
+            "onNotifyDataReceived",
+            mapOf(
+              "macAddress" to mac,
+              "eventType" to nEventType,
+              "raw" to sensorData.map { it.toInt() and 0xff },
+              "data" to null
+            )
           )
-        )
-      }) { success, exception ->
+        }
+      }
+
+      notificationDelegates[key] = delegate
+      beacon.subscribeSensorDataNotify(eventType, delegate) { success, exception ->
         if (success) {
-          notificationSubscriptions.add("$normalized:$notifyEventType")
+          notificationSubscriptions.add(key)
           promise.resolve(true)
         } else {
+          notificationDelegates.remove(key)
           promise.reject("SUBSCRIBE_FAILED", exception?.description ?: "Failed to subscribe", null)
         }
       }
@@ -318,10 +381,16 @@ class ExpoKBeaconProModule : Module() {
     AsyncFunction("unsubscribeNotify") { macAddress: String, eventType: Int?, promise: Promise ->
       val normalized = normalizedMac(macAddress)
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
-      val notifyEventType = eventType ?: 0
-      beacon.unsubscribeSensorDataNotify(notifyEventType) { success, exception ->
+      if (eventType == null) {
+        promise.reject("INVALID_ARGUMENT", "eventType is required", null)
+        return@AsyncFunction
+      }
+
+      val key = notificationKey(normalized, eventType)
+      beacon.removeSubscribeSensorDataNotify(eventType) { success, exception ->
         if (success) {
-          notificationSubscriptions.remove("$normalized:$notifyEventType")
+          notificationSubscriptions.remove(key)
+          notificationDelegates.remove(key)
           promise.resolve(true)
         } else {
           promise.reject("UNSUBSCRIBE_FAILED", exception?.description ?: "Failed to unsubscribe", null)
@@ -335,9 +404,7 @@ class ExpoKBeaconProModule : Module() {
     beaconManager?.stopScanning()
     beaconManager?.clearBeacons()
     beaconManager?.delegate = null
-    beaconManager?.let { manager ->
-      runCatching { manager.javaClass.getMethod("release").invoke(manager) }
-    }
+    KBeaconsMgr.clearBeaconManager()
     activeConnections.values.forEach { beacon -> beacon.disconnect() }
     pendingConnectionPromises.values.forEach { promise ->
       promise.reject("OPERATION_FAILED", "Module was destroyed", null)
@@ -346,6 +413,7 @@ class ExpoKBeaconProModule : Module() {
     activeConnections.clear()
     pendingConnectionPromises.clear()
     notificationSubscriptions.clear()
+    notificationDelegates.clear()
     beaconManager = null
   }
 
@@ -395,30 +463,50 @@ class ExpoKBeaconProModule : Module() {
       }
     }
 
-    val callback: (KBConnState, Any?) -> Unit = { state, reason ->
-      val reasonValue = reasonToInt(reason)
-      sendConnectionState(normalized, state, reasonValue)
+    val callback = object : KBeacon.ConnStateDelegate {
+      override fun onConnStateChange(beacon: KBeacon, state: KBConnState, nReason: Int) {
+        sendConnectionState(normalized, state, nReason)
 
-      if (state == KBConnState.Connected) {
-        activeConnections[normalized] = beacon
-        pendingConnectionPromises.remove(normalized)?.resolve(true)
-      } else if (state == KBConnState.Disconnected) {
-        activeConnections.remove(normalized)
-        val pendingPromise = pendingConnectionPromises.remove(normalized)
-        if (pendingPromise != null) {
-          when (reasonValue) {
-            CONN_REASON_TIMEOUT -> pendingPromise.reject("CONNECTION_TIMEOUT", "Connection timed out", null)
-            CONN_REASON_AUTH_FAILED -> pendingPromise.reject("AUTH_FAILED", "Beacon authentication failed", null)
-            else -> pendingPromise.reject("OPERATION_FAILED", "Connection failed", null)
+        if (state == KBConnState.Connected) {
+          activeConnections[normalized] = beacon
+          pendingConnectionPromises.remove(normalized)?.resolve(true)
+          return
+        }
+
+        if (state == KBConnState.Disconnected) {
+          activeConnections.remove(normalized)
+          notificationDelegates.keys.removeAll { it.startsWith("$normalized:") }
+          notificationSubscriptions.removeAll { it.startsWith("$normalized:") }
+
+          val pending = pendingConnectionPromises.remove(normalized) ?: return
+
+          when (nReason) {
+            KBConnectionEvent.ConnTimeout ->
+              pending.reject("CONNECTION_TIMEOUT", "Connection timed out", null)
+
+            KBConnectionEvent.ConnAuthFail ->
+              pending.reject("AUTH_FAILED", "Beacon authentication failed", null)
+
+            else ->
+              pending.reject(
+                "OPERATION_FAILED",
+                "Connection failed with reason $nReason",
+                null
+              )
           }
         }
       }
     }
 
-    if (connPara != null) {
+    val started = if (connPara != null) {
       beacon.connectEnhanced(normalizedPassword(password), resolvedTimeoutMs, connPara, callback)
     } else {
       beacon.connect(normalizedPassword(password), resolvedTimeoutMs, callback)
+    }
+
+    if (!started) {
+      pendingConnectionPromises.remove(normalized)
+      promise.reject("OPERATION_FAILED", "Native connect request failed", null)
     }
   }
 
@@ -426,7 +514,7 @@ class ExpoKBeaconProModule : Module() {
     val normalized = normalizedMac(macAddress)
     activeConnections[normalized]?.let { return it }
     discoveredBeacons[normalized]?.let { return it }
-    return beaconManager?.beacons?.firstOrNull { normalizedMac(it.mac) == normalized }
+    return beaconManager?.getBeacon(normalized)
   }
 
   private fun connectedBeaconOrReject(macAddress: String, promise: Promise): KBeacon? {
@@ -447,6 +535,10 @@ class ExpoKBeaconProModule : Module() {
     return if (password.isNullOrEmpty()) "0000000000000000" else password
   }
 
+  private fun notificationKey(mac: String, eventType: Int): String {
+    return "$mac:$eventType"
+  }
+
   private fun beaconToMap(beacon: KBeacon): Map<String, Any?> {
     val normalized = normalizedMac(beacon.mac)
     val packets = beacon.allAdvPackets()?.map { packet -> advPacketToMap(packet) } ?: emptyList()
@@ -459,10 +551,7 @@ class ExpoKBeaconProModule : Module() {
       "rssi" to beacon.rssi,
       "advPackets" to packets
     ).apply {
-      (valueFromMethod(beacon, "connectionState") as? KBConnState)?.let {
-        put("connectionState", connectionStateToInt(it))
-      }
-      valueFromMethod(beacon, "isConnectable")?.let { put("isConnectable", it) }
+      put("connectionState", connectionStateToInt(beacon.state))
     }
   }
 
@@ -664,6 +753,26 @@ class ExpoKBeaconProModule : Module() {
 
   private fun numberValue(map: Map<String, Any?>, key: String): Number? {
     return map[key] as? Number
+  }
+
+  private fun integerLongValue(map: Map<String, Any?>, key: String): Long? {
+    val value = numberValue(map, key) ?: return null
+    val doubleValue = value.toDouble()
+    if (!java.lang.Double.isFinite(doubleValue) || doubleValue % 1.0 != 0.0) {
+      return null
+    }
+
+    return value.toLong()
+  }
+
+  private fun isSupportedSensorType(sensorType: Int): Boolean {
+    return sensorType in 1..7
+  }
+
+  private fun isSupportedReadOption(readOption: Int): Boolean {
+    return readOption == KBSensorReadOption.NormalOrder ||
+      readOption == KBSensorReadOption.ReverseOrder ||
+      readOption == KBSensorReadOption.NewRecord
   }
 
   private fun valueFromMethod(target: Any, methodName: String): Any? {
@@ -879,13 +988,6 @@ class ExpoKBeaconProModule : Module() {
     }
   }
 
-  private fun reasonToInt(reason: Any?): Int {
-    return when (reason) {
-      is Number -> reason.toInt()
-      else -> reason?.javaClass?.getMethod("ordinal")?.invoke(reason) as? Int ?: 0
-    }
-  }
-
   private fun capabilitiesMap(): Map<String, Any> {
     return mapOf(
       "transport" to "ble",
@@ -1004,10 +1106,9 @@ class ExpoKBeaconProModule : Module() {
 
   private fun androidBleStateToString(state: Int): String {
     return when (state) {
-      BluetoothAdapter.STATE_ON -> "poweredOn"
-      BluetoothAdapter.STATE_OFF -> "poweredOff"
-      BluetoothAdapter.STATE_TURNING_ON,
-      BluetoothAdapter.STATE_TURNING_OFF -> "resetting"
+      KBeaconsMgr.BLEStatePowerOn -> "poweredOn"
+      KBeaconsMgr.BLEStatePowerOff -> "poweredOff"
+      KBeaconsMgr.BLEStateUnknown -> "unknown"
       else -> "unknown"
     }
   }

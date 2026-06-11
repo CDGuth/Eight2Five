@@ -29,6 +29,7 @@ import {
   KBAdvType,
   KBConnPara,
   KBeaconConfig,
+  KBSensorReadOption,
   KBSensorType,
 } from "../src/ExpoKBeaconPro.types";
 
@@ -102,9 +103,10 @@ jest.mock("expo-modules-core", () => {
       ],
     })),
     readSensorDataInfo: jest.fn(async () => ({
+      sensorType: 1,
       totalRecordNum: 5,
       unreadRecordNum: 2,
-      readIndex: 1,
+      readInfoUtcSeconds: 123456,
     })),
     readSensorRecords: jest.fn(async () => ({
       records: [{ utcTime: 123, raw: [1, 2, 3] }],
@@ -442,13 +444,14 @@ describe("ExpoKBeaconProModule", () => {
         KBSensorType.HTHumidity,
       );
       expect(info).toEqual({
+        sensorType: KBSensorType.HTHumidity,
         totalRecordNum: 5,
         unreadRecordNum: 2,
-        readIndex: 1,
+        readInfoUtcSeconds: 123456,
       });
     });
 
-    test("readSensorDataInfo accepts iOS-shaped response without readIndex", async () => {
+    test("readSensorDataInfo does not require readIndex", async () => {
       mockNativeModule.readSensorDataInfo.mockResolvedValueOnce({
         totalRecordNum: 10,
         unreadRecordNum: 3,
@@ -463,26 +466,30 @@ describe("ExpoKBeaconProModule", () => {
       expect(info).not.toHaveProperty("readIndex");
     });
 
-    test("readSensorDataInfo accepts Android-shaped response with readIndex", async () => {
+    test("readSensorDataInfo accepts Android-shaped response metadata", async () => {
       mockNativeModule.readSensorDataInfo.mockResolvedValueOnce({
+        sensorType: KBSensorType.Light,
         totalRecordNum: 20,
         unreadRecordNum: 5,
-        readIndex: 15,
+        readInfoUtcSeconds: 987654,
       });
 
       const info = await readSensorDataInfo("AA:BB", KBSensorType.Light);
 
       expect(info).toEqual({
+        sensorType: KBSensorType.Light,
         totalRecordNum: 20,
         unreadRecordNum: 5,
-        readIndex: 15,
+        readInfoUtcSeconds: 987654,
       });
+      expect(info).not.toHaveProperty("readIndex");
     });
 
-    test("readSensorRecords forwards typed record requests", async () => {
+    test("readSensorRecords forwards typed record requests with read options", async () => {
       const request = {
         sensorType: KBSensorType.PIR,
         readPosition: 10,
+        readOption: KBSensorReadOption.ReverseOrder,
         maxRecords: 50,
       };
 
@@ -498,35 +505,61 @@ describe("ExpoKBeaconProModule", () => {
       await expect(
         readSensorRecords("AA:BB", {
           sensorType: KBSensorType.PIR,
+          readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 0,
         }),
       ).rejects.toThrow("maxRecords");
     });
 
-    test("readSensorRecords rejects unsupported read options", async () => {
+    test("readSensorRecords rejects invalid read options", async () => {
       await expect(
         readSensorRecords("AA:BB", {
           sensorType: KBSensorType.PIR,
-          readOption: 1,
+          readOption: 99,
           maxRecords: 10,
         } as never),
-      ).rejects.toThrow("readOption is not supported");
+      ).rejects.toThrow("readOption must be 0, 1, or 2");
       expect(mockNativeModule.readSensorRecords).not.toHaveBeenCalled();
     });
 
-    test("readSensorRecords rejects invalid read positions", async () => {
+    test("readSensorRecords rejects omitted readOption", async () => {
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          maxRecords: 10,
+        } as never),
+      ).rejects.toThrow("readOption must be 0, 1, or 2");
+      expect(mockNativeModule.readSensorRecords).not.toHaveBeenCalled();
+    });
+
+    test("readSensorRecords rejects negative read positions", async () => {
       await expect(
         readSensorRecords("AA:BB", {
           sensorType: KBSensorType.PIR,
           readPosition: -1,
+          readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 10,
         }),
       ).rejects.toThrow("readPosition");
     });
 
+    test("readSensorRecords rejects out-of-range read positions", async () => {
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          readPosition: 0x1_0000_0000,
+          readOption: KBSensorReadOption.NormalOrder,
+          maxRecords: 10,
+        }),
+      ).rejects.toThrow(
+        "readPosition must be an integer between 0 and 4294967295",
+      );
+    });
+
     test("readSensorRecords forwards omitted readPosition without validation error", async () => {
       const request = {
         sensorType: KBSensorType.PIR,
+        readOption: KBSensorReadOption.NewRecord,
         maxRecords: 10,
       };
 
@@ -542,9 +575,43 @@ describe("ExpoKBeaconProModule", () => {
       await expect(
         readSensorRecords("AA:BB", {
           sensorType: KBSensorType.PIR,
+          readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 10,
         }),
       ).resolves.toEqual({ records: [{ utcTime: 123, raw: [1, 2, 3] }] });
+    });
+
+    test("readSensorRecords preserves nextReadPosition", async () => {
+      mockNativeModule.readSensorRecords.mockResolvedValueOnce({
+        nextReadPosition: 44,
+        records: [{ utcTime: 123, raw: [1, 2, 3] }],
+      });
+
+      await expect(
+        readSensorRecords("AA:BB", {
+          sensorType: KBSensorType.PIR,
+          readOption: KBSensorReadOption.NormalOrder,
+          maxRecords: 10,
+        }),
+      ).resolves.toEqual({
+        nextReadPosition: 44,
+        records: [{ utcTime: 123, raw: [1, 2, 3] }],
+      });
+    });
+
+    test("readSensorRecords accepts completed reads without nextReadPosition", async () => {
+      mockNativeModule.readSensorRecords.mockResolvedValueOnce({
+        records: [{ utcTime: 123, raw: [1, 2, 3] }],
+      });
+
+      const result = await readSensorRecords("AA:BB", {
+        sensorType: KBSensorType.PIR,
+        readOption: KBSensorReadOption.NormalOrder,
+        maxRecords: 10,
+      });
+
+      expect(result).toEqual({ records: [{ utcTime: 123, raw: [1, 2, 3] }] });
+      expect(result).not.toHaveProperty("nextReadPosition");
     });
 
     test("clearSensorHistory delegates to the native bridge", async () => {
@@ -562,6 +629,13 @@ describe("ExpoKBeaconProModule", () => {
       expect(mockNativeModule.subscribeNotify).toHaveBeenCalledWith("AA:BB", 7);
     });
 
+    test("subscribeNotify requires an explicit eventType", async () => {
+      await expect(
+        subscribeNotify("AA:BB", undefined as never),
+      ).rejects.toThrow("eventType must be an integer");
+      expect(mockNativeModule.subscribeNotify).not.toHaveBeenCalled();
+    });
+
     test("unsubscribeNotify delegates to the native bridge", async () => {
       await unsubscribeNotify("AA:BB", 7);
 
@@ -569,6 +643,13 @@ describe("ExpoKBeaconProModule", () => {
         "AA:BB",
         7,
       );
+    });
+
+    test("unsubscribeNotify requires an explicit eventType", async () => {
+      await expect(
+        unsubscribeNotify("AA:BB", undefined as never),
+      ).rejects.toThrow("eventType must be an integer");
+      expect(mockNativeModule.unsubscribeNotify).not.toHaveBeenCalled();
     });
 
     test("sensor notification compatibility wrappers delegate to generalized API", async () => {

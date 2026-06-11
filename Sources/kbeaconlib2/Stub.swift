@@ -3,46 +3,48 @@
 // Keep signatures here limited to real CocoaPods APIs used by ExpoKBeaconProModule.swift.
 
 @_exported import Foundation
-import CoreBluetooth
 
-public protocol KBeaconsMgrDelegate: AnyObject {
-  func onBeaconDiscovered(_ beacons: [KBeacon])
-  func onCentralBleStateChange(_ state: CBCentralManagerState)
+public enum BLECentralMgrState: Int {
+  case PowerOn = 0
+  case PowerOff = 1
+  case Unauthorized = 2
+  case Unknown = 3
 }
 
-public protocol KBConnStateDelegate: AnyObject {
-  func onConnStateChange(_ beacon: KBeacon, state: KBConnState, err: KBConnErr)
+public protocol KBeaconMgrDelegate: NSObjectProtocol {
+  func onBeaconDiscovered(beacons: [KBeacon])
+  func onCentralBleStateChange(newState: BLECentralMgrState)
+}
+
+public protocol ConnStateDelegate: NSObjectProtocol {
+  func onConnStateChange(_ beacon: KBeacon, state: KBConnState, evt: KBConnEvtReason)
+}
+
+public protocol NotifyDataDelegate: NSObjectProtocol {
+  func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data)
 }
 
 public enum KBConnState: Int {
   case Disconnected = 0
   case Connecting = 1
-  case Connected = 2
-  case Disconnecting = 3
-  case ConnectTimeout = 4
+  case Disconnecting = 2
+  case Connected = 3
 }
 
-public enum KBConnErr: Int, Error {
-  case Success = 0
-  case Failed = 1
-  case Timeout = 2
-  case AuthFailed = 3
-}
-
-public enum KBeaconErr: Int {
-  case Success = 0
-  case BLESystem = 1
-  case Permission = 2
+public enum KBConnEvtReason: Int, Error {
+  case ConnNull = 0
+  case ConnSuccess = 1
+  case ConnTimeout = 2
+  case ConnException = 3
+  case ConnServiceNotSupport = 4
+  case ConnManualDisconnting = 5
+  case ConnAuthFail = 6
 }
 
 public enum KBNotifyDataType: Int {
   case Sensor = 0
   case System = 1
   case Unknown = 255
-}
-
-public protocol NotifyDataDelegate: AnyObject {
-  func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data)
 }
 
 public enum KBAdvType: Int {
@@ -339,11 +341,15 @@ public final class KBException: NSObject {
 }
 
 public final class KBRecordInfoRsp: NSObject {
+  public var sensorType: Int?
   public var totalRecordNumber: UInt32 = 0
   public var unreadRecordNumber: UInt32 = 0
+  public var readInfoUtcSeconds: UInt64?
 }
 
 public final class KBRecordDataRsp: NSObject {
+  public static let INVALID_DATA_RECORD_POS: UInt32 = 4_294_967_295
+  public var readDataNextPos: UInt32 = INVALID_DATA_RECORD_POS
   public var readDataRspList: [NSObject] = []
 }
 
@@ -387,52 +393,48 @@ public final class KBConnPara {
   }
 }
 
-public class KBeacon {
-  private let macAddress: String
-  private let deviceName: String
-  private var signal: Int
-  private var connectable: Bool
-  private var state: KBConnState = .Disconnected
+public class KBeacon: NSObject {
+  public weak var delegate: ConnStateDelegate?
+  public var mac: String?
+  public var name: String?
+  public var rssi: Int8 = -60
+  public var state: KBConnState = .Disconnected
+  public var allAdvPackets: [KBAdvPacketBase]?
 
-  public init(mac: String = "00:00:00:00:00:00", name: String = "Beacon", rssi: Int = -60, connectable: Bool = true) {
-    self.macAddress = mac
-    self.deviceName = name
-    self.signal = rssi
-    self.connectable = connectable
+  public init(mac: String? = "00:00:00:00:00:00", name: String? = "Beacon", rssi: Int8 = -60) {
+    self.mac = mac
+    self.name = name
+    self.rssi = rssi
   }
 
-  public var advPacket: KBAdvPacketBase?
-  public var allAdvPackets: [KBAdvPacketBase] = []
+  public func removeAdvPacket() { allAdvPackets?.removeAll() }
 
-  public func mac() -> String { macAddress }
-  public func name() -> String { deviceName }
-  public func rssi() -> Int { signal }
-  public func isConnectable() -> Bool { connectable }
-  public func connectionState() -> KBConnState { state }
-  public func removeAdvPacket() { allAdvPackets.removeAll() }
-
-  public func connect(_ password: String, timeout: Float, delegate: KBConnStateDelegate?) {
+  public func connect(_ password: String, timeout: Double, delegate: ConnStateDelegate?) -> Bool {
     _ = password
     _ = timeout
+    self.delegate = delegate
     state = .Connected
-    delegate?.onConnStateChange(self, state: state, err: .Success)
+    delegate?.onConnStateChange(self, state: state, evt: .ConnSuccess)
+    return true
   }
 
-  public func connectEnhanced(_ password: String, timeout: Float, connPara: KBConnPara, delegate: KBConnStateDelegate?) {
+  public func connectEnhanced(_ password: String, timeout: Double, connPara: KBConnPara, delegate: ConnStateDelegate?) -> Bool {
     _ = password
     _ = timeout
     _ = connPara
+    self.delegate = delegate
     state = .Connected
-    delegate?.onConnStateChange(self, state: state, err: .Success)
+    delegate?.onConnStateChange(self, state: state, evt: .ConnSuccess)
+    return true
   }
 
   public func disconnect() {
     state = .Disconnected
   }
 
-  public func modifyConfig(obj: [KBCfgBase], callback: @escaping (Bool, Int, KBConnErr) -> Void) {
+  public func modifyConfig(obj: [KBCfgBase], callback: @escaping (Bool, Int, KBConnEvtReason) -> Void) {
     _ = obj
-    callback(true, 0, .Success)
+    callback(true, 0, .ConnSuccess)
   }
 
   public func getCommonCfg() -> KBCfgCommon? { KBCfgCommon() }
@@ -440,8 +442,6 @@ public class KBeacon {
   public func getSlotCfgList() -> [KBCfgAdvBase]? { [] }
 
   public func getTriggerCfgList() -> [KBCfgTrigger]? { [] }
-
-  public func getSensorCfgList() -> [KBCfgSensorBase]? { [] }
 
   public func readSensorDataInfo(_ sensorType: Int, callback: @escaping (Bool, KBRecordInfoRsp?, KBException?) -> Void) {
     _ = sensorType
@@ -474,15 +474,13 @@ public class KBeacon {
 }
 
 public final class KBeaconsMgr {
-  public static func sharedBeaconManager() -> KBeaconsMgr {
-    KBeaconsMgr()
-  }
+  public static let sharedBeaconManager = KBeaconsMgr()
 
-  public weak var delegate: KBeaconsMgrDelegate?
-  public var beacons: [KBeacon] = []
+  public weak var delegate: KBeaconMgrDelegate?
+  public var beacons: [String: KBeacon] = [:]
 
-  public func startScanning() -> Int {
-    KBeaconErr.Success.rawValue
+  public func startScanning() -> Bool {
+    true
   }
 
   public func stopScanning() {}
@@ -490,6 +488,4 @@ public final class KBeaconsMgr {
   public func clearBeacons() {
     beacons.removeAll()
   }
-
-  public func release() {}
 }

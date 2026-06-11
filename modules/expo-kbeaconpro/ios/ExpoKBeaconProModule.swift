@@ -4,21 +4,19 @@ import Foundation
 import kbeaconlib2
 
 private let defaultTimeoutMs = 15_000
-private let connectionReasonTimeout = 2
-private let connectionReasonAuthFailed = 3
 
 private enum ConfigMappingError: Error {
   case invalid(index: Int)
 }
 
-public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDelegate, NotifyDataDelegate {
+public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate {
   private var beaconManager: KBeaconsMgr?
   private var discoveredBeacons = [String: KBeacon]()
   private var activeConnections = [String: KBeacon]()
   private var pendingConnectionPromises = [String: Promise]()
   private var notificationSubscriptions = Set<String>()
   private var isDestroyed = false
-  private var lastBluetoothState: CBCentralManagerState = .unknown
+  private var lastBluetoothState: BLECentralMgrState = .Unknown
 
   private func normalizedMac(_ mac: String) -> String {
     mac.uppercased()
@@ -32,9 +30,9 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     return password
   }
 
-  private func normalizedTimeoutSeconds(_ timeoutMs: Int?) -> Float {
+  private func normalizedTimeoutSeconds(_ timeoutMs: Int?) -> Double {
     let resolvedTimeoutMs = timeoutMs ?? defaultTimeoutMs
-    return max(0.001, Float(resolvedTimeoutMs) / 1000.0)
+    return max(0.001, Double(resolvedTimeoutMs) / 1000.0)
   }
 
   private func normalizeHexString(_ value: String?) -> String? {
@@ -44,20 +42,20 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     return "0x\(withoutPrefix.lowercased())"
   }
 
-  private func beaconToDict(_ beacon: KBeacon) -> [String: Any?] {
-    let mac = normalizedMac(beacon.mac())
-    let packets = beacon.allAdvPackets.map { advPacketToDict($0) }
+  private func beaconToDict(_ beacon: KBeacon, mac: String) -> [String: Any] {
+    let packets = (beacon.allAdvPackets ?? []).map { advPacketToDict($0) }
     beacon.removeAdvPacket()
 
-    return [
+    let payload: [String: Any?] = [
       "deviceId": mac,
       "mac": mac,
-      "name": beacon.name(),
-      "rssi": beacon.rssi(),
-      "isConnectable": beacon.isConnectable(),
-      "connectionState": beacon.connectionState().rawValue,
+      "name": beacon.name,
+      "rssi": Int(beacon.rssi),
+      "connectionState": beacon.state.rawValue,
       "advPackets": packets,
     ]
+
+    return payload.filter { !isNil($0.value) }.mapValues { $0 as Any }
   }
 
   private func advPacketToDict(_ advPacket: KBAdvPacketBase) -> [String: Any?] {
@@ -296,27 +294,42 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     return cfg
   }
 
-  public func onBeaconDiscovered(_ beacons: [KBeacon]) {
-    let beaconData = beacons.map { beacon -> [String: Any?] in
-      let mac = normalizedMac(beacon.mac())
-      discoveredBeacons[mac] = beacon
-      return beaconToDict(beacon)
+  public func onBeaconDiscovered(beacons: [KBeacon]) {
+    let beaconData = beacons.compactMap { beacon -> [String: Any]? in
+      guard let mac = beacon.mac else {
+        sendEvent(
+          "onError",
+          [
+            "code": "OPERATION_FAILED",
+            "message": "Discovered KBeacon does not expose a MAC address",
+          ]
+        )
+        return nil
+      }
+
+      let normalized = normalizedMac(mac)
+      discoveredBeacons[normalized] = beacon
+      return beaconToDict(beacon, mac: normalized)
     }
     sendEvent("onBeaconDiscovered", ["beacons": beaconData])
   }
 
-  public func onCentralBleStateChange(_ state: CBCentralManagerState) {
-    lastBluetoothState = state
-    sendEvent("onBluetoothStateChanged", ["state": bluetoothStateString(state)])
+  public func onCentralBleStateChange(newState: BLECentralMgrState) {
+    lastBluetoothState = newState
+    sendEvent("onBluetoothStateChanged", ["state": bluetoothStateString(newState)])
   }
 
-  public func onConnStateChange(_ beacon: KBeacon, state: KBConnState, err: KBConnErr) {
-    let macAddress = normalizedMac(beacon.mac())
+  public func onConnStateChange(_ beacon: KBeacon, state: KBConnState, evt: KBConnEvtReason) {
+    guard let mac = beacon.mac else {
+      return
+    }
+
+    let macAddress = normalizedMac(mac)
 
     sendEvent("onConnectionStateChanged", [
       "macAddress": macAddress,
       "state": state.rawValue,
-      "reason": err.rawValue,
+      "reason": evt.rawValue,
     ])
 
     if state == .Connected {
@@ -325,7 +338,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
       return
     }
 
-    if state == .Disconnected || state == .ConnectTimeout {
+    if state == .Disconnected {
       activeConnections.removeValue(forKey: macAddress)
       notificationSubscriptions = notificationSubscriptions.filter { !$0.hasPrefix("\(macAddress):") }
 
@@ -333,20 +346,27 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         return
       }
 
-      if state == .ConnectTimeout || err.rawValue == connectionReasonTimeout {
+      switch evt {
+      case .ConnTimeout:
         promise.reject("CONNECTION_TIMEOUT", "Connection timed out")
-      } else if err.rawValue == connectionReasonAuthFailed {
+
+      case .ConnAuthFail:
         promise.reject("AUTH_FAILED", "Beacon authentication failed")
-      } else {
-        promise.reject("OPERATION_FAILED", "Connection failed with reason \(err.rawValue)")
+
+      default:
+        promise.reject("OPERATION_FAILED", "Connection failed with reason \(evt.rawValue)")
       }
     }
   }
 
   public func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data) {
+    guard let mac = beacon.mac else {
+      return
+    }
+
     let payload = notifyPayload(data)
     sendEvent("onNotifyDataReceived", [
-      "macAddress": normalizedMac(beacon.mac()),
+      "macAddress": normalizedMac(mac),
       "eventType": evt,
       "raw": payload.raw as Any,
       "data": payload.data as Any,
@@ -367,7 +387,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
     OnCreate {
       self.isDestroyed = false
-      self.beaconManager = KBeaconsMgr.sharedBeaconManager()
+      self.beaconManager = KBeaconsMgr.sharedBeaconManager
       self.beaconManager?.delegate = self
     }
 
@@ -381,19 +401,19 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         return
       }
 
-      if self.lastBluetoothState == .unsupported || self.lastBluetoothState == .poweredOff {
+      if self.lastBluetoothState == .PowerOff {
         self.rejectAndEmit(promise, code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off")
         return
       }
 
-      if self.lastBluetoothState == .unauthorized || self.bluetoothPermissionStatus() == "denied" {
+      if self.lastBluetoothState == .Unauthorized || self.bluetoothPermissionStatus() == "denied" {
         self.rejectAndEmit(promise, code: "PERMISSION_DENIED", message: "Bluetooth permission is denied")
         return
       }
 
-      let result = manager.startScanning()
-      if result != KBeaconErr.Success.rawValue {
-        self.rejectAndEmit(promise, code: "SCAN_FAILED", message: "KBeacon scanning failed with code \(result)")
+      let started = manager.startScanning()
+      guard started else {
+        self.rejectAndEmit(promise, code: "SCAN_FAILED", message: "KBeacon scanning failed")
         return
       }
 
@@ -483,6 +503,11 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
         return
       }
 
+      guard beacon.mac != nil else {
+        promise.reject("READ_FAILED", "Connected KBeacon does not expose a MAC address")
+        return
+      }
+
       promise.resolve(self.deviceSnapshot(beacon))
     }
 
@@ -504,37 +529,55 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     AsyncFunction("readSensorRecords") { (macAddress: String, request: [String: Any], promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
       guard let maxRecords = request["maxRecords"] as? Int, maxRecords > 0 else {
-        promise.reject("INVALID_ARGUMENT", "Invalid sensor record request")
+        promise.reject("INVALID_ARGUMENT", "maxRecords must be a positive integer")
         return
       }
       guard let sensorType = request["sensorType"] as? Int else {
-        promise.reject("INVALID_ARGUMENT", "Invalid sensor record request")
-        return
-      }
-      let readPosition = request["readPosition"] as? Int ?? 0
-
-      guard readPosition >= 0 else {
-        promise.reject("INVALID_ARGUMENT", "readPosition must be non-negative")
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid")
         return
       }
 
-      let nativeReadPosition = UInt32(readPosition)
+      guard
+        let readOptionRaw = request["readOption"] as? Int,
+        let readOption = KBSensorReadOption(rawValue: readOptionRaw)
+      else {
+        promise.reject("INVALID_ARGUMENT", "readOption must be 0, 1, or 2")
+        return
+      }
+
+      let nativeReadPosition: UInt32
+      if let readPosition = request["readPosition"] as? Int {
+        guard readPosition >= 0, UInt64(readPosition) <= UInt64(UInt32.max) else {
+          promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295")
+          return
+        }
+
+        nativeReadPosition = UInt32(readPosition)
+      } else {
+        nativeReadPosition = KBRecordDataRsp.INVALID_DATA_RECORD_POS
+      }
 
       beacon.readSensorRecord(
         self.nativeSensorType(sensorType),
         number: nativeReadPosition,
-        option: KBSensorReadOption.NormalOrder,
+        option: readOption,
         max: maxRecords
-      ) { result, recordRsp, err in
-        if result {
-          let records = recordRsp?.readDataRspList ?? []
-          let recordDicts = records.map { self.sensorRecordToDict($0, sensorType: sensorType) }
-          promise.resolve([
-            "records": recordDicts,
-          ])
-        } else {
+      ) { result, response, err in
+        guard result, let response else {
           promise.reject("READ_FAILED", "Failed to read sensor records. \(err?.errorDescription ?? "Unknown error")")
+          return
         }
+
+        let records = response.readDataRspList.map {
+          self.sensorRecordToDict($0, sensorType: sensorType)
+        }
+        var payload: [String: Any] = ["records": records]
+
+        if response.readDataNextPos != KBRecordDataRsp.INVALID_DATA_RECORD_POS {
+          payload["nextReadPosition"] = response.readDataNextPos
+        }
+
+        promise.resolve(payload)
       }
     }
 
@@ -553,10 +596,14 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     AsyncFunction("subscribeNotify") { (macAddress: String, eventType: Int?, promise: Promise) in
       let normalized = self.normalizedMac(macAddress)
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
-      let notifyEventType = eventType ?? 0
-      beacon.subscribeSensorDataNotify(notifyEventType, notifyDelegate: self) { result, err in
+      guard let eventType else {
+        promise.reject("INVALID_ARGUMENT", "eventType is required")
+        return
+      }
+
+      beacon.subscribeSensorDataNotify(eventType, notifyDelegate: self) { result, err in
         if result {
-          self.notificationSubscriptions.insert("\(normalized):\(notifyEventType)")
+          self.notificationSubscriptions.insert("\(normalized):\(eventType)")
           promise.resolve(true)
         } else {
           promise.reject("SUBSCRIBE_FAILED", "Failed to subscribe to notifications. \(err?.errorDescription ?? "Unknown error")")
@@ -567,10 +614,14 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     AsyncFunction("unsubscribeNotify") { (macAddress: String, eventType: Int?, promise: Promise) in
       let normalized = self.normalizedMac(macAddress)
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
-      let notifyEventType = eventType ?? 0
-      beacon.removeSubscribeSensorDataNotify(notifyEventType) { result, err in
+      guard let eventType else {
+        promise.reject("INVALID_ARGUMENT", "eventType is required")
+        return
+      }
+
+      beacon.removeSubscribeSensorDataNotify(eventType) { result, err in
         if result {
-          self.notificationSubscriptions.remove("\(normalized):\(notifyEventType)")
+          self.notificationSubscriptions.remove("\(normalized):\(eventType)")
           promise.resolve(true)
         } else {
           promise.reject("UNSUBSCRIBE_FAILED", "Failed to unsubscribe from notifications. \(err?.errorDescription ?? "Unknown error")")
@@ -610,6 +661,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     let timeoutSeconds = normalizedTimeoutSeconds(timeoutMs)
     pendingConnectionPromises[normalized] = promise
 
+    let started: Bool
     if let connParaMap {
       let connPara = KBConnPara()
       if let syncUtcTime = connParaMap["syncUtcTime"] as? Bool { connPara.syncUtcTime = syncUtcTime }
@@ -618,11 +670,15 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
       if let readTriggerPara = connParaMap["readTriggerPara"] as? Bool { connPara.readTriggerPara = readTriggerPara }
       if let readSensorPara = connParaMap["readSensorPara"] as? Bool { connPara.readSensorPara = readSensorPara }
 
-      beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: self)
-      return
+      started = beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: self)
+    } else {
+      started = beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: self)
     }
 
-    beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: self)
+    if !started {
+      pendingConnectionPromises.removeValue(forKey: normalized)
+      promise.reject("OPERATION_FAILED", "Native connect request failed")
+    }
   }
 
   private func connectedBeaconOrReject(_ macAddress: String, promise: Promise) -> KBeacon? {
@@ -639,7 +695,13 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     let normalized = normalizedMac(mac)
     if let activeBeacon = activeConnections[normalized] { return activeBeacon }
     if let discoveredBeacon = discoveredBeacons[normalized] { return discoveredBeacon }
-    return beaconManager?.beacons.first(where: { normalizedMac($0.mac()) == normalized })
+    return beaconManager?.beacons.values.first {
+      guard let candidateMac = $0.mac else {
+        return false
+      }
+
+      return normalizedMac(candidateMac) == normalized
+    }
   }
 
   private func cleanupModule() {
@@ -671,7 +733,7 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
   }
 
   private func bluetoothPermissionStatus() -> String {
-    if lastBluetoothState == .unsupported { return "unavailable" }
+    if lastBluetoothState == .Unauthorized { return "denied" }
 
     if #available(iOS 13.1, *) {
       switch CBManager.authorization {
@@ -689,21 +751,15 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
     return "undetermined"
   }
 
-  private func bluetoothStateString(_ state: CBCentralManagerState) -> String {
+  private func bluetoothStateString(_ state: BLECentralMgrState) -> String {
     switch state {
-    case .unknown:
-      return "unknown"
-    case .resetting:
-      return "resetting"
-    case .unsupported:
-      return "unsupported"
-    case .unauthorized:
-      return "unauthorized"
-    case .poweredOff:
-      return "poweredOff"
-    case .poweredOn:
+    case .PowerOn:
       return "poweredOn"
-    @unknown default:
+    case .PowerOff:
+      return "poweredOff"
+    case .Unauthorized:
+      return "unauthorized"
+    case .Unknown:
       return "unknown"
     }
   }
@@ -735,7 +791,11 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
   }
 
   private func deviceSnapshot(_ beacon: KBeacon) -> [String: Any] {
-    var snapshot: [String: Any] = ["macAddress": normalizedMac(beacon.mac())]
+    guard let mac = beacon.mac else {
+      return [:]
+    }
+
+    var snapshot: [String: Any] = ["macAddress": normalizedMac(mac)]
 
     if let commonCfg = beacon.getCommonCfg() {
       snapshot["common"] = commonConfigToDict(commonCfg)
@@ -747,10 +807,6 @@ public class ExpoKBeaconProModule: Module, KBeaconsMgrDelegate, KBConnStateDeleg
 
     if let triggerCfgList = beacon.getTriggerCfgList() {
       snapshot["triggers"] = triggerCfgList.map(triggerConfigToDict)
-    }
-
-    if let sensorCfgList = beacon.getSensorCfgList() {
-      snapshot["sensors"] = sensorCfgList.map(sensorConfigToDict)
     }
 
     return snapshot

@@ -12,6 +12,7 @@ import {
   KBeaconModuleCapabilities,
   KBeaconPermissionStatus,
   KBSensorDataInfo,
+  KBSensorReadOption,
   KBSensorRecordRequest,
   KBSensorRecordResponse,
   KBSensorType,
@@ -20,6 +21,7 @@ import {
 } from "./ExpoKBeaconPro.types";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_SENSOR_RECORD_POSITION = 0xffffffff;
 
 type EventMap = {
   [ExpoKBeaconProModuleEvents.onBeaconDiscovered]: (
@@ -87,9 +89,9 @@ interface ExpoKBeaconProNativeModule extends ExpoKBeaconProEventEmitter {
     sensorType: KBSensorType,
   ): Promise<boolean>;
 
-  subscribeNotify(macAddress: string, eventType?: number): Promise<boolean>;
+  subscribeNotify(macAddress: string, eventType: number): Promise<boolean>;
 
-  unsubscribeNotify(macAddress: string, eventType?: number): Promise<boolean>;
+  unsubscribeNotify(macAddress: string, eventType: number): Promise<boolean>;
 }
 
 const nativeModule =
@@ -127,9 +129,12 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-function assertNonNegativeInteger(name: string, value: number): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`INVALID_ARGUMENT: ${name} must be a non-negative integer`);
+function assertInteger(
+  name: string,
+  value: number | undefined,
+): asserts value is number {
+  if (!Number.isInteger(value)) {
+    throw new Error(`INVALID_ARGUMENT: ${name} must be an integer`);
   }
 }
 
@@ -227,7 +232,7 @@ function assertSafeConnectability(
   }
 }
 
-function assertValidSensorRecordRequest(
+function assertSensorRecordRequest(
   request: KBSensorRecordRequest,
 ): KBSensorRecordRequest {
   if (!isRecord(request)) {
@@ -235,22 +240,31 @@ function assertValidSensorRecordRequest(
   }
 
   if (
-    typeof request.sensorType !== "number" ||
+    !Number.isInteger(request.sensorType) ||
     !SENSOR_TYPE_VALUES.has(request.sensorType)
   ) {
-    throw new Error("INVALID_ARGUMENT: request.sensorType is invalid");
+    throw new Error("INVALID_ARGUMENT: sensorType is invalid");
   }
 
-  if ("readOption" in request) {
+  if (
+    request.readOption !== KBSensorReadOption.NormalOrder &&
+    request.readOption !== KBSensorReadOption.ReverseOrder &&
+    request.readOption !== KBSensorReadOption.NewRecord
+  ) {
+    throw new Error("INVALID_ARGUMENT: readOption must be 0, 1, or 2");
+  }
+
+  assertPositiveInteger("maxRecords", request.maxRecords);
+
+  if (
+    request.readPosition !== undefined &&
+    (!Number.isInteger(request.readPosition) ||
+      request.readPosition < 0 ||
+      request.readPosition > MAX_SENSOR_RECORD_POSITION)
+  ) {
     throw new Error(
-      "INVALID_ARGUMENT: request.readOption is not supported by the cross-platform sensor history API",
+      "INVALID_ARGUMENT: readPosition must be an integer between 0 and 4294967295",
     );
-  }
-
-  assertPositiveInteger("request.maxRecords", request.maxRecords);
-
-  if (request.readPosition !== undefined) {
-    assertNonNegativeInteger("request.readPosition", request.readPosition);
   }
 
   return request;
@@ -390,7 +404,7 @@ export async function readSensorRecords(
 ): Promise<KBSensorRecordResponse> {
   return await nativeModule.readSensorRecords(
     assertNonEmptyMac(macAddress),
-    assertValidSensorRecordRequest(request),
+    assertSensorRecordRequest(request),
   );
 }
 
@@ -410,9 +424,9 @@ export async function clearSensorHistory(
 
 export async function subscribeNotify(
   macAddress: string,
-  eventType?: number,
+  eventType: number,
 ): Promise<boolean> {
-  if (eventType !== undefined) assertNonNegativeInteger("eventType", eventType);
+  assertInteger("eventType", eventType);
 
   return await nativeModule.subscribeNotify(
     assertNonEmptyMac(macAddress),
@@ -422,9 +436,9 @@ export async function subscribeNotify(
 
 export async function unsubscribeNotify(
   macAddress: string,
-  eventType?: number,
+  eventType: number,
 ): Promise<boolean> {
-  if (eventType !== undefined) assertNonNegativeInteger("eventType", eventType);
+  assertInteger("eventType", eventType);
 
   return await nativeModule.unsubscribeNotify(
     assertNonEmptyMac(macAddress),

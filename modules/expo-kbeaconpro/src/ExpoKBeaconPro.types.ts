@@ -322,6 +322,12 @@ export enum KBSensorType {
   Alarm = 7,
 }
 
+export enum KBSensorReadOption {
+  NormalOrder = 0,
+  ReverseOrder = 1,
+  NewRecord = 2,
+}
+
 export interface KBTimeRange {
   localStartHour: number;
   localStartMinute: number;
@@ -437,14 +443,16 @@ export interface KBeaconDeviceSnapshot {
 }
 
 export interface KBSensorDataInfo {
+  sensorType?: KBSensorType;
   totalRecordNum: number;
   unreadRecordNum: number;
-  readIndex?: number;
+  readInfoUtcSeconds?: number;
 }
 
 export interface KBSensorRecordRequest {
   sensorType: KBSensorType;
   readPosition?: number;
+  readOption: KBSensorReadOption;
   maxRecords: number;
 }
 
@@ -461,5 +469,6 @@ export interface KBSensorDataRecord {
 }
 
 export interface KBSensorRecordResponse {
+  nextReadPosition?: number;
   records: KBSensorDataRecord[];
 }
