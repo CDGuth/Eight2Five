@@ -15,7 +15,6 @@ describe("native source API shape", () => {
 
     expect(source).not.toContain("KBScanProcessMgr");
     expect(source).not.toContain("readSensorHistory");
-    expect(source).not.toContain("unsubscribeSensorDataNotify");
     expect(source).not.toContain('manager.javaClass.getMethod("release")');
 
     expect(source).toContain("KBeaconsMgr.KBeaconMgrDelegate");

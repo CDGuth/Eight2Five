@@ -28,7 +28,6 @@ import java.util.UUID
 
 class ExpoPansBleApiModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
-  private val permissionRequestCode = 5025
 
   private val pansServiceUuid: UUID = UUID.fromString("680c21d9-c946-4c1f-9c11-baa1c21329e7")
   private val gapServiceUuid: UUID = UUID.fromString("00001800-0000-1000-8000-00805f9b34fb")

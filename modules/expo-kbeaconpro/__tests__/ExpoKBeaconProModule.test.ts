@@ -19,9 +19,7 @@ import {
   startScanning,
   stopScanning,
   subscribeNotify,
-  subscribeSensorDataNotify,
   unsubscribeNotify,
-  unsubscribeSensorDataNotify,
   validateConfigAgainstSnapshot,
 } from "../src/ExpoKBeaconProModule";
 import {
@@ -31,6 +29,7 @@ import {
   KBConnEvtReason,
   KBConnPara,
   KBeaconConfig,
+  KBeaconErrorCode,
   KBSensorReadOption,
   KBSensorType,
 } from "../src/ExpoKBeaconPro.types";
@@ -213,6 +212,12 @@ describe("ExpoKBeaconProModule", () => {
       stopScanning();
 
       expect(mockNativeModule.stopScanning).toHaveBeenCalledTimes(1);
+    });
+
+    test("public error codes include deferred scan cancellation", () => {
+      const code: KBeaconErrorCode = "SCAN_CANCELLED";
+
+      expect(code).toBe("SCAN_CANCELLED");
     });
 
     test("clearBeacons delegates to the native module", () => {
@@ -924,20 +929,6 @@ describe("ExpoKBeaconProModule", () => {
         "eventType must be an integer",
       );
       expect(mockNativeModule.unsubscribeNotify).not.toHaveBeenCalled();
-    });
-
-    test("sensor notification compatibility wrappers delegate to generalized API", async () => {
-      await subscribeSensorDataNotify(MAC, KBSensorType.VOC);
-      await unsubscribeSensorDataNotify(MAC, KBSensorType.VOC);
-
-      expect(mockNativeModule.subscribeNotify).toHaveBeenCalledWith(
-        MAC,
-        KBSensorType.VOC,
-      );
-      expect(mockNativeModule.unsubscribeNotify).toHaveBeenCalledWith(
-        MAC,
-        KBSensorType.VOC,
-      );
     });
   });
 });

@@ -871,19 +871,3 @@ export async function unsubscribeNotify(
     eventType,
   );
 }
-
-/** @deprecated Use subscribeNotify(macAddress, eventType). */
-export async function subscribeSensorDataNotify(
-  macAddress: string,
-  sensorType: KBSensorType,
-): Promise<boolean> {
-  return await subscribeNotify(macAddress, sensorType);
-}
-
-/** @deprecated Use unsubscribeNotify(macAddress, eventType). */
-export async function unsubscribeSensorDataNotify(
-  macAddress: string,
-  sensorType: KBSensorType,
-): Promise<boolean> {
-  return await unsubscribeNotify(macAddress, sensorType);
-}

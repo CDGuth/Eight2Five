@@ -11,6 +11,7 @@ export type KBeaconErrorCode =
   | "PERMISSION_DENIED"
   | "BLUETOOTH_UNAVAILABLE"
   | "SCAN_FAILED"
+  | "SCAN_CANCELLED"
   | "BEACON_NOT_FOUND"
   | "BEACON_NOT_CONNECTED"
   | "CONNECTION_BUSY"
@@ -393,9 +394,6 @@ export type KBeaconConfig =
   | KBCfgSensorGEO
   | KBCfgSensorScan
   | KBCfgSensorPIR;
-
-/** @deprecated Use KBeaconConfig. */
-export type KBCfgBase = KBeaconConfig;
 
 export interface ModifyConfigOptions {
   allowDisableAllConnectableSlots?: boolean;

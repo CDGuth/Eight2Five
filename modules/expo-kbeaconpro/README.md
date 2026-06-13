@@ -65,7 +65,7 @@ Partially implemented / requires native validation:
 
 - `readDeviceSnapshot` maps SDK-cached common, slot, trigger, and sensor configuration sections when those sections were loaded by enhanced connect. Missing sections remain omitted rather than fabricated.
 - Sensor history uses the shared fields that are supported by the pinned SDK calls: `sensorType`, optional `readPosition`, required `readOption`, positive `maxRecords`, and optional `nextReadPosition`.
-- Notification subscription requires an explicit `eventType`; Android forwards it to the vendor SDK and iOS forwards it to `subscribeSensorDataNotify(_:notifyDelegate:callback:)` / `removeSubscribeSensorDataNotify(_:callback:)`.
+- Notification subscription requires an explicit `eventType`; both native bridges forward it to the vendor SDK notification APIs.
 
 ## Public API summary
 
@@ -77,7 +77,6 @@ Partially implemented / requires native validation:
 - Snapshot: `readDeviceSnapshot(mac)`.
 - Sensor records: `readSensorDataInfo(mac, sensorType)`, `readSensorRecords(mac, request)`, `clearSensorHistory(mac, sensorType)`.
 - Notifications: `subscribeNotify(mac, eventType)`, `unsubscribeNotify(mac, eventType)`.
-- Compatibility notification wrappers are retained: `subscribeSensorDataNotify`, `unsubscribeSensorDataNotify`.
 
 Timeout values are always milliseconds. The default is `15000` ms.
 
@@ -240,7 +239,7 @@ Android's vendor SDK also supports passing `null` to subscribe to all notificati
 
 ## Editor-only iOS stub
 
-`Sources/kbeaconlib2/Stub.swift` is editor-only.
+From the repository root, `Sources/kbeaconlib2/Stub.swift` is editor-only.
 
 Production iOS code is written against the CocoaPods `kbeaconlib2` `1.2.1` API.
 
