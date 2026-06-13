@@ -138,6 +138,31 @@ describe("native source API shape", () => {
     expect(iosSource).toContain("dict.keys.contains(key)");
   });
 
+  test("iOS common config validates password with isValidPassword before assignment", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+    const commonBlock = source.slice(
+      source.indexOf('case "common":'),
+      source.indexOf('case "advertisement":'),
+    );
+
+    expect(commonBlock).toContain(
+      'try optionalString(dict, key: "password", index: index)',
+    );
+    expect(commonBlock).toContain("isValidPassword(password)");
+    expect(commonBlock).toContain("cfg.password = password");
+
+    const passwordAssignmentIndex = commonBlock.indexOf(
+      "cfg.password = password",
+    );
+    const validationIndex = commonBlock.indexOf("isValidPassword(password)");
+    expect(validationIndex).toBeGreaterThan(-1);
+    expect(passwordAssignmentIndex).toBeGreaterThan(validationIndex);
+
+    expect(source).toContain(
+      "private func isValidPassword(_ password: String?) -> Bool",
+    );
+  });
+
   test("iOS stopScanning cancels a deferred scan start", () => {
     const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
     const stopScanningBlock = source.slice(

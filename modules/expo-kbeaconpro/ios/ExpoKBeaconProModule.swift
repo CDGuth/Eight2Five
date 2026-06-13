@@ -232,7 +232,11 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       cfg.deviceName = name
       setOptionalObject(name, on: cfg, selectorName: "setName:")
       cfg.alwaysPowerOn = try optionalBoolNumber(dict, key: "alwaysPowerOn", index: index)
-      cfg.password = try optionalString(dict, key: "password", index: index)
+      let password = try optionalString(dict, key: "password", index: index)
+      guard isValidPassword(password) else {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      cfg.password = password
       cfg.refPower1Meters = try optionalIntegerNumber(dict, key: "refPower1Meters", index: index)
       return cfg
 
