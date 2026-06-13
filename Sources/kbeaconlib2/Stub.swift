@@ -443,6 +443,8 @@ public class KBeacon: NSObject {
 
   public func getTriggerCfgList() -> [KBCfgTrigger]? { [] }
 
+  public func getSensorCfgList() -> [KBCfgSensorBase]? { [] }
+
   public func readSensorDataInfo(_ sensorType: Int, callback: @escaping (Bool, KBRecordInfoRsp?, KBException?) -> Void) {
     _ = sensorType
     callback(true, KBRecordInfoRsp(), nil)

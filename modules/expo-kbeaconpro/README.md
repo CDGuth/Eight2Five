@@ -52,11 +52,13 @@ Implemented:
 - Foreground scanning and cached rotating advertisement packet emission.
 - Normalized uppercase MAC output.
 - Eddystone UID `nid`/`sid` parity across Android and iOS.
-- Connection, enhanced connection, and disconnect cleanup.
+- Connection, enhanced connection, and disconnect cleanup with cross-platform normalized public connection states and reasons.
 - Typed config writes with strict invalid-config rejection.
 - Capability and permission APIs.
 - Bluetooth state and error events.
 - Typed provider integration for the shared mobile scanner.
+- iOS sensor snapshots include cached sensor configuration when the SDK exposes it, matching Android snapshot behavior.
+- iOS compatibility shims check Objective-C selector availability before invoking optional SDK accessors; feature code does not use unguarded KVC.
 
 Partially implemented / requires native validation:
 
@@ -85,6 +87,29 @@ Timeout values are always milliseconds. The default is `15000` ms.
 - `onNotifyDataReceived`
 - `onBluetoothStateChanged`
 - `onError`
+
+Connection-state events use stable JavaScript values on both platforms rather than native enum ordinals:
+
+```text
+Disconnected  = 0
+Connecting    = 1
+Connected     = 2
+Disconnecting = 3
+```
+
+Connection reasons are also normalized:
+
+```text
+ConnDefault          = 0
+ConnException        = 1
+ConnTimeout          = 2
+ConnAuthFail         = 3
+ConnBleClosed        = 4
+ConnBleBusy          = 5
+ConnNotSupport       = 6
+ConnManualDisconnect = 7
+ConnSuccess          = 256
+```
 
 ## Canonical beacon packet schema
 
@@ -224,7 +249,23 @@ The stub must mirror the pod after production Swift is updated, never the other 
 
 DFU is intentionally not implemented in this pass. The vendor SDK ecosystem includes Nordic-based update support, but this module currently reports `supportsDfu: false`.
 
-Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, or PANS BLE changes.
+Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, or PANS BLE changes. Native builds and physical-device tests remain deferred; do not treat JavaScript tests or source-shape tests as native SDK qualification.
+
+Deferred native-build and hardware validation checklist:
+
+- clean Android build against Maven artifact `1.3.3`
+- clean iOS CocoaPods build against pod `1.2.1`
+- scan start and stop
+- permission denial and retry
+- connect with default password
+- connect with incorrect password
+- enhanced connect with all read flags
+- common, slot, trigger, and sensor snapshots
+- modify each supported config type
+- disconnect during pending connection
+- notification subscribe and unsubscribe
+- sensor history read, pagination, and clear
+- teardown while connected
 
 ## Validation
 

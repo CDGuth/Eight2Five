@@ -95,6 +95,8 @@ const MAX_PROXY_POSITION_ENTRIES = 5;
 const MAX_ANCHOR_LIST_ENTRIES = 16;
 const MAX_DISTANCE_ONLY_ENTRIES = 15;
 const MAX_COMBINED_DISTANCE_ENTRIES = 4;
+const MIN_INT32 = -2_147_483_648;
+const MAX_INT32 = 2_147_483_647;
 
 export function addDeviceDiscoveredListener(
   listener: (event: { devices: PansBleDevice[] }) => void,
@@ -299,10 +301,15 @@ export async function writeLabel(
   deviceId: string,
   label: string,
 ): Promise<boolean> {
+  const encoded = Array.from(textEncoder.encode(label));
+  if (encoded.length > 16) {
+    throw new Error("INVALID_ARGUMENT: label must be at most 16 UTF-8 bytes.");
+  }
+
   return await writeCharacteristic(
     deviceId,
     PANS_BLE_UUIDS.characteristics.label,
-    Array.from(textEncoder.encode(label)),
+    encoded,
   );
 }
 
@@ -657,16 +664,22 @@ export function encodePersistedPosition(
 ): number[] {
   const bytes = new Uint8Array(13);
   const view = new DataView(bytes.buffer);
-  view.setInt32(0, metersToMillimeters(position.xMeters), true);
-  view.setInt32(4, metersToMillimeters(position.yMeters), true);
-  view.setInt32(8, metersToMillimeters(position.zMeters ?? 0), true);
-  const quality = Math.round(position.quality ?? 100);
-  if (quality < 1 || quality > 100) {
+  view.setInt32(0, metersToMillimeters(position.xMeters, "xMeters"), true);
+  view.setInt32(4, metersToMillimeters(position.yMeters, "yMeters"), true);
+  view.setInt32(8, metersToMillimeters(position.zMeters ?? 0, "zMeters"), true);
+  const quality = position.quality ?? 100;
+  if (!Number.isFinite(quality)) {
+    throw new Error(
+      "INVALID_ARGUMENT: persisted position quality must be a finite number.",
+    );
+  }
+  const roundedQuality = Math.round(quality);
+  if (roundedQuality < 1 || roundedQuality > 100) {
     throw new Error(
       "INVALID_ARGUMENT: persisted position quality must be in range 1..100.",
     );
   }
-  bytes[12] = quality;
+  bytes[12] = roundedQuality;
   return Array.from(bytes);
 }
 
@@ -1064,13 +1077,19 @@ function bitsToUwbMode(bits: number): PansUwbMode {
   throw new Error(`MALFORMED_PAYLOAD: unsupported UWB mode bits ${bits}.`);
 }
 
-function metersToMillimeters(value: number): number {
+function metersToMillimeters(value: number, label: string): number {
   if (!Number.isFinite(value)) {
     throw new Error(
       "INVALID_ARGUMENT: position coordinates must be finite numbers.",
     );
   }
-  return Math.round(value * 1000);
+  const millimeters = Math.round(value * 1000);
+  if (millimeters < MIN_INT32 || millimeters > MAX_INT32) {
+    throw new Error(
+      `INVALID_ARGUMENT: ${label} in millimeters must fit signed int32 range.`,
+    );
+  }
+  return millimeters;
 }
 
 function assertUintRange(value: number, max: number, label: string): void {

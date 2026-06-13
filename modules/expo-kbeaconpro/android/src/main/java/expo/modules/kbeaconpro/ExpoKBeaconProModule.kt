@@ -57,6 +57,16 @@ private const val ADV_TYPE_SENSOR = 4
 private const val ADV_TYPE_EBEACON = 6
 private const val ADV_TYPE_UNKNOWN = 255
 private const val MAX_SENSOR_RECORD_POSITION = 0xffffffffL
+private const val JS_CONN_DEFAULT = 0
+private const val JS_CONN_EXCEPTION = 1
+private const val JS_CONN_TIMEOUT = 2
+private const val JS_CONN_AUTH_FAIL = 3
+private const val JS_CONN_BLE_CLOSED = 4
+private const val JS_CONN_BLE_BUSY = 5
+private const val JS_CONN_NOT_SUPPORT = 6
+private const val JS_CONN_MANUAL_DISCONNECT = 7
+private const val JS_CONN_SUCCESS = 256
+private val MAC_ADDRESS_PATTERN = Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 
 class ExpoKBeaconProModule : Module() {
   private var beaconManager: KBeaconsMgr? = null
@@ -190,7 +200,7 @@ class ExpoKBeaconProModule : Module() {
     }
 
     AsyncFunction("disconnect") { macAddress: String, promise: Promise ->
-      val normalized = normalizedMac(macAddress)
+      val normalized = validatedMacOrReject(macAddress, promise) ?: return@AsyncFunction
       val beacon = activeConnections.remove(normalized) ?: findBeacon(macAddress)
       pendingConnectionPromises.remove(normalized)?.reject(
         "OPERATION_FAILED",
@@ -210,7 +220,7 @@ class ExpoKBeaconProModule : Module() {
     }
 
     AsyncFunction("modifyConfig") { macAddress: String, configs: List<Map<String, Any?>>, promise: Promise ->
-      val normalized = normalizedMac(macAddress)
+      val normalized = validatedMacOrReject(macAddress, promise) ?: return@AsyncFunction
       val beacon = activeConnections[normalized]
       if (beacon == null) {
         promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC $normalized is not connected", null)
@@ -242,7 +252,7 @@ class ExpoKBeaconProModule : Module() {
     }
 
     AsyncFunction("readDeviceSnapshot") { macAddress: String, promise: Promise ->
-      val normalized = normalizedMac(macAddress)
+      val normalized = validatedMacOrReject(macAddress, promise) ?: return@AsyncFunction
       val beacon = activeConnections[normalized]
       if (beacon == null) {
         promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC $normalized is not connected", null)
@@ -254,6 +264,10 @@ class ExpoKBeaconProModule : Module() {
 
     AsyncFunction("readSensorDataInfo") { macAddress: String, sensorType: Int, promise: Promise ->
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
+      if (!isSupportedSensorType(sensorType)) {
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid", null)
+        return@AsyncFunction
+      }
       beacon.readSensorDataInfo(sensorType) { success, info, exception ->
         if (!success || info == null) {
           promise.reject(
@@ -299,8 +313,14 @@ class ExpoKBeaconProModule : Module() {
         return@AsyncFunction
       }
 
-      val readPosition = integerLongValue(request, "readPosition")
-        ?: KBRecordDataRsp.INVALID_DATA_RECORD_POS
+      val readPosition = if (request.containsKey("readPosition")) {
+        integerLongValue(request, "readPosition") ?: run {
+          promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295", null)
+          return@AsyncFunction
+        }
+      } else {
+        KBRecordDataRsp.INVALID_DATA_RECORD_POS
+      }
       if (readPosition < 0 || readPosition > MAX_SENSOR_RECORD_POSITION) {
         promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295", null)
         return@AsyncFunction
@@ -333,6 +353,10 @@ class ExpoKBeaconProModule : Module() {
 
     AsyncFunction("clearSensorHistory") { macAddress: String, sensorType: Int, promise: Promise ->
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
+      if (!isSupportedSensorType(sensorType)) {
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid", null)
+        return@AsyncFunction
+      }
       beacon.clearSensorRecord(sensorType) { success, exception ->
         if (success) {
           promise.resolve(true)
@@ -347,6 +371,10 @@ class ExpoKBeaconProModule : Module() {
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
       if (eventType == null) {
         promise.reject("INVALID_ARGUMENT", "eventType is required", null)
+        return@AsyncFunction
+      }
+      if (eventType < 0) {
+        promise.reject("INVALID_ARGUMENT", "eventType must be a non-negative integer", null)
         return@AsyncFunction
       }
 
@@ -383,6 +411,10 @@ class ExpoKBeaconProModule : Module() {
       val beacon = connectedBeaconOrReject(macAddress, promise) ?: return@AsyncFunction
       if (eventType == null) {
         promise.reject("INVALID_ARGUMENT", "eventType is required", null)
+        return@AsyncFunction
+      }
+      if (eventType < 0) {
+        promise.reject("INVALID_ARGUMENT", "eventType must be a non-negative integer", null)
         return@AsyncFunction
       }
 
@@ -429,7 +461,11 @@ class ExpoKBeaconProModule : Module() {
       return
     }
 
-    val normalized = normalizedMac(macAddress)
+    val normalized = validatedMacOrReject(macAddress, promise) ?: return
+    if (!isValidPassword(password)) {
+      promise.reject("INVALID_ARGUMENT", "password must be exactly 16 characters when provided", null)
+      return
+    }
     if (activeConnections.containsKey(normalized)) {
       promise.resolve(true)
       return
@@ -440,7 +476,7 @@ class ExpoKBeaconProModule : Module() {
       return
     }
 
-    val beacon = findBeacon(macAddress)
+    val beacon = findBeacon(normalized)
     if (beacon == null) {
       promise.reject("BEACON_NOT_FOUND", "Beacon with MAC $normalized was not discovered", null)
       return
@@ -490,7 +526,7 @@ class ExpoKBeaconProModule : Module() {
             else ->
               pending.reject(
                 "OPERATION_FAILED",
-                "Connection failed with reason $nReason",
+                "Connection failed with reason ${connectionReasonToJs(nReason)}",
                 null
               )
           }
@@ -518,7 +554,7 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun connectedBeaconOrReject(macAddress: String, promise: Promise): KBeacon? {
-    val normalized = normalizedMac(macAddress)
+    val normalized = validatedMacOrReject(macAddress, promise) ?: return null
     val beacon = activeConnections[normalized]
     if (beacon == null) {
       promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC $normalized is not connected", null)
@@ -528,11 +564,29 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun normalizedMac(macAddress: String): String {
-    return macAddress.uppercase(Locale.US)
+    return macAddress.trim().uppercase(Locale.US)
+  }
+
+  private fun validatedMacOrReject(macAddress: String, promise: Promise): String? {
+    val normalized = normalizedMac(macAddress)
+    if (!MAC_ADDRESS_PATTERN.matches(normalized)) {
+      promise.reject(
+        "INVALID_ARGUMENT",
+        "macAddress must be a canonical colon-delimited MAC address",
+        null
+      )
+      return null
+    }
+
+    return normalized
   }
 
   private fun normalizedPassword(password: String?): String {
     return if (password.isNullOrEmpty()) "0000000000000000" else password
+  }
+
+  private fun isValidPassword(password: String?): Boolean {
+    return password.isNullOrEmpty() || password.length == 16
   }
 
   private fun notificationKey(mac: String, eventType: Int): String {
@@ -616,7 +670,7 @@ class ExpoKBeaconProModule : Module() {
 
   private fun mapToKBCfg(map: Map<String, Any?>, index: Int): KBCfgBase {
     return when (map["configType"] as? String) {
-      "common" -> mapCommonConfig(map)
+      "common" -> mapCommonConfig(map, index)
       "advertisement" -> mapAdvertisementConfig(map, index)
       "trigger" -> mapTriggerConfig(map, index)
       "sensor" -> mapSensorConfig(map, index)
@@ -624,23 +678,28 @@ class ExpoKBeaconProModule : Module() {
     }
   }
 
-  private fun mapCommonConfig(map: Map<String, Any?>): KBCfgCommon {
+  private fun mapCommonConfig(map: Map<String, Any?>, index: Int): KBCfgCommon {
     return KBCfgCommon().apply {
       (map["name"] as? String)?.let { name = it }
       (map["alwaysPowerOn"] as? Boolean)?.let { alwaysPowerOn = it }
-      (map["password"] as? String)?.let { password = it }
-      numberValue(map, "refPower1Meters")?.let { refPower1Meters = it.toInt() }
+      (map["password"] as? String)?.let {
+        if (!isValidPassword(it)) {
+          throw IllegalArgumentException("configuration at index $index has an invalid password")
+        }
+        password = it
+      }
+      integerIntValue(map, "refPower1Meters")?.let { refPower1Meters = it }
     }
   }
 
   private fun mapAdvertisementConfig(map: Map<String, Any?>, index: Int): KBCfgBase {
-    val advType = numberValue(map, "advType")?.toInt()
+    val advType = integerIntValue(map, "advType")
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (advType) {
       ADV_TYPE_IBEACON -> KBCfgAdvIBeacon().apply {
         (map["uuid"] as? String)?.let { uuid = it }
-        numberValue(map, "majorID")?.let { majorID = it.toInt() }
-        numberValue(map, "minorID")?.let { minorID = it.toInt() }
+        integerIntValue(map, "majorID")?.let { majorID = it }
+        integerIntValue(map, "minorID")?.let { minorID = it }
       }
       ADV_TYPE_EDDY_UID -> KBCfgAdvEddyUID().apply {
         (map["nid"] as? String)?.let { nid = normalizeHexString(it) }
@@ -651,12 +710,12 @@ class ExpoKBeaconProModule : Module() {
       }
       ADV_TYPE_EDDY_TLM -> KBCfgAdvEddyTLM()
       ADV_TYPE_SENSOR -> KBCfgAdvKSensor().apply {
-        numberValue(map, "aesType")?.let { aesType = it.toInt() }
+        integerIntValue(map, "aesType")?.let { aesType = it }
       }
       ADV_TYPE_EBEACON -> KBCfgAdvEBeacon().apply {
         (map["uuid"] as? String)?.let { uuid = it }
-        numberValue(map, "encryptInterval")?.let { encryptInterval = it.toInt() }
-        numberValue(map, "aesType")?.let { aesType = it.toInt() }
+        integerIntValue(map, "encryptInterval")?.let { encryptInterval = it }
+        integerIntValue(map, "aesType")?.let { aesType = it }
       }
       ADV_TYPE_UNKNOWN -> newNullAdvertisementConfig()
         ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
@@ -664,11 +723,11 @@ class ExpoKBeaconProModule : Module() {
     }
 
     if (cfg is KBCfgAdvBase) {
-      cfg.slotIndex = numberValue(map, "slotIndex")?.toInt()
+      cfg.slotIndex = integerIntValue(map, "slotIndex")
         ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
-      numberValue(map, "txPower")?.let { cfg.txPower = it.toInt() }
-      numberValue(map, "advPeriod")?.let { cfg.advPeriod = it.toFloat() }
-      numberValue(map, "advMode")?.let { cfg.advMode = it.toInt() }
+      integerIntValue(map, "txPower")?.let { cfg.txPower = it }
+      finiteFloatValue(map, "advPeriod")?.let { cfg.advPeriod = it }
+      integerIntValue(map, "advMode")?.let { cfg.advMode = it }
       (map["advTriggerOnly"] as? Boolean)?.let { cfg.advTriggerOnly = it }
       (map["advConnectable"] as? Boolean)?.let { cfg.advConnectable = it }
     }
@@ -677,67 +736,67 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun mapTriggerConfig(map: Map<String, Any?>, index: Int): KBCfgTrigger {
-    val triggerType = numberValue(map, "triggerType")?.toInt()
+    val triggerType = integerIntValue(map, "triggerType")
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (triggerType) {
       5 -> KBCfgTriggerMotion().apply {
-        numberValue(map, "accODR")?.let { accODR = it.toInt() }
-        numberValue(map, "wakeupDuration")?.let { wakeupDuration = it.toInt() }
+        integerIntValue(map, "accODR")?.let { accODR = it }
+        integerIntValue(map, "wakeupDuration")?.let { wakeupDuration = it }
       }
       14 -> KBCfgTriggerAngle().apply {
-        numberValue(map, "aboveAngle")?.let { aboveAngle = it.toInt() }
-        numberValue(map, "reportInterval")?.let { reportInterval = it.toInt() }
+        integerIntValue(map, "aboveAngle")?.let { aboveAngle = it }
+        integerIntValue(map, "reportInterval")?.let { reportInterval = it }
       }
       else -> KBCfgTrigger()
     }
 
-    cfg.triggerIndex = numberValue(map, "triggerIndex")?.toInt()
+    cfg.triggerIndex = integerIntValue(map, "triggerIndex")
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     cfg.triggerType = triggerType
-    numberValue(map, "triggerAction")?.let { cfg.triggerAction = it.toInt() }
-    numberValue(map, "triggerAdvSlot")?.let { cfg.triggerAdvSlot = it.toInt() }
-    numberValue(map, "triggerAdvTime")?.let { cfg.triggerAdvTime = it.toInt() }
-    numberValue(map, "triggerPara")?.let { cfg.triggerPara = it.toInt() }
-    numberValue(map, "triggerAdvPeriod")?.let { cfg.triggerAdvPeriod = it.toInt() }
-    numberValue(map, "triggerTxPower")?.let { cfg.triggerTxPower = it.toInt() }
-    numberValue(map, "triggerAdvChangeMode")?.let { cfg.triggerAdvChangeMode = it.toInt() }
+    integerIntValue(map, "triggerAction")?.let { cfg.triggerAction = it }
+    integerIntValue(map, "triggerAdvSlot")?.let { cfg.triggerAdvSlot = it }
+    integerIntValue(map, "triggerAdvTime")?.let { cfg.triggerAdvTime = it }
+    integerIntValue(map, "triggerPara")?.let { cfg.triggerPara = it }
+    integerIntValue(map, "triggerAdvPeriod")?.let { cfg.triggerAdvPeriod = it }
+    integerIntValue(map, "triggerTxPower")?.let { cfg.triggerTxPower = it }
+    integerIntValue(map, "triggerAdvChangeMode")?.let { cfg.triggerAdvChangeMode = it }
     return cfg
   }
 
   private fun mapSensorConfig(map: Map<String, Any?>, index: Int): KBCfgBase {
-    val sensorType = numberValue(map, "sensorType")?.toInt()
+    val sensorType = integerIntValue(map, "sensorType")
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     return when (sensorType) {
       1 -> KBCfgSensorHT().apply {
         (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        numberValue(map, "sensorHtMeasureInterval")?.let { sensorHtMeasureInterval = it.toInt() }
-        numberValue(map, "humidityChangeThreshold")?.let { humidityChangeThreshold = it.toInt() }
-        numberValue(map, "temperatureChangeThreshold")?.let { temperatureChangeThreshold = it.toInt() }
+        integerIntValue(map, "sensorHtMeasureInterval")?.let { sensorHtMeasureInterval = it }
+        integerIntValue(map, "humidityChangeThreshold")?.let { humidityChangeThreshold = it }
+        integerIntValue(map, "temperatureChangeThreshold")?.let { temperatureChangeThreshold = it }
       }
       2 -> KBCfgSensorPIR().apply {
         (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        numberValue(map, "measureInterval")?.let { measureInterval = it.toInt() }
-        numberValue(map, "logBackoffTime")?.let { logBackoffTime = it.toInt() }
+        integerIntValue(map, "measureInterval")?.let { measureInterval = it }
+        integerIntValue(map, "logBackoffTime")?.let { logBackoffTime = it }
       }
       3 -> KBCfgSensorLight().apply {
         (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        numberValue(map, "measureInterval")?.let { measureInterval = it.toInt() }
-        numberValue(map, "logChangeThreshold")?.let { logChangeThreshold = it.toInt() }
+        integerIntValue(map, "measureInterval")?.let { measureInterval = it }
+        integerIntValue(map, "logChangeThreshold")?.let { logChangeThreshold = it }
       }
       5 -> KBCfgSensorGEO().apply {
         (map["parkingTag"] as? Boolean)?.let { parkingTag = it }
-        numberValue(map, "parkingThreshold")?.let { parkingThreshold = it.toInt() }
-        numberValue(map, "parkingDelay")?.let { parkingDelay = it.toInt() }
+        integerIntValue(map, "parkingThreshold")?.let { parkingThreshold = it }
+        integerIntValue(map, "parkingDelay")?.let { parkingDelay = it }
       }
       6 -> KBCfgSensorScan().apply {
-        numberValue(map, "scanInterval")?.let { scanInterval = it.toInt() }
-        numberValue(map, "motionScanInterval")?.let { motionScanInterval = it.toInt() }
-        numberValue(map, "scanDuration")?.let { scanDuration = it.toInt() }
-        numberValue(map, "scanModel")?.let { scanModel = it.toInt() }
-        numberValue(map, "scanRssi")?.let { scanRssi = it.toInt() }
-        numberValue(map, "scanChanelMask")?.let { scanChanelMask = it.toInt() }
-        numberValue(map, "scanMax")?.let { scanMax = it.toInt() }
-        numberValue(map, "scanResultAdvSlot")?.let { scanResultAdvSlot = it.toInt() }
+        integerIntValue(map, "scanInterval")?.let { scanInterval = it }
+        integerIntValue(map, "motionScanInterval")?.let { motionScanInterval = it }
+        integerIntValue(map, "scanDuration")?.let { scanDuration = it }
+        integerIntValue(map, "scanModel")?.let { scanModel = it }
+        integerIntValue(map, "scanRssi")?.let { scanRssi = it }
+        integerIntValue(map, "scanChanelMask")?.let { scanChanelMask = it }
+        integerIntValue(map, "scanMax")?.let { scanMax = it }
+        integerIntValue(map, "scanResultAdvSlot")?.let { scanResultAdvSlot = it }
       }
       else -> throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     }
@@ -752,7 +811,18 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun numberValue(map: Map<String, Any?>, key: String): Number? {
-    return map[key] as? Number
+    val value = map[key] as? Number ?: return null
+    return if (java.lang.Double.isFinite(value.toDouble())) value else null
+  }
+
+  private fun integerIntValue(map: Map<String, Any?>, key: String): Int? {
+    val longValue = integerLongValue(map, key) ?: return null
+    if (longValue < Int.MIN_VALUE || longValue > Int.MAX_VALUE) return null
+    return longValue.toInt()
+  }
+
+  private fun finiteFloatValue(map: Map<String, Any?>, key: String): Float? {
+    return numberValue(map, key)?.toFloat()
   }
 
   private fun integerLongValue(map: Map<String, Any?>, key: String): Long? {
@@ -973,9 +1043,30 @@ class ExpoKBeaconProModule : Module() {
       mapOf(
         "macAddress" to normalizedMac(macAddress),
         "state" to connectionStateToInt(state),
-        "reason" to reason
+        "reason" to connectionReasonToJs(reason)
       )
     )
+  }
+
+  private fun connectionReasonToJs(reason: Int): Int {
+    if (nativeConnectionReasonEquals(reason, "ConnDefault")) return JS_CONN_DEFAULT
+    if (nativeConnectionReasonEquals(reason, "ConnException")) return JS_CONN_EXCEPTION
+    if (nativeConnectionReasonEquals(reason, "ConnTimeout")) return JS_CONN_TIMEOUT
+    if (nativeConnectionReasonEquals(reason, "ConnAuthFail")) return JS_CONN_AUTH_FAIL
+    if (nativeConnectionReasonEquals(reason, "ConnBleClosed")) return JS_CONN_BLE_CLOSED
+    if (nativeConnectionReasonEquals(reason, "ConnBleBusy")) return JS_CONN_BLE_BUSY
+    if (nativeConnectionReasonEquals(reason, "ConnNotSupport")) return JS_CONN_NOT_SUPPORT
+    if (nativeConnectionReasonEquals(reason, "ConnServiceNotSupport")) return JS_CONN_NOT_SUPPORT
+    if (nativeConnectionReasonEquals(reason, "ConnManualDisconnect")) return JS_CONN_MANUAL_DISCONNECT
+    if (nativeConnectionReasonEquals(reason, "ConnManualDisconnting")) return JS_CONN_MANUAL_DISCONNECT
+    if (nativeConnectionReasonEquals(reason, "ConnSuccess")) return JS_CONN_SUCCESS
+    return JS_CONN_DEFAULT
+  }
+
+  private fun nativeConnectionReasonEquals(reason: Int, fieldName: String): Boolean {
+    return runCatching {
+      KBConnectionEvent::class.java.getField(fieldName).getInt(null) == reason
+    }.getOrDefault(false)
   }
 
   private fun connectionStateToInt(state: KBConnState): Int {

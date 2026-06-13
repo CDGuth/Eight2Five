@@ -182,6 +182,52 @@ describe("PANS BLE codecs", () => {
     expect(encoded[12]).toBe(80);
   });
 
+  test("encodes persisted position signed-int32 millimeter boundaries", () => {
+    const encoded = encodePersistedPosition({
+      xMeters: 2_147_483.647,
+      yMeters: -2_147_483.648,
+      zMeters: 0,
+      quality: 100,
+    });
+
+    expect(encoded.slice(0, 4)).toEqual([0xff, 0xff, 0xff, 0x7f]);
+    expect(encoded.slice(4, 8)).toEqual([0x00, 0x00, 0x00, 0x80]);
+  });
+
+  test("rejects persisted position non-finite and out-of-range values", () => {
+    expect(() =>
+      encodePersistedPosition({ xMeters: Number.NaN, yMeters: 0 }),
+    ).toThrow("finite numbers");
+    expect(() =>
+      encodePersistedPosition({
+        xMeters: Number.POSITIVE_INFINITY,
+        yMeters: 0,
+      }),
+    ).toThrow("finite numbers");
+    expect(() =>
+      encodePersistedPosition({
+        xMeters: Number.NEGATIVE_INFINITY,
+        yMeters: 0,
+      }),
+    ).toThrow("finite numbers");
+    expect(() =>
+      encodePersistedPosition({ xMeters: 2_147_483.648, yMeters: 0 }),
+    ).toThrow("signed int32");
+    expect(() =>
+      encodePersistedPosition({ xMeters: 0, yMeters: -2_147_483.649 }),
+    ).toThrow("signed int32");
+    expect(() =>
+      encodePersistedPosition({
+        xMeters: 0,
+        yMeters: 0,
+        quality: Number.NaN,
+      }),
+    ).toThrow("quality must be a finite number");
+    expect(() =>
+      encodePersistedPosition({ xMeters: 0, yMeters: 0, quality: 101 }),
+    ).toThrow("quality");
+  });
+
   test("decodes empty, position, distances, and combined location frames", () => {
     expect(decodeLocationData([])).toEqual({
       distances: [],
@@ -724,6 +770,38 @@ describe("ExpoPansBleApiModule wrapper", () => {
       PANS_BLE_UUIDS.characteristics.firmwareUpdatePoll,
       true,
     );
+  });
+
+  test.each([
+    ["empty", "", []],
+    [
+      "exactly 16 ASCII bytes",
+      "1234567890ABCDEF",
+      Array.from("1234567890ABCDEF").map((char) => char.charCodeAt(0)),
+    ],
+    [
+      "Unicode within 16 UTF-8 bytes",
+      "é".repeat(8),
+      Array.from(new TextEncoder().encode("é".repeat(8))),
+    ],
+  ])("writeLabel accepts %s", async (_label, value, expectedPayload) => {
+    await expect(writeLabel("device-1", value)).resolves.toBe(true);
+    expect(mockNativeModule.writeCharacteristic).toHaveBeenCalledWith(
+      "device-1",
+      PANS_BLE_UUIDS.characteristics.label,
+      expectedPayload,
+      "withResponse",
+    );
+  });
+
+  test.each([
+    ["17 ASCII bytes", "1234567890ABCDEFG"],
+    ["Unicode over 16 UTF-8 bytes", "é".repeat(9)],
+  ])("writeLabel rejects %s", async (_label, value) => {
+    await expect(writeLabel("device-1", value)).rejects.toThrow(
+      "label must be at most 16 UTF-8 bytes",
+    );
+    expect(mockNativeModule.writeCharacteristic).not.toHaveBeenCalled();
   });
 
   test("patchOperationMode returns updated raw bytes", async () => {

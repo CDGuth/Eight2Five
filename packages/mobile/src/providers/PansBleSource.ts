@@ -54,8 +54,9 @@ export function createPansBleSource(
       const teardownDevices = new Set<string>();
 
       async function disconnectAfterRemoval(deviceId: string): Promise<void> {
-        if (teardownDevices.has(deviceId)) return;
-        teardownDevices.add(deviceId);
+        const teardownAlreadyStarted = teardownDevices.has(deviceId);
+        if (teardownAlreadyStarted && !subscribedDevices.has(deviceId)) return;
+        if (!teardownAlreadyStarted) teardownDevices.add(deviceId);
         const shouldDisconnect = options.disconnectOnTeardown ?? true;
 
         try {
@@ -66,7 +67,9 @@ export function createPansBleSource(
         } finally {
           if (activeTagDeviceId === deviceId) activeTagDeviceId = undefined;
           configuredDevices.delete(deviceId);
-          if (shouldDisconnect) await disconnect(deviceId);
+          if (shouldDisconnect && !teardownAlreadyStarted) {
+            await disconnect(deviceId);
+          }
         }
       }
 
@@ -114,13 +117,6 @@ export function createPansBleSource(
             configuredDevices.add(device.deviceId);
           }
 
-          await subscribeLocationData(device.deviceId);
-          subscribedDevices.add(device.deviceId);
-          if (isRemoved) {
-            await disconnectAfterRemoval(device.deviceId);
-            return;
-          }
-
           const frame = await readLocationData(device.deviceId);
           if (isRemoved) {
             await disconnectAfterRemoval(device.deviceId);
@@ -136,6 +132,13 @@ export function createPansBleSource(
             } catch (error) {
               options.onError?.(error);
             }
+          }
+
+          await subscribeLocationData(device.deviceId);
+          subscribedDevices.add(device.deviceId);
+          if (isRemoved) {
+            await disconnectAfterRemoval(device.deviceId);
+            return;
           }
         } catch (error) {
           options.onError?.(error);

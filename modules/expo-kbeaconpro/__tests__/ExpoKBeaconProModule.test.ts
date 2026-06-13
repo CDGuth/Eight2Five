@@ -22,16 +22,21 @@ import {
   subscribeSensorDataNotify,
   unsubscribeNotify,
   unsubscribeSensorDataNotify,
+  validateConfigAgainstSnapshot,
 } from "../src/ExpoKBeaconProModule";
 import {
   ExpoKBeaconProModuleEvents,
   KBAdvPacket,
   KBAdvType,
+  KBConnEvtReason,
   KBConnPara,
   KBeaconConfig,
   KBSensorReadOption,
   KBSensorType,
 } from "../src/ExpoKBeaconPro.types";
+
+const MAC = "AA:BB:CC:DD:EE:FF";
+const PASSWORD = "1234567890abcdef";
 
 type NativeModuleMock = {
   addListener: jest.Mock;
@@ -84,7 +89,7 @@ jest.mock("expo-modules-core", () => {
     disconnect: jest.fn(async () => true),
     modifyConfig: jest.fn(async () => true),
     readDeviceSnapshot: jest.fn(async () => ({
-      macAddress: "AA:BB",
+      macAddress: MAC,
       common: {
         name: "Field Beacon",
         model: "K15",
@@ -244,14 +249,14 @@ describe("ExpoKBeaconProModule", () => {
     });
 
     test("connect forwards timeout in milliseconds", async () => {
-      const macAddress = "AA:BB:CC:DD:EE:FF";
-      const password = "123456";
+      const macAddress = " aa:bb:cc:dd:ee:ff ";
+      const password = PASSWORD;
       const timeoutMs = 15_000;
 
       const result = await connect(macAddress, password, timeoutMs);
 
       expect(mockNativeModule.connect).toHaveBeenCalledWith(
-        macAddress,
+        MAC,
         password,
         timeoutMs,
       );
@@ -259,20 +264,29 @@ describe("ExpoKBeaconProModule", () => {
     });
 
     test("connect uses the default millisecond timeout", async () => {
-      await connect("AA:BB");
+      await connect(MAC);
 
       expect(mockNativeModule.connect).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         undefined,
         15_000,
       );
     });
 
     test("connect rejects invalid timeout values before native call", async () => {
-      await expect(connect("AA:BB", undefined, 0)).rejects.toThrow(
+      await expect(connect(MAC, undefined, 0)).rejects.toThrow(
         "timeoutMs must be a positive integer",
       );
       expect(mockNativeModule.connect).not.toHaveBeenCalled();
+    });
+
+    test("connect rejects malformed MAC addresses and short passwords", async () => {
+      await expect(connect("AA:BB")).rejects.toThrow("canonical");
+      await expect(connect(MAC, "short")).rejects.toThrow(
+        "password must be exactly 16 characters",
+      );
+      await connect(MAC, "");
+      expect(mockNativeModule.connect).toHaveBeenCalledWith(MAC, "", 15_000);
     });
 
     test("connectEnhanced forwards connection parameters", async () => {
@@ -281,20 +295,20 @@ describe("ExpoKBeaconProModule", () => {
         readCommPara: true,
       };
 
-      await connectEnhanced("AA:BB", "pwd", 30_000, connPara);
+      await connectEnhanced(MAC, PASSWORD, 30_000, connPara);
 
       expect(mockNativeModule.connectEnhanced).toHaveBeenCalledWith(
-        "AA:BB",
-        "pwd",
+        MAC,
+        PASSWORD,
         30_000,
         connPara,
       );
     });
 
     test("disconnect delegates to the native module", async () => {
-      await disconnect("AA:BB");
+      await disconnect(MAC);
 
-      expect(mockNativeModule.disconnect).toHaveBeenCalledWith("AA:BB");
+      expect(mockNativeModule.disconnect).toHaveBeenCalledWith(MAC);
     });
 
     test("modifyConfig sends strict canonical configs", async () => {
@@ -310,19 +324,126 @@ describe("ExpoKBeaconProModule", () => {
         },
       ];
 
-      await modifyConfig("AA:BB", configs);
+      await modifyConfig(MAC, configs);
 
-      expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(
-        "AA:BB",
-        configs,
-      );
+      expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(MAC, configs);
     });
 
     test("modifyConfig rejects malformed configs", async () => {
-      await expect(
-        modifyConfig("AA:BB", [{} as KBeaconConfig]),
-      ).rejects.toThrow("configuration at index 0");
+      await expect(modifyConfig(MAC, [{} as KBeaconConfig])).rejects.toThrow(
+        "configuration at index 0",
+      );
 
+      expect(mockNativeModule.modifyConfig).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      [
+        "non-finite txPower",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyUID,
+          slotIndex: 0,
+          txPower: Number.NaN,
+        },
+        "txPower",
+      ],
+      [
+        "fractional slotIndex",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyUID,
+          slotIndex: 0.5,
+        },
+        "slotIndex",
+      ],
+      [
+        "overflowing majorID",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.IBeacon,
+          slotIndex: 0,
+          majorID: 65_536,
+        },
+        "majorID",
+      ],
+      [
+        "invalid UUID",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.IBeacon,
+          slotIndex: 0,
+          uuid: "not-a-uuid",
+        },
+        "uuid",
+      ],
+      [
+        "invalid NID length",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyUID,
+          slotIndex: 0,
+          nid: "0x1234",
+        },
+        "nid",
+      ],
+      [
+        "invalid SID hex",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyUID,
+          slotIndex: 0,
+          sid: "0xnot-hex-data",
+        },
+        "sid",
+      ],
+      [
+        "fractional trigger field",
+        {
+          configType: "trigger",
+          triggerIndex: 0,
+          triggerType: 5,
+          wakeupDuration: 1.5,
+        },
+        "wakeupDuration",
+      ],
+      [
+        "unsupported sensor config type",
+        {
+          configType: "sensor",
+          sensorType: KBSensorType.VOC,
+        },
+        "sensorType",
+      ],
+      [
+        "invalid time range",
+        {
+          configType: "sensor",
+          sensorType: KBSensorType.Light,
+          disablePeriod0: { localStartHour: 24 },
+        },
+        "disablePeriod0.localStartHour",
+      ],
+      [
+        "unsafe integer",
+        {
+          configType: "sensor",
+          sensorType: KBSensorType.Scan,
+          scanMax: Number.MAX_SAFE_INTEGER + 1,
+        },
+        "scanMax",
+      ],
+    ])("modifyConfig rejects %s", async (_name, config, message) => {
+      await expect(
+        modifyConfig(MAC, [config as KBeaconConfig]),
+      ).rejects.toThrow(message);
+      expect(mockNativeModule.modifyConfig).not.toHaveBeenCalled();
+    });
+
+    test("modifyConfig validates common passwords before native calls", async () => {
+      await expect(
+        modifyConfig(MAC, [{ configType: "common", password: "pässword" }]),
+      ).rejects.toThrow("password must be exactly 16 characters");
       expect(mockNativeModule.modifyConfig).not.toHaveBeenCalled();
     });
 
@@ -342,7 +463,7 @@ describe("ExpoKBeaconProModule", () => {
         },
       ];
 
-      await expect(modifyConfig("AA:BB", configs)).rejects.toThrow(
+      await expect(modifyConfig(MAC, configs)).rejects.toThrow(
         "refusing to disable connectability",
       );
       expect(mockNativeModule.modifyConfig).not.toHaveBeenCalled();
@@ -358,19 +479,131 @@ describe("ExpoKBeaconProModule", () => {
         },
       ];
 
-      await modifyConfig("AA:BB", configs, {
+      await modifyConfig(MAC, configs, {
         allowDisableAllConnectableSlots: true,
       });
 
-      expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(
-        "AA:BB",
-        configs,
-      );
+      expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(MAC, configs);
+    });
+
+    test("modifyConfig evaluates post-update connectability when snapshot is supplied", async () => {
+      const snapshot = {
+        macAddress: MAC,
+        slots: [
+          {
+            configType: "advertisement" as const,
+            slotIndex: 0,
+            advType: KBAdvType.EddyUID,
+            advConnectable: true,
+          },
+          {
+            configType: "advertisement" as const,
+            slotIndex: 1,
+            advType: KBAdvType.EddyUID,
+            advConnectable: false,
+          },
+        ],
+      };
+
+      await expect(
+        modifyConfig(
+          MAC,
+          [
+            {
+              configType: "advertisement",
+              advType: KBAdvType.EddyUID,
+              slotIndex: 0,
+              advConnectable: false,
+            },
+          ],
+          { snapshot },
+        ),
+      ).rejects.toThrow("every advertisement slot");
+
+      snapshot.slots[1].advConnectable = true;
+      await expect(
+        modifyConfig(
+          MAC,
+          [
+            {
+              configType: "advertisement",
+              advType: KBAdvType.EddyUID,
+              slotIndex: 0,
+              advConnectable: false,
+            },
+          ],
+          { snapshot },
+        ),
+      ).resolves.toBe(true);
+    });
+
+    test("validateConfigAgainstSnapshot rejects incompatible capabilities", () => {
+      const snapshot = {
+        macAddress: MAC,
+        common: {
+          maxSlots: 1,
+          maxTriggers: 1,
+          minTxPower: -20,
+          maxTxPower: 4,
+          supportsEddyUid: false,
+          supportsLight: false,
+        },
+      };
+
+      expect(() =>
+        validateConfigAgainstSnapshot(
+          [
+            {
+              configType: "advertisement",
+              advType: KBAdvType.EddyUID,
+              slotIndex: 1,
+            },
+          ],
+          snapshot,
+        ),
+      ).toThrow("maxSlots");
+      expect(() =>
+        validateConfigAgainstSnapshot(
+          [
+            {
+              configType: "advertisement",
+              advType: KBAdvType.EddyUID,
+              slotIndex: 0,
+              txPower: 8,
+            },
+          ],
+          snapshot,
+        ),
+      ).toThrow("txPower");
+      expect(() =>
+        validateConfigAgainstSnapshot(
+          [
+            {
+              configType: "advertisement",
+              advType: KBAdvType.EddyUID,
+              slotIndex: 0,
+            },
+          ],
+          snapshot,
+        ),
+      ).toThrow("unsupported advertisement type");
+      expect(() =>
+        validateConfigAgainstSnapshot(
+          [{ configType: "trigger", triggerIndex: 1, triggerType: 5 }],
+          snapshot,
+        ),
+      ).toThrow("maxTriggers");
+      expect(() =>
+        validateConfigAgainstSnapshot(
+          [{ configType: "sensor", sensorType: KBSensorType.Light }],
+          snapshot,
+        ),
+      ).toThrow("unsupported sensor type");
     });
 
     test("readDeviceSnapshot returns the native snapshot", async () => {
-      await expect(readDeviceSnapshot("AA:BB")).resolves.toEqual({
-        macAddress: "AA:BB",
+      await expect(readDeviceSnapshot(MAC)).resolves.toEqual({
+        macAddress: MAC,
         common: {
           name: "Field Beacon",
           model: "K15",
@@ -388,31 +621,31 @@ describe("ExpoKBeaconProModule", () => {
           },
         ],
       });
-      expect(mockNativeModule.readDeviceSnapshot).toHaveBeenCalledWith("AA:BB");
+      expect(mockNativeModule.readDeviceSnapshot).toHaveBeenCalledWith(MAC);
     });
 
     test("readDeviceSnapshot preserves omitted optional fields", async () => {
       mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
-        macAddress: "AA:BB",
+        macAddress: MAC,
         slots: [{ configType: "advertisement", slotIndex: 1, advType: 2 }],
       });
 
-      await expect(readDeviceSnapshot("AA:BB")).resolves.toEqual({
-        macAddress: "AA:BB",
+      await expect(readDeviceSnapshot(MAC)).resolves.toEqual({
+        macAddress: MAC,
         slots: [{ configType: "advertisement", slotIndex: 1, advType: 2 }],
       });
     });
 
     test("readDeviceSnapshot accepts snapshot without slots", async () => {
       mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
-        macAddress: "AA:BB",
+        macAddress: MAC,
         common: { name: "Field Beacon" },
       });
 
-      const snapshot = await readDeviceSnapshot("AA:BB");
+      const snapshot = await readDeviceSnapshot(MAC);
 
       expect(snapshot).toEqual({
-        macAddress: "AA:BB",
+        macAddress: MAC,
         common: { name: "Field Beacon" },
       });
       expect(snapshot).not.toHaveProperty("slots");
@@ -420,27 +653,27 @@ describe("ExpoKBeaconProModule", () => {
 
     test("readDeviceSnapshot distinguishes omitted slots from empty loaded slots", async () => {
       mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
-        macAddress: "AA:BB",
+        macAddress: MAC,
         slots: [],
       });
 
-      const snapshotWithEmptySlots = await readDeviceSnapshot("AA:BB");
+      const snapshotWithEmptySlots = await readDeviceSnapshot(MAC);
       expect(snapshotWithEmptySlots.slots).toEqual([]);
       expect(snapshotWithEmptySlots).toHaveProperty("slots");
 
       mockNativeModule.readDeviceSnapshot.mockResolvedValueOnce({
-        macAddress: "AA:BB",
+        macAddress: MAC,
       });
 
-      const snapshotWithoutSlots = await readDeviceSnapshot("AA:BB");
+      const snapshotWithoutSlots = await readDeviceSnapshot(MAC);
       expect(snapshotWithoutSlots).not.toHaveProperty("slots");
     });
 
     test("readSensorDataInfo returns the native payload", async () => {
-      const info = await readSensorDataInfo("AA:BB", KBSensorType.HTHumidity);
+      const info = await readSensorDataInfo(MAC, KBSensorType.HTHumidity);
 
       expect(mockNativeModule.readSensorDataInfo).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         KBSensorType.HTHumidity,
       );
       expect(info).toEqual({
@@ -457,7 +690,7 @@ describe("ExpoKBeaconProModule", () => {
         unreadRecordNum: 3,
       });
 
-      const info = await readSensorDataInfo("AA:BB", KBSensorType.HTHumidity);
+      const info = await readSensorDataInfo(MAC, KBSensorType.HTHumidity);
 
       expect(info).toEqual({
         totalRecordNum: 10,
@@ -474,7 +707,7 @@ describe("ExpoKBeaconProModule", () => {
         readInfoUtcSeconds: 987654,
       });
 
-      const info = await readSensorDataInfo("AA:BB", KBSensorType.Light);
+      const info = await readSensorDataInfo(MAC, KBSensorType.Light);
 
       expect(info).toEqual({
         sensorType: KBSensorType.Light,
@@ -493,17 +726,17 @@ describe("ExpoKBeaconProModule", () => {
         maxRecords: 50,
       };
 
-      await readSensorRecords("AA:BB", request);
+      await readSensorRecords(MAC, request);
 
       expect(mockNativeModule.readSensorRecords).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         request,
       );
     });
 
     test("readSensorRecords rejects invalid maximum record counts", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 0,
@@ -513,7 +746,7 @@ describe("ExpoKBeaconProModule", () => {
 
     test("readSensorRecords rejects invalid read options", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readOption: 99,
           maxRecords: 10,
@@ -524,7 +757,7 @@ describe("ExpoKBeaconProModule", () => {
 
     test("readSensorRecords rejects omitted readOption", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           maxRecords: 10,
         } as never),
@@ -534,7 +767,7 @@ describe("ExpoKBeaconProModule", () => {
 
     test("readSensorRecords rejects negative read positions", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readPosition: -1,
           readOption: KBSensorReadOption.NormalOrder,
@@ -545,7 +778,7 @@ describe("ExpoKBeaconProModule", () => {
 
     test("readSensorRecords rejects out-of-range read positions", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readPosition: 0x1_0000_0000,
           readOption: KBSensorReadOption.NormalOrder,
@@ -563,17 +796,17 @@ describe("ExpoKBeaconProModule", () => {
         maxRecords: 10,
       };
 
-      await readSensorRecords("AA:BB", request);
+      await readSensorRecords(MAC, request);
 
       expect(mockNativeModule.readSensorRecords).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         request,
       );
     });
 
     test("readSensorRecords preserves raw unknown payload data", async () => {
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 10,
@@ -588,7 +821,7 @@ describe("ExpoKBeaconProModule", () => {
       });
 
       await expect(
-        readSensorRecords("AA:BB", {
+        readSensorRecords(MAC, {
           sensorType: KBSensorType.PIR,
           readOption: KBSensorReadOption.NormalOrder,
           maxRecords: 10,
@@ -604,7 +837,7 @@ describe("ExpoKBeaconProModule", () => {
         records: [{ utcTime: 123, raw: [1, 2, 3] }],
       });
 
-      const result = await readSensorRecords("AA:BB", {
+      const result = await readSensorRecords(MAC, {
         sensorType: KBSensorType.PIR,
         readOption: KBSensorReadOption.NormalOrder,
         maxRecords: 10,
@@ -615,53 +848,57 @@ describe("ExpoKBeaconProModule", () => {
     });
 
     test("clearSensorHistory delegates to the native bridge", async () => {
-      await clearSensorHistory("AA:BB", KBSensorType.Light);
+      await clearSensorHistory(MAC, KBSensorType.Light);
 
       expect(mockNativeModule.clearSensorHistory).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         KBSensorType.Light,
       );
     });
 
     test("subscribeNotify delegates to the native bridge", async () => {
-      await subscribeNotify("AA:BB", 7);
+      await subscribeNotify(MAC, 7);
 
-      expect(mockNativeModule.subscribeNotify).toHaveBeenCalledWith("AA:BB", 7);
+      expect(mockNativeModule.subscribeNotify).toHaveBeenCalledWith(MAC, 7);
     });
 
     test("subscribeNotify requires an explicit eventType", async () => {
-      await expect(
-        subscribeNotify("AA:BB", undefined as never),
-      ).rejects.toThrow("eventType must be an integer");
+      await expect(subscribeNotify(MAC, undefined as never)).rejects.toThrow(
+        "eventType must be an integer",
+      );
+      expect(mockNativeModule.subscribeNotify).not.toHaveBeenCalled();
+    });
+
+    test("subscribeNotify rejects negative event types", async () => {
+      await expect(subscribeNotify(MAC, -1)).rejects.toThrow(
+        "eventType must be a non-negative integer",
+      );
       expect(mockNativeModule.subscribeNotify).not.toHaveBeenCalled();
     });
 
     test("unsubscribeNotify delegates to the native bridge", async () => {
-      await unsubscribeNotify("AA:BB", 7);
+      await unsubscribeNotify(MAC, 7);
 
-      expect(mockNativeModule.unsubscribeNotify).toHaveBeenCalledWith(
-        "AA:BB",
-        7,
-      );
+      expect(mockNativeModule.unsubscribeNotify).toHaveBeenCalledWith(MAC, 7);
     });
 
     test("unsubscribeNotify requires an explicit eventType", async () => {
-      await expect(
-        unsubscribeNotify("AA:BB", undefined as never),
-      ).rejects.toThrow("eventType must be an integer");
+      await expect(unsubscribeNotify(MAC, undefined as never)).rejects.toThrow(
+        "eventType must be an integer",
+      );
       expect(mockNativeModule.unsubscribeNotify).not.toHaveBeenCalled();
     });
 
     test("sensor notification compatibility wrappers delegate to generalized API", async () => {
-      await subscribeSensorDataNotify("AA:BB", KBSensorType.VOC);
-      await unsubscribeSensorDataNotify("AA:BB", KBSensorType.VOC);
+      await subscribeSensorDataNotify(MAC, KBSensorType.VOC);
+      await unsubscribeSensorDataNotify(MAC, KBSensorType.VOC);
 
       expect(mockNativeModule.subscribeNotify).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         KBSensorType.VOC,
       );
       expect(mockNativeModule.unsubscribeNotify).toHaveBeenCalledWith(
-        "AA:BB",
+        MAC,
         KBSensorType.VOC,
       );
     });
@@ -725,5 +962,21 @@ describe("canonical packet parity fixtures", () => {
       sid: "0x010000000000",
     });
     expect(uidPacket).not.toHaveProperty("bid");
+  });
+});
+
+describe("stable public enums", () => {
+  test("KBConnEvtReason includes normalized cross-platform reason values", () => {
+    expect(KBConnEvtReason).toMatchObject({
+      ConnDefault: 0,
+      ConnException: 1,
+      ConnTimeout: 2,
+      ConnAuthFail: 3,
+      ConnBleClosed: 4,
+      ConnBleBusy: 5,
+      ConnNotSupport: 6,
+      ConnManualDisconnect: 7,
+      ConnSuccess: 256,
+    });
   });
 });

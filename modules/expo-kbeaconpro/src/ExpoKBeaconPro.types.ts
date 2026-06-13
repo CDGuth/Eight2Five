@@ -182,11 +182,13 @@ export enum KBConnState {
 
 export enum KBConnEvtReason {
   ConnDefault = 0,
+  ConnException = 1,
   ConnTimeout = 2,
   ConnAuthFail = 3,
   ConnBleClosed = 4,
   ConnBleBusy = 5,
   ConnNotSupport = 6,
+  ConnManualDisconnect = 7,
   ConnSuccess = 256,
 }
 
@@ -405,6 +407,7 @@ export type KBCfgBase = KBeaconConfig;
 
 export interface ModifyConfigOptions {
   allowDisableAllConnectableSlots?: boolean;
+  snapshot?: KBeaconDeviceSnapshot;
 }
 
 export interface KBeaconDeviceSnapshot {

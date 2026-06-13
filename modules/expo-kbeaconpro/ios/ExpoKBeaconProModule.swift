@@ -14,12 +14,19 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   private var discoveredBeacons = [String: KBeacon]()
   private var activeConnections = [String: KBeacon]()
   private var pendingConnectionPromises = [String: Promise]()
+  private var pendingScanPromise: Promise?
   private var notificationSubscriptions = Set<String>()
   private var isDestroyed = false
   private var lastBluetoothState: BLECentralMgrState = .Unknown
 
   private func normalizedMac(_ mac: String) -> String {
-    mac.uppercased()
+    mac.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+  }
+
+  private func validatedMac(_ mac: String) -> String? {
+    let normalized = normalizedMac(mac)
+    let pattern = #"^([0-9A-F]{2}:){5}[0-9A-F]{2}$"#
+    return normalized.range(of: pattern, options: .regularExpression) == nil ? nil : normalized
   }
 
   private func normalizedPassword(_ password: String?) -> String {
@@ -30,9 +37,41 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     return password
   }
 
+  private func isValidPassword(_ password: String?) -> Bool {
+    guard let password, !password.isEmpty else { return true }
+    return password.count == 16
+  }
+
+  private func validatedTimeoutMs(_ timeoutMs: Int?) -> Int? {
+    let resolvedTimeoutMs = timeoutMs ?? defaultTimeoutMs
+    return resolvedTimeoutMs > 0 ? resolvedTimeoutMs : nil
+  }
+
   private func normalizedTimeoutSeconds(_ timeoutMs: Int?) -> Double {
     let resolvedTimeoutMs = timeoutMs ?? defaultTimeoutMs
     return max(0.001, Double(resolvedTimeoutMs) / 1000.0)
+  }
+
+  private func connectionStateToJs(_ state: KBConnState) -> Int {
+    switch state {
+    case .Disconnected: return 0
+    case .Connecting: return 1
+    case .Connected: return 2
+    case .Disconnecting: return 3
+    }
+  }
+
+  private func connectionReasonToJs(_ evt: KBConnEvtReason) -> Int {
+    switch evt {
+    case .ConnNull: return 0
+    case .ConnSuccess: return 256
+    case .ConnTimeout: return 2
+    case .ConnException: return 1
+    case .ConnServiceNotSupport: return 6
+    case .ConnManualDisconnting: return 7
+    case .ConnAuthFail: return 3
+    @unknown default: return 0
+    }
   }
 
   private func normalizeHexString(_ value: String?) -> String? {
@@ -51,7 +90,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       "mac": mac,
       "name": beacon.name,
       "rssi": Int(beacon.rssi),
-      "connectionState": beacon.state.rawValue,
+      "connectionState": connectionStateToJs(beacon.state),
       "advPackets": packets,
     ]
 
@@ -90,7 +129,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       }
       dict["alarmStatus"] = sensorPacket.alarmStatus
       dict["pirIndication"] = sensorPacket.pirIndication
-      dict["luxValue"] = sensorPacket.lightValue ?? value(forKey: "luxLevel", on: sensorPacket)
+      dict["luxValue"] = sensorPacket.lightValue ?? optionalNumber(from: sensorPacket, selectorName: "luxLevel")
     } else if let systemPacket = advPacket as? KBAdvPacketSystem {
       dict["macAddress"] = systemPacket.macAddress.map(normalizedMac)
       dict["model"] = systemPacket.model
@@ -114,23 +153,43 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     return false
   }
 
-  private func value(forKey key: String, on object: AnyObject) -> Any? {
-    (object as? NSObject)?.value(forKey: key)
+  // Compatibility shim for optional SDK accessors whose availability differs by pod patch level.
+  // It checks selector support before invocation and never uses KVC for unknown keys.
+  private func optionalNumber(from object: NSObject, selectorName: String) -> NSNumber? {
+    let selector = NSSelectorFromString(selectorName)
+    guard object.responds(to: selector) else { return nil }
+    return object.perform(selector)?.takeUnretainedValue() as? NSNumber
   }
 
-  private func setValue(_ value: Any?, forKey key: String, on object: AnyObject) {
-    guard let value, let object = object as? NSObject else { return }
-    object.setValue(value, forKey: key)
+  private func setOptionalObject(_ value: Any?, on object: NSObject, selectorName: String) {
+    guard let value else { return }
+    let selector = NSSelectorFromString(selectorName)
+    guard object.responds(to: selector) else { return }
+    object.perform(selector, with: value)
   }
 
-  private func setNumber(_ value: Any?, forKey key: String, on object: AnyObject) {
+  private func numberValue(_ value: Any?) -> NSNumber? {
     if let number = value as? NSNumber {
-      setValue(number, forKey: key, on: object)
-    } else if let intValue = value as? Int {
-      setValue(NSNumber(value: intValue), forKey: key, on: object)
-    } else if let doubleValue = value as? Double {
-      setValue(NSNumber(value: doubleValue), forKey: key, on: object)
+      return number.doubleValue.isFinite ? number : nil
     }
+    if let intValue = value as? Int {
+      return NSNumber(value: intValue)
+    }
+    if let doubleValue = value as? Double, doubleValue.isFinite {
+      return NSNumber(value: doubleValue)
+    }
+    return nil
+  }
+
+  private func integerValue(_ value: Any?) -> Int? {
+    guard let number = numberValue(value) else { return nil }
+    let doubleValue = number.doubleValue
+    guard doubleValue.rounded() == doubleValue else { return nil }
+    return number.intValue
+  }
+
+  private func integerNumber(_ value: Any?) -> NSNumber? {
+    integerValue(value).map { NSNumber(value: $0) }
   }
 
   private func dictToCfg(_ dict: [String: Any], index: Int) throws -> KBCfgBase {
@@ -141,11 +200,11 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     switch configType {
     case "common":
       let cfg = KBCfgCommon()
-      setValue(dict["name"] as? String, forKey: "deviceName", on: cfg)
-      setValue(dict["name"] as? String, forKey: "name", on: cfg)
-      setValue(dict["alwaysPowerOn"], forKey: "alwaysPowerOn", on: cfg)
-      setValue(dict["password"] as? String, forKey: "password", on: cfg)
-      setNumber(dict["refPower1Meters"], forKey: "refPower1Meters", on: cfg)
+      cfg.deviceName = dict["name"] as? String
+      setOptionalObject(dict["name"] as? String, on: cfg, selectorName: "setName:")
+      cfg.alwaysPowerOn = (dict["alwaysPowerOn"] as? Bool).map { NSNumber(value: $0) }
+      cfg.password = dict["password"] as? String
+      cfg.refPower1Meters = integerNumber(dict["refPower1Meters"])
       return cfg
 
     case "advertisement":
@@ -163,7 +222,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   }
 
   private func dictToAdvertisementCfg(_ dict: [String: Any], index: Int) throws -> KBCfgBase {
-    guard let advType = dict["advType"] as? Int else {
+    guard let advType = integerValue(dict["advType"]) else {
       throw ConfigMappingError.invalid(index: index)
     }
 
@@ -171,30 +230,30 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     switch advType {
     case 0:
       let typed = KBCfgAdvIBeacon()
-      setValue(dict["uuid"] as? String, forKey: "uuid", on: typed)
-      setNumber(dict["majorID"], forKey: "majorID", on: typed)
-      setNumber(dict["minorID"], forKey: "minorID", on: typed)
+      typed.uuid = dict["uuid"] as? String
+      typed.majorID = integerNumber(dict["majorID"])
+      typed.minorID = integerNumber(dict["minorID"])
       cfg = typed
     case 1:
       cfg = KBCfgAdvEddyTLM()
     case 2:
       let typed = KBCfgAdvEddyUID()
-      setValue(normalizeHexString(dict["nid"] as? String), forKey: "nid", on: typed)
-      setValue(normalizeHexString(dict["sid"] as? String), forKey: "sid", on: typed)
+      typed.nid = normalizeHexString(dict["nid"] as? String)
+      typed.sid = normalizeHexString(dict["sid"] as? String)
       cfg = typed
     case 3:
       let typed = KBCfgAdvEddyURL()
-      setValue(dict["url"] as? String, forKey: "url", on: typed)
+      typed.url = dict["url"] as? String
       cfg = typed
     case 4:
       let typed = KBCfgAdvKSensor()
-      setNumber(dict["aesType"], forKey: "aesType", on: typed)
+      typed.aesType = integerNumber(dict["aesType"])
       cfg = typed
     case 6:
       let typed = KBCfgAdvEBeacon()
-      setValue(dict["uuid"] as? String, forKey: "uuid", on: typed)
-      setNumber(dict["encryptInterval"], forKey: "encryptInterval", on: typed)
-      setNumber(dict["aesType"], forKey: "aesType", on: typed)
+      typed.uuid = dict["uuid"] as? String
+      typed.encryptInterval = integerNumber(dict["encryptInterval"])
+      typed.aesType = integerNumber(dict["aesType"])
       cfg = typed
     case 255:
       cfg = KBCfgAdvNull()
@@ -202,7 +261,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       throw ConfigMappingError.invalid(index: index)
     }
 
-    guard dict["slotIndex"] is Int || dict["slotIndex"] is NSNumber else {
+    guard let slotIndex = integerValue(dict["slotIndex"]), slotIndex >= 0 else {
       throw ConfigMappingError.invalid(index: index)
     }
     applySharedAdvertisementFields(dict, to: cfg)
@@ -210,87 +269,96 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   }
 
   private func applySharedAdvertisementFields(_ dict: [String: Any], to cfg: KBCfgBase) {
-    setNumber(dict["slotIndex"], forKey: "slotIndex", on: cfg)
-    setNumber(dict["txPower"], forKey: "txPower", on: cfg)
-    setNumber(dict["advPeriod"], forKey: "advPeriod", on: cfg)
-    setNumber(dict["advMode"], forKey: "advMode", on: cfg)
-    setValue(dict["advTriggerOnly"], forKey: "advTriggerOnly", on: cfg)
-    setValue(dict["advConnectable"], forKey: "advConnectable", on: cfg)
+    guard let advCfg = cfg as? KBCfgAdvBase else { return }
+    advCfg.slotIndex = integerNumber(dict["slotIndex"])
+    advCfg.txPower = integerNumber(dict["txPower"])
+    advCfg.advPeriod = numberValue(dict["advPeriod"])
+    advCfg.advMode = integerNumber(dict["advMode"])
+    advCfg.advTriggerOnly = (dict["advTriggerOnly"] as? Bool).map { NSNumber(value: $0) }
+    advCfg.advConnectable = (dict["advConnectable"] as? Bool).map { NSNumber(value: $0) }
   }
 
   private func dictToTriggerCfg(_ dict: [String: Any], index: Int) throws -> KBCfgBase {
-    guard let triggerType = dict["triggerType"] as? Int else {
+    guard let triggerType = integerValue(dict["triggerType"]) else {
       throw ConfigMappingError.invalid(index: index)
     }
 
     let cfg: KBCfgBase
     if triggerType == 5 {
-      cfg = KBCfgTriggerMotion()
-      setNumber(dict["accODR"], forKey: "accODR", on: cfg)
-      setNumber(dict["wakeupDuration"], forKey: "wakeupDuration", on: cfg)
+      let typed = KBCfgTriggerMotion()
+      typed.accODR = integerNumber(dict["accODR"])
+      typed.wakeupDuration = integerNumber(dict["wakeupDuration"])
+      cfg = typed
     } else if triggerType == 14 {
-      cfg = KBCfgTriggerAngle()
-      setNumber(dict["aboveAngle"], forKey: "aboveAngle", on: cfg)
-      setNumber(dict["reportInterval"], forKey: "reportInterval", on: cfg)
+      let typed = KBCfgTriggerAngle()
+      typed.aboveAngle = integerNumber(dict["aboveAngle"])
+      typed.reportInterval = integerNumber(dict["reportInterval"])
+      cfg = typed
     } else {
       cfg = KBCfgTrigger()
     }
 
-    setNumber(dict["triggerIndex"], forKey: "triggerIndex", on: cfg)
-    setNumber(dict["triggerType"], forKey: "triggerType", on: cfg)
-    setNumber(dict["triggerAction"], forKey: "triggerAction", on: cfg)
-    setNumber(dict["triggerAdvSlot"], forKey: "triggerAdvSlot", on: cfg)
-    setNumber(dict["triggerAdvTime"], forKey: "triggerAdvTime", on: cfg)
-    setNumber(dict["triggerPara"], forKey: "triggerPara", on: cfg)
-    setNumber(dict["triggerAdvPeriod"], forKey: "triggerAdvPeriod", on: cfg)
-    setNumber(dict["triggerTxPower"], forKey: "triggerTxPower", on: cfg)
-    setNumber(dict["triggerAdvChangeMode"], forKey: "triggerAdvChangeMode", on: cfg)
+    guard let triggerCfg = cfg as? KBCfgTrigger else { return cfg }
+    triggerCfg.triggerIndex = integerNumber(dict["triggerIndex"])
+    triggerCfg.triggerType = integerNumber(dict["triggerType"])
+    triggerCfg.triggerAction = integerNumber(dict["triggerAction"])
+    triggerCfg.triggerAdvSlot = integerNumber(dict["triggerAdvSlot"])
+    triggerCfg.triggerAdvTime = integerNumber(dict["triggerAdvTime"])
+    triggerCfg.triggerPara = integerNumber(dict["triggerPara"])
+    triggerCfg.triggerAdvPeriod = integerNumber(dict["triggerAdvPeriod"])
+    triggerCfg.triggerTxPower = integerNumber(dict["triggerTxPower"])
+    triggerCfg.triggerAdvChangeMode = integerNumber(dict["triggerAdvChangeMode"])
     return cfg
   }
 
   private func dictToSensorCfg(_ dict: [String: Any], index: Int) throws -> KBCfgBase {
-    guard let sensorType = dict["sensorType"] as? Int else {
+    guard let sensorType = integerValue(dict["sensorType"]) else {
       throw ConfigMappingError.invalid(index: index)
     }
 
     let cfg: KBCfgBase
     switch sensorType {
     case 1:
-      cfg = KBCfgSensorHT()
-      setValue(dict["logEnable"], forKey: "logEnable", on: cfg)
-      setNumber(dict["sensorHtMeasureInterval"], forKey: "sensorHtMeasureInterval", on: cfg)
-      setNumber(dict["humidityChangeThreshold"], forKey: "humidityChangeThreshold", on: cfg)
-      setNumber(dict["temperatureChangeThreshold"], forKey: "temperatureChangeThreshold", on: cfg)
+      let typed = KBCfgSensorHT()
+      typed.logEnable = (dict["logEnable"] as? Bool).map { NSNumber(value: $0) }
+      typed.sensorHtMeasureInterval = integerNumber(dict["sensorHtMeasureInterval"])
+      typed.humidityChangeThreshold = integerNumber(dict["humidityChangeThreshold"])
+      typed.temperatureChangeThreshold = integerNumber(dict["temperatureChangeThreshold"])
+      cfg = typed
     case 2:
-      cfg = KBCfgSensorPIR()
-      setValue(dict["logEnable"], forKey: "logEnable", on: cfg)
-      setNumber(dict["measureInterval"], forKey: "measureInterval", on: cfg)
-      setNumber(dict["logBackoffTime"], forKey: "logBackoffTime", on: cfg)
+      let typed = KBCfgSensorPIR()
+      typed.logEnable = (dict["logEnable"] as? Bool).map { NSNumber(value: $0) }
+      typed.measureInterval = integerNumber(dict["measureInterval"])
+      typed.logBackoffTime = integerNumber(dict["logBackoffTime"])
+      cfg = typed
     case 3:
-      cfg = KBCfgSensorLight()
-      setValue(dict["logEnable"], forKey: "logEnable", on: cfg)
-      setNumber(dict["measureInterval"], forKey: "measureInterval", on: cfg)
-      setNumber(dict["logChangeThreshold"], forKey: "logChangeThreshold", on: cfg)
+      let typed = KBCfgSensorLight()
+      typed.logEnable = (dict["logEnable"] as? Bool).map { NSNumber(value: $0) }
+      typed.measureInterval = integerNumber(dict["measureInterval"])
+      typed.logChangeThreshold = integerNumber(dict["logChangeThreshold"])
+      cfg = typed
     case 5:
-      cfg = KBCfgSensorGEO()
-      setValue(dict["parkingTag"], forKey: "parkingTag", on: cfg)
-      setNumber(dict["parkingThreshold"], forKey: "parkingThreshold", on: cfg)
-      setNumber(dict["parkingDelay"], forKey: "parkingDelay", on: cfg)
+      let typed = KBCfgSensorGEO()
+      typed.parkingTag = (dict["parkingTag"] as? Bool).map { NSNumber(value: $0) }
+      typed.parkingThreshold = integerNumber(dict["parkingThreshold"])
+      typed.parkingDelay = integerNumber(dict["parkingDelay"])
+      cfg = typed
     case 6:
-      cfg = KBCfgSensorScan()
-      setNumber(dict["scanInterval"], forKey: "scanInterval", on: cfg)
-      setNumber(dict["motionScanInterval"], forKey: "motionScanInterval", on: cfg)
-      setNumber(dict["scanDuration"], forKey: "scanDuration", on: cfg)
-      setNumber(dict["scanModel"], forKey: "scanModel", on: cfg)
-      setNumber(dict["scanRssi"], forKey: "scanRssi", on: cfg)
-      setNumber(dict["scanChanelMask"], forKey: "scanChanelMask", on: cfg)
-      setNumber(dict["scanMax"], forKey: "scanMax", on: cfg)
-      setNumber(dict["scanResultAdvSlot"], forKey: "scanResultAdvSlot", on: cfg)
+      let typed = KBCfgSensorScan()
+      typed.scanInterval = integerNumber(dict["scanInterval"])
+      typed.motionScanInterval = integerNumber(dict["motionScanInterval"])
+      typed.scanDuration = integerNumber(dict["scanDuration"])
+      typed.scanModel = integerNumber(dict["scanModel"])
+      typed.scanRssi = integerNumber(dict["scanRssi"])
+      typed.scanChanelMask = integerNumber(dict["scanChanelMask"])
+      typed.scanMax = integerNumber(dict["scanMax"])
+      typed.scanResultAdvSlot = integerNumber(dict["scanResultAdvSlot"])
+      cfg = typed
     default:
       throw ConfigMappingError.invalid(index: index)
     }
 
-    setNumber(sensorType, forKey: "sensorType", on: cfg)
+    (cfg as? KBCfgSensorBase)?.sensorType = NSNumber(value: sensorType)
     return cfg
   }
 
@@ -317,6 +385,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   public func onCentralBleStateChange(newState: BLECentralMgrState) {
     lastBluetoothState = newState
     sendEvent("onBluetoothStateChanged", ["state": bluetoothStateString(newState)])
+    settlePendingScanForBluetoothState(newState)
   }
 
   public func onConnStateChange(_ beacon: KBeacon, state: KBConnState, evt: KBConnEvtReason) {
@@ -328,8 +397,8 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     sendEvent("onConnectionStateChanged", [
       "macAddress": macAddress,
-      "state": state.rawValue,
-      "reason": evt.rawValue,
+      "state": connectionStateToJs(state),
+      "reason": connectionReasonToJs(evt),
     ])
 
     if state == .Connected {
@@ -354,7 +423,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         promise.reject("AUTH_FAILED", "Beacon authentication failed")
 
       default:
-        promise.reject("OPERATION_FAILED", "Connection failed with reason \(evt.rawValue)")
+        promise.reject("OPERATION_FAILED", "Connection failed with reason \(connectionReasonToJs(evt))")
       }
     }
   }
@@ -401,6 +470,16 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         return
       }
 
+      if self.lastBluetoothState == .Unknown {
+        if self.pendingScanPromise != nil {
+          promise.reject("SCAN_FAILED", "A scan start is already pending while Bluetooth initializes.")
+          return
+        }
+
+        self.pendingScanPromise = promise
+        return
+      }
+
       if self.lastBluetoothState == .PowerOff {
         self.rejectAndEmit(promise, code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off")
         return
@@ -411,13 +490,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         return
       }
 
-      let started = manager.startScanning()
-      guard started else {
-        self.rejectAndEmit(promise, code: "SCAN_FAILED", message: "KBeacon scanning failed")
-        return
-      }
-
-      promise.resolve(nil)
+      self.startScanningNow(manager: manager, promise: promise)
     }
 
     Function("stopScanning") {
@@ -450,7 +523,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     }
 
     AsyncFunction("disconnect") { (macAddress: String, promise: Promise) in
-      let normalized = self.normalizedMac(macAddress)
+      guard let normalized = self.validatedMac(macAddress) else {
+        promise.reject("INVALID_ARGUMENT", "macAddress must be a canonical colon-delimited MAC address")
+        return
+      }
       guard let beacon = self.activeConnections.removeValue(forKey: normalized) ?? self.findBeacon(mac: macAddress) else {
         promise.resolve(false)
         return
@@ -463,7 +539,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     }
 
     AsyncFunction("modifyConfig") { (macAddress: String, configs: [[String: Any]], promise: Promise) in
-      let normalized = self.normalizedMac(macAddress)
+      guard let normalized = self.validatedMac(macAddress) else {
+        promise.reject("INVALID_ARGUMENT", "macAddress must be a canonical colon-delimited MAC address")
+        return
+      }
       guard let beacon = self.activeConnections[normalized] else {
         promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(normalized) is not connected")
         return
@@ -491,13 +570,16 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         if result {
           promise.resolve(true)
         } else {
-          promise.reject("CONFIG_FAILED", "Failed to modify config. Error: \(err.rawValue)")
+          promise.reject("CONFIG_FAILED", "Failed to modify config. Error: \(self.connectionReasonToJs(err))")
         }
       }
     }
 
     AsyncFunction("readDeviceSnapshot") { (macAddress: String, promise: Promise) in
-      let normalized = self.normalizedMac(macAddress)
+      guard let normalized = self.validatedMac(macAddress) else {
+        promise.reject("INVALID_ARGUMENT", "macAddress must be a canonical colon-delimited MAC address")
+        return
+      }
       guard let beacon = self.activeConnections[normalized] else {
         promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(normalized) is not connected")
         return
@@ -513,6 +595,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     AsyncFunction("readSensorDataInfo") { (macAddress: String, sensorType: Int, promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
+      guard self.isSupportedJsSensorType(sensorType) else {
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid")
+        return
+      }
 
       beacon.readSensorDataInfo(self.nativeSensorType(sensorType)) { result, info, err in
         if result, let info {
@@ -528,17 +614,17 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     AsyncFunction("readSensorRecords") { (macAddress: String, request: [String: Any], promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
-      guard let maxRecords = request["maxRecords"] as? Int, maxRecords > 0 else {
+      guard let maxRecords = self.integerValue(request["maxRecords"]), maxRecords > 0 else {
         promise.reject("INVALID_ARGUMENT", "maxRecords must be a positive integer")
         return
       }
-      guard let sensorType = request["sensorType"] as? Int else {
+      guard let sensorType = self.integerValue(request["sensorType"]), self.isSupportedJsSensorType(sensorType) else {
         promise.reject("INVALID_ARGUMENT", "sensorType is invalid")
         return
       }
 
       guard
-        let readOptionRaw = request["readOption"] as? Int,
+        let readOptionRaw = self.integerValue(request["readOption"]),
         let readOption = KBSensorReadOption(rawValue: readOptionRaw)
       else {
         promise.reject("INVALID_ARGUMENT", "readOption must be 0, 1, or 2")
@@ -546,7 +632,11 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       }
 
       let nativeReadPosition: UInt32
-      if let readPosition = request["readPosition"] as? Int {
+      if request.keys.contains("readPosition") {
+        guard let readPosition = self.integerValue(request["readPosition"]) else {
+          promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295")
+          return
+        }
         guard readPosition >= 0, UInt64(readPosition) <= UInt64(UInt32.max) else {
           promise.reject("INVALID_ARGUMENT", "readPosition must be between 0 and 4294967295")
           return
@@ -583,6 +673,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     AsyncFunction("clearSensorHistory") { (macAddress: String, sensorType: Int, promise: Promise) in
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
+      guard self.isSupportedJsSensorType(sensorType) else {
+        promise.reject("INVALID_ARGUMENT", "sensorType is invalid")
+        return
+      }
 
       beacon.clearSensorRecord(self.nativeSensorType(sensorType)) { result, _, err in
         if result {
@@ -598,6 +692,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       guard let beacon = self.connectedBeaconOrReject(macAddress, promise: promise) else { return }
       guard let eventType else {
         promise.reject("INVALID_ARGUMENT", "eventType is required")
+        return
+      }
+      guard eventType >= 0 else {
+        promise.reject("INVALID_ARGUMENT", "eventType must be a non-negative integer")
         return
       }
 
@@ -618,6 +716,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         promise.reject("INVALID_ARGUMENT", "eventType is required")
         return
       }
+      guard eventType >= 0 else {
+        promise.reject("INVALID_ARGUMENT", "eventType must be a non-negative integer")
+        return
+      }
 
       beacon.removeSubscribeSensorDataNotify(eventType) { result, err in
         if result {
@@ -630,6 +732,41 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     }
   }
 
+  private func startScanningNow(manager: KBeaconsMgr, promise: Promise) {
+    let started = manager.startScanning()
+    guard started else {
+      rejectAndEmit(promise, code: "SCAN_FAILED", message: "KBeacon scanning failed")
+      return
+    }
+
+    promise.resolve(nil)
+  }
+
+  private func settlePendingScanForBluetoothState(_ state: BLECentralMgrState) {
+    guard let promise = pendingScanPromise else { return }
+
+    switch state {
+    case .PowerOn:
+      pendingScanPromise = nil
+      guard let manager = beaconManager else {
+        rejectAndEmit(promise, code: "BLUETOOTH_UNAVAILABLE", message: "KBeacon manager is unavailable")
+        return
+      }
+      startScanningNow(manager: manager, promise: promise)
+
+    case .Unauthorized:
+      pendingScanPromise = nil
+      rejectAndEmit(promise, code: "PERMISSION_DENIED", message: "Bluetooth permission is denied")
+
+    case .PowerOff:
+      pendingScanPromise = nil
+      rejectAndEmit(promise, code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off")
+
+    case .Unknown:
+      break
+    }
+  }
+
   private func connectInternal(
     macAddress: String,
     password: String?,
@@ -637,7 +774,18 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     connParaMap: [String: Any]?,
     promise: Promise
   ) {
-    let normalized = normalizedMac(macAddress)
+    guard let normalized = validatedMac(macAddress) else {
+      promise.reject("INVALID_ARGUMENT", "macAddress must be a canonical colon-delimited MAC address")
+      return
+    }
+    guard isValidPassword(password) else {
+      promise.reject("INVALID_ARGUMENT", "password must be exactly 16 characters when provided")
+      return
+    }
+    guard validatedTimeoutMs(timeoutMs) != nil else {
+      promise.reject("INVALID_ARGUMENT", "timeoutMs must be a positive integer")
+      return
+    }
     guard !isDestroyed else {
       promise.reject("OPERATION_FAILED", "Module has been destroyed")
       return
@@ -682,7 +830,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   }
 
   private func connectedBeaconOrReject(_ macAddress: String, promise: Promise) -> KBeacon? {
-    let normalized = normalizedMac(macAddress)
+    guard let normalized = validatedMac(macAddress) else {
+      promise.reject("INVALID_ARGUMENT", "macAddress must be a canonical colon-delimited MAC address")
+      return nil
+    }
     guard let beacon = activeConnections[normalized] else {
       promise.reject("BEACON_NOT_CONNECTED", "Beacon with MAC \(normalized) is not connected")
       return nil
@@ -717,6 +868,8 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     pendingConnectionPromises.values.forEach { promise in
       promise.reject("OPERATION_FAILED", "Module was destroyed")
     }
+    pendingScanPromise?.reject("OPERATION_FAILED", "Module was destroyed")
+    pendingScanPromise = nil
 
     activeConnections.removeAll()
     discoveredBeacons.removeAll()
@@ -777,6 +930,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     ]
   }
 
+  private func isSupportedJsSensorType(_ sensorType: Int) -> Bool {
+    sensorType >= 1 && sensorType <= 7
+  }
+
   private func nativeSensorType(_ sensorType: Int) -> Int {
     switch sensorType {
     case 1: return KBSensorType.HTHumidity
@@ -807,6 +964,10 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     if let triggerCfgList = beacon.getTriggerCfgList() {
       snapshot["triggers"] = triggerCfgList.map(triggerConfigToDict)
+    }
+
+    if let sensorCfgList = beacon.getSensorCfgList() {
+      snapshot["sensors"] = sensorCfgList.map(sensorConfigToDict)
     }
 
     return snapshot

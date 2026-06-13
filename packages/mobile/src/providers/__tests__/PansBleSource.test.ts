@@ -148,6 +148,10 @@ describe("PansBleSource", () => {
     discoveryListener?.({ devices: [device("tag-1", "tag")] });
     await flushPromises();
 
+    expect(pans.readLocationData.mock.invocationCallOrder[0]).toBeLessThan(
+      pans.subscribeLocationData.mock.invocationCallOrder[0],
+    );
+
     expect(listener).toHaveBeenCalledWith({
       observations: [
         expect.objectContaining({
@@ -228,6 +232,43 @@ describe("PansBleSource", () => {
 
     expect(pans.disconnect).not.toHaveBeenCalled();
     expect(pans.subscribeLocationData).not.toHaveBeenCalled();
+  });
+
+  test("cleanup during initial read disconnects without subscribing", async () => {
+    const pending = deferred<{
+      distances: never[];
+      raw: never[];
+      diagnostics: never[];
+    }>();
+    pans.readLocationData.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource().subscribe(jest.fn());
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    subscription.remove();
+    pending.resolve({ distances: [], raw: [], diagnostics: [] });
+    await flushPromises();
+
+    expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
+    expect(pans.subscribeLocationData).not.toHaveBeenCalled();
+  });
+
+  test("cleanup during subscription settles with unsubscribe and one disconnect", async () => {
+    const pending = deferred<boolean>();
+    pans.subscribeLocationData.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource().subscribe(jest.fn());
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    subscription.remove();
+    pending.resolve(true);
+    await flushPromises();
+
+    expect(pans.unsubscribeLocationData).toHaveBeenCalledWith("tag-1");
+    expect(pans.disconnect).toHaveBeenCalledTimes(1);
+    expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
   });
 
   test("start forwards scan failures to onError", async () => {

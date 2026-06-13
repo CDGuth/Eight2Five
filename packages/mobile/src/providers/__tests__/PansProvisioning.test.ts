@@ -69,10 +69,44 @@ describe("PansProvisioning", () => {
       uwbMode: "active",
       initiatorEnabled: false,
       locationEngineEnabled: false,
+      lowPowerModeEnabled: false,
+      accelerometerEnabled: true,
     });
     expect(pans.writeNetworkId).toHaveBeenCalledWith("tag-1", 0x1234);
     expect(pans.writeLocationDataMode).toHaveBeenCalledWith("tag-1", 1);
     expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
+  });
+
+  test("configureTag defaults to responsive mode and stationary detection", async () => {
+    await expect(configureTag("tag-1")).resolves.toMatchObject({ ok: true });
+
+    expect(pans.patchOperationMode).toHaveBeenCalledWith("tag-1", {
+      role: "tag",
+      uwbMode: "active",
+      initiatorEnabled: false,
+      locationEngineEnabled: true,
+      lowPowerModeEnabled: false,
+      accelerometerEnabled: true,
+    });
+    expect(pans.writeLocationDataMode).toHaveBeenCalledWith("tag-1", 0);
+  });
+
+  test("configureTag can opt into low-power mode", async () => {
+    await configureTag("tag-1", { responsiveMode: false });
+
+    expect(pans.patchOperationMode).toHaveBeenCalledWith(
+      "tag-1",
+      expect.objectContaining({ lowPowerModeEnabled: true }),
+    );
+  });
+
+  test("configureTag can disable stationary detection", async () => {
+    await configureTag("tag-1", { stationaryDetectionEnabled: false });
+
+    expect(pans.patchOperationMode).toHaveBeenCalledWith(
+      "tag-1",
+      expect.objectContaining({ accelerometerEnabled: false }),
+    );
   });
 
   test("configureAnchorNode patches anchor options and persisted position", async () => {

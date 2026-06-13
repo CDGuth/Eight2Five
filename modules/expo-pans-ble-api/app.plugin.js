@@ -10,20 +10,23 @@ const ANDROID_PERMISSIONS = [
   { name: "android.permission.BLUETOOTH_CONNECT" },
   { name: "android.permission.BLUETOOTH", maxSdkVersion: "30" },
   { name: "android.permission.BLUETOOTH_ADMIN", maxSdkVersion: "30" },
-  { name: "android.permission.ACCESS_FINE_LOCATION" },
+  { name: "android.permission.ACCESS_FINE_LOCATION", maxSdkVersion: "30" },
 ];
 
 const withPansBleApi = (config, props = {}) => {
   config = withAndroidManifest(config, (androidConfig) => {
     const manifest = androidConfig.modResults.manifest;
-    manifest.permission = manifest.permission || [];
+    const androidPermissions = manifest["uses-permission"] || [];
+    const androidFeatures = manifest["uses-feature"] || [];
 
     ANDROID_PERMISSIONS.forEach((permission) => {
-      upsertPermission(manifest.permission, permission);
+      upsertPermission(androidPermissions, permission);
     });
 
-    manifest["uses-feature"] = manifest["uses-feature"] || [];
-    upsertBleFeature(manifest["uses-feature"]);
+    upsertBleFeature(androidFeatures);
+
+    manifest["uses-permission"] = androidPermissions;
+    manifest["uses-feature"] = androidFeatures;
 
     return androidConfig;
   });
@@ -84,3 +87,9 @@ function upsertBleFeature(features) {
 }
 
 module.exports = createRunOncePlugin(withPansBleApi, pkg.name, pkg.version);
+module.exports.withPansBleApi = withPansBleApi;
+module.exports._internal = {
+  ANDROID_PERMISSIONS,
+  upsertBleFeature,
+  upsertPermission,
+};

@@ -8,10 +8,19 @@ Do not issue BLE configuration writes concurrently with SPI/UART control operati
 
 ## Firmware and protocol assumptions
 
-- Supported firmware revision: **TBD before hardware qualification**. Development is currently targeting DWM1001/PANS firmware behavior represented by the checked-in UUID registry and codec tests, but the exact DWM1001-DEV/MDEK1001 PANS firmware version still needs confirmation on hardware.
-- Documentation source: **TBD before hardware qualification**. The UUID registry and packet assumptions in `src/ExpoPansBleApi.types.ts` and `src/ExpoPansBleApiModule.ts` should be verified against the exact PANS BLE documentation revision used with the target firmware.
-- Current decoder guardrails assume proxy positions contain at most 5 entries, anchor lists contain at most 16 entries, distance-only location frames contain at most 15 entries, and combined position-plus-distance frames contain at most 4 distance entries. These limits are based on the checked-in implementation and tests and must be confirmed against the target firmware revision.
-- Label writes UTF-8 encode the JavaScript string before writing the GAP Device Name characteristic. The exact firmware-compatible byte limit has not been verified from local documentation, so no hard-coded label byte limit is enforced yet. TODO: verify the maximum label byte length against the target PANS BLE documentation/firmware and add byte-length validation.
+- Implemented against **DWM1001 Firmware API Guide v2.3** and the **DWM1001 PANS Library v1.3.0 BLE GATT interface**.
+- This is a BLE GATT bridge, not a BLE transport for SPI/UART TLV commands.
+- Target hardware must have compatible PANS firmware flashed before the BLE bridge can operate. DWM1001-DEV and MDEK1001 hardware may contain PANS-flashed modules; bare DWM1001C modules can be blank.
+- Documented decoder and encoder limits enforced by this package:
+  - proxy positions: maximum 5 entries
+  - anchor list: maximum 16 entries
+  - distance-only location frame: maximum 15 entries
+  - combined position-plus-distance frame: maximum 4 distance entries
+  - firmware-update chunk data: maximum 32 bytes
+  - node label: maximum 16 UTF-8 bytes
+- BLE configuration writes must not be mixed concurrently with SPI/UART configuration operations against the same node.
+- Android firmware-update write-without-response pacing still requires hardware qualification.
+- Physical-device testing remains deferred; see the deferred validation checklist below.
 
 ## Native platforms
 
@@ -26,7 +35,7 @@ Both app configs already invoke the plugin. It adds:
 
 - Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`
 - Android 11 and lower: legacy Bluetooth permissions with `maxSdkVersion=30`
-- `ACCESS_FINE_LOCATION` for BLE scanning/location behavior
+- Android 11 and lower: `ACCESS_FINE_LOCATION` for BLE scanning/location behavior with `maxSdkVersion=30`
 - BLE hardware feature with `required=false`
 - iOS Bluetooth usage descriptions
 
@@ -66,7 +75,7 @@ Codec helpers live in TypeScript and are covered by Jest tests.
 Shared provisioning helpers make role changes deterministic while preserving reserved operation-mode bits in the lower-level codec:
 
 - Configuring an anchor explicitly clears tag-only `lowPowerModeEnabled` and `locationEngineEnabled` flags.
-- Configuring a tag explicitly clears anchor-only `initiatorEnabled` while preserving intentional tag low-power behavior unless a future explicit option changes it.
+- Configuring a tag explicitly clears anchor-only `initiatorEnabled` and writes deterministic responsive-mode and stationary-detection flags.
 
 ## Example
 
@@ -87,8 +96,8 @@ addDeviceDiscoveredListener(async ({ devices }) => {
   const connected = await connect(tag.deviceId, 10_000);
   if (!connected) return;
 
-  await subscribeLocationData(tag.deviceId);
   console.log(await readLocationData(tag.deviceId));
+  await subscribeLocationData(tag.deviceId);
 });
 
 addLocationDataListener((event) => {
@@ -110,23 +119,18 @@ npm run validate:expo:doctor
 npm run validate:expo:install-check
 ```
 
-Hardware verification still requires recently woken DWM1001-DEV/MDEK1001 nodes running PANS firmware.
+Do not treat source-level tests as hardware qualification. The following checks are deferred until native builds and physical DWM1001/PANS hardware are available:
 
-Manual hardware verification plan for the target firmware:
-
-1. BLE discovery on Android.
-2. BLE discovery on iOS.
-3. Connection and service discovery.
-4. Operation-mode read and write.
-5. Tag conversion and anchor conversion.
-6. PAN ID read and write.
-7. Location-data mode write.
-8. Location-data notifications.
-9. Initial location-data read after subscription.
-10. Disconnect and reconnect.
-11. Bluetooth power-off while connected.
-12. Android permission denial and retry behavior.
-13. iOS delayed startup while CoreBluetooth is initializing.
-14. Firmware-update transport sizing.
-15. Android firmware-chunk pacing if no-response writes are exercised.
-16. Brief advertisement-window behavior after waking a node.
+- verify target DWM1001-DEV or MDEK1001 units are flashed with compatible PANS firmware
+- verify discovery after wake-up
+- verify tag and anchor role transitions
+- verify network ID read and write
+- verify persisted anchor position
+- verify location-data mode
+- verify initial location read and notifications
+- verify reconnect after disconnect
+- verify Android MTU negotiation
+- verify firmware-update offer and poll flow
+- verify Android write-without-response chunk pacing
+- verify iOS maximum-write-length sizing
+- verify label write behavior on hardware
