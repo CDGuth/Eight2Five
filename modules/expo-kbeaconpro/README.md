@@ -59,6 +59,7 @@ Implemented:
 - Typed provider integration for the shared mobile scanner.
 - iOS sensor snapshots include cached sensor configuration when the SDK exposes it, matching Android snapshot behavior.
 - iOS compatibility shims check Objective-C selector availability before invoking optional SDK accessors; feature code does not use unguarded KVC.
+- iOS deferred scan starts are rejected with `SCAN_CANCELLED` and cleared if `stopScanning()` is called before Bluetooth initialization finishes.
 
 Partially implemented / requires native validation:
 
@@ -175,7 +176,7 @@ Implemented mappings:
 - Triggers: base trigger, motion trigger, angle trigger.
 - Sensors: humidity/temperature, light, GEO, scanner, PIR.
 
-Config writes are strict: if any element is unsupported or malformed, the entire write is rejected and no partial config list is submitted. By default, `modifyConfig` refuses updates that explicitly set every included advertisement slot to `advConnectable: false`; pass `allowDisableAllConnectableSlots: true` only when deliberately disabling all updated connectable slots.
+Config writes are strict: if any element is unsupported or malformed, the entire write is rejected and no partial config list is submitted. Optional config fields that are present but malformed are rejected rather than silently omitted. By default, `modifyConfig` refuses updates that explicitly set every included advertisement slot to `advConnectable: false`; pass `allowDisableAllConnectableSlots: true` only when deliberately disabling all updated connectable slots.
 
 ## Enhanced connect and snapshot
 

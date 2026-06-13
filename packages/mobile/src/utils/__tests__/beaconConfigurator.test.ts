@@ -30,6 +30,31 @@ jest.mock("expo-kbeaconpro", () => ({
   })),
   connectEnhanced: jest.fn(async () => true),
   disconnect: jest.fn(async () => true),
+  validateConfigAgainstSnapshot: jest.fn((configs, snapshot) => {
+    configs.forEach(
+      (config: {
+        configType: string;
+        slotIndex?: number;
+        txPower?: number;
+      }) => {
+        if (config.configType !== "advertisement") return;
+        if (
+          typeof snapshot.common?.maxSlots === "number" &&
+          typeof config.slotIndex === "number" &&
+          config.slotIndex >= snapshot.common.maxSlots
+        ) {
+          throw new Error("slotIndex exceeds device maxSlots");
+        }
+        if (
+          typeof snapshot.common?.maxTxPower === "number" &&
+          typeof config.txPower === "number" &&
+          config.txPower > snapshot.common.maxTxPower
+        ) {
+          throw new Error("txPower is above device maximum");
+        }
+      },
+    );
+  }),
 }));
 
 function hexToBytes(hex: string): number[] {
@@ -446,6 +471,62 @@ describe("generateBeaconConfig", () => {
 
     expect(result.provisionalApplied).toBe(true);
     expect(mockTransportWithEmptySlots.modifyConfig).toHaveBeenCalled();
+  });
+
+  it("rejects generated config when tx power exceeds snapshot capability", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2, maxTxPower: 0 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("txPower");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects generated slot usage that exceeds maxSlots", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 1 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 0,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow(/maxSlots|two advertisement slots/);
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
   });
 
   it("accepts valid two-slot snapshot for provisioning", async () => {

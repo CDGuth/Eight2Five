@@ -40,10 +40,6 @@ const withPansBleApi = (config, props = {}) => {
       props.bluetoothPeripheralUsageDescription ||
       "This app uses Bluetooth to communicate with nearby DWM1001 devices for localization.";
 
-    iosConfig.modResults.NSLocationWhenInUseUsageDescription =
-      props.locationWhenInUseUsageDescription ||
-      "This app uses location access for Bluetooth scanning required by localization.";
-
     return iosConfig;
   });
 

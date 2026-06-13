@@ -257,6 +257,34 @@ function assertOptionalFiniteField(
   }
 }
 
+function assertOptionalBooleanField(
+  record: Record<string, unknown>,
+  index: number,
+  key: string,
+): void {
+  const value = record[key];
+  if (value === undefined) return;
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `INVALID_CONFIG: configuration at index ${index} has invalid ${key}; expected a boolean`,
+    );
+  }
+}
+
+function assertOptionalStringField(
+  record: Record<string, unknown>,
+  index: number,
+  key: string,
+): void {
+  const value = record[key];
+  if (value === undefined) return;
+  if (typeof value !== "string") {
+    throw new Error(
+      `INVALID_CONFIG: configuration at index ${index} has invalid ${key}; expected a string`,
+    );
+  }
+}
+
 function assertOptionalUuidField(
   record: Record<string, unknown>,
   index: number,
@@ -292,42 +320,6 @@ function assertOptionalHexBytesField(
   }
 }
 
-function assertTimeRange(
-  record: Record<string, unknown>,
-  index: number,
-  key: string,
-): void {
-  const value = record[key];
-  if (value === undefined) return;
-  if (!isRecord(value)) {
-    throw new Error(
-      `INVALID_CONFIG: configuration at index ${index} has invalid ${key}`,
-    );
-  }
-  const assertRangeField = (
-    field: string,
-    options: { min: number; max: number },
-  ) => {
-    const fieldValue = value[field];
-    if (fieldValue === undefined) return;
-    if (
-      typeof fieldValue !== "number" ||
-      !Number.isSafeInteger(fieldValue) ||
-      fieldValue < options.min ||
-      fieldValue > options.max
-    ) {
-      throw new Error(
-        `INVALID_CONFIG: configuration at index ${index} has invalid ${key}.${field}`,
-      );
-    }
-  };
-
-  assertRangeField("localStartHour", { min: 0, max: 23 });
-  assertRangeField("localStartMinute", { min: 0, max: 59 });
-  assertRangeField("localEndHour", { min: 0, max: 23 });
-  assertRangeField("localEndMinute", { min: 0, max: 59 });
-}
-
 function assertValidConfigArray(configs: KBeaconConfig[]): void {
   if (!Array.isArray(configs) || configs.length === 0) {
     throw new Error("INVALID_CONFIG: configs must be a non-empty array");
@@ -337,6 +329,8 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
     const record = configRecord(config, index);
 
     if (config.configType === "common") {
+      assertOptionalStringField(record, index, "name");
+      assertOptionalBooleanField(record, index, "alwaysPowerOn");
       normalizePassword(config.password);
       assertOptionalIntegerField(record, index, "refPower1Meters");
       return;
@@ -361,6 +355,8 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
       assertOptionalIntegerField(record, index, "txPower");
       assertOptionalFiniteField(record, index, "advPeriod", { min: 0 });
       assertOptionalIntegerField(record, index, "advMode", { min: 0 });
+      assertOptionalBooleanField(record, index, "advTriggerOnly");
+      assertOptionalBooleanField(record, index, "advConnectable");
       if (
         record.advMode !== undefined &&
         !ADV_MODE_VALUES.has(record.advMode as number)
@@ -385,6 +381,10 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
       if (config.advType === KBAdvType.EddyUID) {
         assertOptionalHexBytesField(record, index, "nid", 10);
         assertOptionalHexBytesField(record, index, "sid", 6);
+      }
+
+      if (config.advType === KBAdvType.EddyURL) {
+        assertOptionalStringField(record, index, "url");
       }
 
       if (config.advType === KBAdvType.Sensor) {
@@ -447,7 +447,8 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
         );
       }
 
-      assertTimeRange(record, index, "disablePeriod0");
+      assertOptionalBooleanField(record, index, "logEnable");
+      assertOptionalBooleanField(record, index, "parkingTag");
       [
         "sensorHtMeasureInterval",
         "humidityChangeThreshold",

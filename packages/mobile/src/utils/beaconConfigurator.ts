@@ -63,6 +63,7 @@ import {
   KBeaconDeviceSnapshot,
   KBCfgCommon,
   KBCfgAdvEddyUID,
+  validateConfigAgainstSnapshot,
 } from "expo-kbeaconpro";
 
 const TX_POWER_TO_REF_RSSI = new Map<number, number>([
@@ -376,6 +377,14 @@ export async function applyBeaconConfiguration(
         options.macAddress,
       );
       validateSnapshotForEight2Five(snapshot);
+
+      if (shouldApplyProvisional) {
+        validateConfigAgainstSnapshot(plan.provisional, snapshot);
+      }
+
+      if (shouldApplyFinal) {
+        validateConfigAgainstSnapshot(plan.finalized, snapshot);
+      }
     }
 
     let provisionalApplied = false;

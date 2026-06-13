@@ -330,17 +330,9 @@ export enum KBSensorReadOption {
   NewRecord = 2,
 }
 
-export interface KBTimeRange {
-  localStartHour: number;
-  localStartMinute: number;
-  localEndHour: number;
-  localEndMinute: number;
-}
-
 export interface KBCfgSensorBase {
   configType: "sensor";
   sensorType: KBSensorType;
-  disablePeriod0?: KBTimeRange;
 }
 
 export interface KBCfgSensorHT extends KBCfgSensorBase {

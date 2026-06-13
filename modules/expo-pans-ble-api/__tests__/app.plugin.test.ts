@@ -151,5 +151,25 @@ describe("expo-pans-ble-api config plugin", () => {
       NSBluetoothAlwaysUsageDescription: expect.any(String),
       NSBluetoothPeripheralUsageDescription: expect.any(String),
     });
+    expect(config.modResults).not.toHaveProperty(
+      "NSLocationWhenInUseUsageDescription",
+    );
+  });
+
+  it("preserves an existing host-owned iOS location usage description", () => {
+    const config: Config = {
+      modResults: {
+        manifest: {},
+        NSLocationWhenInUseUsageDescription: "Host app owns location access.",
+      },
+    };
+
+    withPansBleApi(config);
+
+    expect(config.modResults).toMatchObject({
+      NSLocationWhenInUseUsageDescription: "Host app owns location access.",
+      NSBluetoothAlwaysUsageDescription: expect.any(String),
+      NSBluetoothPeripheralUsageDescription: expect.any(String),
+    });
   });
 });

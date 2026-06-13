@@ -33,11 +33,13 @@ Development builds are required; Expo Go cannot load this custom native module.
 
 Both app configs already invoke the plugin. It adds:
 
-- Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`
-- Android 11 and lower: legacy Bluetooth permissions with `maxSdkVersion=30`
-- Android 11 and lower: `ACCESS_FINE_LOCATION` for BLE scanning/location behavior with `maxSdkVersion=30`
+- Android `<uses-permission>` entries for Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`
+- Android `<uses-permission>` entries for Android 11 and lower: legacy Bluetooth permissions with `maxSdkVersion=30`
+- Android `<uses-permission>` entry for Android 11 and lower: `ACCESS_FINE_LOCATION` for BLE scanning/location behavior with `maxSdkVersion=30`
 - BLE hardware feature with `required=false`
-- iOS Bluetooth usage descriptions
+- iOS Bluetooth usage descriptions only
+
+The plugin does not inject `NSLocationWhenInUseUsageDescription`. It preserves pre-existing host-owned plist values, including host-owned location usage text and unrelated usage descriptions.
 
 ## Event model
 

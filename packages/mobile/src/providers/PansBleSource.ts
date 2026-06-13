@@ -25,6 +25,8 @@ export interface PansBleSourceOptions {
   tagDeviceId?: string;
   selectTag?: (device: PansBleDevice) => boolean;
   disconnectOnTeardown?: boolean;
+  responsiveMode?: boolean;
+  stationaryDetectionEnabled?: boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -32,6 +34,8 @@ export function createPansBleSource(
   options: PansBleSourceOptions = {},
 ): BeaconSource {
   const useInternalLocationSolver = options.useInternalLocationSolver ?? true;
+  const responsiveMode = options.responsiveMode ?? true;
+  const stationaryDetectionEnabled = options.stationaryDetectionEnabled ?? true;
   let activeTagDeviceId: string | undefined;
   let connectingDeviceId: string | undefined;
   const configuredDevices = new Set<string>();
@@ -100,7 +104,10 @@ export function createPansBleSource(
             await patchOperationMode(device.deviceId, {
               role: "tag",
               uwbMode: "active",
+              initiatorEnabled: false,
               locationEngineEnabled: useInternalLocationSolver,
+              lowPowerModeEnabled: !responsiveMode,
+              accelerometerEnabled: stationaryDetectionEnabled,
             });
             if (isRemoved) {
               await disconnectAfterRemoval(device.deviceId);

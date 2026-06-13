@@ -119,4 +119,62 @@ describe("native source API shape", () => {
     expect(source).toContain("case .PowerOn:");
     expect(source).toContain("pendingScanPromise?.reject");
   });
+
+  test("native config mappers validate present optional fields", () => {
+    const androidSource = readModuleSource(
+      "android/src/main/java/expo/modules/kbeaconpro/ExpoKBeaconProModule.kt",
+    );
+    const iosSource = readModuleSource("ios/ExpoKBeaconProModule.swift");
+
+    expect(androidSource).toContain("optionalIntegerIntValue");
+    expect(androidSource).toContain("optionalFiniteFloatValue");
+    expect(androidSource).toContain("optionalBooleanValue");
+    expect(androidSource).toContain("optionalStringValue");
+    expect(androidSource).toContain("map.containsKey(key)");
+
+    expect(iosSource).toContain("optionalIntegerNumber");
+    expect(iosSource).toContain("optionalNumber");
+    expect(iosSource).toContain("optionalBoolNumber");
+    expect(iosSource).toContain("optionalString");
+    expect(iosSource).toContain("dict.keys.contains(key)");
+  });
+
+  test("iOS stopScanning cancels a deferred scan start", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+    const stopScanningBlock = source.slice(
+      source.indexOf('Function("stopScanning")'),
+      source.indexOf('Function("clearBeacons")'),
+    );
+
+    expect(stopScanningBlock).toContain("pendingScanPromise?.reject");
+    expect(stopScanningBlock).toContain('"SCAN_CANCELLED"');
+    expect(stopScanningBlock).toContain("pendingScanPromise = nil");
+    expect(stopScanningBlock).toContain("beaconManager?.stopScanning()");
+  });
+
+  test("iOS common snapshot filters optional values before boxing", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+    const commonBlock = source.slice(
+      source.indexOf("private func commonConfigToDict"),
+      source.indexOf("private func slotConfigToDict"),
+    );
+
+    expect(commonBlock).toContain("let dict: [String: Any?]");
+    expect(commonBlock).toContain("filter { !isNil($0.value) }");
+    expect(commonBlock).toContain("mapValues { $0 as Any }");
+    expect(commonBlock).not.toContain("getName() as Any");
+  });
+
+  test("Android connection state mapping uses symbolic enum values", () => {
+    const source = readModuleSource(
+      "android/src/main/java/expo/modules/kbeaconpro/ExpoKBeaconProModule.kt",
+    );
+
+    expect(source).not.toContain("when (state.toString())");
+    expect(source).toContain("when (state)");
+    expect(source).toContain("KBConnState.Disconnected -> 0");
+    expect(source).toContain("KBConnState.Connecting -> 1");
+    expect(source).toContain("KBConnState.Connected -> 2");
+    expect(source).toContain("KBConnState.Disconnecting -> 3");
+  });
 });

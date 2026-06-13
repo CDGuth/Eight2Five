@@ -680,15 +680,15 @@ class ExpoKBeaconProModule : Module() {
 
   private fun mapCommonConfig(map: Map<String, Any?>, index: Int): KBCfgCommon {
     return KBCfgCommon().apply {
-      (map["name"] as? String)?.let { name = it }
-      (map["alwaysPowerOn"] as? Boolean)?.let { alwaysPowerOn = it }
-      (map["password"] as? String)?.let {
+      optionalStringValue(map, "name", index)?.let { name = it }
+      optionalBooleanValue(map, "alwaysPowerOn", index)?.let { alwaysPowerOn = it }
+      optionalStringValue(map, "password", index)?.let {
         if (!isValidPassword(it)) {
           throw IllegalArgumentException("configuration at index $index has an invalid password")
         }
         password = it
       }
-      integerIntValue(map, "refPower1Meters")?.let { refPower1Meters = it }
+      optionalIntegerIntValue(map, "refPower1Meters", index)?.let { refPower1Meters = it }
     }
   }
 
@@ -697,25 +697,25 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (advType) {
       ADV_TYPE_IBEACON -> KBCfgAdvIBeacon().apply {
-        (map["uuid"] as? String)?.let { uuid = it }
-        integerIntValue(map, "majorID")?.let { majorID = it }
-        integerIntValue(map, "minorID")?.let { minorID = it }
+        optionalStringValue(map, "uuid", index)?.let { uuid = it }
+        optionalIntegerIntValue(map, "majorID", index)?.let { majorID = it }
+        optionalIntegerIntValue(map, "minorID", index)?.let { minorID = it }
       }
       ADV_TYPE_EDDY_UID -> KBCfgAdvEddyUID().apply {
-        (map["nid"] as? String)?.let { nid = normalizeHexString(it) }
-        (map["sid"] as? String)?.let { sid = normalizeHexString(it) }
+        optionalStringValue(map, "nid", index)?.let { nid = normalizeHexString(it) }
+        optionalStringValue(map, "sid", index)?.let { sid = normalizeHexString(it) }
       }
       ADV_TYPE_EDDY_URL -> KBCfgAdvEddyURL().apply {
-        (map["url"] as? String)?.let { url = it }
+        optionalStringValue(map, "url", index)?.let { url = it }
       }
       ADV_TYPE_EDDY_TLM -> KBCfgAdvEddyTLM()
       ADV_TYPE_SENSOR -> KBCfgAdvKSensor().apply {
-        integerIntValue(map, "aesType")?.let { aesType = it }
+        optionalIntegerIntValue(map, "aesType", index)?.let { aesType = it }
       }
       ADV_TYPE_EBEACON -> KBCfgAdvEBeacon().apply {
-        (map["uuid"] as? String)?.let { uuid = it }
-        integerIntValue(map, "encryptInterval")?.let { encryptInterval = it }
-        integerIntValue(map, "aesType")?.let { aesType = it }
+        optionalStringValue(map, "uuid", index)?.let { uuid = it }
+        optionalIntegerIntValue(map, "encryptInterval", index)?.let { encryptInterval = it }
+        optionalIntegerIntValue(map, "aesType", index)?.let { aesType = it }
       }
       ADV_TYPE_UNKNOWN -> newNullAdvertisementConfig()
         ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
@@ -725,11 +725,11 @@ class ExpoKBeaconProModule : Module() {
     if (cfg is KBCfgAdvBase) {
       cfg.slotIndex = integerIntValue(map, "slotIndex")
         ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
-      integerIntValue(map, "txPower")?.let { cfg.txPower = it }
-      finiteFloatValue(map, "advPeriod")?.let { cfg.advPeriod = it }
-      integerIntValue(map, "advMode")?.let { cfg.advMode = it }
-      (map["advTriggerOnly"] as? Boolean)?.let { cfg.advTriggerOnly = it }
-      (map["advConnectable"] as? Boolean)?.let { cfg.advConnectable = it }
+      optionalIntegerIntValue(map, "txPower", index)?.let { cfg.txPower = it }
+      optionalFiniteFloatValue(map, "advPeriod", index)?.let { cfg.advPeriod = it }
+      optionalIntegerIntValue(map, "advMode", index)?.let { cfg.advMode = it }
+      optionalBooleanValue(map, "advTriggerOnly", index)?.let { cfg.advTriggerOnly = it }
+      optionalBooleanValue(map, "advConnectable", index)?.let { cfg.advConnectable = it }
     }
 
     return cfg
@@ -740,12 +740,12 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (triggerType) {
       5 -> KBCfgTriggerMotion().apply {
-        integerIntValue(map, "accODR")?.let { accODR = it }
-        integerIntValue(map, "wakeupDuration")?.let { wakeupDuration = it }
+        optionalIntegerIntValue(map, "accODR", index)?.let { accODR = it }
+        optionalIntegerIntValue(map, "wakeupDuration", index)?.let { wakeupDuration = it }
       }
       14 -> KBCfgTriggerAngle().apply {
-        integerIntValue(map, "aboveAngle")?.let { aboveAngle = it }
-        integerIntValue(map, "reportInterval")?.let { reportInterval = it }
+        optionalIntegerIntValue(map, "aboveAngle", index)?.let { aboveAngle = it }
+        optionalIntegerIntValue(map, "reportInterval", index)?.let { reportInterval = it }
       }
       else -> KBCfgTrigger()
     }
@@ -753,13 +753,13 @@ class ExpoKBeaconProModule : Module() {
     cfg.triggerIndex = integerIntValue(map, "triggerIndex")
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     cfg.triggerType = triggerType
-    integerIntValue(map, "triggerAction")?.let { cfg.triggerAction = it }
-    integerIntValue(map, "triggerAdvSlot")?.let { cfg.triggerAdvSlot = it }
-    integerIntValue(map, "triggerAdvTime")?.let { cfg.triggerAdvTime = it }
-    integerIntValue(map, "triggerPara")?.let { cfg.triggerPara = it }
-    integerIntValue(map, "triggerAdvPeriod")?.let { cfg.triggerAdvPeriod = it }
-    integerIntValue(map, "triggerTxPower")?.let { cfg.triggerTxPower = it }
-    integerIntValue(map, "triggerAdvChangeMode")?.let { cfg.triggerAdvChangeMode = it }
+    optionalIntegerIntValue(map, "triggerAction", index)?.let { cfg.triggerAction = it }
+    optionalIntegerIntValue(map, "triggerAdvSlot", index)?.let { cfg.triggerAdvSlot = it }
+    optionalIntegerIntValue(map, "triggerAdvTime", index)?.let { cfg.triggerAdvTime = it }
+    optionalIntegerIntValue(map, "triggerPara", index)?.let { cfg.triggerPara = it }
+    optionalIntegerIntValue(map, "triggerAdvPeriod", index)?.let { cfg.triggerAdvPeriod = it }
+    optionalIntegerIntValue(map, "triggerTxPower", index)?.let { cfg.triggerTxPower = it }
+    optionalIntegerIntValue(map, "triggerAdvChangeMode", index)?.let { cfg.triggerAdvChangeMode = it }
     return cfg
   }
 
@@ -768,35 +768,35 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     return when (sensorType) {
       1 -> KBCfgSensorHT().apply {
-        (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        integerIntValue(map, "sensorHtMeasureInterval")?.let { sensorHtMeasureInterval = it }
-        integerIntValue(map, "humidityChangeThreshold")?.let { humidityChangeThreshold = it }
-        integerIntValue(map, "temperatureChangeThreshold")?.let { temperatureChangeThreshold = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
+        optionalIntegerIntValue(map, "sensorHtMeasureInterval", index)?.let { sensorHtMeasureInterval = it }
+        optionalIntegerIntValue(map, "humidityChangeThreshold", index)?.let { humidityChangeThreshold = it }
+        optionalIntegerIntValue(map, "temperatureChangeThreshold", index)?.let { temperatureChangeThreshold = it }
       }
       2 -> KBCfgSensorPIR().apply {
-        (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        integerIntValue(map, "measureInterval")?.let { measureInterval = it }
-        integerIntValue(map, "logBackoffTime")?.let { logBackoffTime = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
+        optionalIntegerIntValue(map, "measureInterval", index)?.let { measureInterval = it }
+        optionalIntegerIntValue(map, "logBackoffTime", index)?.let { logBackoffTime = it }
       }
       3 -> KBCfgSensorLight().apply {
-        (map["logEnable"] as? Boolean)?.let { logEnable = it }
-        integerIntValue(map, "measureInterval")?.let { measureInterval = it }
-        integerIntValue(map, "logChangeThreshold")?.let { logChangeThreshold = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
+        optionalIntegerIntValue(map, "measureInterval", index)?.let { measureInterval = it }
+        optionalIntegerIntValue(map, "logChangeThreshold", index)?.let { logChangeThreshold = it }
       }
       5 -> KBCfgSensorGEO().apply {
-        (map["parkingTag"] as? Boolean)?.let { parkingTag = it }
-        integerIntValue(map, "parkingThreshold")?.let { parkingThreshold = it }
-        integerIntValue(map, "parkingDelay")?.let { parkingDelay = it }
+        optionalBooleanValue(map, "parkingTag", index)?.let { parkingTag = it }
+        optionalIntegerIntValue(map, "parkingThreshold", index)?.let { parkingThreshold = it }
+        optionalIntegerIntValue(map, "parkingDelay", index)?.let { parkingDelay = it }
       }
       6 -> KBCfgSensorScan().apply {
-        integerIntValue(map, "scanInterval")?.let { scanInterval = it }
-        integerIntValue(map, "motionScanInterval")?.let { motionScanInterval = it }
-        integerIntValue(map, "scanDuration")?.let { scanDuration = it }
-        integerIntValue(map, "scanModel")?.let { scanModel = it }
-        integerIntValue(map, "scanRssi")?.let { scanRssi = it }
-        integerIntValue(map, "scanChanelMask")?.let { scanChanelMask = it }
-        integerIntValue(map, "scanMax")?.let { scanMax = it }
-        integerIntValue(map, "scanResultAdvSlot")?.let { scanResultAdvSlot = it }
+        optionalIntegerIntValue(map, "scanInterval", index)?.let { scanInterval = it }
+        optionalIntegerIntValue(map, "motionScanInterval", index)?.let { motionScanInterval = it }
+        optionalIntegerIntValue(map, "scanDuration", index)?.let { scanDuration = it }
+        optionalIntegerIntValue(map, "scanModel", index)?.let { scanModel = it }
+        optionalIntegerIntValue(map, "scanRssi", index)?.let { scanRssi = it }
+        optionalIntegerIntValue(map, "scanChanelMask", index)?.let { scanChanelMask = it }
+        optionalIntegerIntValue(map, "scanMax", index)?.let { scanMax = it }
+        optionalIntegerIntValue(map, "scanResultAdvSlot", index)?.let { scanResultAdvSlot = it }
       }
       else -> throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     }
@@ -822,7 +822,32 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun finiteFloatValue(map: Map<String, Any?>, key: String): Float? {
-    return numberValue(map, key)?.toFloat()
+    val converted = numberValue(map, key)?.toFloat() ?: return null
+    return if (converted.isFinite()) converted else null
+  }
+
+  private fun optionalIntegerIntValue(map: Map<String, Any?>, key: String, index: Int): Int? {
+    if (!map.containsKey(key)) return null
+    return integerIntValue(map, key)
+      ?: throw IllegalArgumentException("configuration at index $index has an invalid $key")
+  }
+
+  private fun optionalFiniteFloatValue(map: Map<String, Any?>, key: String, index: Int): Float? {
+    if (!map.containsKey(key)) return null
+    return finiteFloatValue(map, key)
+      ?: throw IllegalArgumentException("configuration at index $index has an invalid $key")
+  }
+
+  private fun optionalBooleanValue(map: Map<String, Any?>, key: String, index: Int): Boolean? {
+    if (!map.containsKey(key)) return null
+    return map[key] as? Boolean
+      ?: throw IllegalArgumentException("configuration at index $index has an invalid $key")
+  }
+
+  private fun optionalStringValue(map: Map<String, Any?>, key: String, index: Int): String? {
+    if (!map.containsKey(key)) return null
+    return map[key] as? String
+      ?: throw IllegalArgumentException("configuration at index $index has an invalid $key")
   }
 
   private fun integerLongValue(map: Map<String, Any?>, key: String): Long? {
@@ -1070,11 +1095,11 @@ class ExpoKBeaconProModule : Module() {
   }
 
   private fun connectionStateToInt(state: KBConnState): Int {
-    return when (state.toString()) {
-      "Disconnected" -> 0
-      "Connecting" -> 1
-      "Connected" -> 2
-      "Disconnecting" -> 3
+    return when (state) {
+      KBConnState.Disconnected -> 0
+      KBConnState.Connecting -> 1
+      KBConnState.Connected -> 2
+      KBConnState.Disconnecting -> 3
       else -> 0
     }
   }

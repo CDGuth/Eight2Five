@@ -416,13 +416,50 @@ describe("ExpoKBeaconProModule", () => {
         "sensorType",
       ],
       [
-        "invalid time range",
+        "invalid common boolean",
+        {
+          configType: "common",
+          alwaysPowerOn: "true",
+        },
+        "alwaysPowerOn",
+      ],
+      [
+        "invalid advertisement boolean",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyUID,
+          slotIndex: 0,
+          advConnectable: "false",
+        },
+        "advConnectable",
+      ],
+      [
+        "invalid URL string",
+        {
+          configType: "advertisement",
+          advType: KBAdvType.EddyURL,
+          slotIndex: 0,
+          url: 123,
+        },
+        "url",
+      ],
+      [
+        "invalid sensor log boolean",
         {
           configType: "sensor",
           sensorType: KBSensorType.Light,
-          disablePeriod0: { localStartHour: 24 },
+          logEnable: 1,
         },
-        "disablePeriod0.localStartHour",
+        "logEnable",
+      ],
+      [
+        "invalid parking tag boolean",
+        {
+          configType: "sensor",
+          sensorType: KBSensorType.GEO,
+          parkingTag: "yes",
+        },
+        "parkingTag",
       ],
       [
         "unsafe integer",

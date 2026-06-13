@@ -112,10 +112,32 @@ describe("PansBleSource", () => {
     expect(pans.patchOperationMode).toHaveBeenCalledWith("tag-1", {
       role: "tag",
       uwbMode: "active",
+      initiatorEnabled: false,
       locationEngineEnabled: true,
+      lowPowerModeEnabled: false,
+      accelerometerEnabled: true,
     });
     expect(pans.writeLocationDataMode).toHaveBeenCalledWith("tag-1", 0);
     expect(pans.subscribeLocationData).toHaveBeenCalledWith("tag-1");
+  });
+
+  test("live source disables responsive and stationary tracking when requested", async () => {
+    createPansBleSource({
+      responsiveMode: false,
+      stationaryDetectionEnabled: false,
+    }).subscribe(jest.fn());
+
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    expect(pans.patchOperationMode).toHaveBeenCalledWith("tag-1", {
+      role: "tag",
+      uwbMode: "active",
+      initiatorEnabled: false,
+      locationEngineEnabled: true,
+      lowPowerModeEnabled: true,
+      accelerometerEnabled: false,
+    });
   });
 
   test("honors tagDeviceId, selectTag, and disabled solver mode", async () => {
