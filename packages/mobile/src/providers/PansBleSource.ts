@@ -25,6 +25,8 @@ export interface PansBleSourceOptions {
   tagDeviceId?: string;
   selectTag?: (device: PansBleDevice) => boolean;
   disconnectOnTeardown?: boolean;
+  responsiveMode?: boolean;
+  stationaryDetectionEnabled?: boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -32,16 +34,21 @@ export function createPansBleSource(
   options: PansBleSourceOptions = {},
 ): BeaconSource {
   const useInternalLocationSolver = options.useInternalLocationSolver ?? true;
+  const responsiveMode = options.responsiveMode ?? true;
+  const stationaryDetectionEnabled = options.stationaryDetectionEnabled ?? true;
   let activeTagDeviceId: string | undefined;
   let connectingDeviceId: string | undefined;
   const configuredDevices = new Set<string>();
   const subscribedDevices = new Set<string>();
 
   return {
-    start() {
-      void startScanning().catch((error) => {
+    async start() {
+      try {
+        await startScanning();
+      } catch (error) {
         options.onError?.(error);
-      });
+        throw error;
+      }
     },
     stop() {
       stopScanning();
@@ -51,8 +58,9 @@ export function createPansBleSource(
       const teardownDevices = new Set<string>();
 
       async function disconnectAfterRemoval(deviceId: string): Promise<void> {
-        if (teardownDevices.has(deviceId)) return;
-        teardownDevices.add(deviceId);
+        const teardownAlreadyStarted = teardownDevices.has(deviceId);
+        if (teardownAlreadyStarted && !subscribedDevices.has(deviceId)) return;
+        if (!teardownAlreadyStarted) teardownDevices.add(deviceId);
         const shouldDisconnect = options.disconnectOnTeardown ?? true;
 
         try {
@@ -63,7 +71,9 @@ export function createPansBleSource(
         } finally {
           if (activeTagDeviceId === deviceId) activeTagDeviceId = undefined;
           configuredDevices.delete(deviceId);
-          if (shouldDisconnect) await disconnect(deviceId);
+          if (shouldDisconnect && !teardownAlreadyStarted) {
+            await disconnect(deviceId);
+          }
         }
       }
 
@@ -94,7 +104,10 @@ export function createPansBleSource(
             await patchOperationMode(device.deviceId, {
               role: "tag",
               uwbMode: "active",
+              initiatorEnabled: false,
               locationEngineEnabled: useInternalLocationSolver,
+              lowPowerModeEnabled: !responsiveMode,
+              accelerometerEnabled: stationaryDetectionEnabled,
             });
             if (isRemoved) {
               await disconnectAfterRemoval(device.deviceId);
@@ -109,13 +122,6 @@ export function createPansBleSource(
               return;
             }
             configuredDevices.add(device.deviceId);
-          }
-
-          await subscribeLocationData(device.deviceId);
-          subscribedDevices.add(device.deviceId);
-          if (isRemoved) {
-            await disconnectAfterRemoval(device.deviceId);
-            return;
           }
 
           const frame = await readLocationData(device.deviceId);
@@ -133,6 +139,13 @@ export function createPansBleSource(
             } catch (error) {
               options.onError?.(error);
             }
+          }
+
+          await subscribeLocationData(device.deviceId);
+          subscribedDevices.add(device.deviceId);
+          if (isRemoved) {
+            await disconnectAfterRemoval(device.deviceId);
+            return;
           }
         } catch (error) {
           options.onError?.(error);

@@ -29,6 +29,8 @@ export interface SetupTagOptions {
   connectTimeoutMs?: number;
   useInternalLocationSolver?: boolean;
   locationDataMode?: 0 | 1 | 2;
+  responsiveMode?: boolean;
+  stationaryDetectionEnabled?: boolean;
   disconnectAfterSetup?: boolean;
   panId?: number;
 }
@@ -168,6 +170,8 @@ export async function configureTag(
 ): Promise<PansCommandResult> {
   const connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
   const useInternalLocationSolver = options.useInternalLocationSolver ?? true;
+  const responsiveMode = options.responsiveMode ?? true;
+  const stationaryDetectionEnabled = options.stationaryDetectionEnabled ?? true;
   const locationDataMode =
     options.locationDataMode ?? (useInternalLocationSolver ? 0 : 1);
 
@@ -182,6 +186,8 @@ export async function configureTag(
       uwbMode: "active",
       initiatorEnabled: false,
       locationEngineEnabled: useInternalLocationSolver,
+      lowPowerModeEnabled: !responsiveMode,
+      accelerometerEnabled: stationaryDetectionEnabled,
     });
 
     if (options.panId !== undefined) {
@@ -223,6 +229,8 @@ export async function configureAnchorNode(
       ledEnabled: options.ledEnabled,
       firmwareUpdateEnabled: options.firmwareUpdateEnabled,
       initiatorEnabled: options.initiator,
+      lowPowerModeEnabled: false,
+      locationEngineEnabled: false,
     });
 
     if (options.panId !== undefined) {

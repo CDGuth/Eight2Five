@@ -1,16 +1,75 @@
-export interface KBeacon {
-  name: string;
-  mac: string;
-  rssi: number;
-  advPackets: KBAdvPacketBase[];
-}
-
 export enum ExpoKBeaconProModuleEvents {
   onBeaconDiscovered = "onBeaconDiscovered",
-  onBeaconConnected = "onBeaconConnected",
-  onBeaconDisconnected = "onBeaconDisconnected",
   onConnectionStateChanged = "onConnectionStateChanged",
   onNotifyDataReceived = "onNotifyDataReceived",
+  onBluetoothStateChanged = "onBluetoothStateChanged",
+  onError = "onError",
+}
+
+export type KBeaconErrorCode =
+  | "UNSUPPORTED"
+  | "PERMISSION_DENIED"
+  | "BLUETOOTH_UNAVAILABLE"
+  | "SCAN_FAILED"
+  | "SCAN_CANCELLED"
+  | "BEACON_NOT_FOUND"
+  | "BEACON_NOT_CONNECTED"
+  | "CONNECTION_BUSY"
+  | "CONNECTION_TIMEOUT"
+  | "AUTH_FAILED"
+  | "INVALID_ARGUMENT"
+  | "INVALID_CONFIG"
+  | "CONFIG_FAILED"
+  | "READ_FAILED"
+  | "SUBSCRIBE_FAILED"
+  | "UNSUBSCRIBE_FAILED"
+  | "OPERATION_FAILED";
+
+export interface KBeaconErrorEvent {
+  code: KBeaconErrorCode;
+  message: string;
+  macAddress?: string;
+}
+
+export interface KBeaconBluetoothStateEvent {
+  state:
+    | "unknown"
+    | "resetting"
+    | "unsupported"
+    | "unauthorized"
+    | "poweredOff"
+    | "poweredOn";
+}
+
+export interface KBeaconModuleCapabilities {
+  transport: "ble";
+  supportsScanning: boolean;
+  supportsConnection: boolean;
+  supportsConfiguration: boolean;
+  supportsEnhancedConnection: boolean;
+  supportsSensorHistory: boolean;
+  supportsNotifications: boolean;
+  supportsDfu: boolean;
+}
+
+export interface KBeaconPermissionStatus {
+  bluetooth: "granted" | "denied" | "undetermined" | "unavailable";
+  location?: "granted" | "denied" | "undetermined" | "unavailable";
+  canAskAgain: boolean;
+}
+
+export interface KBeacon {
+  deviceId: string;
+  mac: string;
+  name?: string;
+  rssi: number;
+  isConnectable?: boolean;
+  connectionState?: KBConnState;
+  advPackets: KBAdvPacket[];
+}
+
+export interface BeaconDiscoveredEvent {
+  beacons: KBeacon[];
 }
 
 export interface ConnectionStateChangeEvent {
@@ -22,10 +81,10 @@ export interface ConnectionStateChangeEvent {
 export interface NotifyDataEvent {
   macAddress: string;
   eventType: number;
-  data: number[] | Record<string, unknown> | null;
+  raw?: number[];
+  data?: Record<string, unknown> | null;
 }
 
-// Advertisement Packet Types
 export enum KBAdvType {
   IBeacon = 0,
   EddyTLM = 1,
@@ -36,6 +95,16 @@ export enum KBAdvType {
   EBeacon = 6,
   Unknown = 255,
 }
+
+export type KBAdvPacket =
+  | KBAdvPacketIBeacon
+  | KBAdvPacketEddyTLM
+  | KBAdvPacketEddyUID
+  | KBAdvPacketEddyURL
+  | KBAdvPacketSensor
+  | KBAdvPacketSystem
+  | KBAdvPacketEBeacon
+  | KBAdvPacketUnknown;
 
 export interface KBAdvPacketBase {
   advType: KBAdvType;
@@ -50,27 +119,10 @@ export interface KBAdvPacketIBeacon extends KBAdvPacketBase {
 
 export interface KBAdvPacketEddyTLM extends KBAdvPacketBase {
   advType: KBAdvType.EddyTLM;
-  batteryLevel: number;
-  temperature: number;
-  advCount: number;
-  secCount: number;
-}
-
-export interface KBAccSensorValue {
-  xAis: number;
-  yAis: number;
-  zAis: number;
-}
-
-export interface KBAdvPacketSensor extends KBAdvPacketBase {
-  advType: KBAdvType.Sensor;
-  batteryLevel: number;
-  temperature: number;
-  humidity?: number;
-  accSensor?: KBAccSensorValue;
-  alarmStatus?: number;
-  pirIndication?: number;
-  luxValue?: number;
+  batteryLevel?: number;
+  temperature?: number;
+  advCount?: number;
+  secCount?: number;
 }
 
 export interface KBAdvPacketEddyUID extends KBAdvPacketBase {
@@ -84,23 +136,44 @@ export interface KBAdvPacketEddyURL extends KBAdvPacketBase {
   url: string;
 }
 
+export interface KBAccSensorValue {
+  xAis: number;
+  yAis: number;
+  zAis: number;
+}
+
+export interface KBAdvPacketSensor extends KBAdvPacketBase {
+  advType: KBAdvType.Sensor;
+  batteryLevel?: number;
+  temperature?: number;
+  humidity?: number;
+  accSensor?: KBAccSensorValue;
+  alarmStatus?: number;
+  pirIndication?: number;
+  luxValue?: number;
+}
+
 export interface KBAdvPacketSystem extends KBAdvPacketBase {
   advType: KBAdvType.System;
-  macAddress: string;
-  model: string;
-  batteryPercent: number;
-  version: string;
+  macAddress?: string;
+  model?: string;
+  batteryPercent?: number;
+  version?: string;
 }
 
 export interface KBAdvPacketEBeacon extends KBAdvPacketBase {
   advType: KBAdvType.EBeacon;
-  mac: string;
-  uuid: string;
-  utcSecCount: number;
-  refTxPower: number;
+  mac?: string;
+  uuid?: string;
+  utcSecCount?: number;
+  refTxPower?: number;
 }
 
-// Connection states and reasons
+export interface KBAdvPacketUnknown extends KBAdvPacketBase {
+  advType: KBAdvType.Unknown;
+  raw?: Record<string, unknown>;
+}
+
 export enum KBConnState {
   Disconnected = 0,
   Connecting = 1,
@@ -110,25 +183,22 @@ export enum KBConnState {
 
 export enum KBConnEvtReason {
   ConnDefault = 0,
+  ConnException = 1,
   ConnTimeout = 2,
   ConnAuthFail = 3,
   ConnBleClosed = 4,
   ConnBleBusy = 5,
   ConnNotSupport = 6,
+  ConnManualDisconnect = 7,
   ConnSuccess = 256,
 }
 
-// Configuration types
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface KBCfgBase {
-  // Base interface for all config objects
-}
-
-export interface KBCfgCommon extends KBCfgBase {
-  name?: string;
-  alwaysPowerOn?: boolean;
-  password?: string;
-  refPower1Meters?: number;
+export interface KBConnPara {
+  syncUtcTime?: boolean;
+  readCommPara?: boolean;
+  readSlotPara?: boolean;
+  readTriggerPara?: boolean;
+  readSensorPara?: boolean;
 }
 
 export enum KBAdvMode {
@@ -137,7 +207,16 @@ export enum KBAdvMode {
   HighSpeed = 2,
 }
 
-export interface KBCfgAdvBase extends KBCfgBase {
+export interface KBCfgCommon {
+  configType: "common";
+  name?: string;
+  alwaysPowerOn?: boolean;
+  password?: string;
+  refPower1Meters?: number;
+}
+
+export interface KBCfgAdvBase {
+  configType: "advertisement";
   slotIndex: number;
   advType: KBAdvType;
   txPower?: number;
@@ -154,15 +233,15 @@ export interface KBCfgAdvIBeacon extends KBCfgAdvBase {
   minorID?: number;
 }
 
-export interface KBCfgAdvEddyURL extends KBCfgAdvBase {
-  advType: KBAdvType.EddyURL;
-  url?: string;
-}
-
 export interface KBCfgAdvEddyUID extends KBCfgAdvBase {
   advType: KBAdvType.EddyUID;
   nid?: string;
   sid?: string;
+}
+
+export interface KBCfgAdvEddyURL extends KBCfgAdvBase {
+  advType: KBAdvType.EddyURL;
+  url?: string;
 }
 
 export interface KBCfgAdvEddyTLM extends KBCfgAdvBase {
@@ -185,7 +264,6 @@ export interface KBCfgAdvNull extends KBCfgAdvBase {
   advType: KBAdvType.Unknown;
 }
 
-// Trigger types
 export enum KBTriggerType {
   TriggerNull = 0,
   BtnSingleClick = 1,
@@ -212,7 +290,8 @@ export enum KBTriggerAction {
   Report2App = 8,
 }
 
-export interface KBCfgTrigger extends KBCfgBase {
+export interface KBCfgTrigger {
+  configType: "trigger";
   triggerIndex: number;
   triggerType: KBTriggerType;
   triggerAction?: KBTriggerAction;
@@ -236,7 +315,6 @@ export interface KBCfgTriggerAngle extends KBCfgTrigger {
   reportInterval?: number;
 }
 
-// Sensor configuration
 export enum KBSensorType {
   HTHumidity = 1,
   PIR = 2,
@@ -247,26 +325,41 @@ export enum KBSensorType {
   Alarm = 7,
 }
 
-export interface KBCfgSensorHT extends KBCfgBase {
+export enum KBSensorReadOption {
+  NormalOrder = 0,
+  ReverseOrder = 1,
+  NewRecord = 2,
+}
+
+export interface KBCfgSensorBase {
+  configType: "sensor";
+  sensorType: KBSensorType;
+}
+
+export interface KBCfgSensorHT extends KBCfgSensorBase {
+  sensorType: KBSensorType.HTHumidity;
   logEnable?: boolean;
   sensorHtMeasureInterval?: number;
   humidityChangeThreshold?: number;
   temperatureChangeThreshold?: number;
 }
 
-export interface KBCfgSensorLight extends KBCfgBase {
+export interface KBCfgSensorLight extends KBCfgSensorBase {
+  sensorType: KBSensorType.Light;
   logEnable?: boolean;
   measureInterval?: number;
   logChangeThreshold?: number;
 }
 
-export interface KBCfgSensorGEO extends KBCfgBase {
+export interface KBCfgSensorGEO extends KBCfgSensorBase {
+  sensorType: KBSensorType.GEO;
   parkingTag?: boolean;
   parkingThreshold?: number;
   parkingDelay?: number;
 }
 
-export interface KBCfgSensorScan extends KBCfgBase {
+export interface KBCfgSensorScan extends KBCfgSensorBase {
+  sensorType: KBSensorType.Scan;
   scanInterval?: number;
   motionScanInterval?: number;
   scanDuration?: number;
@@ -277,40 +370,98 @@ export interface KBCfgSensorScan extends KBCfgBase {
   scanResultAdvSlot?: number;
 }
 
-export interface KBCfgSensorPIR extends KBCfgBase {
+export interface KBCfgSensorPIR extends KBCfgSensorBase {
+  sensorType: KBSensorType.PIR;
   logEnable?: boolean;
   measureInterval?: number;
   logBackoffTime?: number;
 }
 
-export interface KBCfgSensorBase extends KBCfgBase {
-  sensorType: KBSensorType;
-  disablePeriod0?: KBTimeRange;
+export type KBeaconConfig =
+  | KBCfgCommon
+  | KBCfgAdvIBeacon
+  | KBCfgAdvEddyUID
+  | KBCfgAdvEddyURL
+  | KBCfgAdvEddyTLM
+  | KBCfgAdvKSensor
+  | KBCfgAdvEBeacon
+  | KBCfgAdvNull
+  | KBCfgTrigger
+  | KBCfgTriggerMotion
+  | KBCfgTriggerAngle
+  | KBCfgSensorHT
+  | KBCfgSensorLight
+  | KBCfgSensorGEO
+  | KBCfgSensorScan
+  | KBCfgSensorPIR;
+
+export interface ModifyConfigOptions {
+  allowDisableAllConnectableSlots?: boolean;
+  snapshot?: KBeaconDeviceSnapshot;
 }
 
-export interface KBTimeRange {
-  localStartHour: number;
-  localStartMinute: number;
-  localEndHour: number;
-  localEndMinute: number;
+export interface KBeaconDeviceSnapshot {
+  macAddress: string;
+  common?: {
+    name?: string;
+    model?: string;
+    version?: string;
+    hardwareVersion?: string;
+    maxSlots?: number;
+    maxTriggers?: number;
+    minTxPower?: number;
+    maxTxPower?: number;
+    supportsIBeacon?: boolean;
+    supportsEddyUid?: boolean;
+    supportsEddyUrl?: boolean;
+    supportsEddyTlm?: boolean;
+    supportsSensorAdvertisement?: boolean;
+    supportsSystemAdvertisement?: boolean;
+    supportsButton?: boolean;
+    supportsBeep?: boolean;
+    supportsAccelerometer?: boolean;
+    supportsHumidity?: boolean;
+    supportsPir?: boolean;
+    supportsLight?: boolean;
+  };
+  slots?: KBCfgAdvBase[];
+  triggers?: KBCfgTrigger[];
+  sensors?: (
+    | KBCfgSensorHT
+    | KBCfgSensorLight
+    | KBCfgSensorGEO
+    | KBCfgSensorScan
+    | KBCfgSensorPIR
+  )[];
 }
 
 export interface KBSensorDataInfo {
+  sensorType?: KBSensorType;
   totalRecordNum: number;
   unreadRecordNum: number;
-  readIndex: number;
+  readInfoUtcSeconds?: number;
+}
+
+export interface KBSensorRecordRequest {
+  sensorType: KBSensorType;
+  readPosition?: number;
+  readOption: KBSensorReadOption;
+  maxRecords: number;
 }
 
 export interface KBSensorDataRecord {
   utcTime: number;
-  // Specific data fields depend on the sensor type
-  [key: string]: any;
+  sensorType?: KBSensorType;
+  raw?: number[];
+  temperature?: number;
+  humidity?: number;
+  luxValue?: number;
+  pirIndication?: number;
+  alarmStatus?: number;
+  [key: string]: unknown;
 }
 
-export interface KBConnPara {
-  syncUtcTime?: boolean;
-  readCommPara?: boolean;
-  readSlotPara?: boolean;
-  readTriggerPara?: boolean;
-  readSensorPara?: boolean;
+export interface KBSensorRecordResponse {
+  nextReadPosition?: number;
+  records: KBSensorDataRecord[];
 }

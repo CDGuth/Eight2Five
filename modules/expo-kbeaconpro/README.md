@@ -1,245 +1,278 @@
 # expo-kbeaconpro
 
-Expo native module wrapper for KKMHogen KBeaconPro BLE scanning, connection, configuration, and sensor-history operations.
+Expo native module wrapper for KKM KBeaconPro BLE devices used by Eight2Five field localization.
 
-## Scope
+## Platform and build requirements
 
-- Platform support: iOS and Android via Expo Modules
-- Primary responsibilities:
-  - Discover nearby KBeacon devices
-  - Connect/disconnect to individual beacons
-  - Modify beacon configs
-  - Read/clear sensor history
-  - Subscribe to sensor notifications
+- Supported platforms: Android and iOS.
+- Requires a development build or production native build. Expo Go cannot load this native module.
+- Android SDK dependency: `com.kkmcn.kbeaconlib2:kbeaconlib2:1.3.3`.
+- iOS CocoaPods dependency: `kbeaconlib2 1.2.1`.
 
-## Installation and Wiring
+## Native dependency pins
 
-This monorepo already consumes the module via file dependency.
+Android:
 
-Add the config plugin in app config:
-
-```ts
-plugins: [
-  [
-    "expo-kbeaconpro",
-    {
-      bluetoothAlwaysUsageDescription:
-        "This app uses Bluetooth to scan and communicate with KBeacon devices.",
-      bluetoothPeripheralUsageDescription:
-        "This app uses Bluetooth to scan and communicate with KBeacon devices.",
-      locationWhenInUseUsageDescription:
-        "Location permission is required for BLE scanning.",
-    },
-  ],
-];
+```text
+com.kkmcn.kbeaconlib2:kbeaconlib2:1.3.3
 ```
 
-Plugin implementation: [app.plugin.js](app.plugin.js)
+iOS:
+
+```text
+kbeaconlib2 1.2.1
+```
+
+## Config plugin behavior
+
+The config plugin injects foreground BLE permissions only and is non-destructive: it adds KBeaconPro requirements but does not remove host-app permissions or usage descriptions owned by other features.
+
+Android:
+
+- `android.permission.BLUETOOTH_SCAN`
+- `android.permission.BLUETOOTH_CONNECT`
+- `android.permission.BLUETOOTH` with `maxSdkVersion=30`
+- `android.permission.BLUETOOTH_ADMIN` with `maxSdkVersion=30`
+- `android.permission.ACCESS_FINE_LOCATION` with `maxSdkVersion=30`
+- BLE feature declaration: `android.hardware.bluetooth_le` with `required=false`
+
+These are written as `<uses-permission>` entries (`manifest["uses-permission"]` in Expo config-plugin XML form), not `<permission>` declarations.
+
+iOS:
+
+- `NSBluetoothAlwaysUsageDescription`
+- `NSBluetoothPeripheralUsageDescription`
+
+The plugin does not inject iOS location usage text. CoreBluetooth scanning does not require iOS location permission, and any existing `NSLocationWhenInUseUsageDescription` is preserved.
+
+## Implementation status
+
+Implemented:
+
+- Foreground scanning and cached rotating advertisement packet emission.
+- Normalized uppercase MAC output.
+- Eddystone UID `nid`/`sid` parity across Android and iOS.
+- Connection, enhanced connection, and disconnect cleanup with cross-platform normalized public connection states and reasons.
+- Typed config writes with strict invalid-config rejection.
+- Capability and permission APIs.
+- Bluetooth state and error events.
+- Typed provider integration for the shared mobile scanner.
+- iOS sensor snapshots include cached sensor configuration when the SDK exposes it, matching Android snapshot behavior.
+- iOS compatibility shims check Objective-C selector availability before invoking optional SDK accessors; feature code does not use unguarded KVC.
+- iOS deferred scan starts are rejected with `SCAN_CANCELLED` and cleared if `stopScanning()` is called before Bluetooth initialization finishes.
+
+Partially implemented / requires native validation:
+
+- `readDeviceSnapshot` maps SDK-cached common, slot, trigger, and sensor configuration sections when those sections were loaded by enhanced connect. Missing sections remain omitted rather than fabricated.
+- Sensor history uses the shared fields that are supported by the pinned SDK calls: `sensorType`, optional `readPosition`, required `readOption`, positive `maxRecords`, and optional `nextReadPosition`.
+- Notification subscription requires an explicit `eventType`; both native bridges forward it to the vendor SDK notification APIs.
+
+## Public API summary
+
+- Scanning: `startScanning(): Promise<void>`, `stopScanning()`, `clearBeacons()`.
+- Capabilities: `getCapabilities()`.
+- Permissions: `getPermissionStatus()`, `requestPermissions()`.
+- Connection: `connect(mac, password?, timeoutMs?)`, `connectEnhanced(mac, password?, timeoutMs?, connPara?)`, `disconnect(mac)`.
+- Configuration: `modifyConfig(mac, configs, options?)`.
+- Snapshot: `readDeviceSnapshot(mac)`.
+- Sensor records: `readSensorDataInfo(mac, sensorType)`, `readSensorRecords(mac, request)`, `clearSensorHistory(mac, sensorType)`.
+- Notifications: `subscribeNotify(mac, eventType)`, `unsubscribeNotify(mac, eventType)`.
+
+Timeout values are always milliseconds. The default is `15000` ms.
+
+## Events
+
+- `onBeaconDiscovered`
+- `onConnectionStateChanged`
+- `onNotifyDataReceived`
+- `onBluetoothStateChanged`
+- `onError`
+
+Connection-state events use stable JavaScript values on both platforms rather than native enum ordinals:
+
+```text
+Disconnected  = 0
+Connecting    = 1
+Connected     = 2
+Disconnecting = 3
+```
+
+Connection reasons are also normalized:
+
+```text
+ConnDefault          = 0
+ConnException        = 1
+ConnTimeout          = 2
+ConnAuthFail         = 3
+ConnBleClosed        = 4
+ConnBleBusy          = 5
+ConnNotSupport       = 6
+ConnManualDisconnect = 7
+ConnSuccess          = 256
+```
+
+## Canonical beacon packet schema
+
+Native platforms emit normalized uppercase MAC addresses as both `deviceId` and `mac`:
+
+```ts
+{
+  deviceId: "AA:BB:CC:DD:EE:FF",
+  mac: "AA:BB:CC:DD:EE:FF",
+  name?: string,
+  rssi: number,
+  isConnectable?: boolean,
+  connectionState?: KBConnState,
+  advPackets: KBAdvPacket[],
+}
+```
+
+Both platforms emit all cached advertisement packets where the vendor SDK exposes them. Eddystone UID packets use canonical lowercase `0x`-prefixed hex strings:
+
+```ts
+{
+  advType: KBAdvType.EddyUID,
+  nid: "0x45696768743246697665",
+  sid: "0x010000000000",
+}
+```
+
+The legacy iOS `bid` field is not part of the public schema.
+
+Normalized packet variants include iBeacon, Eddystone UID/URL/TLM, sensor, system, EBeacon, and unknown packets. Unknown packets preserve safe raw metadata instead of crashing.
+
+## Eight2Five Eddystone-UID localization format
+
+Eight2Five uses two rotating Eddystone-UID advertisement slots and merges packets by MAC address.
+
+Slot 0 identity:
+
+- NID: ASCII `Eight2Five` encoded as 10 bytes.
+- SID byte 0: packet type `0x01`.
+- SID byte 1 flags:
+  - bit 0: configured
+  - bit 1: password protected
+  - bit 2: password derived from serial hash
+- SID byte 2: signed reference tx power.
+- SID bytes 3..5: zero padding.
+
+Slot 1 position:
+
+- NID bytes 0..3: X position as uint32 percentage.
+- NID bytes 4..7: Y position as uint32 percentage.
+- NID bytes 8..9: Z height as signed int16 centimeters.
+- SID byte 0: packet type `0x02`.
+- SID bytes 1..5: zero padding.
+
+## Configuration support
+
+The TypeScript schema uses discriminated unions with `configType`.
+
+Implemented mappings:
+
+- Common configuration.
+- Advertisement slots: iBeacon, Eddystone UID, Eddystone URL, Eddystone TLM, sensor advertisement, EBeacon, disabled/null slot where the vendor SDK exposes a class.
+- Triggers: base trigger, motion trigger, angle trigger.
+- Sensors: humidity/temperature, light, GEO, scanner, PIR.
+
+Config writes are strict: if any element is unsupported or malformed, the entire write is rejected and no partial config list is submitted. Optional config fields that are present but malformed are rejected rather than silently omitted. By default, `modifyConfig` refuses updates that explicitly set every included advertisement slot to `advConnectable: false`; pass `allowDisableAllConnectableSlots: true` only when deliberately disabling all updated connectable slots.
+
+## Enhanced connect and snapshot
+
+`connectEnhanced` supports vendor automatic read flags:
+
+```ts
+{
+  syncUtcTime?: boolean;
+  readCommPara?: boolean;
+  readSlotPara?: boolean;
+  readTriggerPara?: boolean;
+  readSensorPara?: boolean;
+}
+```
+
+After enhanced connect, `readDeviceSnapshot(mac)` returns values available in the vendor SDK cache:
+
+- `common`: name, model/version metadata, slot/trigger limits, tx-power limits, and capability booleans when common parameters were loaded. Omitted when common parameters were not loaded.
+- `slots`: advertisement slot configs when slot parameters were loaded. **Optional** — omitted when slot configuration was not loaded or the SDK returns no cached slot list. Loaded empty lists remain representable as empty arrays and are distinguishable from omitted metadata.
+- `triggers`: trigger configs when trigger parameters were loaded. Omitted when not loaded.
+- `sensors`: sensor configs when sensor parameters were loaded. Omitted when not loaded.
+
+All snapshot sections may be omitted when not loaded or unavailable. The bridge never fabricates missing sections.
+
+Eight2Five provisioning uses enhanced connect with `readCommPara: true` and `readSlotPara: true`; provisioning rejects snapshots missing required `supportsEddyUid`, `maxSlots`, or slot configuration metadata instead of assuming the beacon is compatible.
+
+## Sensor records and notifications
+
+`readSensorDataInfo(mac, sensorType)` returns:
+
+- `sensorType` when exposed by the native SDK.
+- `totalRecordNum`.
+- `unreadRecordNum`.
+- `readInfoUtcSeconds` when exposed by the native SDK.
+
+It does not return `readIndex`.
+
+Use `readSensorRecords(mac, request)` with:
+
+- `sensorType`.
+- `readOption`.
+- `maxRecords`.
+
+`readPosition` is optional. When omitted, the native bridge uses the SDK invalid-position sentinel, `INVALID_DATA_RECORD_POS` (`4294967295`), instead of defaulting to `0`.
+
+Read options:
+
+- `NormalOrder = 0`.
+- `ReverseOrder = 1`.
+- `NewRecord = 2`.
+
+`nextReadPosition` is omitted when the native SDK returns `INVALID_DATA_RECORD_POS`, which means the requested read is complete.
+
+`clearSensorHistory(mac, sensorType)` forwards the requested sensor type on both platforms. Android uses its native sensor-type values directly; iOS maps the JavaScript enum values to the CocoaPods SDK constants before forwarding.
+
+Unknown or partially modeled sensor payloads preserve `raw` bytes when available. Known fields may include `utcTime`, `sensorType`, `temperature`, `humidity`, `luxValue`, `pirIndication`, and `alarmStatus`.
+
+Use `subscribeNotify` and `unsubscribeNotify` for live notifications. Both methods require an explicit `eventType` on both platforms. Notification events preserve byte arrays in `raw`, map known sensor record fields into `data`, and emit `data: null` for unsupported payload objects.
+
+Android's vendor SDK also supports passing `null` to subscribe to all notifications, but that platform-specific behavior is intentionally not overloaded into the cross-platform API. If needed later, expose it separately (for example, `subscribeAllNotificationsAndroid(...)`).
+
+## Editor-only iOS stub
+
+From the repository root, `Sources/kbeaconlib2/Stub.swift` is editor-only.
+
+Production iOS code is written against the CocoaPods `kbeaconlib2` `1.2.1` API.
+
+The stub must mirror the pod after production Swift is updated, never the other way around. TypeScript and Jest tests do not prove CocoaPods API compatibility. Real iOS builds use the CocoaPods `kbeaconlib2` SDK, and a native iOS CocoaPods build **must** be run before release to verify that all protocol conformances, callback signatures, and SDK method calls compile against the real pod.
+
+## Deferred scope
+
+DFU is intentionally not implemented in this pass. The vendor SDK ecosystem includes Nordic-based update support, but this module currently reports `supportsDfu: false`.
+
+Not included here: DFU UI, firmware hosting, background BLE scanning architecture, cloud sync, hardware validation, or PANS BLE changes. Native builds and physical-device tests remain deferred; do not treat JavaScript tests or source-shape tests as native SDK qualification.
+
+Deferred native-build and hardware validation checklist:
+
+- clean Android build against Maven artifact `1.3.3`
+- clean iOS CocoaPods build against pod `1.2.1`
+- scan start and stop
+- permission denial and retry
+- connect with default password
+- connect with incorrect password
+- enhanced connect with all read flags
+- common, slot, trigger, and sensor snapshots
+- modify each supported config type
+- disconnect during pending connection
+- notification subscribe and unsubscribe
+- sensor history read, pagination, and clear
+- teardown while connected
 
 ## Validation
 
-From repo root:
+From the repository root:
 
 ```bash
 npm run lint --workspace modules/expo-kbeaconpro
 npm run type-check --workspace modules/expo-kbeaconpro
 npm run test --workspace modules/expo-kbeaconpro
 ```
-
-## Runtime Event Model
-
-Event names are defined in [src/ExpoKBeaconPro.types.ts](src/ExpoKBeaconPro.types.ts).
-
-- `onBeaconDiscovered`
-- `onConnectionStateChanged`
-- `onNotifyDataReceived`
-
-Subscribe with:
-
-- `addBeaconDiscoveredListener`
-- `addConnectionStateChangedListener`
-- `addNotifyDataReceivedListener`
-
-## Public API
-
-Wrappers are exported from [src/ExpoKBeaconProModule.ts](src/ExpoKBeaconProModule.ts) and re-exported from [index.tsx](index.tsx).
-
-### Scanning
-
-- `startScanning(): void`
-- `stopScanning(): void`
-- `clearBeacons(): void`
-
-### Connection Lifecycle
-
-- `connect(macAddress: string, password?: string, timeout?: number): Promise<boolean>`
-- `connectEnhanced(macAddress: string, password?: string, timeout?: number, connPara?: KBConnPara): Promise<boolean>`
-- `disconnect(macAddress: string): Promise<boolean>`
-
-### Configuration
-
-- `modifyConfig(macAddress: string, configs: KBCfgBase[]): Promise<boolean>`
-
-### Sensor Data and Notifications
-
-- `readSensorDataInfo(macAddress: string, sensorType: KBSensorType): Promise<KBSensorDataInfo>`
-- `readSensorHistory(macAddress: string, sensorType: KBSensorType, maxNum: number, readIndex?: number): Promise<KBSensorDataRecord[]>`
-- `clearSensorHistory(macAddress: string, sensorType: KBSensorType): Promise<boolean>`
-- `subscribeSensorDataNotify(macAddress: string, sensorType: KBSensorType): Promise<boolean>`
-- `unsubscribeSensorDataNotify(macAddress: string, sensorType: KBSensorType): Promise<boolean>`
-
-## Core Data Types
-
-Defined in [src/ExpoKBeaconPro.types.ts](src/ExpoKBeaconPro.types.ts).
-
-### Beacon and Event Types
-
-- `KBeacon`
-- `ConnectionStateChangeEvent`
-- `NotifyDataEvent`
-- `KBConnState`
-- `KBConnEvtReason`
-
-### Advertisement Packet Types
-
-Discriminator enum: `KBAdvType`
-
-Supported packet interfaces include:
-
-- `KBAdvPacketIBeacon`
-- `KBAdvPacketEddyTLM`
-- `KBAdvPacketEddyUID`
-- `KBAdvPacketEddyURL`
-- `KBAdvPacketSensor`
-- `KBAdvPacketSystem`
-- `KBAdvPacketEBeacon`
-
-### Configuration Types
-
-Base + common:
-
-- `KBCfgBase`
-- `KBCfgCommon`
-- `KBAdvMode`
-
-Advertisement config variants:
-
-- `KBCfgAdvBase`
-- `KBCfgAdvIBeacon`
-- `KBCfgAdvEddyURL`
-- `KBCfgAdvEddyUID`
-- `KBCfgAdvEddyTLM`
-- `KBCfgAdvKSensor`
-- `KBCfgAdvEBeacon`
-- `KBCfgAdvNull`
-
-Trigger config variants:
-
-- `KBCfgTrigger`
-- `KBCfgTriggerMotion`
-- `KBCfgTriggerAngle`
-- `KBTriggerType`
-- `KBTriggerAction`
-
-Sensor config variants:
-
-- `KBCfgSensorHT`
-- `KBCfgSensorLight`
-- `KBCfgSensorGEO`
-- `KBCfgSensorScan`
-- `KBCfgSensorPIR`
-- `KBCfgSensorBase`
-- `KBSensorType`
-
-Sensor data structures:
-
-- `KBSensorDataInfo`
-- `KBSensorDataRecord`
-
-Connection parameter helper:
-
-- `KBConnPara`
-
-## Typical Flow
-
-```mermaid
-%%{init: {'sequence': {'mirrorActors': false, 'showSequenceNumbers': true}}}%%
-sequenceDiagram
-  participant App as App (mobile/testbed)
-  participant Module as expo-kbeaconpro
-  participant Beacon as KBeacon Device
-
-  App->>Module: startScanning()
-  loop scanning session
-    Module-->>App: onBeaconDiscovered({ beacons[] })
-  end
-
-  App->>Module: connect(mac, password?, timeout?)
-  Module-->>App: onConnectionStateChanged(Connecting)
-  Module-->>App: onConnectionStateChanged(Connected)
-
-  opt configure beacon
-    App->>Module: modifyConfig(mac, configs)
-  end
-
-  opt history read path
-    App->>Module: readSensorDataInfo(mac, sensorType)
-    App->>Module: readSensorHistory(mac, sensorType, maxNum, readIndex?)
-  end
-
-  opt live notify path
-    App->>Module: subscribeSensorDataNotify(mac, sensorType)
-    Beacon-->>Module: sensor payload over BLE
-    Module-->>App: onNotifyDataReceived(payload)
-    App->>Module: unsubscribeSensorDataNotify(mac, sensorType)
-  end
-
-  App->>Module: disconnect(mac)
-  Module-->>App: onConnectionStateChanged(Disconnected)
-```
-
-## Example Usage
-
-```ts
-import {
-  addBeaconDiscoveredListener,
-  addConnectionStateChangedListener,
-  startScanning,
-  stopScanning,
-  connect,
-  disconnect,
-} from "expo-kbeaconpro";
-
-const discoveredSub = addBeaconDiscoveredListener(async ({ beacons }) => {
-  const first = beacons[0];
-  if (!first) return;
-
-  await connect(first.mac);
-});
-
-const connSub = addConnectionStateChangedListener((event) => {
-  console.log("Connection state", event.macAddress, event.state, event.reason);
-});
-
-startScanning();
-
-// cleanup
-stopScanning();
-discoveredSub.remove();
-connSub.remove();
-await disconnect("AA:BB:CC:DD:EE:FF");
-```
-
-## Operational Notes
-
-- BLE permissions are injected by the config plugin.
-- On iOS, Bluetooth and location usage descriptions must be present in Info.plist (plugin handles defaults).
-- On Android 12+, BLE scan/connect permissions are required (plugin adds them).
-- API calls are async wrappers around native module methods; error semantics depend on the native implementation.
-
-## Source Files
-
-- Entry: [index.tsx](index.tsx)
-- JS wrapper: [src/ExpoKBeaconProModule.ts](src/ExpoKBeaconProModule.ts)
-- Type definitions: [src/ExpoKBeaconPro.types.ts](src/ExpoKBeaconPro.types.ts)
-- Expo module config: [expo-module.config.json](expo-module.config.json)

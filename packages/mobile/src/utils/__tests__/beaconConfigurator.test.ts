@@ -5,6 +5,57 @@ import {
   BeaconConfigurationTransport,
 } from "../beaconConfigurator";
 import { APP_NAMESPACE } from "../../types/BeaconProtocol";
+import { KBAdvType } from "expo-kbeaconpro";
+import type { KBCfgAdvEddyUID, KBCfgCommon } from "expo-kbeaconpro";
+import fs from "node:fs";
+import path from "node:path";
+
+jest.mock("expo-kbeaconpro", () => ({
+  KBAdvType: {
+    IBeacon: 0,
+    EddyTLM: 1,
+    EddyUID: 2,
+    EddyURL: 3,
+    Sensor: 4,
+    System: 5,
+    EBeacon: 6,
+    Unknown: 255,
+  },
+  connect: jest.fn(async () => true),
+  modifyConfig: jest.fn(async () => true),
+  readDeviceSnapshot: jest.fn(async () => ({
+    macAddress: "AA:BB",
+    common: { supportsEddyUid: true, maxSlots: 2 },
+    slots: [],
+  })),
+  connectEnhanced: jest.fn(async () => true),
+  disconnect: jest.fn(async () => true),
+  validateConfigAgainstSnapshot: jest.fn((configs, snapshot) => {
+    configs.forEach(
+      (config: {
+        configType: string;
+        slotIndex?: number;
+        txPower?: number;
+      }) => {
+        if (config.configType !== "advertisement") return;
+        if (
+          typeof snapshot.common?.maxSlots === "number" &&
+          typeof config.slotIndex === "number" &&
+          config.slotIndex >= snapshot.common.maxSlots
+        ) {
+          throw new Error("slotIndex exceeds device maxSlots");
+        }
+        if (
+          typeof snapshot.common?.maxTxPower === "number" &&
+          typeof config.txPower === "number" &&
+          config.txPower > snapshot.common.maxTxPower
+        ) {
+          throw new Error("txPower is above device maximum");
+        }
+      },
+    );
+  }),
+}));
 
 function hexToBytes(hex: string): number[] {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -23,8 +74,14 @@ function asciiToHex(value: string): string {
   return "0x" + hex.toUpperCase();
 }
 
-function findSlot(configs: any[], slotIndex: number) {
-  return configs.find((cfg: any) => cfg.slotIndex === slotIndex);
+function findSlot(
+  configs: ReturnType<typeof generateBeaconConfig>,
+  slotIndex: number,
+): KBCfgAdvEddyUID | undefined {
+  return configs.find(
+    (cfg): cfg is KBCfgAdvEddyUID =>
+      cfg.configType === "advertisement" && cfg.slotIndex === slotIndex,
+  );
 }
 
 describe("generateBeaconConfig", () => {
@@ -37,16 +94,17 @@ describe("generateBeaconConfig", () => {
       isPasswordProtected: true,
       isPasswordSerialHash: false,
       isConfigured: true,
-    }) as any[];
+    });
 
     const slot0 = findSlot(configs, 0);
     if (!slot0) throw new Error("Slot 0 config missing");
 
     expect(slot0.slotIndex).toBe(0);
-    expect(slot0.advType).toBe(2);
+    expect(slot0.configType).toBe("advertisement");
+    expect(slot0.advType).toBe(KBAdvType.EddyUID);
     expect(slot0.nid).toBe(asciiToHex(APP_NAMESPACE));
 
-    const sidBytes = hexToBytes(slot0.sid);
+    const sidBytes = hexToBytes(slot0.sid!);
     expect(sidBytes).toHaveLength(6);
     expect(sidBytes[0]).toBe(0x01); // Packet type
     expect(sidBytes[1] & 0x01).toBe(0x01); // Configured set
@@ -54,7 +112,8 @@ describe("generateBeaconConfig", () => {
     expect(sidBytes[1] & 0x04).toBe(0x00); // Serial hash flag off
 
     const refPowerCfg = configs.find(
-      (cfg: any) => typeof cfg.refPower1Meters === "number",
+      (cfg): cfg is KBCfgCommon =>
+        cfg.configType === "common" && typeof cfg.refPower1Meters === "number",
     );
     if (!refPowerCfg) throw new Error("Reference RSSI config missing");
     expect(refPowerCfg.refPower1Meters).toBe(-55);
@@ -70,12 +129,14 @@ describe("generateBeaconConfig", () => {
       isPasswordProtected: false,
       isPasswordSerialHash: true,
       isConfigured: true,
-    }) as any[];
+    });
 
     const slot1 = findSlot(configs, 1);
     if (!slot1) throw new Error("Slot 1 config missing");
+    expect(slot1.configType).toBe("advertisement");
+    expect(slot1.advType).toBe(KBAdvType.EddyUID);
 
-    const nidBytes = hexToBytes(slot1.nid);
+    const nidBytes = hexToBytes(slot1.nid!);
     expect(nidBytes).toHaveLength(10);
 
     const xValue =
@@ -101,7 +162,7 @@ describe("generateBeaconConfig", () => {
     const signedZ = (zValue << 16) >> 16;
     expect(signedZ).toBe(32767);
 
-    const sidBytes = hexToBytes(slot1.sid);
+    const sidBytes = hexToBytes(slot1.sid!);
     expect(sidBytes[0]).toBe(0x02);
     expect(sidBytes.slice(1)).toEqual([0, 0, 0, 0, 0]);
   });
@@ -115,12 +176,12 @@ describe("generateBeaconConfig", () => {
       isPasswordProtected: false,
       isPasswordSerialHash: false,
       isConfigured: false,
-    }) as any[];
+    });
 
     const slot0 = findSlot(configs, 0);
     if (!slot0) throw new Error("Slot 0 config missing");
 
-    const sidBytes = hexToBytes(slot0.sid);
+    const sidBytes = hexToBytes(slot0.sid!);
     expect(sidBytes[1] & 0x01).toBe(0x00);
   });
 
@@ -134,24 +195,60 @@ describe("generateBeaconConfig", () => {
 
     const provisionalIdentity = findSlot(plan.provisional, 0);
     if (!provisionalIdentity) throw new Error("Provisional identity missing");
-    const provisionalFlags = hexToBytes(provisionalIdentity.sid)[1];
+    const provisionalFlags = hexToBytes(provisionalIdentity.sid!)[1];
     expect(provisionalFlags & 0x01).toBe(0x00);
 
     const finalizedIdentity = findSlot(plan.finalized, 0);
     if (!finalizedIdentity) throw new Error("Final identity missing");
-    const finalizedFlags = hexToBytes(finalizedIdentity.sid)[1];
+    const finalizedFlags = hexToBytes(finalizedIdentity.sid!)[1];
     expect(finalizedFlags & 0x01).toBe(0x01);
 
     const provisionalPosition = findSlot(plan.provisional, 1);
     if (!provisionalPosition) throw new Error("Provisional position missing");
-    const provisionalPosBytes = hexToBytes(provisionalPosition.nid);
+    const provisionalPosBytes = hexToBytes(provisionalPosition.nid!);
     expect(provisionalPosBytes.every((byte) => byte === 0)).toBe(true);
+  });
+
+  it("keeps generated UID configs connectable by default", () => {
+    const configs = generateBeaconConfig({
+      xPercent: 10,
+      yPercent: 20,
+      zCm: 30,
+      txPower: -4,
+      isPasswordProtected: false,
+      isPasswordSerialHash: false,
+      isConfigured: true,
+    });
+
+    const advertisementConfigs = configs.filter(
+      (config): config is KBCfgAdvEddyUID =>
+        config.configType === "advertisement",
+    );
+
+    expect(advertisementConfigs).toHaveLength(2);
+    expect(advertisementConfigs.every((config) => config.advConnectable)).toBe(
+      true,
+    );
+  });
+
+  it("does not use any[] for generated configs", () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../beaconConfigurator.ts"),
+      "utf8",
+    );
+
+    expect(source).not.toContain("const configs: any[]");
   });
 
   it("applies provisional stage using provided transport", async () => {
     const mockTransport: BeaconConfigurationTransport = {
       connect: jest.fn(async () => true),
       modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2 },
+        slots: [],
+      })),
       disconnect: jest.fn(async () => true),
     };
 
@@ -173,6 +270,9 @@ describe("generateBeaconConfig", () => {
     );
     expect(mockTransport.modifyConfig).toHaveBeenCalledTimes(1);
     expect(mockTransport.disconnect).toHaveBeenCalledWith("AA:BB:CC:DD:EE:FF");
+    expect(mockTransport.readDeviceSnapshot).toHaveBeenCalledWith(
+      "AA:BB:CC:DD:EE:FF",
+    );
     expect(result.provisionalApplied).toBe(true);
     expect(result.finalizedApplied).toBe(false);
   });
@@ -203,5 +303,267 @@ describe("generateBeaconConfig", () => {
     expect(mockTransport.modifyConfig).toHaveBeenCalledTimes(1);
     expect(result.provisionalApplied).toBe(false);
     expect(result.finalizedApplied).toBe(true);
+  });
+
+  it("rejects snapshots that do not expose the required two UID slots", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 1 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("two advertisement slots");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+    expect(mockTransport.disconnect).toHaveBeenCalledWith("AA:BB:CC:DD:EE:FF");
+  });
+
+  it("rejects snapshots missing Eddystone UID capability metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("Eddystone UID capability metadata");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects snapshots missing maxSlots metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not include maxSlots");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects snapshots that report no Eddystone UID support", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: false, maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not report Eddystone UID support");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects snapshots missing slot configuration metadata", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2 },
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("does not include slot configuration metadata");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes omitted slots from empty loaded slots", async () => {
+    const mockTransportWithEmptySlots: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    // Empty loaded slots should pass validation (slots is defined, just empty)
+    const result = await applyBeaconConfiguration(
+      {
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        txPower: 4,
+        isPasswordProtected: false,
+        isPasswordSerialHash: false,
+        finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+      },
+      mockTransportWithEmptySlots,
+    );
+
+    expect(result.provisionalApplied).toBe(true);
+    expect(mockTransportWithEmptySlots.modifyConfig).toHaveBeenCalled();
+  });
+
+  it("rejects generated config when tx power exceeds snapshot capability", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 2, maxTxPower: 0 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 4,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow("txPower");
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects generated slot usage that exceeds maxSlots", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 1 },
+        slots: [],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    await expect(
+      applyBeaconConfiguration(
+        {
+          macAddress: "AA:BB:CC:DD:EE:FF",
+          txPower: 0,
+          isPasswordProtected: false,
+          isPasswordSerialHash: false,
+          finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+        },
+        mockTransport,
+      ),
+    ).rejects.toThrow(/maxSlots|two advertisement slots/);
+
+    expect(mockTransport.modifyConfig).not.toHaveBeenCalled();
+  });
+
+  it("accepts valid two-slot snapshot for provisioning", async () => {
+    const mockTransport: BeaconConfigurationTransport = {
+      connect: jest.fn(async () => true),
+      modifyConfig: jest.fn(async () => true),
+      readDeviceSnapshot: jest.fn(async () => ({
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        common: { supportsEddyUid: true, maxSlots: 5 },
+        slots: [
+          {
+            configType: "advertisement" as const,
+            slotIndex: 0,
+            advType: KBAdvType.EddyUID,
+          },
+          {
+            configType: "advertisement" as const,
+            slotIndex: 1,
+            advType: KBAdvType.EddyUID,
+          },
+        ],
+      })),
+      disconnect: jest.fn(async () => true),
+    };
+
+    const result = await applyBeaconConfiguration(
+      {
+        macAddress: "AA:BB:CC:DD:EE:FF",
+        txPower: 4,
+        isPasswordProtected: false,
+        isPasswordSerialHash: false,
+        finalPosition: { xPercent: 10, yPercent: 15, zCm: 50 },
+      },
+      mockTransport,
+    );
+
+    expect(result.provisionalApplied).toBe(true);
+    expect(mockTransport.modifyConfig).toHaveBeenCalledTimes(1);
   });
 });

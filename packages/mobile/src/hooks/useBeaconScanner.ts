@@ -49,6 +49,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
     [],
   );
   const [position, setPosition] = useState<PositionEstimate | undefined>();
+  const [startupError, setStartupError] = useState<unknown>();
   const beaconsRef = useRef<Map<string, BeaconState>>(new Map());
   const engineRef = useRef<LocalizationEngine | null>(null);
   const sourceRef = useRef<BeaconSource | null>(null);
@@ -109,7 +110,8 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
 
     const start = async () => {
       try {
-        source.start();
+        await source.start();
+        setStartupError(undefined);
 
         subscription = source.subscribe((event: BeaconSourceEvent) => {
           let hasUpdates = false;
@@ -117,7 +119,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
           const discoveredBeacons: RawBeaconData[] = event.rawBeacons ?? [];
 
           discoveredBeacons.forEach((rawBeacon: RawBeaconData) => {
-            const mac = rawBeacon.mac;
+            const mac = rawBeacon.mac.toUpperCase();
             const currentState = beaconsRef.current.get(mac);
 
             // Parse the raw data
@@ -173,6 +175,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
           }
         });
       } catch (e) {
+        setStartupError(e);
         console.error("Failed to start scanning:", e);
       }
     };
@@ -187,5 +190,5 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
     };
   }, []);
 
-  return { beacons, filteredBeacons, position };
+  return { beacons, filteredBeacons, position, startupError };
 }

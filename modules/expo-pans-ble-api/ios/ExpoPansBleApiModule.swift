@@ -13,7 +13,8 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   ])
 
   private var centralManager: CBCentralManager?
-  private var shouldScanWhenPoweredOn = false
+  private var pendingScanPromise: Promise?
+  private var pendingPermissionPromise: Promise?
   private var isScanning = false
   private var discoveredPeripherals = [String: CBPeripheral]()
   private var discoveredMetadata = [String: [String: Any?]]()
@@ -37,7 +38,15 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
 
     OnDestroy {
       self.stopScanningInternal()
-      self.connections.keys.forEach { self.closeConnection(deviceId: $0, reason: "module destroyed", rejectConnect: true) }
+      self.pendingPermissionPromise?.reject("OPERATION_FAILED", "Module was destroyed.")
+      self.pendingPermissionPromise = nil
+      Array(self.connections.keys).forEach {
+        self.closeConnection(
+          deviceId: $0,
+          reason: "module destroyed",
+          rejectConnect: true
+        )
+      }
       self.disconnectingDeviceIds.removeAll()
       self.discoveredPeripherals.removeAll()
       self.discoveredMetadata.removeAll()
@@ -59,8 +68,17 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
         self.startScan(manager)
         promise.resolve(nil)
       } else if manager.state == .unknown || manager.state == .resetting {
-        self.shouldScanWhenPoweredOn = true
-        promise.resolve(nil)
+        // Keep at most one deferred start. A duplicate start while CoreBluetooth is
+        // initializing is rejected deterministically instead of replacing the
+        // original promise and leaving callers unsure which request will settle.
+        guard self.pendingScanPromise == nil else {
+          promise.reject(
+            "OPERATION_FAILED",
+            "A scan start is already pending while Bluetooth initializes."
+          )
+          return
+        }
+        self.pendingScanPromise = promise
       } else {
         promise.reject("BLUETOOTH_UNAVAILABLE", "Bluetooth is not powered on.")
       }
@@ -91,13 +109,16 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
     }
 
     AsyncFunction("requestPermissions") { (promise: Promise) in
-      self.ensureCentralManager()
-      promise.resolve(self.permissionStatusMap())
+      self.requestBluetoothPermission(promise)
     }
 
     AsyncFunction("connect") { (deviceId: String, timeoutMs: Int?, promise: Promise) in
       guard !deviceId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         promise.reject("INVALID_ARGUMENT", "deviceId must be non-empty.")
+        return
+      }
+      if let timeoutMs, timeoutMs <= 0 {
+        promise.reject("INVALID_ARGUMENT", "timeoutMs must be a positive integer.")
         return
       }
       guard let manager = self.centralManager else {
@@ -187,13 +208,22 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   }
 
   public func centralManagerDidUpdateState(_ central: CBCentralManager) {
-    if central.state == .poweredOn && shouldScanWhenPoweredOn {
-      shouldScanWhenPoweredOn = false
-      startScan(central)
+    settlePendingPermissionForCentralState(central.state)
+
+    if central.state == .poweredOn {
+      if let promise = pendingScanPromise {
+        pendingScanPromise = nil
+        startScan(central)
+        promise.resolve(nil)
+      }
     } else if central.state == .unauthorized {
+      rejectPendingScanStart(code: "PERMISSION_DENIED", message: "Bluetooth permission is not authorized.")
+      closeAllConnections(reason: "bluetooth unavailable")
       sendError(code: "PERMISSION_DENIED", message: "Bluetooth permission is not authorized.")
     } else if central.state == .unsupported || central.state == .poweredOff {
+      rejectPendingScanStart(code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off.")
       isScanning = false
+      closeAllConnections(reason: "bluetooth unavailable")
       sendError(code: "BLUETOOTH_UNAVAILABLE", message: "Bluetooth is unavailable or powered off.")
     }
   }
@@ -346,9 +376,59 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   }
 
   private func stopScanningInternal() {
-    shouldScanWhenPoweredOn = false
+    rejectPendingScanStart(
+      code: "OPERATION_FAILED",
+      message: "Pending scan start was cancelled."
+    )
     centralManager?.stopScan()
     isScanning = false
+  }
+
+  private func rejectPendingScanStart(code: String, message: String) {
+    pendingScanPromise?.reject(code, message)
+    pendingScanPromise = nil
+  }
+
+  private func requestBluetoothPermission(_ promise: Promise) {
+    ensureCentralManager()
+
+    if bluetoothPermissionStatus() != "undetermined" {
+      promise.resolve(permissionStatusMap())
+      return
+    }
+
+    guard pendingPermissionPromise == nil else {
+      promise.reject(
+        "OPERATION_FAILED",
+        "A Bluetooth permission request is already pending while CoreBluetooth initializes."
+      )
+      return
+    }
+
+    pendingPermissionPromise = promise
+    if let manager = centralManager {
+      settlePendingPermissionForCentralState(manager.state)
+    }
+  }
+
+  private func settlePendingPermissionForCentralState(_ state: CBManagerState) {
+    guard let promise = pendingPermissionPromise else { return }
+
+    let bluetoothStatus = bluetoothPermissionStatus()
+    guard bluetoothStatus != "undetermined" || (state != .unknown && state != .resetting) else { return }
+
+    pendingPermissionPromise = nil
+    promise.resolve(permissionStatusMap())
+  }
+
+  private func closeAllConnections(reason: String) {
+    Array(connections.keys).forEach {
+      closeConnection(
+        deviceId: $0,
+        reason: reason,
+        rejectConnect: true
+      )
+    }
   }
 
   private func extractPansServiceData(advertisementData: [String: Any]) -> Data? {
@@ -472,15 +552,18 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   }
 
   private func permissionStatusMap() -> [String: Any] {
+    let bluetooth = bluetoothPermissionStatus()
+    return ["bluetooth": bluetooth, "canAskAgain": bluetooth == "undetermined"]
+  }
+
+  private func bluetoothPermissionStatus() -> String {
     let authorization = CBCentralManager.authorization
-    let bluetooth: String
     switch authorization {
-    case .allowedAlways: bluetooth = "granted"
-    case .denied, .restricted: bluetooth = "denied"
-    case .notDetermined: bluetooth = "undetermined"
-    @unknown default: bluetooth = "unavailable"
+    case .allowedAlways: return "granted"
+    case .denied, .restricted: return "denied"
+    case .notDetermined: return "undetermined"
+    @unknown default: return "unavailable"
     }
-    return ["bluetooth": bluetooth, "canAskAgain": authorization == .notDetermined]
   }
 
   private func decodePresence(_ data: Data) -> [String: Any?] {

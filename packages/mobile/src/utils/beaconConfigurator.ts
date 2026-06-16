@@ -58,9 +58,13 @@
 
 import { APP_NAMESPACE, PacketType } from "../types/BeaconProtocol";
 import {
-  KBCfgBase,
+  KBAdvType,
+  KBeaconConfig,
+  KBeaconDeviceSnapshot,
   KBCfgCommon,
-} from "../../../../modules/expo-kbeaconpro/src/ExpoKBeaconPro.types";
+  KBCfgAdvEddyUID,
+  validateConfigAgainstSnapshot,
+} from "expo-kbeaconpro";
 
 const TX_POWER_TO_REF_RSSI = new Map<number, number>([
   [8, -51],
@@ -154,32 +158,39 @@ export interface BeaconConfigurationPlanOptions extends BeaconIdentitySettings {
 }
 
 export interface BeaconConfigurationPlan {
-  provisional: KBCfgBase[];
-  finalized: KBCfgBase[];
+  provisional: KBeaconConfig[];
+  finalized: KBeaconConfig[];
 }
 
 export interface BeaconConfigurationTransport {
   connect: (
     macAddress: string,
     password?: string,
-    timeout?: number,
+    timeoutMs?: number,
   ) => Promise<boolean>;
-  modifyConfig: (macAddress: string, configs: KBCfgBase[]) => Promise<boolean>;
+  modifyConfig: (
+    macAddress: string,
+    configs: KBeaconConfig[],
+  ) => Promise<boolean>;
+  readDeviceSnapshot?: (macAddress: string) => Promise<KBeaconDeviceSnapshot>;
   disconnect: (macAddress: string) => Promise<boolean>;
 }
 
-type NativeBeaconModule =
-  typeof import("../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule");
+type NativeBeaconModule = typeof import("expo-kbeaconpro");
 
 let cachedTransport: BeaconConfigurationTransport | null = null;
 
 async function getDefaultTransport(): Promise<BeaconConfigurationTransport> {
   if (cachedTransport) return cachedTransport;
-  const nativeModule: NativeBeaconModule =
-    await import("../../../../modules/expo-kbeaconpro/src/ExpoKBeaconProModule");
+  const nativeModule: NativeBeaconModule = await import("expo-kbeaconpro");
   cachedTransport = {
-    connect: nativeModule.connect,
+    connect: (macAddress, password, timeoutMs) =>
+      nativeModule.connectEnhanced(macAddress, password, timeoutMs, {
+        readCommPara: true,
+        readSlotPara: true,
+      }),
     modifyConfig: nativeModule.modifyConfig,
+    readDeviceSnapshot: nativeModule.readDeviceSnapshot,
     disconnect: nativeModule.disconnect,
   };
   return cachedTransport;
@@ -188,7 +199,7 @@ async function getDefaultTransport(): Promise<BeaconConfigurationTransport> {
 export interface ApplyBeaconConfigurationOptions extends BeaconConfigurationPlanOptions {
   macAddress: string;
   password?: string;
-  timeout?: number;
+  timeoutMs?: number;
   stage?: BeaconConfigurationStage;
   disconnectAfter?: boolean;
   skipConnect?: boolean;
@@ -200,8 +211,10 @@ export interface BeaconConfigurationResult {
   plan: BeaconConfigurationPlan;
 }
 
-export function generateBeaconConfig(params: BeaconConfigParams): KBCfgBase[] {
-  const configs: any[] = []; // Using any[] because we need to cast to KBCfgAdvEddyUID which might not be fully typed in the module yet
+export function generateBeaconConfig(
+  params: BeaconConfigParams,
+): KBeaconConfig[] {
+  const configs: KBeaconConfig[] = [];
   const isConfigured = params.isConfigured ?? false; // Default to false until configuration is completed
 
   // --- Slot 0: Identity ---
@@ -229,16 +242,18 @@ export function generateBeaconConfig(params: BeaconConfigParams): KBCfgBase[] {
   const sid0 =
     "0x" + sid0Bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  configs.push({
-    advType: 2, // KBAdvType.EddyUID (Assuming 2, need to verify enum)
+  const identitySlot: KBCfgAdvEddyUID = {
+    configType: "advertisement",
+    advType: KBAdvType.EddyUID,
     slotIndex: 0,
     nid: nid0,
     sid: sid0,
     txPower: params.txPower,
-    advPeriod: 1000.0, // 1Hz default //TODO: Check BlueCharmBeacons docs for optimal period
+    advPeriod: 1000,
     advConnectable: true,
     advTriggerOnly: false,
-  });
+  };
+  configs.push(identitySlot);
 
   // --- Slot 1: Position ---
   // NID: [X(4), Y(4), Z(2)]
@@ -271,22 +286,26 @@ export function generateBeaconConfig(params: BeaconConfigParams): KBCfgBase[] {
   const sid1 =
     "0x" + sid1Bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  configs.push({
-    advType: 2, // KBAdvType.EddyUID
+  const positionSlot: KBCfgAdvEddyUID = {
+    configType: "advertisement",
+    advType: KBAdvType.EddyUID,
     slotIndex: 1,
     nid: nid1,
     sid: sid1,
     txPower: params.txPower,
-    advPeriod: 1000.0, //TODO: Check BlueCharmBeacons docs for optimal period
+    advPeriod: 1000,
     advConnectable: true,
     advTriggerOnly: false,
-  });
+  };
+  configs.push(positionSlot);
 
   const refPower1m = resolveRefPower(params.txPower);
   if (typeof refPower1m === "number") {
-    configs.push({
+    const commonConfig: KBCfgCommon = {
+      configType: "common",
       refPower1Meters: refPower1m,
-    } as KBCfgCommon);
+    };
+    configs.push(commonConfig);
   }
 
   return configs;
@@ -344,7 +363,7 @@ export async function applyBeaconConfiguration(
     const didConnect = await activeTransport.connect(
       options.macAddress,
       options.password,
-      options.timeout,
+      options.timeoutMs,
     );
     if (!didConnect) {
       throw new Error(`Unable to connect to beacon ${options.macAddress}`);
@@ -353,6 +372,21 @@ export async function applyBeaconConfiguration(
   }
 
   try {
+    if (activeTransport.readDeviceSnapshot) {
+      const snapshot = await activeTransport.readDeviceSnapshot(
+        options.macAddress,
+      );
+      validateSnapshotForEight2Five(snapshot);
+
+      if (shouldApplyProvisional) {
+        validateConfigAgainstSnapshot(plan.provisional, snapshot);
+      }
+
+      if (shouldApplyFinal) {
+        validateConfigAgainstSnapshot(plan.finalized, snapshot);
+      }
+    }
+
     let provisionalApplied = false;
     let finalizedApplied = false;
 
@@ -385,5 +419,39 @@ export async function applyBeaconConfiguration(
     if (connected && options.disconnectAfter !== false) {
       await activeTransport.disconnect(options.macAddress);
     }
+  }
+}
+
+function validateSnapshotForEight2Five(snapshot: KBeaconDeviceSnapshot): void {
+  const common = snapshot.common;
+
+  if (common?.supportsEddyUid === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot for ${snapshot.macAddress} does not include required Eddystone UID capability metadata`,
+    );
+  }
+
+  if (common?.supportsEddyUid === false) {
+    throw new Error(
+      `Beacon ${snapshot.macAddress} does not report Eddystone UID support`,
+    );
+  }
+
+  if (common?.maxSlots === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot for ${snapshot.macAddress} does not include maxSlots`,
+    );
+  }
+
+  if (typeof common?.maxSlots === "number" && common.maxSlots < 2) {
+    throw new Error(
+      `Beacon ${snapshot.macAddress} does not expose the two advertisement slots required by Eight2Five`,
+    );
+  }
+
+  if (snapshot.slots === undefined) {
+    throw new Error(
+      `INVALID_CONFIG: device snapshot does not include slot configuration metadata`,
+    );
   }
 }

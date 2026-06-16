@@ -112,10 +112,32 @@ describe("PansBleSource", () => {
     expect(pans.patchOperationMode).toHaveBeenCalledWith("tag-1", {
       role: "tag",
       uwbMode: "active",
+      initiatorEnabled: false,
       locationEngineEnabled: true,
+      lowPowerModeEnabled: false,
+      accelerometerEnabled: true,
     });
     expect(pans.writeLocationDataMode).toHaveBeenCalledWith("tag-1", 0);
     expect(pans.subscribeLocationData).toHaveBeenCalledWith("tag-1");
+  });
+
+  test("live source disables responsive and stationary tracking when requested", async () => {
+    createPansBleSource({
+      responsiveMode: false,
+      stationaryDetectionEnabled: false,
+    }).subscribe(jest.fn());
+
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    expect(pans.patchOperationMode).toHaveBeenCalledWith("tag-1", {
+      role: "tag",
+      uwbMode: "active",
+      initiatorEnabled: false,
+      locationEngineEnabled: true,
+      lowPowerModeEnabled: true,
+      accelerometerEnabled: false,
+    });
   });
 
   test("honors tagDeviceId, selectTag, and disabled solver mode", async () => {
@@ -147,6 +169,10 @@ describe("PansBleSource", () => {
     createPansBleSource().subscribe(listener);
     discoveryListener?.({ devices: [device("tag-1", "tag")] });
     await flushPromises();
+
+    expect(pans.readLocationData.mock.invocationCallOrder[0]).toBeLessThan(
+      pans.subscribeLocationData.mock.invocationCallOrder[0],
+    );
 
     expect(listener).toHaveBeenCalledWith({
       observations: [
@@ -230,13 +256,51 @@ describe("PansBleSource", () => {
     expect(pans.subscribeLocationData).not.toHaveBeenCalled();
   });
 
+  test("cleanup during initial read disconnects without subscribing", async () => {
+    const pending = deferred<{
+      distances: never[];
+      raw: never[];
+      diagnostics: never[];
+    }>();
+    pans.readLocationData.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource().subscribe(jest.fn());
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    subscription.remove();
+    pending.resolve({ distances: [], raw: [], diagnostics: [] });
+    await flushPromises();
+
+    expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
+    expect(pans.subscribeLocationData).not.toHaveBeenCalled();
+  });
+
+  test("cleanup during subscription settles with unsubscribe and one disconnect", async () => {
+    const pending = deferred<boolean>();
+    pans.subscribeLocationData.mockReturnValueOnce(pending.promise);
+
+    const subscription = createPansBleSource().subscribe(jest.fn());
+    discoveryListener?.({ devices: [device("tag-1", "tag")] });
+    await flushPromises();
+
+    subscription.remove();
+    pending.resolve(true);
+    await flushPromises();
+
+    expect(pans.unsubscribeLocationData).toHaveBeenCalledWith("tag-1");
+    expect(pans.disconnect).toHaveBeenCalledTimes(1);
+    expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
+  });
+
   test("start forwards scan failures to onError", async () => {
     const onError = jest.fn();
     const error = new Error("Bluetooth disabled");
     pans.startScanning.mockRejectedValueOnce(error);
 
-    createPansBleSource({ onError }).start();
-    await flushPromises();
+    await expect(createPansBleSource({ onError }).start()).rejects.toThrow(
+      "Bluetooth disabled",
+    );
 
     expect(onError).toHaveBeenCalledWith(error);
   });

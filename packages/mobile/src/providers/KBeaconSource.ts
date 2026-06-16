@@ -6,10 +6,21 @@ import {
 import { RawBeaconData } from "../types/BeaconProtocol";
 import { BeaconSource } from "./types";
 
-export function createKBeaconSource(): BeaconSource {
+export interface KBeaconSourceOptions {
+  onError?: (error: unknown) => void;
+}
+
+export function createKBeaconSource(
+  options: KBeaconSourceOptions = {},
+): BeaconSource {
   return {
-    start() {
-      startScanning();
+    async start() {
+      try {
+        await startScanning();
+      } catch (error) {
+        options.onError?.(error);
+        throw error;
+      }
     },
     stop() {
       stopScanning();

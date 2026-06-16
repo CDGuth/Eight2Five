@@ -28,7 +28,6 @@ import java.util.UUID
 
 class ExpoPansBleApiModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
-  private val permissionRequestCode = 5025
 
   private val pansServiceUuid: UUID = UUID.fromString("680c21d9-c946-4c1f-9c11-baa1c21329e7")
   private val gapServiceUuid: UUID = UUID.fromString("00001800-0000-1000-8000-00805f9b34fb")
@@ -199,6 +198,11 @@ class ExpoPansBleApiModule : Module() {
 
     AsyncFunction("connect") { deviceId: String, timeoutMs: Int?, promise: Promise ->
       try {
+        if (timeoutMs != null && timeoutMs <= 0) {
+          promise.reject("INVALID_ARGUMENT", "timeoutMs must be a positive integer.", null)
+          return@AsyncFunction
+        }
+
         val normalized = normalizeDeviceId(deviceId)
         val device = discoveredDevices[normalized] ?: bluetoothAdapter()?.getRemoteDeviceOrNull(normalized)
         if (device == null) {
@@ -237,11 +241,50 @@ class ExpoPansBleApiModule : Module() {
         }
         mainHandler.postDelayed(connection.connectTimeoutRunnable!!, (timeoutMs ?: 15000).toLong())
 
-        connection.bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-          device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-        } else {
-          device.connectGatt(context, false, gattCallback)
+        val gatt = try {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+          } else {
+            device.connectGatt(context, false, gattCallback)
+          }
+        } catch (error: SecurityException) {
+          failImmediateConnect(
+            normalized,
+            connection,
+            null,
+            promise,
+            "PERMISSION_DENIED",
+            error.message ?: "Bluetooth permission denied.",
+            error
+          )
+          return@AsyncFunction
+        } catch (error: Throwable) {
+          failImmediateConnect(
+            normalized,
+            connection,
+            null,
+            promise,
+            "OPERATION_FAILED",
+            error.message ?: "Unable to connect.",
+            error
+          )
+          return@AsyncFunction
         }
+
+        if (gatt == null) {
+          failImmediateConnect(
+            normalized,
+            connection,
+            null,
+            promise,
+            "OPERATION_FAILED",
+            "connectGatt returned null.",
+            null
+          )
+          return@AsyncFunction
+        }
+
+        connection.bluetoothGatt = gatt
       } catch (error: IllegalArgumentException) {
         promise.reject("INVALID_ARGUMENT", error.message ?: "Invalid device ID.", error)
       } catch (error: SecurityException) {
@@ -541,11 +584,16 @@ class ExpoPansBleApiModule : Module() {
   private fun startNotify(context: ConnectionContext, gatt: BluetoothGatt, operation: GattOperation.Notify): StartResult {
     val characteristic = context.characteristics[operation.uuid]
       ?: return StartResult.Failed("CHARACTERISTIC_NOT_FOUND", "Characteristic ${operation.uuid} was not discovered.")
+    val previousLocalState = context.notificationStates[operation.uuid] ?: false
+    context.activeNotifyPreviousLocalState = previousLocalState
     if (!gatt.setCharacteristicNotification(characteristic, operation.enabled)) {
       return StartResult.Failed("OPERATION_FAILED", "Failed to set local notification state.")
     }
     val descriptor = characteristic.getDescriptor(cccdUuid)
-      ?: return StartResult.Failed("CHARACTERISTIC_NOT_FOUND", "CCCD descriptor was not found for ${operation.uuid}.")
+    if (descriptor == null) {
+      rollbackLocalNotificationState(gatt, characteristic, previousLocalState)
+      return StartResult.Failed("CHARACTERISTIC_NOT_FOUND", "CCCD descriptor was not found for ${operation.uuid}.")
+    }
     val enabledValue = if (!operation.enabled) {
       BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
     } else if ((characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
@@ -561,7 +609,12 @@ class ExpoPansBleApiModule : Module() {
       @Suppress("DEPRECATION")
       gatt.writeDescriptor(descriptor)
     }
-    return if (started) StartResult.Started else StartResult.Failed("OPERATION_FAILED", "Failed to write CCCD descriptor.")
+    return if (started) {
+      StartResult.Started
+    } else {
+      rollbackLocalNotificationState(gatt, characteristic, previousLocalState)
+      StartResult.Failed("OPERATION_FAILED", "Failed to write CCCD descriptor.")
+    }
   }
 
   private fun finishRead(context: ConnectionContext, characteristicUuid: UUID, status: Int, value: ByteArray) {
@@ -591,10 +644,13 @@ class ExpoPansBleApiModule : Module() {
   private fun finishNotify(context: ConnectionContext, descriptor: BluetoothGattDescriptor, status: Int) {
     val operation = context.activeOperation as? GattOperation.Notify ?: return
     if (descriptor.characteristic.uuid != operation.uuid) return
+    val previousLocalState = context.activeNotifyPreviousLocalState ?: false
     clearActiveOperation(context)
     if (status == BluetoothGatt.GATT_SUCCESS) {
+      context.notificationStates[operation.uuid] = operation.enabled
       operation.promise.resolve(true)
     } else {
+      context.bluetoothGatt?.let { rollbackLocalNotificationState(it, descriptor.characteristic, previousLocalState) }
       operation.promise.reject("GATT_ERROR", "Descriptor write failed with status $status.", null)
     }
     startNextOperation(context)
@@ -615,6 +671,42 @@ class ExpoPansBleApiModule : Module() {
     context.activeOperationTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
     context.activeOperationTimeoutRunnable = null
     context.activeOperation = null
+    context.activeNotifyPreviousLocalState = null
+  }
+
+  private fun failImmediateConnect(
+    deviceId: String,
+    context: ConnectionContext,
+    gatt: BluetoothGatt?,
+    promise: Promise,
+    code: String,
+    message: String,
+    cause: Throwable?
+  ) {
+    if (connections[deviceId] === context) {
+      connections.remove(deviceId)
+    }
+    context.connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+    context.connectTimeoutRunnable = null
+    context.pendingConnectPromise = null
+    context.isClosed = true
+    try {
+      gatt?.close()
+    } catch (_: SecurityException) {
+    }
+    promise.reject(code, message, cause)
+    sendConnectionState(deviceId, "disconnected", message)
+  }
+
+  private fun rollbackLocalNotificationState(
+    gatt: BluetoothGatt,
+    characteristic: BluetoothGattCharacteristic,
+    previousLocalState: Boolean
+  ) {
+    try {
+      gatt.setCharacteristicNotification(characteristic, previousLocalState)
+    } catch (_: SecurityException) {
+    }
   }
 
   private fun cacheCharacteristics(context: ConnectionContext, service: BluetoothGattService) {
@@ -687,9 +779,10 @@ class ExpoPansBleApiModule : Module() {
     val locationGranted = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
       context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     } else true
-    val canAskAgain = denied.isEmpty() || !hasRequestedPermissions || denied.any { permission ->
-      activity?.shouldShowRequestPermissionRationale(permission) == true
-    }
+    val canAskAgain = denied.isNotEmpty() &&
+      (!hasRequestedPermissions || denied.any { permission ->
+        activity?.shouldShowRequestPermissionRationale(permission) == true
+      })
     return mapOf(
       "bluetooth" to if (bluetoothGranted) "granted" else "denied",
       "location" to if (locationGranted) "granted" else "denied",
@@ -749,11 +842,13 @@ class ExpoPansBleApiModule : Module() {
     var bluetoothGatt: BluetoothGatt? = null
     var state: String = "connecting"
     val characteristics = mutableMapOf<UUID, BluetoothGattCharacteristic>()
+    val notificationStates = mutableMapOf<UUID, Boolean>()
     var pendingConnectPromise: Promise? = null
     var connectTimeoutRunnable: Runnable? = null
     val queue: ArrayDeque<GattOperation> = ArrayDeque()
     var activeOperation: GattOperation? = null
     var activeOperationTimeoutRunnable: Runnable? = null
+    var activeNotifyPreviousLocalState: Boolean? = null
     var isClosed = false
   }
 

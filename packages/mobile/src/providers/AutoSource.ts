@@ -10,17 +10,39 @@ export function createAutoBeaconSource(
 ): BeaconSource {
   const kbeaconSource = createKBeaconSource();
   const pansSource = createPansBleSource(options.pans);
+  const sources = [
+    { kind: "kbeacon" as const, source: kbeaconSource },
+    { kind: "pans-ble" as const, source: pansSource },
+  ];
 
   let pansSeenAt = 0;
 
   return {
-    start() {
-      safelyRun(() => kbeaconSource.start());
-      safelyRun(() => pansSource.start());
+    async start() {
+      const results = await Promise.allSettled(
+        sources.map(({ source }) => source.start()),
+      );
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
+
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          options.onError?.(result.reason, sources[index].kind);
+        }
+      });
+
+      if (failures.length === sources.length) {
+        throw aggregateStartupError(failures.map((failure) => failure.reason));
+      }
     },
-    stop() {
-      safelyRun(() => kbeaconSource.stop());
-      safelyRun(() => pansSource.stop());
+    async stop() {
+      await Promise.allSettled(
+        sources.map(({ source }) =>
+          Promise.resolve().then(() => source.stop()),
+        ),
+      );
     },
     subscribe(listener) {
       const kbeaconSubscription = safelySubscribe(kbeaconSource, (event) => {
@@ -46,8 +68,13 @@ export function createAutoBeaconSource(
       };
     },
     destroy() {
-      safelyRun(() => kbeaconSource.destroy?.());
-      safelyRun(() => pansSource.destroy?.());
+      sources.forEach(({ source }) => {
+        try {
+          source.destroy?.();
+        } catch {
+          // Best effort teardown for optional providers.
+        }
+      });
     },
   };
 }
@@ -69,10 +96,12 @@ function safelySubscribe(
   }
 }
 
-function safelyRun(action: () => unknown) {
-  try {
-    action();
-  } catch {
-    // Best effort for optional provider behavior.
+function aggregateStartupError(errors: unknown[]): Error {
+  if (typeof AggregateError === "function") {
+    return new AggregateError(errors, "All beacon providers failed to start.");
   }
+
+  const error = new Error("All beacon providers failed to start.");
+  (error as Error & { errors?: unknown[] }).errors = errors;
+  return error;
 }
