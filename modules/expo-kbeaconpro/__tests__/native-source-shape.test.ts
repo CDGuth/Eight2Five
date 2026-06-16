@@ -176,6 +176,21 @@ describe("native source API shape", () => {
     expect(stopScanningBlock).toContain("beaconManager?.stopScanning()");
   });
 
+  test("iOS requestPermissions defers while CoreBluetooth authorization is undetermined", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+
+    expect(source).toContain("private var pendingPermissionPromise: Promise?");
+    expect(source).toContain("self.requestBluetoothPermission(promise)");
+    expect(source).toContain("settlePendingPermissionForBluetoothState");
+    expect(source).toContain(
+      'bluetoothStatus != "undetermined" || state != .Unknown',
+    );
+    expect(source).toContain("pendingPermissionPromise?.reject");
+    expect(source).not.toContain(
+      "promise.resolve(self.currentPermissionStatus())",
+    );
+  });
+
   test("iOS common snapshot filters optional values before boxing", () => {
     const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
     const commonBlock = source.slice(
@@ -200,5 +215,20 @@ describe("native source API shape", () => {
     expect(source).toContain("KBConnState.Connecting -> 1");
     expect(source).toContain("KBConnState.Connected -> 2");
     expect(source).toContain("KBConnState.Disconnecting -> 3");
+  });
+
+  test("Android permission status derives canAskAgain from denied runtime permissions", () => {
+    const source = readModuleSource(
+      "android/src/main/java/expo/modules/kbeaconpro/ExpoKBeaconProModule.kt",
+    );
+
+    expect(source).toContain("private var hasRequestedPermissions = false");
+    expect(source).toContain("hasRequestedPermissions = true");
+    expect(source).toContain("canAskAgainForDeniedPermissions");
+    expect(source).toContain("ContextCompat.checkSelfPermission(context, it)");
+    expect(source).toContain(
+      "activity.shouldShowRequestPermissionRationale(permission)",
+    );
+    expect(source).not.toContain('"canAskAgain" to true');
   });
 });

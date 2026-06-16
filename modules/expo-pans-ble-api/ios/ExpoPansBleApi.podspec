@@ -1,15 +1,14 @@
 Pod::Spec.new do |s|
   s.name           = 'ExpoPansBleApi'
   s.version        = '1.0.0'
-  s.summary        = 'DWM1001 PANS BLE GATT transport for Expo apps'
-  s.description    = 'Native Android/iOS BLE transport for DWM1001 PANS GATT characteristics.'
-  s.author         = ''
-  s.homepage       = 'https://docs.expo.dev/modules/'
+  s.summary        = 'Expo native module wrapper for DWM1001 PANS BLE devices'
+  s.description    = 'Expo Modules wrapper for DWM1001 PANS BLE scanning, connection, GATT characteristics, and localization helpers.'
+  s.author         = 'Eight2Five'
+  s.homepage       = 'https://github.com/CDGuth/Eight2Five'
   s.platforms      = {
-    :ios => '15.1',
-    :tvos => '15.1'
+    :ios => '15.1'
   }
-  s.source         = { git: '' }
+  s.source         = { git: 'https://github.com/CDGuth/Eight2Five.git' }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'

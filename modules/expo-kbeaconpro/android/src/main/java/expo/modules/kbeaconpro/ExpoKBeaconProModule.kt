@@ -76,6 +76,7 @@ class ExpoKBeaconProModule : Module() {
   private val pendingConnectionPromises = mutableMapOf<String, Promise>()
   private val notificationSubscriptions = mutableSetOf<String>()
   private val notificationDelegates = mutableMapOf<String, KBeacon.NotifyDataDelegate>()
+  private var hasRequestedPermissions = false
 
   override fun definition() = ModuleDefinition {
     Name("ExpoKBeaconPro")
@@ -183,6 +184,7 @@ class ExpoKBeaconProModule : Module() {
         return@AsyncFunction
       }
 
+      hasRequestedPermissions = true
       permissionsManager.askForPermissions(
         PermissionsResponseListener { response ->
           promise.resolve(permissionStatusFromResponses(response))
@@ -1137,9 +1139,22 @@ class ExpoKBeaconProModule : Module() {
 
     return mutableMapOf<String, Any?>(
       "bluetooth" to bluetoothStatus,
-      "canAskAgain" to true
+      "canAskAgain" to canAskAgainForDeniedPermissions(context, runtimePermissionsForPlatform())
     ).apply {
       locationStatus?.let { put("location", it) }
+    }
+  }
+
+  private fun canAskAgainForDeniedPermissions(context: Context, permissions: Array<String>): Boolean {
+    val deniedPermissions = permissions.filter {
+      ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+    }
+    if (deniedPermissions.isEmpty()) return false
+    if (!hasRequestedPermissions) return true
+
+    val activity = appContext.currentActivity ?: return false
+    return deniedPermissions.any { permission ->
+      activity.shouldShowRequestPermissionRationale(permission)
     }
   }
 

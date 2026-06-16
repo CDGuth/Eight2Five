@@ -15,6 +15,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   private var activeConnections = [String: KBeacon]()
   private var pendingConnectionPromises = [String: Promise]()
   private var pendingScanPromise: Promise?
+  private var pendingPermissionPromise: Promise?
   private var notificationSubscriptions = Set<String>()
   private var isDestroyed = false
   private var lastBluetoothState: BLECentralMgrState = .Unknown
@@ -418,6 +419,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   public func onCentralBleStateChange(newState: BLECentralMgrState) {
     lastBluetoothState = newState
     sendEvent("onBluetoothStateChanged", ["state": bluetoothStateString(newState)])
+    settlePendingPermissionForBluetoothState(newState)
     settlePendingScanForBluetoothState(newState)
   }
 
@@ -549,7 +551,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     }
 
     AsyncFunction("requestPermissions") { (promise: Promise) in
-      promise.resolve(self.currentPermissionStatus())
+      self.requestBluetoothPermission(promise)
     }
 
     AsyncFunction("connect") { (macAddress: String, password: String?, timeoutMs: Int?, promise: Promise) in
@@ -908,6 +910,8 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     }
     pendingScanPromise?.reject("OPERATION_FAILED", "Module was destroyed")
     pendingScanPromise = nil
+    pendingPermissionPromise?.reject("OPERATION_FAILED", "Module was destroyed")
+    pendingPermissionPromise = nil
 
     activeConnections.removeAll()
     discoveredBeacons.removeAll()
@@ -921,6 +925,39 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       "bluetooth": bluetoothPermissionStatus(),
       "canAskAgain": bluetoothPermissionStatus() == "undetermined",
     ]
+  }
+
+  private func requestBluetoothPermission(_ promise: Promise) {
+    if bluetoothPermissionStatus() != "undetermined" {
+      promise.resolve(currentPermissionStatus())
+      return
+    }
+
+    guard pendingPermissionPromise == nil else {
+      promise.reject(
+        "OPERATION_FAILED",
+        "A Bluetooth permission request is already pending while CoreBluetooth initializes."
+      )
+      return
+    }
+
+    if beaconManager == nil {
+      beaconManager = KBeaconsMgr.sharedBeaconManager
+      beaconManager?.delegate = self
+    }
+
+    pendingPermissionPromise = promise
+    settlePendingPermissionForBluetoothState(lastBluetoothState)
+  }
+
+  private func settlePendingPermissionForBluetoothState(_ state: BLECentralMgrState) {
+    guard let promise = pendingPermissionPromise else { return }
+
+    let bluetoothStatus = bluetoothPermissionStatus()
+    guard bluetoothStatus != "undetermined" || state != .Unknown else { return }
+
+    pendingPermissionPromise = nil
+    promise.resolve(currentPermissionStatus())
   }
 
   private func bluetoothPermissionStatus() -> String {
