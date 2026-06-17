@@ -72,7 +72,7 @@
     "expo-tracking-transparency": "~55.0.14",
     "expo-updates": "~55.0.24",
     "expo-video": "55.0.17",
-    "expo-web-browser": "~55.0.16",
+    "expo-web-browser": "~56.0.5",
     "lucide-react-native": "^1.17.0",
     "nativewind": "^4.2.5",
     "react-aria": "^3.49.0",
