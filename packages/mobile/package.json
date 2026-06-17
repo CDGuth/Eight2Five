@@ -28,7 +28,7 @@
     "@react-native-community/datetimepicker": "8.6.0",
     "ai": "^6.0.197",
     "dom-helpers": "^5.2.1",
-    "expo-application": "~55.0.15",
+    "expo-application": "~56.0.3",
     "expo-asset": "^55.0.8",
     "expo-auth-session": "~55.0.16",
     "expo-audio": "55.0.14",
