@@ -19,44 +19,14 @@
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
     },
-    "docling": {
+    "markitdown": {
       "type": "local",
       "command": [
         "uvx",
-        "--from",
-        "git+https://github.com/CDGuth/docling-mcp.git@main",
-        "docling-mcp-server",
-        "--transport",
-        "stdio"
+        "markitdown-mcp"
       ],
-      "environment": {
-        "DOCLING_CONVERSION_MODE": "remote",
-        "DOCLING_SERVICE_URL": "https://cdguth-hf-docling-serve.hf.space",
-        "DOCLING_SERVICE_API_KEY": "{env:DOCLING_SERVICE_API_KEY}",
-        "DOCLING_SERVICE_TIMEOUT": "3600.0",
-        "DOCLING_SERVICE_MAX_RETRIES": "3",
-        "DOCLING_FALLBACK_TO_LOCAL": "false",
-
-        "DOCLING_MCP_DO_OCR": "true",
-        "DOCLING_MCP_FORCE_OCR": "false",
-        "DOCLING_MCP_OCR_PRESET": "auto",
-
-        "DOCLING_MCP_DO_TABLE_STRUCTURE": "true",
-        "DOCLING_MCP_TABLE_MODE": "accurate",
-        "DOCLING_MCP_PDF_BACKEND": "docling_parse",
-
-        "DOCLING_MCP_ABORT_ON_ERROR": "false",
-
-        "DOCLING_MCP_INCLUDE_IMAGES": "true",
-        "DOCLING_MCP_IMAGE_EXPORT_MODE": "embedded",
-
-        "DOCLING_MCP_DO_PICTURE_CLASSIFICATION": "true",
-        "DOCLING_MCP_DO_PICTURE_DESCRIPTION": "true",
-        "DOCLING_MCP_DO_CODE_ENRICHMENT": "true",
-        "DOCLING_MCP_DO_FORMULA_ENRICHMENT": "true"
-      },
       "enabled": true,
-      "timeout": 3600000
+      "timeout": 180000
     }
   },
   "agent": {
@@ -68,29 +38,15 @@
     },
     "engineer": {
       "mode": "primary",
-      "prompt": "{file:./agents/engineer.md}",
-      "temperature": 0.2,
-      "top_p": 0.9
+      "prompt": "{file:./agents/engineer.md}"
     },
     "explore": {
       "mode": "subagent",
-      "prompt": "{file:./agents/explore.md}",
-      "temperature": 0.4,
-      "top_p": 0.95,
-      "model": "openai/gpt-5.4",
-      "options": {
-        "reasoningEffort": "medium"
-      }
+      "prompt": "{file:./agents/explore.md}"
     },
     "general": {
       "mode": "subagent",
-      "prompt": "{file:./agents/general.md}",
-      "temperature": 0.15,
-      "top_p": 0.9,
-      "model": "openai/gpt-5.4",
-      "options": {
-        "reasoningEffort": "medium"
-      }
+      "prompt": "{file:./agents/general.md}"
     }
   }
 }
