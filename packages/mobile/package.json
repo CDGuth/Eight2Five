@@ -58,7 +58,7 @@
     "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-print": "~55.0.15",
     "expo-router": "~55.0.16",
-    "expo-screen-capture": "~55.0.14",
+    "expo-screen-capture": "~56.0.4",
     "expo-screen-orientation": "~55.0.16",
     "expo-secure-store": "~55.0.14",
     "expo-sensors": "~55.0.15",
