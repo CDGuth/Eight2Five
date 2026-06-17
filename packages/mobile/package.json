@@ -106,7 +106,7 @@
     "@types/react-native": "^0.72.8",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.15",
-    "react-test-renderer": "19.2.0",
+    "react-test-renderer": "19.2.7",
     "tailwindcss": "^4.3.0"
   }
 }
