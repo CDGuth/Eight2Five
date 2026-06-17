@@ -250,7 +250,8 @@ This project follows a disciplined git workflow. The rules below are mandatory.
    - **Remove** temporary or debugging commits entirely
    - The goal is a branch history that is clean, self-explanatory, and easy to review.
 3. **Merge into main with `--merge` via PR.** After the rebase is complete and the branch history is clean, open a pull request and merge using `gh pr merge --merge` (creates a merge commit, preserving individual commit history). All changes must go through a PR — **no direct or force pushes to `main` are allowed**. **Never merge with `--squash` or `--rebase`** — those flatten or discard history and are only acceptable on personal feature branches or non-shared branches that will never be merged into `main`.
-4. **Never rewrite history on shared branches.** Interactive rebasing is acceptable and encouraged for personal feature branches, but `main` (and any other long-lived shared branch) must **never** have its history rewritten.
+4. **Clean up local and remote branches after merging.** After the PR has been merged, delete the local feature branch (`git branch -d <branch-name>`) and the remote feature branch (`git push origin --delete <branch-name>` or via `gh pr merge --delete-branch`). This prevents stale branches from accumulating locally and on the remote.
+5. **Never rewrite history on shared branches.** Interactive rebasing is acceptable and encouraged for personal feature branches, but `main` (and any other long-lived shared branch) must **never** have its history rewritten.
 
 ### Commit and Pull Request Conventions
 
