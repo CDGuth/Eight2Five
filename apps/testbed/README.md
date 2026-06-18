@@ -55,9 +55,6 @@ npm run test --workspace apps/testbed
 - `UWB Distance`: Simulates UWB distance observations for trilateration-style solving.
 - `Hybrid`: Feeds both RSSI and distance observations into the optimizer.
 
-### Environment
-- `USE_NATIVE_BEACONING=true` enables native beaconing flag (read via `extra.isNativeBeaconingEnabled`).
-
 ### Multi-source direction
 - Shared localization now includes provider abstractions for source-agnostic ingestion.
 - Default behavior is now automatic dual-source mode (`kbeacon` + `pans-ble`) without app-config setup.
