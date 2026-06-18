@@ -423,7 +423,6 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
         "triggerAdvSlot",
         "triggerAdvTime",
         "triggerPara",
-        "triggerAdvPeriod",
         "triggerAdvChangeMode",
         "accODR",
         "wakeupDuration",
@@ -432,6 +431,7 @@ function assertValidConfigArray(configs: KBeaconConfig[]): void {
       ].forEach((key) =>
         assertOptionalIntegerField(record, index, key, { min: 0 }),
       );
+      assertOptionalFiniteField(record, index, "triggerAdvPeriod", { min: 0 });
       assertOptionalIntegerField(record, index, "triggerTxPower");
 
       return;

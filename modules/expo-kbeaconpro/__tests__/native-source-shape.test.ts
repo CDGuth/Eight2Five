@@ -25,6 +25,71 @@ describe("native source API shape", () => {
     expect(source).toContain("removeSubscribeSensorDataNotify");
   });
 
+  test("Android bridge uses kbeaconlib2 1.3.3 config APIs", () => {
+    const source = readModuleSource(
+      "android/src/main/java/expo/modules/kbeaconpro/ExpoKBeaconProModule.kt",
+    );
+
+    expect(source).not.toContain("exception?.description");
+    expect(source).toContain("sdkExceptionMessage(exception");
+    expect(source).toContain(
+      "clearSensorRecord(sensorType) { success, _, exception ->",
+    );
+
+    expect(source).not.toMatch(/\balwaysPowerOn\s*=/);
+    expect(source).not.toMatch(/\badvTriggerOnly\s*=/);
+    expect(source).not.toMatch(/\badvConnectable\s*=/);
+    expect(source).not.toMatch(/\breportInterval\s*=/);
+    expect(source).not.toMatch(/\btriggerAdvPeriod\s*=/);
+    expect(source).not.toMatch(/\btriggerTxPower\s*=/);
+    expect(source).not.toMatch(/\btriggerAdvChangeMode\s*=/);
+    expect(source).not.toMatch(/\blogEnable\s*=/);
+    expect(source).not.toMatch(/\bsensorHtMeasureInterval\s*=/);
+    expect(source).not.toMatch(/\bhumidityChangeThreshold\s*=/);
+    expect(source).not.toMatch(/\btemperatureChangeThreshold\s*=/);
+    expect(source).not.toMatch(/\bscanModel\s*=/);
+
+    expect(source).toContain("setAlwaysPowerOn(it)");
+    expect(source).toContain("cfg.setAdvTriggerOnly(it)");
+    expect(source).toContain("cfg.setAdvConnectable(it)");
+    expect(source).toContain("setReportingInterval(it)");
+    expect(source).toContain("cfg.setTriggerAdvPeriod(it)");
+    expect(source).toContain(
+      '"triggerAdvPeriod" to numberFromMethods(triggerCfg, "getTriggerAdvPeriod")?.toDouble()',
+    );
+    expect(source).toContain("cfg.setTriggerAdvTxPower(it)");
+    expect(source).toContain("cfg.setTriggerAdvChangeMode(it)");
+    expect(source).toContain("setLogEnable(it)");
+    expect(source).toContain("setMeasureInterval(it)");
+    expect(source).toContain("setHumidityLogThreshold(it)");
+    expect(source).toContain("setTemperatureLogThreshold(it)");
+    expect(source).toContain("setScanMode(it)");
+  });
+
+  test("Android snapshot builder uses kbeaconlib2 1.3.3 readback names", () => {
+    const source = readModuleSource(
+      "android/src/main/java/expo/modules/kbeaconpro/ExpoKBeaconProModule.kt",
+    );
+
+    expect(source).not.toContain('"getMaxSlot"');
+    expect(source).not.toContain('"getMaxTrigger"');
+    expect(source).not.toContain('"getTriggerAdvChangeMode"');
+    expect(source).not.toContain('"getSensorHtMeasureInterval"');
+    expect(source).not.toContain('"getHumidityChangeThreshold"');
+    expect(source).not.toContain('"getTemperatureChangeThreshold"');
+    expect(source).not.toContain('"isParkingTag"');
+    expect(source).not.toContain('"getScanModel"');
+
+    expect(source).toContain('"getMaxAdvSlot"');
+    expect(source).toContain('"getMaxTriggerNum"');
+    expect(source).toContain('"getTriggerAdvChgMode"');
+    expect(source).toContain('"getMeasureInterval"');
+    expect(source).toContain('"getHumidityChangeLogThreshold"');
+    expect(source).toContain('"getTemperatureChangeLogThreshold"');
+    expect(source).toContain('"isParkingTaged"');
+    expect(source).toContain('"getScanMode"');
+  });
+
   test("iOS bridge avoids known invalid SDK symbols", () => {
     const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
 
