@@ -1,0 +1,275 @@
+# Required GitHub secrets:
+# - EXPO_TOKEN: always required for the Expo account that owns the EAS projects.
+# - EXPO_ASC_API_KEY_P8, EXPO_ASC_KEY_ID, EXPO_ASC_ISSUER_ID,
+#   EXPO_APPLE_TEAM_ID, EXPO_APPLE_TEAM_TYPE: required only when
+#   refresh_ad_hoc_profile=true for iOS ad hoc/device builds.
+# Local EAS builds cannot use EAS Secret-visibility environment variables; add
+# any required build-time values as GitHub Actions secrets/env vars instead.
+
+name: EAS Local Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Expo app to build
+        type: choice
+        required: true
+        default: mobile
+        options:
+          - mobile
+          - testbed
+      platform:
+        description: Platform to build
+        type: choice
+        required: true
+        default: ios
+        options:
+          - ios
+          - android
+      profile:
+        description: EAS build profile
+        type: choice
+        required: true
+        default: preview
+        options:
+          - development
+          - development-simulator
+          - preview
+          - preview-simulator
+          - production
+      artifact_type:
+        description: Expected artifact type
+        type: choice
+        required: true
+        default: auto
+        options:
+          - auto
+          - android-apk
+          - android-aab
+          - ios-ipa
+          - ios-simulator
+      refresh_ad_hoc_profile:
+        description: Refresh iOS ad hoc provisioning profile before building
+        type: boolean
+        required: true
+        default: false
+      use_native_beaconing:
+        description: Set USE_NATIVE_BEACONING=true for this build
+        type: boolean
+        required: true
+        default: false
+      run_validation:
+        description: Run validation scripts before building
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Setup Java
+        if: ${{ inputs.platform == 'android' }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        if: ${{ inputs.platform == 'android' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate repository
+        if: ${{ inputs.run_validation }}
+        run: |
+          npm run lint
+          npm run type-check
+          npm run test
+          npm run validate:expo:doctor
+          npm run validate:expo:install-check
+
+      - name: Resolve build inputs
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP="${{ inputs.app }}"
+          PLATFORM="${{ inputs.platform }}"
+          PROFILE="${{ inputs.profile }}"
+          ARTIFACT_TYPE="${{ inputs.artifact_type }}"
+          REFRESH="${{ inputs.refresh_ad_hoc_profile }}"
+
+          case "$APP" in
+            mobile) APP_DIR="apps/mobile"; APP_LABEL="eight2five-mobile" ;;
+            testbed) APP_DIR="apps/testbed"; APP_LABEL="eight2five-testbed" ;;
+            *) echo "Invalid app: $APP" >&2; exit 1 ;;
+          esac
+
+          case "$PLATFORM" in
+            ios|android) ;;
+            *) echo "Invalid platform: $PLATFORM" >&2; exit 1 ;;
+          esac
+
+          case "$PROFILE" in
+            development|development-simulator|preview|preview-simulator|production) ;;
+            *) echo "Invalid profile: $PROFILE" >&2; exit 1 ;;
+          esac
+
+          if [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]]; then
+            if [[ "$PLATFORM" != "ios" ]]; then
+              echo "Simulator profiles are only valid for iOS." >&2
+              exit 1
+            fi
+          fi
+
+          if [[ "$ARTIFACT_TYPE" == "auto" ]]; then
+            if [[ "$PLATFORM" == "android" && "$PROFILE" == "production" ]]; then
+              ARTIFACT_TYPE="android-aab"
+            elif [[ "$PLATFORM" == "android" ]]; then
+              ARTIFACT_TYPE="android-apk"
+            elif [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]]; then
+              ARTIFACT_TYPE="ios-simulator"
+            else
+              ARTIFACT_TYPE="ios-ipa"
+            fi
+          fi
+
+          case "$ARTIFACT_TYPE" in
+            android-apk)
+              [[ "$PLATFORM" == "android" ]] || { echo "android-apk requires platform=android" >&2; exit 1; }
+              [[ "$PROFILE" == "development" || "$PROFILE" == "preview" ]] || { echo "android-apk requires development or preview profile" >&2; exit 1; }
+              EXT="apk"
+              ;;
+            android-aab)
+              [[ "$PLATFORM" == "android" ]] || { echo "android-aab requires platform=android" >&2; exit 1; }
+              [[ "$PROFILE" == "production" ]] || { echo "android-aab requires production profile" >&2; exit 1; }
+              EXT="aab"
+              ;;
+            ios-ipa)
+              [[ "$PLATFORM" == "ios" ]] || { echo "ios-ipa requires platform=ios" >&2; exit 1; }
+              [[ "$PROFILE" != "development-simulator" && "$PROFILE" != "preview-simulator" ]] || { echo "ios-ipa cannot use simulator profiles" >&2; exit 1; }
+              EXT="ipa"
+              ;;
+            ios-simulator)
+              [[ "$PLATFORM" == "ios" ]] || { echo "ios-simulator requires platform=ios" >&2; exit 1; }
+              [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]] || { echo "ios-simulator requires development-simulator or preview-simulator profile" >&2; exit 1; }
+              EXT="tar.gz"
+              ;;
+            *)
+              echo "Invalid artifact_type: $ARTIFACT_TYPE" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "$REFRESH" == "true" ]]; then
+            if [[ "$PLATFORM" != "ios" || "$ARTIFACT_TYPE" == "ios-simulator" ]]; then
+              echo "refresh_ad_hoc_profile is only valid for physical-device iOS ad hoc builds." >&2
+              exit 1
+            fi
+            if [[ "$PROFILE" != "development" && "$PROFILE" != "preview" ]]; then
+              echo "refresh_ad_hoc_profile requires an internal/ad hoc iOS profile." >&2
+              exit 1
+            fi
+          fi
+
+          ARTIFACT_DIR="$RUNNER_TEMP/eas-local-builds"
+          mkdir -p "$ARTIFACT_DIR"
+          OUTPUT_PATH="$ARTIFACT_DIR/${APP_LABEL}-${PLATFORM}-${PROFILE}-${GITHUB_RUN_NUMBER}.${EXT}"
+
+          echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "app_label=$APP_LABEL" >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "artifact_type=$ARTIFACT_TYPE" >> "$GITHUB_OUTPUT"
+          echo "artifact_dir=$ARTIFACT_DIR" >> "$GITHUB_OUTPUT"
+          echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Verify EAS CLI supports local output paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx eas-cli@latest build --help | grep -- "--output" > /dev/null; then
+            echo "The installed EAS CLI does not support 'eas build --output'. Refusing to run a local build with an unknown artifact path." >&2
+            exit 1
+          fi
+
+      - name: Write App Store Connect API key
+        if: ${{ inputs.refresh_ad_hoc_profile }}
+        shell: bash
+        env:
+          EXPO_ASC_API_KEY_P8: ${{ secrets.EXPO_ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_ASC_API_KEY_P8:-}" ]]; then
+            echo "Missing EXPO_ASC_API_KEY_P8 secret." >&2
+            exit 1
+          fi
+          printf '%s' "$EXPO_ASC_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Build locally with EAS
+        working-directory: ${{ steps.resolve.outputs.app_dir }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          USE_NATIVE_BEACONING: ${{ inputs.use_native_beaconing }}
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ steps.resolve.outputs.artifact_dir }}
+          EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
+          EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CMD=(
+            npx eas-cli@latest build
+            --local
+            --platform "${{ steps.resolve.outputs.platform }}"
+            --profile "${{ steps.resolve.outputs.profile }}"
+            --non-interactive
+            --output "${{ steps.resolve.outputs.output_path }}"
+          )
+
+          if [[ "${{ inputs.refresh_ad_hoc_profile }}" == "true" ]]; then
+            CMD+=(--refresh-ad-hoc-provisioning-profile)
+          fi
+
+          "${CMD[@]}"
+
+      - name: Verify build artifact exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${{ steps.resolve.outputs.output_path }}"
+          ls -lh "${{ steps.resolve.outputs.output_path }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.resolve.outputs.app_label }}-${{ steps.resolve.outputs.platform }}-${{ steps.resolve.outputs.profile }}-${{ steps.resolve.outputs.artifact_type }}
+          path: ${{ steps.resolve.outputs.output_path }}
+          if-no-files-found: error
+          retention-days: 7

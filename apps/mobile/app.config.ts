@@ -70,7 +70,7 @@ const config: ExpoConfig = {
     isNativeBeaconingEnabled:
       runtime.process?.env?.USE_NATIVE_BEACONING === "true",
     eas: {
-      projectId: "eba37a43-6b79-47e1-b347-ba1bf0f40c80",
+      projectId: "a26bddc3-6439-460b-b15b-51143e499c8a",
     },
   },
 };

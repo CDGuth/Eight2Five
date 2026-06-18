@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 3.8.1",
+    "version": ">= 19.1.0",
     "appVersionSource": "local"
   },
   "build": {
@@ -8,6 +8,16 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "ios": {
+        "simulator": true,
         "resourceClass": "m-medium"
       }
     },
@@ -20,12 +30,9 @@
         "buildType": "apk"
       }
     },
-    "production-apk": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
+    "preview-simulator": {
       "ios": {
+        "simulator": true,
         "resourceClass": "m-medium"
       }
     },

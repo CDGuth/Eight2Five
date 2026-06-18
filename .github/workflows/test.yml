@@ -26,19 +26,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run expo doctor (mobile)
-        working-directory: apps/mobile
-        run: npx expo-doctor
-
-      - name: Run expo doctor (testbed)
-        working-directory: apps/testbed
-        run: npx expo-doctor
-
-      - name: Run type checks (all workspaces)
-        run: npm run type-check
-
-      - name: Run lint (all workspaces)
+      - name: Run lint
         run: npm run lint
 
-      - name: Run tests (all workspaces)
+      - name: Run type checks
+        run: npm run type-check
+
+      - name: Run tests
         run: npm run test
+
+      - name: Run Expo doctor
+        run: npm run validate:expo:doctor
+
+      - name: Run Expo install check
+        run: npm run validate:expo:install-check
