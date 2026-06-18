@@ -249,3 +249,39 @@ loop.stop();
 - Validation command policy lives in [.github/skills/validation-guide/SKILL.md](.github/skills/validation-guide/SKILL.md).
 - Expo app configs include module config plugins for Bluetooth/location permission setup.
 - Swift stubs under [Sources](Sources) support linting/tooling on non-macOS environments and are not runtime production code.
+
+### EAS Local Build Workflow
+
+Manual local build artifacts are produced by `.github/workflows/eas-local-build.yml`. The workflow runs EAS local builds from the selected app directory (`apps/mobile` or `apps/testbed`) and uploads the resulting artifact only to GitHub Actions artifact storage. It does not create GitHub releases, submit to stores, upload local build artifacts back to EAS, or replace the real EAS Cloud production release path.
+
+Supported workflow inputs:
+
+- `app`: `mobile` or `testbed`
+- `platform`: `ios` or `android`
+- `profile`: `development`, `development-simulator`, `preview`, `preview-simulator`, or `production`
+- `artifact_type`: `auto`, `android-apk`, `android-aab`, `ios-ipa`, or `ios-simulator`
+- `refresh_ad_hoc_profile`: refresh iOS ad hoc provisioning profiles for physical-device internal builds only
+- `use_native_beaconing`: sets `USE_NATIVE_BEACONING` for dynamic Expo config
+- `run_validation`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
+
+Android APK artifacts come from the `development` or `preview` profiles. Android AAB artifacts come from the `production` profile. There is no production-like APK build profile.
+
+Required GitHub secrets:
+
+- `EXPO_TOKEN`: always required; personal access token for the Expo account that owns the EAS projects.
+
+Required only when `refresh_ad_hoc_profile=true` for iOS ad hoc/device builds:
+
+- `EXPO_ASC_API_KEY_P8`: raw contents of the App Store Connect `.p8` key. This is a custom workflow secret; the workflow writes it to a temporary file.
+- `EXPO_ASC_KEY_ID`: App Store Connect API key ID.
+- `EXPO_ASC_ISSUER_ID`: App Store Connect issuer ID.
+- `EXPO_APPLE_TEAM_ID`: Apple Developer Team ID.
+- `EXPO_APPLE_TEAM_TYPE`: one of `IN_HOUSE`, `COMPANY_OR_ORGANIZATION`, or `INDIVIDUAL`.
+
+Other setup notes:
+
+- Add any app-specific build-time secrets as GitHub Actions secrets/env vars. EAS Secret-visibility environment variables are not available to local builds.
+- If private npm packages are introduced later, add `NPM_TOKEN` or the repository's chosen npm auth secret.
+- EAS-managed Apple credentials must already be configured for each app.
+- Manage iOS ad hoc devices with `eas device:create` and `eas device:list`; run the workflow with `refresh_ad_hoc_profile=true` after adding devices.
+- Real production mobile builds should still run on EAS Cloud.
