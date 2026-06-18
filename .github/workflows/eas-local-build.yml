@@ -34,28 +34,12 @@ on:
         default: preview
         options:
           - development
-          - development-simulator
+          - development-simulator (iOS only)
           - preview
-          - preview-simulator
+          - preview-simulator (iOS only)
           - production
-      artifact_type:
-        description: Expected artifact type
-        type: choice
-        required: true
-        default: auto
-        options:
-          - auto
-          - android-apk
-          - android-aab
-          - ios-ipa
-          - ios-simulator
       refresh_ad_hoc_profile:
         description: Refresh iOS ad hoc provisioning profile before building
-        type: boolean
-        required: true
-        default: false
-      use_native_beaconing:
-        description: Set USE_NATIVE_BEACONING=true for this build
         type: boolean
         required: true
         default: false
@@ -98,7 +82,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Validate repository
         if: ${{ inputs.run_validation }}
@@ -117,8 +101,7 @@ jobs:
 
           APP="${{ inputs.app }}"
           PLATFORM="${{ inputs.platform }}"
-          PROFILE="${{ inputs.profile }}"
-          ARTIFACT_TYPE="${{ inputs.artifact_type }}"
+          PROFILE_INPUT="${{ inputs.profile }}"
           REFRESH="${{ inputs.refresh_ad_hoc_profile }}"
 
           case "$APP" in
@@ -132,9 +115,13 @@ jobs:
             *) echo "Invalid platform: $PLATFORM" >&2; exit 1 ;;
           esac
 
-          case "$PROFILE" in
-            development|development-simulator|preview|preview-simulator|production) ;;
-            *) echo "Invalid profile: $PROFILE" >&2; exit 1 ;;
+          case "$PROFILE_INPUT" in
+            development) PROFILE="development" ;;
+            "development-simulator (iOS only)") PROFILE="development-simulator" ;;
+            preview) PROFILE="preview" ;;
+            "preview-simulator (iOS only)") PROFILE="preview-simulator" ;;
+            production) PROFILE="production" ;;
+            *) echo "Invalid profile: $PROFILE_INPUT" >&2; exit 1 ;;
           esac
 
           if [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]]; then
@@ -144,52 +131,21 @@ jobs:
             fi
           fi
 
-          if [[ "$ARTIFACT_TYPE" == "auto" ]]; then
-            if [[ "$PLATFORM" == "android" && "$PROFILE" == "production" ]]; then
-              ARTIFACT_TYPE="android-aab"
-            elif [[ "$PLATFORM" == "android" ]]; then
-              ARTIFACT_TYPE="android-apk"
-            elif [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]]; then
-              ARTIFACT_TYPE="ios-simulator"
-            else
-              ARTIFACT_TYPE="ios-ipa"
-            fi
-          fi
-
-          case "$ARTIFACT_TYPE" in
-            android-apk)
-              [[ "$PLATFORM" == "android" ]] || { echo "android-apk requires platform=android" >&2; exit 1; }
-              [[ "$PROFILE" == "development" || "$PROFILE" == "preview" ]] || { echo "android-apk requires development or preview profile" >&2; exit 1; }
-              EXT="apk"
-              ;;
-            android-aab)
-              [[ "$PLATFORM" == "android" ]] || { echo "android-aab requires platform=android" >&2; exit 1; }
-              [[ "$PROFILE" == "production" ]] || { echo "android-aab requires production profile" >&2; exit 1; }
-              EXT="aab"
-              ;;
-            ios-ipa)
-              [[ "$PLATFORM" == "ios" ]] || { echo "ios-ipa requires platform=ios" >&2; exit 1; }
-              [[ "$PROFILE" != "development-simulator" && "$PROFILE" != "preview-simulator" ]] || { echo "ios-ipa cannot use simulator profiles" >&2; exit 1; }
-              EXT="ipa"
-              ;;
-            ios-simulator)
-              [[ "$PLATFORM" == "ios" ]] || { echo "ios-simulator requires platform=ios" >&2; exit 1; }
-              [[ "$PROFILE" == "development-simulator" || "$PROFILE" == "preview-simulator" ]] || { echo "ios-simulator requires development-simulator or preview-simulator profile" >&2; exit 1; }
-              EXT="tar.gz"
-              ;;
-            *)
-              echo "Invalid artifact_type: $ARTIFACT_TYPE" >&2
-              exit 1
-              ;;
+          case "$PLATFORM:$PROFILE" in
+            android:production) EXT="aab" ;;
+            android:development|android:preview) EXT="apk" ;;
+            ios:development-simulator|ios:preview-simulator) EXT="tar.gz" ;;
+            ios:development|ios:preview|ios:production) EXT="ipa" ;;
+            *) echo "Invalid platform/profile combination: $PLATFORM/$PROFILE" >&2; exit 1 ;;
           esac
 
           if [[ "$REFRESH" == "true" ]]; then
-            if [[ "$PLATFORM" != "ios" || "$ARTIFACT_TYPE" == "ios-simulator" ]]; then
-              echo "refresh_ad_hoc_profile is only valid for physical-device iOS ad hoc builds." >&2
+            if [[ "$PLATFORM" != "ios" ]]; then
+              echo "refresh_ad_hoc_profile is only valid for iOS builds." >&2
               exit 1
             fi
             if [[ "$PROFILE" != "development" && "$PROFILE" != "preview" ]]; then
-              echo "refresh_ad_hoc_profile requires an internal/ad hoc iOS profile." >&2
+              echo "refresh_ad_hoc_profile requires a physical-device iOS development or preview profile." >&2
               exit 1
             fi
           fi
@@ -202,7 +158,6 @@ jobs:
           echo "app_label=$APP_LABEL" >> "$GITHUB_OUTPUT"
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
-          echo "artifact_type=$ARTIFACT_TYPE" >> "$GITHUB_OUTPUT"
           echo "artifact_dir=$ARTIFACT_DIR" >> "$GITHUB_OUTPUT"
           echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
 
@@ -233,7 +188,6 @@ jobs:
         working-directory: ${{ steps.resolve.outputs.app_dir }}
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          USE_NATIVE_BEACONING: ${{ inputs.use_native_beaconing }}
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ steps.resolve.outputs.artifact_dir }}
           EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
@@ -269,7 +223,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.resolve.outputs.app_label }}-${{ steps.resolve.outputs.platform }}-${{ steps.resolve.outputs.profile }}-${{ steps.resolve.outputs.artifact_type }}
+          name: ${{ steps.resolve.outputs.app_label }}-${{ steps.resolve.outputs.platform }}-${{ steps.resolve.outputs.profile }}
           path: ${{ steps.resolve.outputs.output_path }}
           if-no-files-found: error
           retention-days: 7

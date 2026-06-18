@@ -258,10 +258,8 @@ Supported workflow inputs:
 
 - `app`: `mobile` or `testbed`
 - `platform`: `ios` or `android`
-- `profile`: `development`, `development-simulator`, `preview`, `preview-simulator`, or `production`
-- `artifact_type`: `auto`, `android-apk`, `android-aab`, `ios-ipa`, or `ios-simulator`
+- `profile`: `development`, `development-simulator (iOS only)`, `preview`, `preview-simulator (iOS only)`, or `production`
 - `refresh_ad_hoc_profile`: refresh iOS ad hoc provisioning profiles for physical-device internal builds only
-- `use_native_beaconing`: sets `USE_NATIVE_BEACONING` for dynamic Expo config
 - `run_validation`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
 
 Android APK artifacts come from the `development` or `preview` profiles. Android AAB artifacts come from the `production` profile. There is no production-like APK build profile.

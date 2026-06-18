@@ -39,9 +39,6 @@ npm run test --workspace apps/mobile
 - Native PANS BLE plugin: [../../modules/expo-pans-ble-api](../../modules/expo-pans-ble-api)
 - Shared mobile localization stack: [../../packages/mobile](../../packages/mobile)
 
-### Environment
-- `USE_NATIVE_BEACONING=true` enables native beaconing flag (read via `extra.isNativeBeaconingEnabled`).
-
 ### Provider model
 - The shared scanner hook now supports source injection through provider abstractions.
 - Default behavior is now automatic dual-source mode (`kbeacon` + `pans-ble`) without app-config setup.
