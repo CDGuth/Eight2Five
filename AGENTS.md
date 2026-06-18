@@ -35,3 +35,6 @@ Do not use for: refactoring, writing scripts from scratch, debugging business lo
 
 ## Documentation
 - Detailed outdoor BLE localization math (Two-Ray Model) paper is at `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`.
+
+## Git Notes
+- `.opencode/opencode.json` is set to `--skip-worktree` (local changes are ignored by git; the committed version is preserved). Do not try to commit changes to this file. If you need to modify it intentionally, run `git update-index --no-skip-worktree .opencode/opencode.json`, make your change, commit it, then re-apply `--skip-worktree`.
