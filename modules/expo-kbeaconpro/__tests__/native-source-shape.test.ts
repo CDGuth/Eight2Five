@@ -115,6 +115,30 @@ describe("native source API shape", () => {
     expect(source).toContain("removeSubscribeSensorDataNotify");
   });
 
+  test("iOS bridge uses kbeaconlib2 public setters and readback names", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+
+    expect(source).not.toContain("advPacket.advType.rawValue");
+    expect(source).not.toMatch(/\bcfg\.deviceName\s*=/);
+    expect(source).not.toMatch(/\bcfg\.alwaysPowerOn\s*=/);
+    expect(source).not.toMatch(/\badvCfg\.slotIndex\s*=/);
+    expect(source).not.toMatch(/\btriggerCfg\.triggerAdvChangeMode\s*=/);
+    expect(source).not.toMatch(/\btyped\.logEnable\s*=/);
+    expect(source).not.toMatch(/\btyped\.scanModel\s*=/);
+    expect(source).not.toContain("getTriggerAdvChangeMode()");
+    expect(source).not.toContain("getParkingDelay()");
+    expect(source).not.toContain("modifyConfig(obj: cfgObjects)");
+
+    expect(source).toContain("advPacket.getAdvType()");
+    expect(source).toContain("cfg.setAlwaysPowerOn(alwaysPowerOn)");
+    expect(source).toContain("advCfg.setSlotIndex(slotIndex)");
+    expect(source).toContain("triggerCfg.setTriggerAdvTxPower(triggerTxPower)");
+    expect(source).toContain("typed.setScanModel(scanModel)");
+    expect(source).toContain("triggerCfg.getTriggerAdvChgMode()");
+    expect(source).toContain("geoCfg.getPakingDelay()");
+    expect(source).toContain("beacon.modifyConfig(array: cfgObjects)");
+  });
+
   test("iOS SDK delegates are isolated behind an NSObject proxy", () => {
     const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
 
@@ -173,10 +197,9 @@ describe("native source API shape", () => {
 
     expect(source).not.toContain(".value(forKey:");
     expect(source).not.toContain(".setValue(");
-    expect(source).toContain(
-      "optionalNumber(from object: NSObject, selectorName: String)",
-    );
-    expect(source).toContain("object.responds(to: selector)");
+    expect(source).not.toContain("object.perform(");
+    expect(source).toContain("cfg.setName(name)");
+    expect(source).toContain("advCfg.setAdvPeriod(advPeriod)");
   });
 
   test("iOS snapshot builder includes cached sensor configuration", () => {
@@ -212,10 +235,11 @@ describe("native source API shape", () => {
     expect(androidSource).toContain("optionalStringValue");
     expect(androidSource).toContain("map.containsKey(key)");
 
-    expect(iosSource).toContain("optionalIntegerNumber");
-    expect(iosSource).toContain("optionalNumber");
-    expect(iosSource).toContain("optionalBoolNumber");
+    expect(iosSource).toContain("optionalInt");
+    expect(iosSource).toContain("optionalFloat");
+    expect(iosSource).toContain("optionalBool");
     expect(iosSource).toContain("optionalString");
+    expect(iosSource).toContain("optionalUInt8");
     expect(iosSource).toContain("dict.keys.contains(key)");
   });
 
@@ -230,10 +254,10 @@ describe("native source API shape", () => {
       'try optionalString(dict, key: "password", index: index)',
     );
     expect(commonBlock).toContain("isValidPassword(password)");
-    expect(commonBlock).toContain("cfg.password = password");
+    expect(commonBlock).toContain("cfg.setPassword(password)");
 
     const passwordAssignmentIndex = commonBlock.indexOf(
-      "cfg.password = password",
+      "cfg.setPassword(password)",
     );
     const validationIndex = commonBlock.indexOf("isValidPassword(password)");
     expect(validationIndex).toBeGreaterThan(-1);
