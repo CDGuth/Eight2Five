@@ -9,8 +9,9 @@ private enum ConfigMappingError: Error {
   case invalid(index: Int)
 }
 
-public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate {
+public class ExpoKBeaconProModule: Module {
   private var beaconManager: KBeaconsMgr?
+  private lazy var delegateProxy = ExpoKBeaconProDelegateProxy(module: self)
   private var discoveredBeacons = [String: KBeacon]()
   private var activeConnections = [String: KBeacon]()
   private var pendingConnectionPromises = [String: Promise]()
@@ -492,7 +493,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     OnCreate {
       self.isDestroyed = false
       self.beaconManager = KBeaconsMgr.sharedBeaconManager
-      self.beaconManager?.delegate = self
+      self.beaconManager?.delegate = self.delegateProxy
     }
 
     OnDestroy {
@@ -739,7 +740,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         return
       }
 
-      beacon.subscribeSensorDataNotify(eventType, notifyDelegate: self) { result, err in
+      beacon.subscribeSensorDataNotify(eventType, notifyDelegate: self.delegateProxy) { result, err in
         if result {
           self.notificationSubscriptions.insert("\(normalized):\(eventType)")
           promise.resolve(true)
@@ -858,9 +859,9 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       if let readTriggerPara = connParaMap["readTriggerPara"] as? Bool { connPara.readTriggerPara = readTriggerPara }
       if let readSensorPara = connParaMap["readSensorPara"] as? Bool { connPara.readSensorPara = readSensorPara }
 
-      started = beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: self)
+      started = beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: delegateProxy)
     } else {
-      started = beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: self)
+      started = beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: delegateProxy)
     }
 
     if !started {
@@ -943,7 +944,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     if beaconManager == nil {
       beaconManager = KBeaconsMgr.sharedBeaconManager
-      beaconManager?.delegate = self
+      beaconManager?.delegate = delegateProxy
     }
 
     pendingPermissionPromise = promise
@@ -1238,5 +1239,30 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     if let macAddress { payload["macAddress"] = normalizedMac(macAddress) }
     sendEvent("onError", payload)
     promise.reject(code, message)
+  }
+}
+
+private final class ExpoKBeaconProDelegateProxy: NSObject, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate {
+  private weak var module: ExpoKBeaconProModule?
+
+  init(module: ExpoKBeaconProModule) {
+    self.module = module
+    super.init()
+  }
+
+  func onBeaconDiscovered(beacons: [KBeacon]) {
+    module?.onBeaconDiscovered(beacons: beacons)
+  }
+
+  func onCentralBleStateChange(newState: BLECentralMgrState) {
+    module?.onCentralBleStateChange(newState: newState)
+  }
+
+  func onConnStateChange(_ beacon: KBeacon, state: KBConnState, evt: KBConnEvtReason) {
+    module?.onConnStateChange(beacon, state: state, evt: evt)
+  }
+
+  func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data) {
+    module?.onNotifyDataReceived(beacon, evt: evt, data: data)
   }
 }

@@ -1,7 +1,8 @@
 import CoreBluetooth
 import ExpoModulesCore
+import Foundation
 
-public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeripheralDelegate {
+public class ExpoPansBleApiModule: Module {
   private let pansServiceUuid = CBUUID(string: "680c21d9-c946-4c1f-9c11-baa1c21329e7")
   private let gapServiceUuid = CBUUID(string: "00001800-0000-1000-8000-00805f9b34fb")
   private let requiredCommonCharacteristicUuids = Set([
@@ -13,6 +14,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
   ])
 
   private var centralManager: CBCentralManager?
+  private var bluetoothDelegate: ExpoPansBleApiBluetoothDelegate?
   private var pendingScanPromise: Promise?
   private var pendingPermissionPromise: Promise?
   private var isScanning = false
@@ -52,6 +54,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
       self.discoveredMetadata.removeAll()
       self.centralManager?.delegate = nil
       self.centralManager = nil
+      self.bluetoothDelegate = nil
     }
 
     AsyncFunction("startScanning") { (promise: Promise) in
@@ -158,7 +161,7 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
       let context = PeripheralContext(deviceId: deviceId, peripheral: peripheral)
       context.connectPromise = promise
       self.connections[deviceId] = context
-      peripheral.delegate = self
+      peripheral.delegate = self.ensureBluetoothDelegate()
       self.sendConnectionState(deviceId: deviceId, state: "connecting", reason: nil)
       context.connectTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeoutMs ?? 15000) / 1000.0, repeats: false) { [weak self, weak context] _ in
         guard
@@ -365,8 +368,18 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
 
   private func ensureCentralManager() {
     if centralManager == nil {
-      centralManager = CBCentralManager(delegate: self, queue: nil)
+      centralManager = CBCentralManager(delegate: ensureBluetoothDelegate(), queue: nil)
     }
+  }
+
+  private func ensureBluetoothDelegate() -> ExpoPansBleApiBluetoothDelegate {
+    if let bluetoothDelegate {
+      return bluetoothDelegate
+    }
+
+    let bluetoothDelegate = ExpoPansBleApiBluetoothDelegate(module: self)
+    self.bluetoothDelegate = bluetoothDelegate
+    return bluetoothDelegate
   }
 
   private func startScan(_ manager: CBCentralManager) {
@@ -628,6 +641,59 @@ public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate, CBPeriphera
 
   private func sendError(code: String, message: String) {
     sendEvent("onError", ["code": code, "message": message])
+  }
+}
+
+private final class ExpoPansBleApiBluetoothDelegate: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+  private weak var module: ExpoPansBleApiModule?
+
+  init(module: ExpoPansBleApiModule) {
+    self.module = module
+    super.init()
+  }
+
+  func centralManagerDidUpdateState(_ central: CBCentralManager) {
+    module?.centralManagerDidUpdateState(central)
+  }
+
+  func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+    module?.centralManager(central, didDiscover: peripheral, advertisementData: advertisementData, rssi: RSSI)
+  }
+
+  func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+    module?.centralManager(central, didConnect: peripheral)
+  }
+
+  func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+    module?.centralManager(central, didFailToConnect: peripheral, error: error)
+  }
+
+  func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+    module?.centralManager(central, didDisconnectPeripheral: peripheral, error: error)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    module?.peripheral(peripheral, didDiscoverServices: error)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    module?.peripheral(peripheral, didDiscoverCharacteristicsFor: service, error: error)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    module?.peripheral(peripheral, didUpdateValueFor: characteristic, error: error)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+    module?.peripheral(peripheral, didWriteValueFor: characteristic, error: error)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    module?.peripheral(peripheral, didUpdateNotificationStateFor: characteristic, error: error)
+  }
+
+  func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+    module?.peripheralIsReady(toSendWriteWithoutResponse: peripheral)
   }
 }
 

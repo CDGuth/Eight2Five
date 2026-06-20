@@ -115,6 +115,22 @@ describe("native source API shape", () => {
     expect(source).toContain("removeSubscribeSensorDataNotify");
   });
 
+  test("iOS SDK delegates are isolated behind an NSObject proxy", () => {
+    const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
+
+    expect(source).toContain("public class ExpoKBeaconProModule: Module {");
+    expect(source).not.toContain(
+      "public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate",
+    );
+    expect(source).toContain(
+      "private final class ExpoKBeaconProDelegateProxy: NSObject, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate",
+    );
+    expect(source).toContain("private lazy var delegateProxy");
+    expect(source).toContain("beaconManager?.delegate = self.delegateProxy");
+    expect(source).toContain("notifyDelegate: self.delegateProxy");
+    expect(source).toContain("delegate: delegateProxy");
+  });
+
   test("iOS bridge normalizes connection states and reasons", () => {
     const source = readModuleSource("ios/ExpoKBeaconProModule.swift");
 
