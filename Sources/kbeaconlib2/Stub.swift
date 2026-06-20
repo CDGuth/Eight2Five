@@ -70,6 +70,8 @@ open class KBAdvPacketBase: NSObject {
   public init(advType: KBAdvType = .Unknown) {
     self.advType = advType
   }
+
+  public func getAdvType() -> Int { advType.rawValue }
 }
 
 public final class KBAdvPacketIBeacon: KBAdvPacketBase {}
@@ -90,17 +92,20 @@ public final class KBAdvPacketEddyURL: KBAdvPacketBase {
   public var url: String?
 }
 
+public final class KBAccSensorValue: NSObject {
+  public var xAis: Int16 = 0
+  public var yAis: Int16 = 0
+  public var zAis: Int16 = 0
+}
+
 public class KBAdvPacketSensor: KBAdvPacketBase {
   public var temperature: NSNumber?
   public var humidity: NSNumber?
   public var batteryLevel: NSNumber?
-  public var alarmStatus: NSNumber?
+  public var accSensor: KBAccSensorValue?
+  public var cutoff: UInt8 = 0
   public var pirIndication: NSNumber?
-  public var accX: NSNumber?
-  public var accY: NSNumber?
-  public var accZ: NSNumber?
-  public var lightValue: NSNumber?
-  public var luxLevel: NSNumber?
+  public var luxLevel: UInt16 = 0
 }
 
 public class KBAdvPacketSystem: KBAdvPacketBase {
@@ -114,9 +119,7 @@ public class KBAdvPacketSystem: KBAdvPacketBase {
 
 public class KBAdvPacketEBeacon: KBAdvPacketBase {
   public var mac: String?
-  public var uuid: String?
   public var utcSecCount: NSNumber?
-  public var refTxPower: NSNumber?
   public var measurePower: NSNumber?
 }
 
@@ -139,6 +142,12 @@ open class KBCfgAdvBase: KBCfgBase {
   public func getAdvMode() -> Int { advMode?.intValue ?? 0 }
   public func isAdvTriggerOnly() -> Bool { advTriggerOnly?.boolValue ?? false }
   public func isAdvConnectable() -> Bool { advConnectable?.boolValue ?? true }
+  public func setSlotIndex(_ value: Int) -> Bool { slotIndex = NSNumber(value: value); return true }
+  public func setTxPower(_ value: Int) -> Bool { txPower = NSNumber(value: value); return true }
+  public func setAdvPeriod(_ value: Float) -> Bool { advPeriod = NSNumber(value: value); return true }
+  public func setAdvMode(_ value: Int) -> Bool { advMode = NSNumber(value: value); return true }
+  public func setAdvTriggerOnly(_ value: Bool) { advTriggerOnly = NSNumber(value: value) }
+  public func setAdvConnectable(_ value: Bool) { advConnectable = NSNumber(value: value) }
 }
 
 public final class KBCfgCommon: KBCfgBase {
@@ -168,6 +177,10 @@ public final class KBCfgCommon: KBCfgBase {
   public func isSupportHumiditySensor() -> Bool { false }
   public func isSupportPIRSensor() -> Bool { false }
   public func isSupportLightSensor() -> Bool { false }
+  public func setName(_ value: String) -> Bool { deviceName = value; name = value; return true }
+  public func setAlwaysPowerOn(_ value: Bool) { alwaysPowerOn = NSNumber(value: value) }
+  public func setPassword(_ value: String) -> Bool { password = value; return true }
+  public func setRefPower1Meters(_ value: Int) -> Bool { refPower1Meters = NSNumber(value: value); return true }
 }
 
 public final class KBCfgAdvIBeacon: KBCfgAdvBase {
@@ -178,6 +191,9 @@ public final class KBCfgAdvIBeacon: KBCfgAdvBase {
   public func getUuid() -> String? { uuid }
   public func getMajorID() -> UInt { majorID?.uintValue ?? 0 }
   public func getMinorID() -> UInt { minorID?.uintValue ?? 0 }
+  public func setUuid(_ value: String) -> Bool { uuid = value; return true }
+  public func setMajorID(_ value: UInt) { majorID = NSNumber(value: value) }
+  public func setMinorID(_ value: UInt) { minorID = NSNumber(value: value) }
 }
 
 public final class KBCfgAdvEddyUID: KBCfgAdvBase {
@@ -186,12 +202,15 @@ public final class KBCfgAdvEddyUID: KBCfgAdvBase {
   public override func getAdvType() -> Int { KBAdvType.EddyUID.rawValue }
   public func getNid() -> String? { nid }
   public func getSid() -> String? { sid }
+  public func setNid(_ value: String) -> Bool { nid = value; return true }
+  public func setSid(_ value: String) -> Bool { sid = value; return true }
 }
 
 public final class KBCfgAdvEddyURL: KBCfgAdvBase {
   public var url: String?
   public override func getAdvType() -> Int { KBAdvType.EddyURL.rawValue }
   public func getUrl() -> String? { url }
+  public func setUrl(_ value: String) -> Bool { url = value; return true }
 }
 
 public final class KBCfgAdvEddyTLM: KBCfgAdvBase {
@@ -202,6 +221,7 @@ public final class KBCfgAdvKSensor: KBCfgAdvBase {
   public var aesType: NSNumber?
   public override func getAdvType() -> Int { KBAdvType.Sensor.rawValue }
   public func getAesType() -> Int { aesType?.intValue ?? 0 }
+  public func setAesType(_ value: Int) { aesType = NSNumber(value: value) }
 }
 
 public final class KBCfgAdvEBeacon: KBCfgAdvBase {
@@ -212,6 +232,9 @@ public final class KBCfgAdvEBeacon: KBCfgAdvBase {
   public func getUuid() -> String? { uuid }
   public func getEncryptInterval() -> UInt8 { UInt8(encryptInterval?.intValue ?? 0) }
   public func getAESType() -> UInt8 { UInt8(aesType?.intValue ?? 0) }
+  public func setUuid(_ value: String) -> Bool { uuid = value; return true }
+  public func setEncryptInterval(_ value: UInt8) -> Bool { encryptInterval = NSNumber(value: value); return true }
+  public func setAESType(_ value: UInt8) { aesType = NSNumber(value: value) }
 }
 
 public final class KBCfgAdvNull: KBCfgAdvBase {}
@@ -235,7 +258,16 @@ public class KBCfgTrigger: KBCfgBase {
   public func getTriggerPara() -> Int { triggerPara?.intValue ?? 0 }
   public func getTriggerAdvPeriod() -> Float { triggerAdvPeriod?.floatValue ?? 0 }
   public func getTriggerAdvTxPower() -> Int { triggerTxPower?.intValue ?? 0 }
-  public func getTriggerAdvChangeMode() -> Int { triggerAdvChangeMode?.intValue ?? 0 }
+  public func getTriggerAdvChgMode() -> Int { triggerAdvChangeMode?.intValue ?? 0 }
+  public func setTriggerIndex(_ value: Int) { triggerIndex = NSNumber(value: value) }
+  public func setTriggerType(_ value: Int) { triggerType = NSNumber(value: value) }
+  public func setTriggerAction(_ value: Int) { triggerAction = NSNumber(value: value) }
+  public func setTriggerAdvSlot(_ value: Int) -> Bool { triggerAdvSlot = NSNumber(value: value); return true }
+  public func setTriggerAdvTime(_ value: Int) -> Bool { triggerAdvTime = NSNumber(value: value); return true }
+  public func setTriggerPara(_ value: Int) { triggerPara = NSNumber(value: value) }
+  public func setTriggerAdvPeriod(_ value: Float) -> Bool { triggerAdvPeriod = NSNumber(value: value); return true }
+  public func setTriggerAdvTxPower(_ value: Int) -> Bool { triggerTxPower = NSNumber(value: value); return true }
+  public func setTriggerAdvChangeMode(_ value: Int) { triggerAdvChangeMode = NSNumber(value: value) }
 }
 
 public final class KBCfgTriggerMotion: KBCfgTrigger {
@@ -243,6 +275,8 @@ public final class KBCfgTriggerMotion: KBCfgTrigger {
   public var wakeupDuration: NSNumber?
   public func getAccODR() -> Int { accODR?.intValue ?? 0 }
   public func getWakeupDuration() -> Int { wakeupDuration?.intValue ?? 0 }
+  public func setAccODR(_ value: Int) -> Bool { accODR = NSNumber(value: value); return true }
+  public func setWakeupDuration(_ value: Int) -> Bool { wakeupDuration = NSNumber(value: value); return true }
 }
 
 public final class KBCfgTriggerAngle: KBCfgTrigger {
@@ -250,11 +284,14 @@ public final class KBCfgTriggerAngle: KBCfgTrigger {
   public var reportInterval: NSNumber?
   public func getAboveAngle() -> Int? { aboveAngle?.intValue }
   public func getReportingInterval() -> Int? { reportInterval?.intValue }
+  public func setAboveAngle(_ value: Int) { aboveAngle = NSNumber(value: value) }
+  public func setReportingInterval(_ value: Int) { reportInterval = NSNumber(value: value) }
 }
 
 open class KBCfgSensorBase: KBCfgBase {
   public var sensorType: NSNumber?
   public func getSensorType() -> Int { sensorType?.intValue ?? 0 }
+  public func setSensorType(_ value: Int) { sensorType = NSNumber(value: value) }
 }
 
 public final class KBCfgSensorHT: KBCfgSensorBase {
@@ -266,6 +303,10 @@ public final class KBCfgSensorHT: KBCfgSensorBase {
   public func getMeasureInterval() -> Int { sensorHtMeasureInterval?.intValue ?? 0 }
   public func getHumidityLogThreshold() -> Int { humidityChangeThreshold?.intValue ?? 0 }
   public func getTemperatureLogThreshold() -> Int { temperatureChangeThreshold?.intValue ?? 0 }
+  public func setLogEnable(_ value: Bool) { logEnable = NSNumber(value: value) }
+  public func setMeasureInterval(_ value: Int) -> Bool { sensorHtMeasureInterval = NSNumber(value: value); return true }
+  public func setHumidityLogThreshold(_ value: Int) -> Bool { humidityChangeThreshold = NSNumber(value: value); return true }
+  public func setTemperatureLogThreshold(_ value: Int) -> Bool { temperatureChangeThreshold = NSNumber(value: value); return true }
 }
 
 public final class KBCfgSensorLight: KBCfgSensorBase {
@@ -275,6 +316,9 @@ public final class KBCfgSensorLight: KBCfgSensorBase {
   public func getLogEnable() -> Bool { logEnable?.boolValue ?? false }
   public func getMeasureInterval() -> Int { measureInterval?.intValue ?? 0 }
   public func getLogChangeThreshold() -> Int { logChangeThreshold?.intValue ?? 0 }
+  public func setLogEnable(_ value: Bool) { logEnable = NSNumber(value: value) }
+  public func setMeasureInterval(_ value: Int) -> Bool { measureInterval = NSNumber(value: value); return true }
+  public func setLogChangeThreshold(_ value: Int) { logChangeThreshold = NSNumber(value: value) }
 }
 
 public final class KBCfgSensorGEO: KBCfgSensorBase {
@@ -283,7 +327,10 @@ public final class KBCfgSensorGEO: KBCfgSensorBase {
   public var parkingDelay: NSNumber?
   public func isParkingTaged() -> Bool { parkingTag?.boolValue ?? false }
   public func getParkingThreshold() -> Int { parkingThreshold?.intValue ?? 0 }
-  public func getParkingDelay() -> Int { parkingDelay?.intValue ?? 0 }
+  public func getPakingDelay() -> Int { parkingDelay?.intValue ?? 0 }
+  public func setParkingTag(_ value: Bool) { parkingTag = NSNumber(value: value) }
+  public func setParkingThreshold(_ value: Int) -> Bool { parkingThreshold = NSNumber(value: value); return true }
+  public func setParkingDelay(_ value: Int) -> Bool { parkingDelay = NSNumber(value: value); return true }
 }
 
 public final class KBCfgSensorScan: KBCfgSensorBase {
@@ -303,6 +350,14 @@ public final class KBCfgSensorScan: KBCfgSensorBase {
   public func getScanChanelMask() -> UInt8 { UInt8(scanChanelMask?.intValue ?? 0) }
   public func getScanMax() -> Int { scanMax?.intValue ?? 0 }
   public func getScanResultAdvSlot() -> Int { scanResultAdvSlot?.intValue ?? 0 }
+  public func setScanInterval(_ value: Int) -> Bool { scanInterval = NSNumber(value: value); return true }
+  public func setMotionScanInterval(_ value: Int) -> Bool { motionScanInterval = NSNumber(value: value); return true }
+  public func setScanDuration(_ value: Int) -> Bool { scanDuration = NSNumber(value: value); return true }
+  public func setScanModel(_ value: Int) -> Bool { scanModel = NSNumber(value: value); return true }
+  public func setScanRssi(_ value: Int) -> Bool { scanRssi = NSNumber(value: value); return true }
+  public func setScanChanelMask(_ value: UInt8) -> Bool { scanChanelMask = NSNumber(value: value); return true }
+  public func setScanMax(_ value: Int) -> Bool { scanMax = NSNumber(value: value); return true }
+  public func setScanResultAdvSlot(_ value: Int) { scanResultAdvSlot = NSNumber(value: value) }
 }
 
 public final class KBCfgSensorPIR: KBCfgSensorBase {
@@ -312,6 +367,9 @@ public final class KBCfgSensorPIR: KBCfgSensorBase {
   public func getLogEnable() -> Bool { logEnable?.boolValue ?? false }
   public func getMeasureInterval() -> Int { measureInterval?.intValue ?? 0 }
   public func getLogBackoffTime() -> Int { logBackoffTime?.intValue ?? 0 }
+  public func setLogEnable(_ value: Bool) { logEnable = NSNumber(value: value) }
+  public func setMeasureInterval(_ value: Int) -> Bool { measureInterval = NSNumber(value: value); return true }
+  public func setLogBackoffTime(_ value: Int) -> Bool { logBackoffTime = NSNumber(value: value); return true }
 }
 
 public final class KBSensorType: NSObject {
@@ -432,9 +490,9 @@ public class KBeacon: NSObject {
     state = .Disconnected
   }
 
-  public func modifyConfig(obj: [KBCfgBase], callback: @escaping (Bool, Int, KBConnEvtReason) -> Void) {
-    _ = obj
-    callback(true, 0, .ConnSuccess)
+  public func modifyConfig(array: [KBCfgBase], callback: @escaping (Bool, KBException?) -> Void) {
+    _ = array
+    callback(true, nil)
   }
 
   public func getCommonCfg() -> KBCfgCommon? { KBCfgCommon() }

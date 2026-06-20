@@ -11,7 +11,10 @@
         "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\" -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+        }
       }
     },
     "development-simulator": {
@@ -27,7 +30,10 @@
         "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\" -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+        }
       }
     },
     "preview-simulator": {
@@ -39,6 +45,11 @@
     "production": {
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "android": {
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8\" -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+        }
       }
     }
   },

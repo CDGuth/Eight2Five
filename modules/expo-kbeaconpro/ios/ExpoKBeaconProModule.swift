@@ -9,8 +9,9 @@ private enum ConfigMappingError: Error {
   case invalid(index: Int)
 }
 
-public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate {
+public class ExpoKBeaconProModule: Module {
   private var beaconManager: KBeaconsMgr?
+  private lazy var delegateProxy = ExpoKBeaconProDelegateProxy(module: self)
   private var discoveredBeacons = [String: KBeacon]()
   private var activeConnections = [String: KBeacon]()
   private var pendingConnectionPromises = [String: Promise]()
@@ -100,7 +101,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
   private func advPacketToDict(_ advPacket: KBAdvPacketBase) -> [String: Any?] {
     var dict: [String: Any?] = [
-      "advType": advPacket.advType.rawValue,
+      "advType": advPacket.getAdvType(),
     ]
 
     if let iBeaconPacket = advPacket as? KBAdvPacketIBeacon {
@@ -121,26 +122,25 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       dict["batteryLevel"] = sensorPacket.batteryLevel
       dict["temperature"] = sensorPacket.temperature
       dict["humidity"] = sensorPacket.humidity
-      if let accX = sensorPacket.accX, let accY = sensorPacket.accY, let accZ = sensorPacket.accZ {
+      if let accSensor = sensorPacket.accSensor {
         dict["accSensor"] = [
-          "xAis": accX,
-          "yAis": accY,
-          "zAis": accZ,
+          "xAis": accSensor.xAis,
+          "yAis": accSensor.yAis,
+          "zAis": accSensor.zAis,
         ]
       }
-      dict["alarmStatus"] = sensorPacket.alarmStatus
+      dict["cutoff"] = sensorPacket.cutoff
       dict["pirIndication"] = sensorPacket.pirIndication
-      dict["luxValue"] = sensorPacket.lightValue ?? optionalNumber(from: sensorPacket, selectorName: "luxLevel")
+      dict["luxValue"] = sensorPacket.luxLevel
     } else if let systemPacket = advPacket as? KBAdvPacketSystem {
       dict["macAddress"] = systemPacket.macAddress.map(normalizedMac)
       dict["model"] = systemPacket.model
-      dict["batteryPercent"] = systemPacket.batteryPercent ?? systemPacket.batteryLevel
-      dict["version"] = systemPacket.firmwareVersion ?? systemPacket.version
+      dict["batteryPercent"] = systemPacket.batteryPercent
+      dict["version"] = systemPacket.firmwareVersion
     } else if let eBeaconPacket = advPacket as? KBAdvPacketEBeacon {
-      dict["mac"] = eBeaconPacket.mac.map(normalizedMac)
       dict["uuid"] = eBeaconPacket.uuid
       dict["utcSecCount"] = eBeaconPacket.utcSecCount
-      dict["refTxPower"] = eBeaconPacket.refTxPower ?? eBeaconPacket.measurePower
+      dict["refTxPower"] = eBeaconPacket.measurePower
     } else {
       dict["advType"] = 255
       dict["raw"] = ["className": String(describing: type(of: advPacket))]
@@ -152,21 +152,6 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
   private func isNil(_ value: Any?) -> Bool {
     if case Optional<Any>.none = value { return true }
     return false
-  }
-
-  // Compatibility shim for optional SDK accessors whose availability differs by pod patch level.
-  // It checks selector support before invocation and never uses KVC for unknown keys.
-  private func optionalNumber(from object: NSObject, selectorName: String) -> NSNumber? {
-    let selector = NSSelectorFromString(selectorName)
-    guard object.responds(to: selector) else { return nil }
-    return object.perform(selector)?.takeUnretainedValue() as? NSNumber
-  }
-
-  private func setOptionalObject(_ value: Any?, on object: NSObject, selectorName: String) {
-    guard let value else { return }
-    let selector = NSSelectorFromString(selectorName)
-    guard object.responds(to: selector) else { return }
-    object.perform(selector, with: value)
   }
 
   private func numberValue(_ value: Any?) -> NSNumber? {
@@ -193,26 +178,34 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     return number.intValue
   }
 
-  private func integerNumber(_ value: Any?) -> NSNumber? {
-    integerValue(value).map { NSNumber(value: $0) }
-  }
-
-  private func optionalIntegerNumber(_ dict: [String: Any], key: String, index: Int) throws -> NSNumber? {
+  private func optionalInt(_ dict: [String: Any], key: String, index: Int) throws -> Int? {
     guard dict.keys.contains(key) else { return nil }
-    guard let value = integerNumber(dict[key]) else { throw ConfigMappingError.invalid(index: index) }
+    guard let value = integerValue(dict[key]) else { throw ConfigMappingError.invalid(index: index) }
     return value
   }
 
-  private func optionalNumber(_ dict: [String: Any], key: String, index: Int) throws -> NSNumber? {
+  private func optionalFloat(_ dict: [String: Any], key: String, index: Int) throws -> Float? {
     guard dict.keys.contains(key) else { return nil }
     guard let value = numberValue(dict[key]) else { throw ConfigMappingError.invalid(index: index) }
+    return value.floatValue
+  }
+
+  private func optionalBool(_ dict: [String: Any], key: String, index: Int) throws -> Bool? {
+    guard dict.keys.contains(key) else { return nil }
+    guard let value = dict[key] as? Bool else { throw ConfigMappingError.invalid(index: index) }
     return value
   }
 
-  private func optionalBoolNumber(_ dict: [String: Any], key: String, index: Int) throws -> NSNumber? {
-    guard dict.keys.contains(key) else { return nil }
-    guard let value = dict[key] as? Bool else { throw ConfigMappingError.invalid(index: index) }
-    return NSNumber(value: value)
+  private func optionalUInt(_ dict: [String: Any], key: String, index: Int) throws -> UInt? {
+    guard let value = try optionalInt(dict, key: key, index: index) else { return nil }
+    guard value >= 0 else { throw ConfigMappingError.invalid(index: index) }
+    return UInt(value)
+  }
+
+  private func optionalUInt8(_ dict: [String: Any], key: String, index: Int) throws -> UInt8? {
+    guard let value = try optionalInt(dict, key: key, index: index) else { return nil }
+    guard value >= 0, value <= Int(UInt8.max) else { throw ConfigMappingError.invalid(index: index) }
+    return UInt8(value)
   }
 
   private func optionalString(_ dict: [String: Any], key: String, index: Int) throws -> String? {
@@ -229,16 +222,22 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     switch configType {
     case "common":
       let cfg = KBCfgCommon()
-      let name = try optionalString(dict, key: "name", index: index)
-      cfg.deviceName = name
-      setOptionalObject(name, on: cfg, selectorName: "setName:")
-      cfg.alwaysPowerOn = try optionalBoolNumber(dict, key: "alwaysPowerOn", index: index)
+      if let name = try optionalString(dict, key: "name", index: index), !cfg.setName(name) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let alwaysPowerOn = try optionalBool(dict, key: "alwaysPowerOn", index: index) {
+        cfg.setAlwaysPowerOn(alwaysPowerOn)
+      }
       let password = try optionalString(dict, key: "password", index: index)
       guard isValidPassword(password) else {
         throw ConfigMappingError.invalid(index: index)
       }
-      cfg.password = password
-      cfg.refPower1Meters = try optionalIntegerNumber(dict, key: "refPower1Meters", index: index)
+      if let password, !cfg.setPassword(password) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let refPower = try optionalInt(dict, key: "refPower1Meters", index: index), !cfg.setRefPower1Meters(refPower) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       return cfg
 
     case "advertisement":
@@ -264,30 +263,50 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     switch advType {
     case 0:
       let typed = KBCfgAdvIBeacon()
-      typed.uuid = try optionalString(dict, key: "uuid", index: index)
-      typed.majorID = try optionalIntegerNumber(dict, key: "majorID", index: index)
-      typed.minorID = try optionalIntegerNumber(dict, key: "minorID", index: index)
+      if let uuid = try optionalString(dict, key: "uuid", index: index), !typed.setUuid(uuid) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let majorID = try optionalUInt(dict, key: "majorID", index: index) {
+        typed.setMajorID(majorID)
+      }
+      if let minorID = try optionalUInt(dict, key: "minorID", index: index) {
+        typed.setMinorID(minorID)
+      }
       cfg = typed
     case 1:
       cfg = KBCfgAdvEddyTLM()
     case 2:
       let typed = KBCfgAdvEddyUID()
-      typed.nid = normalizeHexString(try optionalString(dict, key: "nid", index: index))
-      typed.sid = normalizeHexString(try optionalString(dict, key: "sid", index: index))
+      if let nid = normalizeHexString(try optionalString(dict, key: "nid", index: index)), !typed.setNid(nid) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let sid = normalizeHexString(try optionalString(dict, key: "sid", index: index)), !typed.setSid(sid) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     case 3:
       let typed = KBCfgAdvEddyURL()
-      typed.url = try optionalString(dict, key: "url", index: index)
+      if let url = try optionalString(dict, key: "url", index: index), !typed.setUrl(url) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     case 4:
       let typed = KBCfgAdvKSensor()
-      typed.aesType = try optionalIntegerNumber(dict, key: "aesType", index: index)
+      if let aesType = try optionalInt(dict, key: "aesType", index: index) {
+        typed.setAesType(aesType)
+      }
       cfg = typed
     case 6:
       let typed = KBCfgAdvEBeacon()
-      typed.uuid = try optionalString(dict, key: "uuid", index: index)
-      typed.encryptInterval = try optionalIntegerNumber(dict, key: "encryptInterval", index: index)
-      typed.aesType = try optionalIntegerNumber(dict, key: "aesType", index: index)
+      if let uuid = try optionalString(dict, key: "uuid", index: index), !typed.setUuid(uuid) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let encryptInterval = try optionalUInt8(dict, key: "encryptInterval", index: index), !typed.setEncryptInterval(encryptInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let aesType = try optionalUInt8(dict, key: "aesType", index: index) {
+        typed.setAESType(aesType)
+      }
       cfg = typed
     case 255:
       cfg = KBCfgAdvNull()
@@ -304,12 +323,24 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
   private func applySharedAdvertisementFields(_ dict: [String: Any], to cfg: KBCfgBase, index: Int) throws {
     guard let advCfg = cfg as? KBCfgAdvBase else { return }
-    advCfg.slotIndex = try optionalIntegerNumber(dict, key: "slotIndex", index: index)
-    advCfg.txPower = try optionalIntegerNumber(dict, key: "txPower", index: index)
-    advCfg.advPeriod = try optionalNumber(dict, key: "advPeriod", index: index)
-    advCfg.advMode = try optionalIntegerNumber(dict, key: "advMode", index: index)
-    advCfg.advTriggerOnly = try optionalBoolNumber(dict, key: "advTriggerOnly", index: index)
-    advCfg.advConnectable = try optionalBoolNumber(dict, key: "advConnectable", index: index)
+    if let slotIndex = try optionalInt(dict, key: "slotIndex", index: index), !advCfg.setSlotIndex(slotIndex) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let txPower = try optionalInt(dict, key: "txPower", index: index), !advCfg.setTxPower(txPower) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let advPeriod = try optionalFloat(dict, key: "advPeriod", index: index), !advCfg.setAdvPeriod(advPeriod) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let advMode = try optionalInt(dict, key: "advMode", index: index), !advCfg.setAdvMode(advMode) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let advTriggerOnly = try optionalBool(dict, key: "advTriggerOnly", index: index) {
+      advCfg.setAdvTriggerOnly(advTriggerOnly)
+    }
+    if let advConnectable = try optionalBool(dict, key: "advConnectable", index: index) {
+      advCfg.setAdvConnectable(advConnectable)
+    }
   }
 
   private func dictToTriggerCfg(_ dict: [String: Any], index: Int) throws -> KBCfgBase {
@@ -320,28 +351,54 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     let cfg: KBCfgBase
     if triggerType == 5 {
       let typed = KBCfgTriggerMotion()
-      typed.accODR = try optionalIntegerNumber(dict, key: "accODR", index: index)
-      typed.wakeupDuration = try optionalIntegerNumber(dict, key: "wakeupDuration", index: index)
+      if let accODR = try optionalInt(dict, key: "accODR", index: index), !typed.setAccODR(accODR) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let wakeupDuration = try optionalInt(dict, key: "wakeupDuration", index: index), !typed.setWakeupDuration(wakeupDuration) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     } else if triggerType == 14 {
       let typed = KBCfgTriggerAngle()
-      typed.aboveAngle = try optionalIntegerNumber(dict, key: "aboveAngle", index: index)
-      typed.reportInterval = try optionalIntegerNumber(dict, key: "reportInterval", index: index)
+      if let aboveAngle = try optionalInt(dict, key: "aboveAngle", index: index) {
+        typed.setAboveAngle(aboveAngle)
+      }
+      if let reportInterval = try optionalInt(dict, key: "reportInterval", index: index) {
+        typed.setReportingInterval(reportInterval)
+      }
       cfg = typed
     } else {
       cfg = KBCfgTrigger()
     }
 
     guard let triggerCfg = cfg as? KBCfgTrigger else { return cfg }
-    triggerCfg.triggerIndex = try optionalIntegerNumber(dict, key: "triggerIndex", index: index)
-    triggerCfg.triggerType = try optionalIntegerNumber(dict, key: "triggerType", index: index)
-    triggerCfg.triggerAction = try optionalIntegerNumber(dict, key: "triggerAction", index: index)
-    triggerCfg.triggerAdvSlot = try optionalIntegerNumber(dict, key: "triggerAdvSlot", index: index)
-    triggerCfg.triggerAdvTime = try optionalIntegerNumber(dict, key: "triggerAdvTime", index: index)
-    triggerCfg.triggerPara = try optionalIntegerNumber(dict, key: "triggerPara", index: index)
-    triggerCfg.triggerAdvPeriod = try optionalIntegerNumber(dict, key: "triggerAdvPeriod", index: index)
-    triggerCfg.triggerTxPower = try optionalIntegerNumber(dict, key: "triggerTxPower", index: index)
-    triggerCfg.triggerAdvChangeMode = try optionalIntegerNumber(dict, key: "triggerAdvChangeMode", index: index)
+    if let triggerIndex = try optionalInt(dict, key: "triggerIndex", index: index) {
+      triggerCfg.setTriggerIndex(triggerIndex)
+    }
+    if let triggerType = try optionalInt(dict, key: "triggerType", index: index) {
+      triggerCfg.setTriggerType(triggerType)
+    }
+    if let triggerAction = try optionalInt(dict, key: "triggerAction", index: index) {
+      triggerCfg.setTriggerAction(triggerAction)
+    }
+    if let triggerAdvSlot = try optionalInt(dict, key: "triggerAdvSlot", index: index), !triggerCfg.setTriggerAdvSlot(triggerAdvSlot) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let triggerAdvTime = try optionalInt(dict, key: "triggerAdvTime", index: index), !triggerCfg.setTriggerAdvTime(triggerAdvTime) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let triggerPara = try optionalInt(dict, key: "triggerPara", index: index) {
+      triggerCfg.setTriggerPara(triggerPara)
+    }
+    if let triggerAdvPeriod = try optionalFloat(dict, key: "triggerAdvPeriod", index: index), !triggerCfg.setTriggerAdvPeriod(triggerAdvPeriod) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let triggerTxPower = try optionalInt(dict, key: "triggerTxPower", index: index), !triggerCfg.setTriggerAdvTxPower(triggerTxPower) {
+      throw ConfigMappingError.invalid(index: index)
+    }
+    if let triggerAdvChangeMode = try optionalInt(dict, key: "triggerAdvChangeMode", index: index) {
+      triggerCfg.setTriggerAdvChangeMode(triggerAdvChangeMode)
+    }
     return cfg
   }
 
@@ -354,45 +411,87 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     switch sensorType {
     case 1:
       let typed = KBCfgSensorHT()
-      typed.logEnable = try optionalBoolNumber(dict, key: "logEnable", index: index)
-      typed.sensorHtMeasureInterval = try optionalIntegerNumber(dict, key: "sensorHtMeasureInterval", index: index)
-      typed.humidityChangeThreshold = try optionalIntegerNumber(dict, key: "humidityChangeThreshold", index: index)
-      typed.temperatureChangeThreshold = try optionalIntegerNumber(dict, key: "temperatureChangeThreshold", index: index)
+      if let logEnable = try optionalBool(dict, key: "logEnable", index: index) {
+        typed.setLogEnable(logEnable)
+      }
+      if let measureInterval = try optionalInt(dict, key: "sensorHtMeasureInterval", index: index), !typed.setMeasureInterval(measureInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let threshold = try optionalInt(dict, key: "humidityChangeThreshold", index: index), !typed.setHumidityLogThreshold(threshold) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let threshold = try optionalInt(dict, key: "temperatureChangeThreshold", index: index), !typed.setTemperatureLogThreshold(threshold) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     case 2:
       let typed = KBCfgSensorPIR()
-      typed.logEnable = try optionalBoolNumber(dict, key: "logEnable", index: index)
-      typed.measureInterval = try optionalIntegerNumber(dict, key: "measureInterval", index: index)
-      typed.logBackoffTime = try optionalIntegerNumber(dict, key: "logBackoffTime", index: index)
+      if let logEnable = try optionalBool(dict, key: "logEnable", index: index) {
+        typed.setLogEnable(logEnable)
+      }
+      if let measureInterval = try optionalInt(dict, key: "measureInterval", index: index), !typed.setMeasureInterval(measureInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let logBackoffTime = try optionalInt(dict, key: "logBackoffTime", index: index), !typed.setLogBackoffTime(logBackoffTime) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     case 3:
       let typed = KBCfgSensorLight()
-      typed.logEnable = try optionalBoolNumber(dict, key: "logEnable", index: index)
-      typed.measureInterval = try optionalIntegerNumber(dict, key: "measureInterval", index: index)
-      typed.logChangeThreshold = try optionalIntegerNumber(dict, key: "logChangeThreshold", index: index)
+      if let logEnable = try optionalBool(dict, key: "logEnable", index: index) {
+        typed.setLogEnable(logEnable)
+      }
+      if let measureInterval = try optionalInt(dict, key: "measureInterval", index: index), !typed.setMeasureInterval(measureInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let logChangeThreshold = try optionalInt(dict, key: "logChangeThreshold", index: index) {
+        typed.setLogChangeThreshold(logChangeThreshold)
+      }
       cfg = typed
     case 5:
       let typed = KBCfgSensorGEO()
-      typed.parkingTag = try optionalBoolNumber(dict, key: "parkingTag", index: index)
-      typed.parkingThreshold = try optionalIntegerNumber(dict, key: "parkingThreshold", index: index)
-      typed.parkingDelay = try optionalIntegerNumber(dict, key: "parkingDelay", index: index)
+      if let parkingTag = try optionalBool(dict, key: "parkingTag", index: index) {
+        typed.setParkingTag(parkingTag)
+      }
+      if let parkingThreshold = try optionalInt(dict, key: "parkingThreshold", index: index), !typed.setParkingThreshold(parkingThreshold) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let parkingDelay = try optionalInt(dict, key: "parkingDelay", index: index), !typed.setParkingDelay(parkingDelay) {
+        throw ConfigMappingError.invalid(index: index)
+      }
       cfg = typed
     case 6:
       let typed = KBCfgSensorScan()
-      typed.scanInterval = try optionalIntegerNumber(dict, key: "scanInterval", index: index)
-      typed.motionScanInterval = try optionalIntegerNumber(dict, key: "motionScanInterval", index: index)
-      typed.scanDuration = try optionalIntegerNumber(dict, key: "scanDuration", index: index)
-      typed.scanModel = try optionalIntegerNumber(dict, key: "scanModel", index: index)
-      typed.scanRssi = try optionalIntegerNumber(dict, key: "scanRssi", index: index)
-      typed.scanChanelMask = try optionalIntegerNumber(dict, key: "scanChanelMask", index: index)
-      typed.scanMax = try optionalIntegerNumber(dict, key: "scanMax", index: index)
-      typed.scanResultAdvSlot = try optionalIntegerNumber(dict, key: "scanResultAdvSlot", index: index)
+      if let scanInterval = try optionalInt(dict, key: "scanInterval", index: index), !typed.setScanInterval(scanInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let motionScanInterval = try optionalInt(dict, key: "motionScanInterval", index: index), !typed.setMotionScanInterval(motionScanInterval) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanDuration = try optionalInt(dict, key: "scanDuration", index: index), !typed.setScanDuration(scanDuration) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanModel = try optionalInt(dict, key: "scanModel", index: index), !typed.setScanModel(scanModel) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanRssi = try optionalInt(dict, key: "scanRssi", index: index), !typed.setScanRssi(scanRssi) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanChanelMask = try optionalUInt8(dict, key: "scanChanelMask", index: index), !typed.setScanChanelMask(scanChanelMask) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanMax = try optionalInt(dict, key: "scanMax", index: index), !typed.setScanMax(scanMax) {
+        throw ConfigMappingError.invalid(index: index)
+      }
+      if let scanResultAdvSlot = try optionalInt(dict, key: "scanResultAdvSlot", index: index) {
+        typed.setScanResultAdvSlot(scanResultAdvSlot)
+      }
       cfg = typed
     default:
       throw ConfigMappingError.invalid(index: index)
     }
 
-    (cfg as? KBCfgSensorBase)?.sensorType = NSNumber(value: sensorType)
+    (cfg as? KBCfgSensorBase)?.setSensorType(sensorType)
     return cfg
   }
 
@@ -492,7 +591,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     OnCreate {
       self.isDestroyed = false
       self.beaconManager = KBeaconsMgr.sharedBeaconManager
-      self.beaconManager?.delegate = self
+      self.beaconManager?.delegate = self.delegateProxy
     }
 
     OnDestroy {
@@ -606,11 +705,11 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         return
       }
 
-      beacon.modifyConfig(obj: cfgObjects) { result, _, err in
+      beacon.modifyConfig(array: cfgObjects) { result, err in
         if result {
           promise.resolve(true)
         } else {
-          promise.reject("CONFIG_FAILED", "Failed to modify config. Error: \(self.connectionReasonToJs(err))")
+          promise.reject("CONFIG_FAILED", "Failed to modify config. \(err?.errorDescription ?? "Unknown error")")
         }
       }
     }
@@ -739,7 +838,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
         return
       }
 
-      beacon.subscribeSensorDataNotify(eventType, notifyDelegate: self) { result, err in
+      beacon.subscribeSensorDataNotify(eventType, notifyDelegate: self.delegateProxy) { result, err in
         if result {
           self.notificationSubscriptions.insert("\(normalized):\(eventType)")
           promise.resolve(true)
@@ -858,9 +957,9 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       if let readTriggerPara = connParaMap["readTriggerPara"] as? Bool { connPara.readTriggerPara = readTriggerPara }
       if let readSensorPara = connParaMap["readSensorPara"] as? Bool { connPara.readSensorPara = readSensorPara }
 
-      started = beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: self)
+      started = beacon.connectEnhanced(normalizedPassword(password), timeout: timeoutSeconds, connPara: connPara, delegate: delegateProxy)
     } else {
-      started = beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: self)
+      started = beacon.connect(normalizedPassword(password), timeout: timeoutSeconds, delegate: delegateProxy)
     }
 
     if !started {
@@ -943,7 +1042,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
 
     if beaconManager == nil {
       beaconManager = KBeaconsMgr.sharedBeaconManager
-      beaconManager?.delegate = self
+      beaconManager?.delegate = delegateProxy
     }
 
     pendingPermissionPromise = promise
@@ -1118,7 +1217,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
       "triggerPara": triggerCfg.getTriggerPara(),
       "triggerAdvPeriod": triggerCfg.getTriggerAdvPeriod(),
       "triggerTxPower": triggerCfg.getTriggerAdvTxPower(),
-      "triggerAdvChangeMode": triggerCfg.getTriggerAdvChangeMode(),
+      "triggerAdvChangeMode": triggerCfg.getTriggerAdvChgMode(),
     ]
 
     if let motionCfg = triggerCfg as? KBCfgTriggerMotion {
@@ -1150,7 +1249,7 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     } else if let geoCfg = sensorCfg as? KBCfgSensorGEO {
       dict["parkingTag"] = geoCfg.isParkingTaged()
       dict["parkingThreshold"] = geoCfg.getParkingThreshold()
-      dict["parkingDelay"] = geoCfg.getParkingDelay()
+      dict["parkingDelay"] = geoCfg.getPakingDelay()
     } else if let scanCfg = sensorCfg as? KBCfgSensorScan {
       dict["scanInterval"] = scanCfg.getScanInterval()
       dict["motionScanInterval"] = scanCfg.getMotionScanInterval()
@@ -1238,5 +1337,30 @@ public class ExpoKBeaconProModule: Module, KBeaconMgrDelegate, ConnStateDelegate
     if let macAddress { payload["macAddress"] = normalizedMac(macAddress) }
     sendEvent("onError", payload)
     promise.reject(code, message)
+  }
+}
+
+private final class ExpoKBeaconProDelegateProxy: NSObject, KBeaconMgrDelegate, ConnStateDelegate, NotifyDataDelegate {
+  private weak var module: ExpoKBeaconProModule?
+
+  init(module: ExpoKBeaconProModule) {
+    self.module = module
+    super.init()
+  }
+
+  func onBeaconDiscovered(beacons: [KBeacon]) {
+    module?.onBeaconDiscovered(beacons: beacons)
+  }
+
+  func onCentralBleStateChange(newState: BLECentralMgrState) {
+    module?.onCentralBleStateChange(newState: newState)
+  }
+
+  func onConnStateChange(_ beacon: KBeacon, state: KBConnState, evt: KBConnEvtReason) {
+    module?.onConnStateChange(beacon, state: state, evt: evt)
+  }
+
+  func onNotifyDataReceived(_ beacon: KBeacon, evt: Int, data: Data) {
+    module?.onNotifyDataReceived(beacon, evt: evt, data: data)
   }
 }

@@ -35,6 +35,7 @@ import com.kkmcn.kbeaconlib2.KBCfgPackage.KBCfgTriggerMotion
 import com.kkmcn.kbeaconlib2.KBConnPara
 import com.kkmcn.kbeaconlib2.KBConnState
 import com.kkmcn.kbeaconlib2.KBConnectionEvent
+import com.kkmcn.kbeaconlib2.KBException
 import com.kkmcn.kbeaconlib2.KBSensorHistoryData.KBRecordDataRsp
 import com.kkmcn.kbeaconlib2.KBSensorHistoryData.KBSensorReadOption
 import com.kkmcn.kbeaconlib2.KBeacon
@@ -248,7 +249,7 @@ class ExpoKBeaconProModule : Module() {
         if (success) {
           promise.resolve(true)
         } else {
-          promise.reject("CONFIG_FAILED", exception?.description ?: "Configuration failed", null)
+          promise.reject("CONFIG_FAILED", sdkExceptionMessage(exception, "Configuration failed"), null)
         }
       }
     }
@@ -274,7 +275,7 @@ class ExpoKBeaconProModule : Module() {
         if (!success || info == null) {
           promise.reject(
             "READ_FAILED",
-            exception?.description ?: "Failed to read sensor data info",
+            sdkExceptionMessage(exception, "Failed to read sensor data info"),
             null
           )
           return@readSensorDataInfo
@@ -332,7 +333,7 @@ class ExpoKBeaconProModule : Module() {
         if (!success || response == null) {
           promise.reject(
             "READ_FAILED",
-            exception?.description ?: "Failed to read sensor records",
+            sdkExceptionMessage(exception, "Failed to read sensor records"),
             null
           )
           return@readSensorRecord
@@ -359,11 +360,11 @@ class ExpoKBeaconProModule : Module() {
         promise.reject("INVALID_ARGUMENT", "sensorType is invalid", null)
         return@AsyncFunction
       }
-      beacon.clearSensorRecord(sensorType) { success, exception ->
+      beacon.clearSensorRecord(sensorType) { success, _, exception ->
         if (success) {
           promise.resolve(true)
         } else {
-          promise.reject("OPERATION_FAILED", exception?.description ?: "Failed to clear sensor history", null)
+          promise.reject("OPERATION_FAILED", sdkExceptionMessage(exception, "Failed to clear sensor history"), null)
         }
       }
     }
@@ -403,7 +404,7 @@ class ExpoKBeaconProModule : Module() {
           promise.resolve(true)
         } else {
           notificationDelegates.remove(key)
-          promise.reject("SUBSCRIBE_FAILED", exception?.description ?: "Failed to subscribe", null)
+          promise.reject("SUBSCRIBE_FAILED", sdkExceptionMessage(exception, "Failed to subscribe"), null)
         }
       }
     }
@@ -427,7 +428,7 @@ class ExpoKBeaconProModule : Module() {
           notificationDelegates.remove(key)
           promise.resolve(true)
         } else {
-          promise.reject("UNSUBSCRIBE_FAILED", exception?.description ?: "Failed to unsubscribe", null)
+          promise.reject("UNSUBSCRIBE_FAILED", sdkExceptionMessage(exception, "Failed to unsubscribe"), null)
         }
       }
     }
@@ -595,6 +596,13 @@ class ExpoKBeaconProModule : Module() {
     return "$mac:$eventType"
   }
 
+  private fun sdkExceptionMessage(exception: KBException?, fallback: String): String {
+    if (exception == null) return fallback
+
+    val message = exception.message?.takeIf { it.isNotBlank() } ?: fallback
+    return "$message (errorCode=${exception.errorCode}, subErrorCode=${exception.subErrorCode})"
+  }
+
   private fun beaconToMap(beacon: KBeacon): Map<String, Any?> {
     val normalized = normalizedMac(beacon.mac)
     val packets = beacon.allAdvPackets()?.map { packet -> advPacketToMap(packet) } ?: emptyList()
@@ -682,15 +690,15 @@ class ExpoKBeaconProModule : Module() {
 
   private fun mapCommonConfig(map: Map<String, Any?>, index: Int): KBCfgCommon {
     return KBCfgCommon().apply {
-      optionalStringValue(map, "name", index)?.let { name = it }
-      optionalBooleanValue(map, "alwaysPowerOn", index)?.let { alwaysPowerOn = it }
+      optionalStringValue(map, "name", index)?.let { setName(it) }
+      optionalBooleanValue(map, "alwaysPowerOn", index)?.let { setAlwaysPowerOn(it) }
       optionalStringValue(map, "password", index)?.let {
         if (!isValidPassword(it)) {
           throw IllegalArgumentException("configuration at index $index has an invalid password")
         }
-        password = it
+        setPassword(it)
       }
-      optionalIntegerIntValue(map, "refPower1Meters", index)?.let { refPower1Meters = it }
+      optionalIntegerIntValue(map, "refPower1Meters", index)?.let { setRefPower1Meters(it) }
     }
   }
 
@@ -699,25 +707,25 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (advType) {
       ADV_TYPE_IBEACON -> KBCfgAdvIBeacon().apply {
-        optionalStringValue(map, "uuid", index)?.let { uuid = it }
-        optionalIntegerIntValue(map, "majorID", index)?.let { majorID = it }
-        optionalIntegerIntValue(map, "minorID", index)?.let { minorID = it }
+        optionalStringValue(map, "uuid", index)?.let { setUuid(it) }
+        optionalIntegerIntValue(map, "majorID", index)?.let { setMajorID(it) }
+        optionalIntegerIntValue(map, "minorID", index)?.let { setMinorID(it) }
       }
       ADV_TYPE_EDDY_UID -> KBCfgAdvEddyUID().apply {
-        optionalStringValue(map, "nid", index)?.let { nid = normalizeHexString(it) }
-        optionalStringValue(map, "sid", index)?.let { sid = normalizeHexString(it) }
+        optionalStringValue(map, "nid", index)?.let { setNid(normalizeHexString(it) ?: it) }
+        optionalStringValue(map, "sid", index)?.let { setSid(normalizeHexString(it) ?: it) }
       }
       ADV_TYPE_EDDY_URL -> KBCfgAdvEddyURL().apply {
-        optionalStringValue(map, "url", index)?.let { url = it }
+        optionalStringValue(map, "url", index)?.let { setUrl(it) }
       }
       ADV_TYPE_EDDY_TLM -> KBCfgAdvEddyTLM()
       ADV_TYPE_SENSOR -> KBCfgAdvKSensor().apply {
-        optionalIntegerIntValue(map, "aesType", index)?.let { aesType = it }
+        optionalIntegerIntValue(map, "aesType", index)?.let { setAesType(it) }
       }
       ADV_TYPE_EBEACON -> KBCfgAdvEBeacon().apply {
-        optionalStringValue(map, "uuid", index)?.let { uuid = it }
-        optionalIntegerIntValue(map, "encryptInterval", index)?.let { encryptInterval = it }
-        optionalIntegerIntValue(map, "aesType", index)?.let { aesType = it }
+        optionalStringValue(map, "uuid", index)?.let { setUuid(it) }
+        optionalIntegerIntValue(map, "encryptInterval", index)?.let { setEncryptInterval(it) }
+        optionalIntegerIntValue(map, "aesType", index)?.let { setAesType(it) }
       }
       ADV_TYPE_UNKNOWN -> newNullAdvertisementConfig()
         ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
@@ -725,13 +733,15 @@ class ExpoKBeaconProModule : Module() {
     }
 
     if (cfg is KBCfgAdvBase) {
-      cfg.slotIndex = integerIntValue(map, "slotIndex")
-        ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
-      optionalIntegerIntValue(map, "txPower", index)?.let { cfg.txPower = it }
-      optionalFiniteFloatValue(map, "advPeriod", index)?.let { cfg.advPeriod = it }
-      optionalIntegerIntValue(map, "advMode", index)?.let { cfg.advMode = it }
-      optionalBooleanValue(map, "advTriggerOnly", index)?.let { cfg.advTriggerOnly = it }
-      optionalBooleanValue(map, "advConnectable", index)?.let { cfg.advConnectable = it }
+      cfg.setSlotIndex(
+        integerIntValue(map, "slotIndex")
+          ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
+      )
+      optionalIntegerIntValue(map, "txPower", index)?.let { cfg.setTxPower(it) }
+      optionalFiniteFloatValue(map, "advPeriod", index)?.let { cfg.setAdvPeriod(it) }
+      optionalIntegerIntValue(map, "advMode", index)?.let { cfg.setAdvMode(it) }
+      optionalBooleanValue(map, "advTriggerOnly", index)?.let { cfg.setAdvTriggerOnly(it) }
+      optionalBooleanValue(map, "advConnectable", index)?.let { cfg.setAdvConnectable(it) }
     }
 
     return cfg
@@ -742,26 +752,28 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     val cfg = when (triggerType) {
       5 -> KBCfgTriggerMotion().apply {
-        optionalIntegerIntValue(map, "accODR", index)?.let { accODR = it }
-        optionalIntegerIntValue(map, "wakeupDuration", index)?.let { wakeupDuration = it }
+        optionalIntegerIntValue(map, "accODR", index)?.let { setAccODR(it) }
+        optionalIntegerIntValue(map, "wakeupDuration", index)?.let { setWakeupDuration(it) }
       }
       14 -> KBCfgTriggerAngle().apply {
-        optionalIntegerIntValue(map, "aboveAngle", index)?.let { aboveAngle = it }
-        optionalIntegerIntValue(map, "reportInterval", index)?.let { reportInterval = it }
+        optionalIntegerIntValue(map, "aboveAngle", index)?.let { setAboveAngle(it) }
+        optionalIntegerIntValue(map, "reportInterval", index)?.let { setReportingInterval(it) }
       }
       else -> KBCfgTrigger()
     }
 
-    cfg.triggerIndex = integerIntValue(map, "triggerIndex")
-      ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
-    cfg.triggerType = triggerType
-    optionalIntegerIntValue(map, "triggerAction", index)?.let { cfg.triggerAction = it }
-    optionalIntegerIntValue(map, "triggerAdvSlot", index)?.let { cfg.triggerAdvSlot = it }
-    optionalIntegerIntValue(map, "triggerAdvTime", index)?.let { cfg.triggerAdvTime = it }
-    optionalIntegerIntValue(map, "triggerPara", index)?.let { cfg.triggerPara = it }
-    optionalIntegerIntValue(map, "triggerAdvPeriod", index)?.let { cfg.triggerAdvPeriod = it }
-    optionalIntegerIntValue(map, "triggerTxPower", index)?.let { cfg.triggerTxPower = it }
-    optionalIntegerIntValue(map, "triggerAdvChangeMode", index)?.let { cfg.triggerAdvChangeMode = it }
+    cfg.setTriggerIndex(
+      integerIntValue(map, "triggerIndex")
+        ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
+    )
+    cfg.setTriggerType(triggerType)
+    optionalIntegerIntValue(map, "triggerAction", index)?.let { cfg.setTriggerAction(it) }
+    optionalIntegerIntValue(map, "triggerAdvSlot", index)?.let { cfg.setTriggerAdvSlot(it) }
+    optionalIntegerIntValue(map, "triggerAdvTime", index)?.let { cfg.setTriggerAdvTime(it) }
+    optionalIntegerIntValue(map, "triggerPara", index)?.let { cfg.setTriggerPara(it) }
+    optionalFiniteFloatValue(map, "triggerAdvPeriod", index)?.let { cfg.setTriggerAdvPeriod(it) }
+    optionalIntegerIntValue(map, "triggerTxPower", index)?.let { cfg.setTriggerAdvTxPower(it) }
+    optionalIntegerIntValue(map, "triggerAdvChangeMode", index)?.let { cfg.setTriggerAdvChangeMode(it) }
     return cfg
   }
 
@@ -770,35 +782,35 @@ class ExpoKBeaconProModule : Module() {
       ?: throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     return when (sensorType) {
       1 -> KBCfgSensorHT().apply {
-        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
-        optionalIntegerIntValue(map, "sensorHtMeasureInterval", index)?.let { sensorHtMeasureInterval = it }
-        optionalIntegerIntValue(map, "humidityChangeThreshold", index)?.let { humidityChangeThreshold = it }
-        optionalIntegerIntValue(map, "temperatureChangeThreshold", index)?.let { temperatureChangeThreshold = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { setLogEnable(it) }
+        optionalIntegerIntValue(map, "sensorHtMeasureInterval", index)?.let { setMeasureInterval(it) }
+        optionalIntegerIntValue(map, "humidityChangeThreshold", index)?.let { setHumidityLogThreshold(it) }
+        optionalIntegerIntValue(map, "temperatureChangeThreshold", index)?.let { setTemperatureLogThreshold(it) }
       }
       2 -> KBCfgSensorPIR().apply {
-        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
-        optionalIntegerIntValue(map, "measureInterval", index)?.let { measureInterval = it }
-        optionalIntegerIntValue(map, "logBackoffTime", index)?.let { logBackoffTime = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { setLogEnable(it) }
+        optionalIntegerIntValue(map, "measureInterval", index)?.let { setMeasureInterval(it) }
+        optionalIntegerIntValue(map, "logBackoffTime", index)?.let { setLogBackoffTime(it) }
       }
       3 -> KBCfgSensorLight().apply {
-        optionalBooleanValue(map, "logEnable", index)?.let { logEnable = it }
-        optionalIntegerIntValue(map, "measureInterval", index)?.let { measureInterval = it }
-        optionalIntegerIntValue(map, "logChangeThreshold", index)?.let { logChangeThreshold = it }
+        optionalBooleanValue(map, "logEnable", index)?.let { setLogEnable(it) }
+        optionalIntegerIntValue(map, "measureInterval", index)?.let { setMeasureInterval(it) }
+        optionalIntegerIntValue(map, "logChangeThreshold", index)?.let { setLogChangeThreshold(it) }
       }
       5 -> KBCfgSensorGEO().apply {
-        optionalBooleanValue(map, "parkingTag", index)?.let { parkingTag = it }
-        optionalIntegerIntValue(map, "parkingThreshold", index)?.let { parkingThreshold = it }
-        optionalIntegerIntValue(map, "parkingDelay", index)?.let { parkingDelay = it }
+        optionalBooleanValue(map, "parkingTag", index)?.let { setParkingTag(it) }
+        optionalIntegerIntValue(map, "parkingThreshold", index)?.let { setParkingThreshold(it) }
+        optionalIntegerIntValue(map, "parkingDelay", index)?.let { setParkingDelay(it) }
       }
       6 -> KBCfgSensorScan().apply {
-        optionalIntegerIntValue(map, "scanInterval", index)?.let { scanInterval = it }
-        optionalIntegerIntValue(map, "motionScanInterval", index)?.let { motionScanInterval = it }
-        optionalIntegerIntValue(map, "scanDuration", index)?.let { scanDuration = it }
-        optionalIntegerIntValue(map, "scanModel", index)?.let { scanModel = it }
-        optionalIntegerIntValue(map, "scanRssi", index)?.let { scanRssi = it }
-        optionalIntegerIntValue(map, "scanChanelMask", index)?.let { scanChanelMask = it }
-        optionalIntegerIntValue(map, "scanMax", index)?.let { scanMax = it }
-        optionalIntegerIntValue(map, "scanResultAdvSlot", index)?.let { scanResultAdvSlot = it }
+        optionalIntegerIntValue(map, "scanInterval", index)?.let { setScanInterval(it) }
+        optionalIntegerIntValue(map, "motionScanInterval", index)?.let { setMotionScanInterval(it) }
+        optionalIntegerIntValue(map, "scanDuration", index)?.let { setScanDuration(it) }
+        optionalIntegerIntValue(map, "scanModel", index)?.let { setScanMode(it) }
+        optionalIntegerIntValue(map, "scanRssi", index)?.let { setScanRssi(it) }
+        optionalIntegerIntValue(map, "scanChanelMask", index)?.let { setScanChanelMask(it) }
+        optionalIntegerIntValue(map, "scanMax", index)?.let { setScanMax(it) }
+        optionalIntegerIntValue(map, "scanResultAdvSlot", index)?.let { setScanResultAdvSlot(it) }
       }
       else -> throw IllegalArgumentException("configuration at index $index is unsupported or malformed")
     }
@@ -952,8 +964,8 @@ class ExpoKBeaconProModule : Module() {
       "model" to stringFromMethods(commonCfg, "getModel"),
       "version" to stringFromMethods(commonCfg, "getVersion"),
       "hardwareVersion" to stringFromMethods(commonCfg, "getHardwareVersion"),
-      "maxSlots" to numberFromMethods(commonCfg, "getMaxSlot")?.toInt(),
-      "maxTriggers" to numberFromMethods(commonCfg, "getMaxTrigger")?.toInt(),
+      "maxSlots" to numberFromMethods(commonCfg, "getMaxAdvSlot")?.toInt(),
+      "maxTriggers" to numberFromMethods(commonCfg, "getMaxTriggerNum")?.toInt(),
       "minTxPower" to numberFromMethods(commonCfg, "getMinTxPower")?.toInt(),
       "maxTxPower" to numberFromMethods(commonCfg, "getMaxTxPower")?.toInt(),
       "supportsIBeacon" to booleanFromMethods(commonCfg, "isSupportIBeacon"),
@@ -1029,9 +1041,9 @@ class ExpoKBeaconProModule : Module() {
       "triggerAdvSlot" to numberFromMethods(triggerCfg, "getTriggerAdvSlot")?.toInt(),
       "triggerAdvTime" to numberFromMethods(triggerCfg, "getTriggerAdvTime")?.toInt(),
       "triggerPara" to numberFromMethods(triggerCfg, "getTriggerPara")?.toInt(),
-      "triggerAdvPeriod" to numberFromMethods(triggerCfg, "getTriggerAdvPeriod")?.toInt(),
+      "triggerAdvPeriod" to numberFromMethods(triggerCfg, "getTriggerAdvPeriod")?.toDouble(),
       "triggerTxPower" to numberFromMethods(triggerCfg, "getTriggerAdvTxPower", "getTriggerTxPower")?.toInt(),
-      "triggerAdvChangeMode" to numberFromMethods(triggerCfg, "getTriggerAdvChangeMode")?.toInt(),
+      "triggerAdvChangeMode" to numberFromMethods(triggerCfg, "getTriggerAdvChgMode")?.toInt(),
       "accODR" to numberFromMethods(triggerCfg, "getAccODR")?.toInt(),
       "wakeupDuration" to numberFromMethods(triggerCfg, "getWakeupDuration")?.toInt(),
       "aboveAngle" to numberFromMethods(triggerCfg, "getAboveAngle")?.toInt(),
@@ -1044,18 +1056,18 @@ class ExpoKBeaconProModule : Module() {
       "configType" to "sensor",
       "sensorType" to numberFromMethods(sensorCfg, "getSensorType")?.toInt(),
       "logEnable" to booleanFromMethods(sensorCfg, "isLogEnable", "getLogEnable"),
-      "sensorHtMeasureInterval" to numberFromMethods(sensorCfg, "getSensorHtMeasureInterval")?.toInt(),
-      "humidityChangeThreshold" to numberFromMethods(sensorCfg, "getHumidityChangeThreshold")?.toInt(),
-      "temperatureChangeThreshold" to numberFromMethods(sensorCfg, "getTemperatureChangeThreshold")?.toInt(),
+      "sensorHtMeasureInterval" to numberFromMethods(sensorCfg, "getMeasureInterval")?.toInt(),
+      "humidityChangeThreshold" to numberFromMethods(sensorCfg, "getHumidityChangeLogThreshold")?.toInt(),
+      "temperatureChangeThreshold" to numberFromMethods(sensorCfg, "getTemperatureChangeLogThreshold")?.toInt(),
       "measureInterval" to numberFromMethods(sensorCfg, "getMeasureInterval")?.toInt(),
       "logChangeThreshold" to numberFromMethods(sensorCfg, "getLogChangeThreshold")?.toInt(),
-      "parkingTag" to booleanFromMethods(sensorCfg, "isParkingTag", "getParkingTag"),
+      "parkingTag" to booleanFromMethods(sensorCfg, "isParkingTaged"),
       "parkingThreshold" to numberFromMethods(sensorCfg, "getParkingThreshold")?.toInt(),
       "parkingDelay" to numberFromMethods(sensorCfg, "getParkingDelay")?.toInt(),
       "scanInterval" to numberFromMethods(sensorCfg, "getScanInterval")?.toInt(),
       "motionScanInterval" to numberFromMethods(sensorCfg, "getMotionScanInterval")?.toInt(),
       "scanDuration" to numberFromMethods(sensorCfg, "getScanDuration")?.toInt(),
-      "scanModel" to numberFromMethods(sensorCfg, "getScanModel")?.toInt(),
+      "scanModel" to numberFromMethods(sensorCfg, "getScanMode")?.toInt(),
       "scanRssi" to numberFromMethods(sensorCfg, "getScanRssi")?.toInt(),
       "scanChanelMask" to numberFromMethods(sensorCfg, "getScanChanelMask")?.toInt(),
       "scanMax" to numberFromMethods(sensorCfg, "getScanMax")?.toInt(),

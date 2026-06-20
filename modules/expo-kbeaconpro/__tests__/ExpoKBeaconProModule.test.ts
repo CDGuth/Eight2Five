@@ -334,6 +334,21 @@ describe("ExpoKBeaconProModule", () => {
       expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(MAC, configs);
     });
 
+    test("modifyConfig accepts fractional trigger advertising periods", async () => {
+      const configs: KBeaconConfig[] = [
+        {
+          configType: "trigger",
+          triggerIndex: 0,
+          triggerType: 5,
+          triggerAdvPeriod: 125.5,
+        },
+      ];
+
+      await modifyConfig(MAC, configs);
+
+      expect(mockNativeModule.modifyConfig).toHaveBeenCalledWith(MAC, configs);
+    });
+
     test("modifyConfig rejects malformed configs", async () => {
       await expect(modifyConfig(MAC, [{} as KBeaconConfig])).rejects.toThrow(
         "configuration at index 0",
@@ -411,6 +426,16 @@ describe("ExpoKBeaconProModule", () => {
           wakeupDuration: 1.5,
         },
         "wakeupDuration",
+      ],
+      [
+        "non-finite trigger advertising period",
+        {
+          configType: "trigger",
+          triggerIndex: 0,
+          triggerType: 5,
+          triggerAdvPeriod: Number.POSITIVE_INFINITY,
+        },
+        "triggerAdvPeriod",
       ],
       [
         "unsupported sensor config type",

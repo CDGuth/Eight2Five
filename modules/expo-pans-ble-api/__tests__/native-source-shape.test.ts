@@ -19,4 +19,22 @@ describe("native source API shape", () => {
     expect(source).toContain("pendingPermissionPromise?.reject");
     expect(source).not.toContain("promise.resolve(self.permissionStatusMap())");
   });
+
+  test("iOS CoreBluetooth delegates are isolated behind an NSObject proxy", () => {
+    const source = readModuleSource("ios/ExpoPansBleApiModule.swift");
+
+    expect(source).toContain("public class ExpoPansBleApiModule: Module {");
+    expect(source).not.toContain(
+      "public class ExpoPansBleApiModule: Module, CBCentralManagerDelegate",
+    );
+    expect(source).toContain(
+      "private final class ExpoPansBleApiBluetoothDelegate: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate",
+    );
+    expect(source).toContain(
+      "CBCentralManager(delegate: ensureBluetoothDelegate()",
+    );
+    expect(source).toContain(
+      "peripheral.delegate = self.ensureBluetoothDelegate()",
+    );
+  });
 });

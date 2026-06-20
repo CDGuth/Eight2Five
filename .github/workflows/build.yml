@@ -15,7 +15,7 @@
 # Local EAS builds cannot use EAS Secret-visibility environment variables; add
 # any required build-time values as GitHub Actions secrets/env vars instead.
 
-name: EAS Local Build
+name: build
 
 on:
   workflow_dispatch:
@@ -43,10 +43,10 @@ on:
         default: preview
         options:
           - development
-          - development-simulator (iOS only)
           - preview
-          - preview-simulator (iOS only)
           - production
+          - development-simulator (iOS only)
+          - preview-simulator (iOS only)
       run_validation:
         description: Run validation scripts before building
         type: boolean
@@ -101,7 +101,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Validate repository
         if: ${{ inputs.run_validation }}
