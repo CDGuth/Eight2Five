@@ -250,15 +250,15 @@ loop.stop();
 - Expo app configs include module config plugins for Bluetooth/location permission setup.
 - Swift stubs under [Sources](Sources) support linting/tooling on non-macOS environments and are not runtime production code.
 
-### EAS Local Build Workflow
+### Build Workflow
 
-Manual local build artifacts are produced by `.github/workflows/eas-local-build.yml`. The workflow runs EAS local builds from the selected app directory (`apps/mobile` or `apps/testbed`) and uploads the resulting artifact only to GitHub Actions artifact storage. It does not create GitHub releases, submit to stores, upload local build artifacts back to EAS, or replace the real EAS Cloud production release path.
+Manual local build artifacts are produced by `.github/workflows/build.yml`. The workflow runs EAS local builds from the selected app directory (`apps/mobile` or `apps/testbed`) and uploads the resulting artifact only to GitHub Actions artifact storage. It does not create GitHub releases, submit to stores, upload local build artifacts back to EAS, or replace the real EAS Cloud production release path.
 
 Supported workflow inputs:
 
 - `app`: `mobile` or `testbed`
 - `platform`: `ios` or `android`
-- `profile`: `development`, `development-simulator (iOS only)`, `preview`, `preview-simulator (iOS only)`, or `production`
+- `profile`: `development`, `preview`, `production`, `development-simulator (iOS only)`, or `preview-simulator (iOS only)`
 - `refresh_ad_hoc_profile`: refresh iOS ad hoc provisioning profiles for physical-device internal builds only
 - `run_validation`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
 
