@@ -15,7 +15,7 @@
 # Local EAS builds cannot use EAS Secret-visibility environment variables; add
 # any required build-time values as GitHub Actions secrets/env vars instead.
 
-name: build
+name: Build
 
 on:
   workflow_dispatch:
