@@ -259,7 +259,6 @@ Supported workflow inputs:
 - `app`: `mobile` or `testbed`
 - `platform`: `ios` or `android`
 - `profile`: `development`, `preview`, `production`, `development-simulator (iOS only)`, or `preview-simulator (iOS only)`
-- `refresh_ad_hoc_profile`: refresh iOS ad hoc provisioning profiles for physical-device internal builds only
 - `run_validation`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
 
 Android APK artifacts come from the `development` or `preview` profiles. Android AAB artifacts come from the `production` profile. There is no production-like APK build profile.
@@ -268,18 +267,15 @@ Required GitHub secrets:
 
 - `EXPO_TOKEN`: always required; personal access token for the Expo account that owns the EAS projects.
 
-Required only when `refresh_ad_hoc_profile=true` for iOS ad hoc/device builds:
+Required EAS setup for iOS physical-device `development` and `preview` builds:
 
-- `EXPO_ASC_API_KEY_P8`: raw contents of the App Store Connect `.p8` key. This is a custom workflow secret; the workflow writes it to a temporary file.
-- `EXPO_ASC_KEY_ID`: App Store Connect API key ID.
-- `EXPO_ASC_ISSUER_ID`: App Store Connect issuer ID.
-- `EXPO_APPLE_TEAM_ID`: Apple Developer Team ID.
-- `EXPO_APPLE_TEAM_TYPE`: one of `IN_HOUSE`, `COMPANY_OR_ORGANIZATION`, or `INDIVIDUAL`.
+- EAS-managed Apple credentials must be configured for each app.
+- An App Store Connect API key must be stored in EAS for submissions on each project; EAS CLI fetches it from the EAS credentials service when refreshing ad hoc provisioning profiles.
+- At least one iOS device must be registered with `eas device:create` before running an ad hoc/device build.
 
 Other setup notes:
 
 - Add any app-specific build-time secrets as GitHub Actions secrets/env vars. EAS Secret-visibility environment variables are not available to local builds.
 - If private npm packages are introduced later, add `NPM_TOKEN` or the repository's chosen npm auth secret.
-- EAS-managed Apple credentials must already be configured for each app.
-- Manage iOS ad hoc devices with `eas device:create` and `eas device:list`; run the workflow with `refresh_ad_hoc_profile=true` after adding devices.
+- Manage iOS ad hoc devices with `eas device:create` and `eas device:list`; physical-device `development` and `preview` builds refresh ad hoc provisioning profiles automatically.
 - Real production mobile builds should still run on EAS Cloud.
