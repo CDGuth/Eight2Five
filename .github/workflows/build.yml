@@ -1,17 +1,10 @@
 # Required GitHub secrets:
-#
-# Required for normal builds:
 #   EXPO_TOKEN
 #
-# Required automatically for iOS physical-device development/preview builds:
-#   EXPO_ASC_API_KEY_P8
-#   EXPO_ASC_KEY_ID
-#   EXPO_ASC_ISSUER_ID
-#   EXPO_APPLE_TEAM_ID
-#   EXPO_APPLE_TEAM_TYPE
-#
-# The App Store Connect secrets above are not needed for Android, iOS
-# simulator, or production builds in this local-artifact workflow.
+# iOS physical-device development/preview builds refresh EAS-managed ad hoc
+# provisioning profiles before building. Configure an App Store Connect API key
+# for submissions on each EAS project; EAS CLI will fetch that key from the EAS
+# credentials service during the non-interactive refresh.
 # Local EAS builds cannot use EAS Secret-visibility environment variables; add
 # any required build-time values as GitHub Actions secrets/env vars instead.
 
@@ -184,30 +177,11 @@ jobs:
             exit 1
           fi
 
-      - name: Write App Store Connect API key
-        if: ${{ steps.resolve.outputs.should_refresh_ad_hoc_profile == 'true' }}
-        shell: bash
-        env:
-          EXPO_ASC_API_KEY_P8: ${{ secrets.EXPO_ASC_API_KEY_P8 }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${EXPO_ASC_API_KEY_P8:-}" ]]; then
-            echo "Missing EXPO_ASC_API_KEY_P8 secret." >&2
-            exit 1
-          fi
-          printf '%s' "$EXPO_ASC_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
-
       - name: Build locally with EAS
         working-directory: ${{ steps.resolve.outputs.app_dir }}
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ steps.resolve.outputs.artifact_dir }}
-          EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
-          EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
-          EXPO_APPLE_TEAM_ID: ${{ secrets.EXPO_APPLE_TEAM_ID }}
-          EXPO_APPLE_TEAM_TYPE: ${{ secrets.EXPO_APPLE_TEAM_TYPE }}
         shell: bash
         run: |
           set -euo pipefail
