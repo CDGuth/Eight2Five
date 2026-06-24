@@ -1,6 +1,11 @@
 import React from "react";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+
+SplashScreen.setOptions({
+  fade: true,
+});
 
 export default function RootLayout() {
   return (

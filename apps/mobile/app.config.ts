@@ -8,12 +8,7 @@ const config: ExpoConfig = {
   version: "0.0.0",
   orientation: "portrait",
   icon: "./assets/app-icons/mobile-android-legacy-icon.png",
-  userInterfaceStyle: "light",
-  splash: {
-    image: "./assets/splash-icon.png",
-    resizeMode: "contain",
-    backgroundColor: "#ffffff",
-  },
+  userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: "com.eight2five.app",
     supportsTablet: false,
@@ -31,10 +26,25 @@ const config: ExpoConfig = {
         "./assets/app-icons/mobile-android-adaptive-foreground.png",
       backgroundImage:
         "./assets/app-icons/mobile-android-adaptive-background.png",
+      monochromeImage:
+        "./assets/app-icons/mobile-android-adaptive-monochrome.png",
     },
   },
   plugins: [
     "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        dark: {
+          image: "./assets/splash-icon-dark.png",
+          backgroundColor: "#000000",
+        },
+      },
+    ],
     [
       "../../modules/expo-kbeaconpro/app.plugin.js",
       {

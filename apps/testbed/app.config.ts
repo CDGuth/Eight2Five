@@ -8,12 +8,7 @@ const config: ExpoConfig = {
   version: "0.0.0",
   orientation: "portrait",
   icon: "./assets/app-icons/testbed-android-legacy-icon.png",
-  userInterfaceStyle: "light",
-  splash: {
-    image: "./assets/splash-icon.png",
-    resizeMode: "contain",
-    backgroundColor: "#ffffff",
-  },
+  userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: "com.eight2five.app.testbed",
     supportsTablet: false,
@@ -31,10 +26,25 @@ const config: ExpoConfig = {
         "./assets/app-icons/testbed-android-adaptive-foreground.png",
       backgroundImage:
         "./assets/app-icons/testbed-android-adaptive-background.png",
+      monochromeImage:
+        "./assets/app-icons/testbed-android-adaptive-monochrome.png",
     },
   },
   plugins: [
     "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        dark: {
+          image: "./assets/splash-icon-dark.png",
+          backgroundColor: "#000000",
+        },
+      },
+    ],
     "expo-asset",
     "expo-sharing",
     [
