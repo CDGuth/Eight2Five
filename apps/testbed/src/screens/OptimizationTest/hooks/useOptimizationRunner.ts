@@ -313,7 +313,11 @@ export function useOptimizationRunner() {
   ]);
 
   useEffect(() => {
-    if (currentAnchors.length === 0) generateAnchors();
+    if (currentAnchors.length > 0) return;
+
+    const timeout = setTimeout(generateAnchors, 0);
+
+    return () => clearTimeout(timeout);
   }, [generateAnchors, currentAnchors.length]);
 
   const performSimulation = useCallback(

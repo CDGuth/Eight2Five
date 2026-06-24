@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "start:mobile": "npm run start --workspace apps/mobile",
+    "start:mobile:mcp": "npm run start:mcp --workspace apps/mobile",
     "start:testbed": "npm run start --workspace apps/testbed",
+    "start:testbed:mcp": "npm run start:mcp --workspace apps/testbed",
     "android:mobile": "npm run android --workspace apps/mobile",
     "android:testbed": "npm run android --workspace apps/testbed",
     "ios:mobile": "npm run ios --workspace apps/mobile",
@@ -23,6 +25,11 @@
     "validate:expo:install-check": "npm run validate:expo:install-check --workspaces --if-present",
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@expo/config-plugins": "^56.0.9",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.20.0",
+    "babel-preset-expo": "~56.0.4",
+    "typescript": "~6.0.3"
+  }
 }

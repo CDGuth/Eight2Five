@@ -100,11 +100,11 @@ export const styles = StyleSheet.create({
     marginTop: 4,
   },
   dropdownModalContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2000,
   },
   dropdownBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   dropdownModalList: {
     position: "absolute",

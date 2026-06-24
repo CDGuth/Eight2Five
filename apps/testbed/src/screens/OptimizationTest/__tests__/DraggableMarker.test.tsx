@@ -1,26 +1,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { View, PanResponder } from "react-native";
+import { View } from "react-native";
 import { DraggableMarker } from "../components/DraggableMarker";
-
-const originalPanResponderCreate = PanResponder.create;
-
-beforeAll(() => {
-  (PanResponder as any).create = (handlers: any) => ({
-    panHandlers: {
-      onStartShouldSetResponder:
-        handlers.onStartShouldSetPanResponder ??
-        handlers.onStartShouldSetResponder,
-      onResponderGrant: handlers.onPanResponderGrant,
-      onResponderMove: handlers.onPanResponderMove,
-      onResponderRelease: handlers.onPanResponderRelease,
-    },
-  });
-});
-
-afterAll(() => {
-  (PanResponder as any).create = originalPanResponderCreate;
-});
 
 describe("DraggableMarker", () => {
   it("clamps drag movement within bounds", () => {
@@ -47,11 +28,11 @@ describe("DraggableMarker", () => {
 
     expect(handlers.onStartShouldSetResponder({} as any)).toBe(true);
 
-    const mockEvent = { touchHistory: {} } as any;
-    const gesture = { dx: 100, dy: 200 } as any;
+    const startEvent = { nativeEvent: { pageX: 0, pageY: 0 } } as any;
+    const moveEvent = { nativeEvent: { pageX: 100, pageY: 200 } } as any;
 
-    act(() => handlers.onResponderGrant?.(mockEvent, gesture));
-    act(() => handlers.onResponderMove?.(mockEvent, gesture));
+    act(() => handlers.onResponderGrant?.(startEvent));
+    act(() => handlers.onResponderMove?.(moveEvent));
     act(() => handlers.onResponderRelease?.());
 
     expect(onDragStart).toHaveBeenCalled();
