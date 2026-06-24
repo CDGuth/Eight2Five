@@ -19,6 +19,13 @@
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
     },
+    "expo": {
+      "type": "remote",
+      "url": "https://mcp.expo.dev/mcp",
+      "enabled": true,
+      "oauth": {},
+      "timeout": 180000
+    },
     "markitdown": {
       "type": "local",
       "command": [
