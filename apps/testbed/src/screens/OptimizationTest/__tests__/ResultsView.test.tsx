@@ -1,6 +1,5 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { Text, TouchableOpacity } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { captureRef } from "react-native-view-shot";
 import { ResultsView } from "../ResultsView";
@@ -97,7 +96,7 @@ const logBatches: LogBatch[] = [
 ];
 
 describe("ResultsView", () => {
-  it("copies analysis, toggles averages, selects runs, and clears logs", async () => {
+  it("copies analysis, toggles averages, copies graph, selects runs, and clears logs", async () => {
     const onSelectResultIndex = jest.fn();
     const onClearLogs = jest.fn();
     const onToggleScroll = jest.fn();
@@ -123,46 +122,32 @@ describe("ResultsView", () => {
       />,
     );
 
-    const copyAnalysis = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: any) =>
-        n.findAllByType(Text).some((t: any) => t.props.children === "Copy"),
-      );
+    const copyAnalysis = tree.root.findByProps({
+      accessibilityLabel: "Copy analysis",
+    });
     await act(async () => {
-      await copyAnalysis?.props.onPress();
+      await copyAnalysis.props.onPress();
     });
 
-    const showAverages = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: any) =>
-        n
-          .findAllByType(Text)
-          .some((t: any) => t.props.children === "Show Averages"),
-      );
-    act(() => showAverages?.props.onPress());
+    const showAverages = tree.root.findByProps({
+      accessibilityLabel: "Toggle averages",
+    });
+    act(() => showAverages.props.onPress());
 
-    const copyGraph = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: any) =>
-        n
-          .findAllByType(Text)
-          .some((t: any) => t.props.children === "Copy Graph"),
-      );
+    const copyGraph = tree.root.findByProps({
+      accessibilityLabel: "Copy graph",
+    });
     await act(async () => {
-      await copyGraph?.props.onPress();
+      await copyGraph.props.onPress();
     });
 
     const logsHeader = tree.root.findByProps({ accessibilityLabel: "Logs" });
     act(() => logsHeader.props.onPress());
 
-    const clearLogs = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: any) =>
-        n
-          .findAllByType(Text)
-          .some((t: any) => t.props.children === "Clear Logs"),
-      );
-    act(() => clearLogs?.props.onPress());
+    const clearLogs = tree.root.findByProps({
+      accessibilityLabel: "Clear logs",
+    });
+    act(() => clearLogs.props.onPress());
 
     const dropdown = tree.root.findByProps({ label: "Select Run" });
     act(() => dropdown.props.onToggle(true));
