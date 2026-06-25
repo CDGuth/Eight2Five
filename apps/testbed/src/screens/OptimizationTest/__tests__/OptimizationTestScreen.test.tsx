@@ -149,7 +149,6 @@ const setterNames = [
   "setFireflyPlacementMode",
   "setFireflySigma",
   "setIsRegenerateFirefliesEveryRun",
-  "setCurrentInitialFireflies",
   "setTestMode",
   "setNumRuns",
   "setSweepConfig",

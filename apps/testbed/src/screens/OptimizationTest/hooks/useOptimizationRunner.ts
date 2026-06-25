@@ -18,7 +18,6 @@ import {
   BatchAnalysis,
   FIELD_PRESETS,
   LogBatch,
-  LogEntry,
   RunParameters,
   RunResult,
   SimulationSourceMode,
@@ -27,6 +26,18 @@ import {
   TestMode,
 } from "../types";
 import { generateSimulationCandidates } from "../simulation/simulationProviders";
+import { calculatePlacement, pointsToAnchors } from "../simulation/placement";
+import { analyzeBatch } from "../simulation/analysis";
+import {
+  createLogBatch,
+  createLogEntry,
+  formatBatchAnalysisLog,
+  formatRunLog,
+  formatSettingsLog,
+  formatSweepRunLog,
+  formatSweepStepLog,
+  prependEntryToBatches,
+} from "../simulation/logging";
 
 export function useOptimizationRunner() {
   // --- Configuration State ---
@@ -172,89 +183,9 @@ export function useOptimizationRunner() {
   const isCancelledRef = useRef(false);
   const currentOptimizerRef = useRef<MFASAOptimizer | null>(null);
 
-  const calculatePlacement = useCallback(
-    (
-      mode: "random" | "border" | "grid",
-      n: number,
-      w: number,
-      l: number,
-      sigma: number,
-    ) => {
-      const points: { x: number; y: number }[] = [];
-
-      if (mode === "random") {
-        for (let i = 0; i < n; i++) {
-          points.push({ x: Math.random() * w, y: Math.random() * l });
-        }
-      } else if (mode === "grid") {
-        const ratio = l / w;
-        let cols = Math.max(1, Math.round(Math.sqrt(n / ratio)));
-        let rows = Math.ceil(n / cols);
-        if (cols * (rows - 1) >= n) rows--;
-
-        const stepX = w / cols;
-        const stepY = l / rows;
-
-        for (let i = 0; i < n; i++) {
-          const r = Math.floor(i / cols);
-          const c = i % cols;
-          const numInRow = r === rows - 1 ? n % cols || cols : cols;
-          const rowOffset = ((cols - numInRow) * stepX) / 2;
-          const x = (c + 0.5) * stepX + rowOffset;
-          const y = (r + 0.5) * stepY;
-          points.push({ x, y });
-        }
-      } else {
-        // Border
-        const perimeter = 2 * (w + l);
-        const step = perimeter / n;
-        for (let i = 0; i < n; i++) {
-          const dist = i * step;
-          let x = 0,
-            y = 0;
-          if (dist < w) {
-            x = dist;
-            y = 0;
-          } else if (dist < w + l) {
-            x = w;
-            y = dist - w;
-          } else if (dist < 2 * w + l) {
-            x = w - (dist - (w + l));
-            y = l;
-          } else {
-            x = 0;
-            y = l - (dist - (2 * w + l));
-          }
-          points.push({ x, y });
-        }
-      }
-
-      if (sigma > 0) {
-        points.forEach((p) => {
-          const u1 = Math.random();
-          const u2 = Math.random();
-          const mag = Math.sqrt(-2.0 * Math.log(u1)) * sigma;
-          const phase = 2.0 * Math.PI * u2;
-          p.x = Math.max(0, Math.min(w, p.x + mag * Math.cos(phase)));
-          p.y = Math.max(0, Math.min(l, p.y + mag * Math.sin(phase)));
-        });
-      }
-      return points;
-    },
-    [],
-  );
-
   const addLog = useCallback((msg: string) => {
-    const entry: LogEntry = { timestamp: Date.now(), message: msg };
-    setLogBatches((prev) => {
-      if (prev.length === 0) return prev;
-      const newBatches = [...prev];
-      newBatches[0] = {
-        ...newBatches[0],
-        entries: [entry, ...newBatches[0].entries],
-      };
-      return newBatches;
-    });
+    const entry = createLogEntry(msg);
+    setLogBatches((prev) => prependEntryToBatches(prev, entry));
   }, []);
 
   const handlePresetChange = useCallback((presetValue: string) => {
@@ -277,21 +208,8 @@ export function useOptimizationRunner() {
       fieldLength,
       parseFloat(anchorSigma) || 0,
     );
-    setCurrentAnchors(
-      points.map((p, i) => ({
-        mac: `00:11:22:33:44:0${i}`,
-        x: p.x,
-        y: p.y,
-      })),
-    );
-  }, [
-    numAnchors,
-    calculatePlacement,
-    anchorPlacementMode,
-    fieldWidth,
-    fieldLength,
-    anchorSigma,
-  ]);
+    setCurrentAnchors(pointsToAnchors(points));
+  }, [numAnchors, anchorPlacementMode, fieldWidth, fieldLength, anchorSigma]);
 
   const generateFireflies = useCallback(() => {
     const n = parseInt(populationSize) || 25;
@@ -305,7 +223,6 @@ export function useOptimizationRunner() {
     setCurrentInitialFireflies(points);
   }, [
     populationSize,
-    calculatePlacement,
     fireflyPlacementMode,
     fieldWidth,
     fieldLength,
@@ -490,7 +407,6 @@ export function useOptimizationRunner() {
       noiseBase,
       noiseScale,
       noiseParameter,
-      calculatePlacement,
       currentInitialFireflies,
       fireflyPlacementMode,
       fireflySigma,
@@ -508,59 +424,54 @@ export function useOptimizationRunner() {
     isCancelledRef.current = false;
 
     // Create new log batch
-    const newBatch: LogBatch = {
-      id: Date.now(),
-      startTime: Date.now(),
-      entries: [],
-      type: testMode === "standard" ? "Standard" : "Sweep",
-    };
+    const newBatch = createLogBatch(
+      testMode === "standard" ? "Standard" : "Sweep",
+    );
     setLogBatches((prev) => [newBatch, ...prev]);
     setResults([]);
     setProgress(0);
     setViewMode("results");
 
-    const settingsLog = `Test Configuration:
-Mode: ${testMode}
-Runs: ${numRuns}
-Field: ${fieldWidth}m x ${fieldLength}m
-Anchors: ${numAnchors} (${anchorPlacementMode})
-Model: ${selectedModel}
-Source Mode: ${sourceMode}
-Algorithm: ${selectedAlgorithm}
-Filter: ${selectedFilter}
-
-Propagation Constants:
-Tx Height: ${txHeight}m
-Rx Height: ${rxHeight}m
-Frequency: ${freq}Hz
-Tx Gain: ${txGain}
-Rx Gain: ${rxGain}
-Reflection Coefficient: ${refCoeff}
-
-MFASA Options:
-Time Limit: ${iterationTimeLimit}ms
-Max Iterations: ${maxIterations}
-Population: ${populationSize}
-Beta0: ${beta0}
-Light Absorption: ${lightAbsorption}
-Alpha: ${alpha}
-Initial Temp: ${initialTemperature}
-Cooling Rate: ${coolingRate}
-
-Simulation Noise:
-Enabled: ${isNoiseEnabled}
-Model: ${noiseWeightingModel} (Base: ${noiseBase}, Scale: ${noiseScale}, Param: ${noiseParameter})
-UWB Distance Sigma (m): ${uwbDistanceSigma}
-
-Solver Weighting:
-Enabled: ${isSolverWeighted}
-${
-  isSolverWeighted
-    ? `Model: ${solverWeightingModel} (Base: ${solverWeightingBase}, Scale: ${solverWeightingScale}, Param: ${solverWeightingParam})`
-    : "Model: None"
-}
-
-True Position: ${isRandomTruePos ? "Random" : `Fixed (${manualTrueX}, ${manualTrueY})`}`;
+    const settingsLog = formatSettingsLog({
+      testMode,
+      numRuns,
+      fieldWidth,
+      fieldLength,
+      numAnchors,
+      anchorPlacementMode,
+      selectedModel,
+      sourceMode,
+      selectedAlgorithm,
+      selectedFilter,
+      txHeight,
+      rxHeight,
+      freq,
+      txGain,
+      rxGain,
+      refCoeff,
+      iterationTimeLimit,
+      maxIterations,
+      populationSize,
+      beta0,
+      lightAbsorption,
+      alpha,
+      initialTemperature,
+      coolingRate,
+      isNoiseEnabled,
+      noiseWeightingModel,
+      noiseBase,
+      noiseScale,
+      noiseParameter,
+      uwbDistanceSigma,
+      isSolverWeighted,
+      solverWeightingModel,
+      solverWeightingBase,
+      solverWeightingScale,
+      solverWeightingParam,
+      isRandomTruePos,
+      manualTrueX,
+      manualTrueY,
+    });
 
     addLog(settingsLog);
     addLog(
@@ -579,15 +490,7 @@ True Position: ${isRandomTruePos ? "Random" : `Fixed (${manualTrueX}, ${manualTr
           const res = await performSimulation(i + 1);
           newResults.push(res);
 
-          const runLog = `Run ${i + 1}:
-Error: ${res.error.toFixed(2)}m
-RSSI RMSE: ${res.rssiRmse.toFixed(2)}
-Time: ${res.duration.toFixed(2)}ms
-Iterations: ${res.iterations}
-Est Pos: (${res.estPos.x.toFixed(2)}, ${res.estPos.y.toFixed(2)})
-${isRandomTruePos ? `True Pos: (${res.truePos.x.toFixed(2)}, ${res.truePos.y.toFixed(2)})` : ""}`;
-
-          addLog(runLog);
+          addLog(formatRunLog(res, i + 1, isRandomTruePos));
           setProgress((i + 1) / n);
         }
       } else {
@@ -617,12 +520,7 @@ ${isRandomTruePos ? `True Pos: (${res.truePos.x.toFixed(2)}, ${res.truePos.y.toF
             });
             stepRuns.push(res);
             newResults.push(res);
-            addLog(
-              `Step ${stepIdx + 1}, Run ${r + 1} (${paramName}=${val.toFixed(2)}):
-Error: ${res.error.toFixed(2)}m
-RSSI RMSE: ${res.rssiRmse.toFixed(2)}
-Iterations: ${res.iterations}`,
-            );
+            addLog(formatSweepRunLog(stepIdx, r, paramName, val, res));
             setProgress(newResults.length / totalRuns);
           }
           const avgError =
@@ -640,10 +538,14 @@ Iterations: ${res.iterations}`,
               : 0;
 
           addLog(
-            `Step ${stepIdx + 1} Summary (${paramName}=${val.toFixed(2)}):
-Avg Error: ${avgError.toFixed(3)}m
-Std Dev: ${stdDev.toFixed(3)}m
-Avg Iter: ${avgIter.toFixed(1)}`,
+            formatSweepStepLog(
+              stepIdx,
+              paramName,
+              val,
+              avgError,
+              stdDev,
+              avgIter,
+            ),
           );
 
           newSweepResults.push({
@@ -662,55 +564,10 @@ Avg Iter: ${avgIter.toFixed(1)}`,
       setSweepResults(newSweepResults);
 
       // Analysis
-      const errors = newResults.map((r) => r.error);
-      if (errors.length > 0) {
-        const n = errors.length;
-        const avgError = errors.reduce((a, b) => a + b, 0) / n;
-        const avgDuration = newResults.reduce((a, b) => a + b.duration, 0) / n;
-        const avgIter = newResults.reduce((a, b) => a + b.iterations, 0) / n;
-        const rmse = Math.sqrt(errors.reduce((a, b) => a + b * b, 0) / n);
-        const avgRssiRmse = newResults.reduce((a, b) => a + b.rssiRmse, 0) / n;
-        const stdDev = Math.sqrt(
-          errors.reduce((a, b) => a + Math.pow(b - avgError, 2), 0) / n,
-        );
-        const sortedErrors = [...errors].sort((a, b) => a - b);
-        const medianError =
-          n % 2 === 0
-            ? (sortedErrors[n / 2 - 1] + sortedErrors[n / 2]) / 2
-            : sortedErrors[Math.floor(n / 2)];
-
-        const successRate1m = (errors.filter((e) => e < 1).length / n) * 100;
-        const successRate2m = (errors.filter((e) => e < 2).length / n) * 100;
-
-        const analysis = {
-          avgError,
-          stdDev,
-          rmse,
-          avgRssiRmse,
-          medianError,
-          minError: sortedErrors[0],
-          maxError: sortedErrors[n - 1],
-          avgDuration,
-          avgIterations: avgIter,
-          successRate1m,
-          successRate2m,
-          totalRuns: n,
-          bestRuns: [...newResults].sort((a, b) => a.error - b.error),
-        };
-
+      const analysis = analyzeBatch(newResults);
+      if (analysis) {
         setBatchAnalysis(analysis);
-
-        addLog(`Batch Analysis:
-Avg Error: ${analysis.avgError.toFixed(3)}m
-Position RMSE: ${analysis.rmse.toFixed(3)}m
-Avg RSSI RMSE: ${analysis.avgRssiRmse.toFixed(3)}
-Std Dev: ${analysis.stdDev.toFixed(3)}m
-Median: ${analysis.medianError.toFixed(3)}m
-Avg Iterations: ${analysis.avgIterations.toFixed(1)}
-Min/Max: ${analysis.minError.toFixed(3)}m / ${analysis.maxError.toFixed(3)}m
-Avg Time: ${analysis.avgDuration.toFixed(2)}ms
-Success <1m: ${analysis.successRate1m.toFixed(1)}%
-Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
+        addLog(formatBatchAnalysisLog(analysis));
       }
     } catch (e: any) {
       if (e.message !== "Cancelled") {
@@ -883,7 +740,6 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
         setFireflyPlacementMode,
         setFireflySigma,
         setIsRegenerateFirefliesEveryRun,
-        setCurrentInitialFireflies,
         setTestMode,
         setNumRuns,
         setSweepConfig,
