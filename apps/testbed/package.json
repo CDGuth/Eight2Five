@@ -51,12 +51,11 @@
       "/ios/"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo.*|@expo(nent)?.*|@expo-google-fonts.*|react-navigation|@react-navigation.*|@sentry/react-native|native-base|react-native-svg|@gluestack-ui.*|@legendapp.*|uniwind|tailwind-variants))"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo.*|@expo(nent)?.*|@expo-google-fonts.*|react-navigation|@react-navigation.*|@sentry/react-native|react-native-svg|@gluestack-ui.*|@legendapp.*|uniwind|tailwind-variants|@eight2five.*))"
     ],
     "moduleNameMapper": {
       "^@eight2five/mobile/(.*)$": "<rootDir>/../../packages/mobile/src/$1"
     },
-    "collectCoverage": true,
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
       "../../packages/mobile/src/**/*.{ts,tsx}",

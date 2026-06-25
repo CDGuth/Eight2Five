@@ -1,4 +1,5 @@
 import React from "react";
+import type { Href } from "expo-router";
 import TestRenderer, { act } from "react-test-renderer";
 import { TestbedHome } from "../TestbedHome";
 import { TestbedSubapp } from "../../subapps";
@@ -8,7 +9,7 @@ const fakeSubapps: TestbedSubapp[] = [
     id: "optimization",
     title: "optimization playground",
     description: "Run localization scenarios",
-    href: "/(subapps)/optimization",
+    href: "/(subapps)/optimization" as Href,
   },
 ];
 

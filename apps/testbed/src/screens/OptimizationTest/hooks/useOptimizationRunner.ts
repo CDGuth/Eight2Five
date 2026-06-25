@@ -375,8 +375,7 @@ export function useOptimizationRunner() {
       const optimizer = new MFASAOptimizer({
         ...params,
         timeBudgetMs:
-          parseFloat(iterationTimeLimit) ||
-          DEFAULT_MFASA_OPTIONS.timeBudgetMs,
+          parseFloat(iterationTimeLimit) || DEFAULT_MFASA_OPTIONS.timeBudgetMs,
       });
       currentOptimizerRef.current = optimizer;
 

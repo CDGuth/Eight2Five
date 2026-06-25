@@ -1,22 +1,20 @@
 import React, { useState, useRef } from "react";
-import { View, Alert } from "react-native";
+import type { View } from "react-native";
 import { Box } from "@eight2five/ui/box";
 import { Button, ButtonSpinner, ButtonText } from "@eight2five/ui/button";
 import { Divider } from "@eight2five/ui/divider";
-import { HStack } from "@eight2five/ui/hstack";
 import { ScrollView } from "@eight2five/ui/scroll-view";
-import { Switch } from "@eight2five/ui/switch";
-import { Text } from "@eight2five/ui/text";
-import { captureRef } from "react-native-view-shot";
-import * as Clipboard from "expo-clipboard";
 
+import { ActionButton } from "../../components/ActionButton";
+import { SectionLabel } from "../../components/SectionLabel";
+import { ToggleRow } from "../../components/ToggleRow";
+import { useCaptureToClipboard } from "../../hooks/useCaptureToClipboard";
 import { useOptimizationRunner } from "./hooks/useOptimizationRunner";
 import { ResultsView } from "./ResultsView";
 import { CollapsibleSection } from "./components/CollapsibleSection";
 import { InputRow } from "./components/InputRow";
 import { Dropdown } from "./components/Dropdown";
 import { VisualizationSection } from "./sections/VisualizationSection";
-import { styles } from "./styles";
 import { FIELD_PRESETS } from "./types";
 
 export interface OptimizationTestScreenProps {
@@ -24,64 +22,6 @@ export interface OptimizationTestScreenProps {
   forcedViewMode?: "config" | "results";
   onRunComplete?: () => void;
   onBackToConfiguration?: () => void;
-}
-
-function ActionButton({
-  children,
-  onPress,
-  isDisabled = false,
-  variant = "default",
-  className,
-}: {
-  children: string;
-  onPress: () => void;
-  isDisabled?: boolean;
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost";
-  className?: string;
-}) {
-  return (
-    <Button
-      onPress={onPress}
-      isDisabled={isDisabled}
-      variant={variant}
-      className={className}
-    >
-      <ButtonText>{children}</ButtonText>
-    </Button>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <Text size="sm" bold className="mb-3 text-foreground">
-      {children}
-    </Text>
-  );
-}
-
-function ToggleRow({
-  label,
-  isChecked,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  isChecked: boolean;
-  onChange: (isChecked: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <HStack className="mb-3 items-center justify-between py-1">
-      <Text size="sm" className="mr-3 flex-1 text-foreground">
-        {label}
-      </Text>
-      <Switch
-        value={isChecked}
-        onValueChange={onChange}
-        isDisabled={disabled}
-      />
-    </HStack>
-  );
 }
 
 export default function OptimizationTestScreen({
@@ -93,29 +33,10 @@ export default function OptimizationTestScreen({
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const useWhiteBackground = true;
-  const [isCapturing, setIsCapturing] = useState(false);
+  const { isCapturing, capture } = useCaptureToClipboard();
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
 
   const visualizationRef = useRef<View>(null);
-
-  const copyImage = async () => {
-    try {
-      setIsCapturing(true);
-      await new Promise((r) => setTimeout(r, 100));
-      const base64 = await captureRef(visualizationRef, {
-        format: "png",
-        quality: 0.8,
-        result: "base64",
-      });
-      await Clipboard.setImageAsync(base64);
-      Alert.alert("Success", "Image copied");
-    } catch (e) {
-      console.error(e);
-      Alert.alert("Error", "Failed to copy");
-    } finally {
-      setIsCapturing(false);
-    }
-  };
 
   const effectiveViewMode = forcedViewMode ?? state.viewMode;
 
@@ -135,7 +56,7 @@ export default function OptimizationTestScreen({
   return (
     <Box className="flex-1 bg-background">
       <ScrollView
-        style={styles.scrollContainer}
+        className="flex-1 pb-5"
         scrollEnabled={scrollEnabled}
         nestedScrollEnabled
       >
@@ -165,7 +86,7 @@ export default function OptimizationTestScreen({
           heatmapResolution={state.heatmapResolution}
           onResolutionChange={setters.setHeatmapResolution}
           progress={state.progress}
-          onCopyImage={copyImage}
+          onCopyImage={() => capture(visualizationRef)}
           onCancelRun={actions.cancelTest}
         />
 
