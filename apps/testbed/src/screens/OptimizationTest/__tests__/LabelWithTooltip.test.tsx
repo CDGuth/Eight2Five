@@ -1,6 +1,6 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { Alert, TouchableOpacity } from "react-native";
+import { Alert } from "react-native";
 import { LabelWithTooltip } from "../components/LabelWithTooltip";
 
 describe("LabelWithTooltip", () => {
@@ -9,7 +9,9 @@ describe("LabelWithTooltip", () => {
       <LabelWithTooltip label="Help" tooltip="More info" />,
     );
 
-    const tooltip = tree.root.findByType(TouchableOpacity);
+    const tooltip = tree.root.findByProps({
+      accessibilityLabel: "Show help for Help",
+    });
     act(() => tooltip.props.onPress());
 
     expect(Alert.alert).toHaveBeenCalledWith("Help", "More info");

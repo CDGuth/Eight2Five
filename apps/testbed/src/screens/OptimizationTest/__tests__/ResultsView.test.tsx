@@ -152,12 +152,8 @@ describe("ResultsView", () => {
       await copyGraph?.props.onPress();
     });
 
-    const logsHeader = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: any) =>
-        n.findAllByType(Text).some((t: any) => t.props.children === "Logs"),
-      );
-    act(() => logsHeader?.props.onPress());
+    const logsHeader = tree.root.findByProps({ accessibilityLabel: "Logs" });
+    act(() => logsHeader.props.onPress());
 
     const clearLogs = tree.root
       .findAllByType(TouchableOpacity)

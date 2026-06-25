@@ -4,5 +4,12 @@
   "private": true,
   "exports": {
     "./*": "./*/index.tsx"
+  },
+  "dependencies": {
+    "@react-aria/ssr": "^3.10.1",
+    "@react-aria/utils": "^3.34.1",
+    "@react-stately/toggle": "^3.10.1",
+    "react-dom": "^19.2.3",
+    "react-native-svg": "^15.15.5"
   }
 }

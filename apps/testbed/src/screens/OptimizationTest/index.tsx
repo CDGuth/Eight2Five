@@ -1,24 +1,22 @@
 import React, { useState, useRef } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { View, Alert } from "react-native";
+import { Box } from "@eight2five/ui/box";
+import { Button, ButtonSpinner, ButtonText } from "@eight2five/ui/button";
+import { Divider } from "@eight2five/ui/divider";
+import { HStack } from "@eight2five/ui/hstack";
+import { ScrollView } from "@eight2five/ui/scroll-view";
+import { Switch } from "@eight2five/ui/switch";
+import { Text } from "@eight2five/ui/text";
 import { captureRef } from "react-native-view-shot";
 import * as Clipboard from "expo-clipboard";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { MaterialIcons } from "@expo/vector-icons";
 
 import { useOptimizationRunner } from "./hooks/useOptimizationRunner";
 import { ResultsView } from "./ResultsView";
-import { Visualization } from "./components/Visualization";
 import { CollapsibleSection } from "./components/CollapsibleSection";
 import { InputRow } from "./components/InputRow";
 import { Dropdown } from "./components/Dropdown";
-import { styles, ACCENT_COLOR } from "./styles";
+import { VisualizationSection } from "./sections/VisualizationSection";
+import { styles } from "./styles";
 import { FIELD_PRESETS } from "./types";
 
 export interface OptimizationTestScreenProps {
@@ -26,6 +24,64 @@ export interface OptimizationTestScreenProps {
   forcedViewMode?: "config" | "results";
   onRunComplete?: () => void;
   onBackToConfiguration?: () => void;
+}
+
+function ActionButton({
+  children,
+  onPress,
+  isDisabled = false,
+  variant = "default",
+  className,
+}: {
+  children: string;
+  onPress: () => void;
+  isDisabled?: boolean;
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost";
+  className?: string;
+}) {
+  return (
+    <Button
+      onPress={onPress}
+      isDisabled={isDisabled}
+      variant={variant}
+      className={className}
+    >
+      <ButtonText>{children}</ButtonText>
+    </Button>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Text size="sm" bold className="mb-3 text-foreground">
+      {children}
+    </Text>
+  );
+}
+
+function ToggleRow({
+  label,
+  isChecked,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  isChecked: boolean;
+  onChange: (isChecked: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <HStack className="mb-3 items-center justify-between py-1">
+      <Text size="sm" className="mr-3 flex-1 text-foreground">
+        {label}
+      </Text>
+      <Switch
+        value={isChecked}
+        onValueChange={onChange}
+        isDisabled={disabled}
+      />
+    </HStack>
+  );
 }
 
 export default function OptimizationTestScreen({
@@ -77,77 +133,41 @@ export default function OptimizationTestScreen({
   };
 
   return (
-    <View style={styles.container}>
+    <Box className="flex-1 bg-background">
       <ScrollView
         style={styles.scrollContainer}
         scrollEnabled={scrollEnabled}
         nestedScrollEnabled
       >
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Visualization</Text>
-            {!state.isRunning && (
-              <TouchableOpacity onPress={copyImage} style={styles.copyButton}>
-                <Text style={styles.copyButtonText}>Copy Image</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <View
-            ref={visualizationRef}
-            collapsable={false}
-            style={[
-              styles.sectionContent,
-              useWhiteBackground && { backgroundColor: "#fff" },
-            ]}
-          >
-            <Visualization
-              width={state.fieldWidth}
-              length={state.fieldLength}
-              result={state.results[selectedResultIndex]}
-              currentAnchors={state.currentAnchors}
-              currentTruePos={state.currentTruePos}
-              currentInitialFireflies={state.currentInitialFireflies}
-              onUpdateTruePos={(x, y) => setters.setCurrentTruePos({ x, y })}
-              onUpdateAnchor={(i, x, y) => {
-                const newA = [...state.currentAnchors];
-                newA[i] = { ...newA[i], x, y };
-                setters.setCurrentAnchors(newA);
-              }}
-              onDragStart={() => setScrollEnabled(false)}
-              onDragEnd={() => setScrollEnabled(true)}
-              isRandomTruePos={state.isRandomTruePos}
-              isRunning={state.isRunning}
-              showHeatmap={showHeatmap}
-              onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
-              isSetup={effectiveViewMode === "config"}
-              hideControls={isCapturing}
-              useWhiteBackground={useWhiteBackground}
-              heatmapResolution={state.heatmapResolution}
-              onResolutionChange={setters.setHeatmapResolution}
-            />
-            {state.isRunning && (
-              <View style={{ marginTop: 20 }}>
-                <View style={styles.progressBarContainer}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${state.progress * 100}%` },
-                    ]}
-                  />
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    { backgroundColor: "#d32f2f", marginTop: 10 },
-                  ]}
-                  onPress={actions.cancelTest}
-                >
-                  <Text style={styles.buttonText}>CANCEL RUN</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
+        <VisualizationSection
+          visualizationRef={visualizationRef}
+          fieldWidth={state.fieldWidth}
+          fieldLength={state.fieldLength}
+          result={state.results[selectedResultIndex]}
+          currentAnchors={state.currentAnchors}
+          currentTruePos={state.currentTruePos}
+          currentInitialFireflies={state.currentInitialFireflies}
+          onUpdateTruePos={(x, y) => setters.setCurrentTruePos({ x, y })}
+          onUpdateAnchor={(i, x, y) => {
+            const newAnchors = [...state.currentAnchors];
+            newAnchors[i] = { ...newAnchors[i], x, y };
+            setters.setCurrentAnchors(newAnchors);
+          }}
+          onDragStart={() => setScrollEnabled(false)}
+          onDragEnd={() => setScrollEnabled(true)}
+          isRandomTruePos={state.isRandomTruePos}
+          isRunning={state.isRunning}
+          showHeatmap={showHeatmap}
+          onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
+          isSetup={effectiveViewMode === "config"}
+          isCapturing={isCapturing}
+          useWhiteBackground={useWhiteBackground}
+          heatmapResolution={state.heatmapResolution}
+          onResolutionChange={setters.setHeatmapResolution}
+          progress={state.progress}
+          onCopyImage={copyImage}
+          onCancelRun={actions.cancelTest}
+        />
 
         {effectiveViewMode === "config" ? (
           <>
@@ -275,18 +295,21 @@ export default function OptimizationTestScreen({
                   />
                 </>
               )}
-              <View style={styles.controls}>
+              <Box className="my-5 items-center">
                 {state.isRunning ? (
-                  <ActivityIndicator />
+                  <Button isDisabled>
+                    <ButtonSpinner />
+                    <ButtonText>Running</ButtonText>
+                  </Button>
                 ) : (
-                  <TouchableOpacity
-                    style={styles.button}
+                  <ActionButton
+                    className="w-full"
                     onPress={handleRunOptimizationTest}
                   >
-                    <Text style={styles.buttonText}>Run Optimization Test</Text>
-                  </TouchableOpacity>
+                    Run Optimization Test
+                  </ActionButton>
                 )}
-              </View>
+              </Box>
             </CollapsibleSection>
 
             {!state.isRunning && (
@@ -312,18 +335,15 @@ export default function OptimizationTestScreen({
                     onChange={setters.setInputLength}
                     tooltip="The length of the practice field in meters. This defines the Y-axis bounds for localization."
                   />
-                  <TouchableOpacity
+                  <ActionButton
                     onPress={() => {
                       setters.setFieldWidth(parseFloat(state.inputWidth));
                       setters.setFieldLength(parseFloat(state.inputLength));
                     }}
-                    style={[
-                      styles.button,
-                      { marginBottom: 10, backgroundColor: ACCENT_COLOR },
-                    ]}
+                    className="mb-3"
                   >
-                    <Text style={styles.buttonText}>Resize Field</Text>
-                  </TouchableOpacity>
+                    Resize Field
+                  </ActionButton>
                   <InputRow
                     label="Number of Anchors"
                     value={state.numAnchors}
@@ -348,12 +368,12 @@ export default function OptimizationTestScreen({
                     onChange={setters.setAnchorSigma}
                     tooltip="The standard deviation of random error added to anchor positions during generation. Increase this to simulate field setup inaccuracies. Even small values (0.1m - 0.5m) can significantly impact localization accuracy."
                   />
-                  <TouchableOpacity
+                  <ActionButton
                     onPress={actions.generateAnchors}
-                    style={[styles.button, { marginTop: 10 }]}
+                    className="mt-3"
                   >
-                    <Text style={styles.buttonText}>Generate Anchors</Text>
-                  </TouchableOpacity>
+                    Generate Anchors
+                  </ActionButton>
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Model & Filter">
@@ -469,46 +489,15 @@ export default function OptimizationTestScreen({
                     tooltip="How fast the temperature decreases (0-1). Closer to 1 means slower cooling and more exhaustive exploration. Faster cooling (0.8-0.9) speed up convergence but might be less accurate."
                   />
 
-                  <View
-                    style={{
-                      height: 1,
-                      backgroundColor: "#eee",
-                      marginVertical: 15,
-                    }}
-                  />
+                  <Divider className="my-4" />
 
-                  <Text
-                    style={[
-                      styles.labelText,
-                      { fontWeight: "bold", marginBottom: 10 },
-                    ]}
-                  >
-                    Solver Weighting
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxRow,
-                      state.isRunning && { opacity: 0.5 },
-                      { marginBottom: 10 },
-                    ]}
-                    onPress={() =>
-                      !state.isRunning &&
-                      setters.setIsSolverWeighted(!state.isSolverWeighted)
-                    }
+                  <SectionLabel>Solver Weighting</SectionLabel>
+                  <ToggleRow
+                    label="Enable Weighted Solver"
+                    isChecked={state.isSolverWeighted}
+                    onChange={setters.setIsSolverWeighted}
                     disabled={state.isRunning}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        state.isSolverWeighted && styles.checkboxChecked,
-                      ]}
-                    >
-                      {state.isSolverWeighted && (
-                        <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>
-                      )}
-                    </View>
-                    <Text style={styles.labelText}>Enable Weighted Solver</Text>
-                  </TouchableOpacity>
+                  />
 
                   {state.isSolverWeighted && (
                     <Dropdown
@@ -552,49 +541,15 @@ export default function OptimizationTestScreen({
                     </>
                   )}
 
-                  <View
-                    style={{
-                      height: 1,
-                      backgroundColor: "#eee",
-                      marginVertical: 15,
-                    }}
-                  />
+                  <Divider className="my-4" />
 
-                  <Text
-                    style={[
-                      styles.labelText,
-                      { fontWeight: "bold", marginBottom: 10 },
-                    ]}
-                  >
-                    Initial Population
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxRow,
-                      state.isRunning && { opacity: 0.5 },
-                      { marginBottom: 10 },
-                    ]}
-                    onPress={() =>
-                      !state.isRunning &&
-                      setters.setIsRegenerateFirefliesEveryRun(
-                        !state.isRegenerateFirefliesEveryRun,
-                      )
-                    }
+                  <SectionLabel>Initial Population</SectionLabel>
+                  <ToggleRow
+                    label="Regenerate Every Run"
+                    isChecked={state.isRegenerateFirefliesEveryRun}
+                    onChange={setters.setIsRegenerateFirefliesEveryRun}
                     disabled={state.isRunning}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        state.isRegenerateFirefliesEveryRun &&
-                          styles.checkboxChecked,
-                      ]}
-                    >
-                      {state.isRegenerateFirefliesEveryRun && (
-                        <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>
-                      )}
-                    </View>
-                    <Text style={styles.labelText}>Regenerate Every Run</Text>
-                  </TouchableOpacity>
+                  />
 
                   <Dropdown
                     label="Firefly Placement"
@@ -615,40 +570,22 @@ export default function OptimizationTestScreen({
                     tooltip="The standard deviation of random error added to initial firefly positions during generation."
                   />
                   {!state.isRegenerateFirefliesEveryRun && (
-                    <TouchableOpacity
+                    <ActionButton
                       onPress={actions.generateFireflies}
-                      style={[styles.button, { marginTop: 10 }]}
+                      className="mt-3"
                     >
-                      <Text style={styles.buttonText}>Generate Fireflies</Text>
-                    </TouchableOpacity>
+                      Generate Fireflies
+                    </ActionButton>
                   )}
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Simulation Noise">
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxRow,
-                      state.isRunning && { opacity: 0.5 },
-                      { marginBottom: 10 },
-                    ]}
-                    onPress={() =>
-                      !state.isRunning &&
-                      setters.setIsNoiseEnabled(!state.isNoiseEnabled)
-                    }
+                  <ToggleRow
+                    label="Enable Noise"
+                    isChecked={state.isNoiseEnabled}
+                    onChange={setters.setIsNoiseEnabled}
                     disabled={state.isRunning}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        state.isNoiseEnabled && styles.checkboxChecked,
-                      ]}
-                    >
-                      {state.isNoiseEnabled && (
-                        <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>
-                      )}
-                    </View>
-                    <Text style={styles.labelText}>Enable Noise</Text>
-                  </TouchableOpacity>
+                  />
 
                   {state.isNoiseEnabled && (
                     <Dropdown
@@ -691,31 +628,12 @@ export default function OptimizationTestScreen({
                 </CollapsibleSection>
 
                 <CollapsibleSection title="True Position">
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxRow,
-                      state.isRunning && { opacity: 0.5 },
-                    ]}
-                    onPress={() =>
-                      !state.isRunning &&
-                      setters.setIsRandomTruePos(!state.isRandomTruePos)
-                    }
+                  <ToggleRow
+                    label="Randomly Select True Position"
+                    isChecked={state.isRandomTruePos}
+                    onChange={setters.setIsRandomTruePos}
                     disabled={state.isRunning}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        state.isRandomTruePos && styles.checkboxChecked,
-                      ]}
-                    >
-                      {state.isRandomTruePos && (
-                        <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>
-                      )}
-                    </View>
-                    <Text style={styles.labelText}>
-                      Randomly Select True Position
-                    </Text>
-                  </TouchableOpacity>
+                  />
 
                   {!state.isRandomTruePos && (
                     <>
@@ -754,12 +672,12 @@ export default function OptimizationTestScreen({
         ) : (
           <>
             {!state.isRunning && (
-              <TouchableOpacity
+              <ActionButton
                 onPress={handleBackToConfiguration}
-                style={[styles.button, { marginBottom: 12 }]}
+                className="mb-3"
               >
-                <Text style={styles.buttonText}>Back to Configuration</Text>
-              </TouchableOpacity>
+                Back to Configuration
+              </ActionButton>
             )}
             <ResultsView
               results={state.results}
@@ -775,8 +693,8 @@ export default function OptimizationTestScreen({
             />
           </>
         )}
-        <View style={{ height: 40 }} />
+        <Box className="h-10" />
       </ScrollView>
-    </View>
+    </Box>
   );
 }

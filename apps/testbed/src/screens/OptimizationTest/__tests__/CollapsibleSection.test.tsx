@@ -1,6 +1,6 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { Text, TouchableOpacity } from "react-native";
+import { Text } from "react-native";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 
 describe("CollapsibleSection", () => {
@@ -14,7 +14,7 @@ describe("CollapsibleSection", () => {
     const initialCount = tree.root.findAllByProps({ children: "Child" }).length;
 
     act(() => {
-      tree.root.findByType(TouchableOpacity).props.onPress();
+      tree.root.findByProps({ accessibilityLabel: "Example" }).props.onPress();
     });
 
     const collapsedCount = tree.root.findAllByProps({

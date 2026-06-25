@@ -23,11 +23,10 @@ describe("Dropdown", () => {
       />,
     );
 
-    const dropdown = tree.root.findByType(Dropdown);
-    const button = tree.root.findByProps({ testID: "dropdown-button" });
+    const select = tree.root.findByProps({ selectedValue: "a" });
 
-    act(() => button.props.onPress());
-    act(() => dropdown.props.onSelect("b"));
+    act(() => select.props.onOpen());
+    act(() => select.props.onValueChange("b"));
 
     expect(onToggle).toHaveBeenCalledWith(true);
     expect(onSelect).toHaveBeenCalledWith("b");

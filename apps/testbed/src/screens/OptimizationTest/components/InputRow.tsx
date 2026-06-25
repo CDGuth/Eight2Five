@@ -1,6 +1,8 @@
 import React from "react";
-import { View, TextInput } from "react-native";
-import { styles } from "../styles";
+import { Box } from "@eight2five/ui/box";
+import { FormControl } from "@eight2five/ui/form-control";
+import { HStack } from "@eight2five/ui/hstack";
+import { Input, InputField } from "@eight2five/ui/input";
 import { LabelWithTooltip } from "./LabelWithTooltip";
 
 export const InputRow = ({
@@ -16,17 +18,21 @@ export const InputRow = ({
   tooltip?: string;
   disabled?: boolean;
 }) => (
-  <View style={[styles.inputRow, disabled && { opacity: 0.5 }]}>
-    <LabelWithTooltip label={label} tooltip={tooltip} />
-    <View style={styles.controlWrapper}>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChange}
-        keyboardType="numeric"
-        placeholderTextColor="#999"
-        editable={!disabled}
-      />
-    </View>
-  </View>
+  <FormControl isDisabled={disabled} className={disabled ? "opacity-50" : ""}>
+    <HStack className="mb-3 items-center justify-between">
+      <Box className="mr-3 flex-1">
+        <LabelWithTooltip label={label} tooltip={tooltip} />
+      </Box>
+      <Box className="w-36">
+        <Input>
+          <InputField
+            value={value}
+            onChangeText={onChange}
+            keyboardType="numeric"
+            editable={!disabled}
+          />
+        </Input>
+      </Box>
+    </HStack>
+  </FormControl>
 );
