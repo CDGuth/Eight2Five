@@ -5,6 +5,19 @@ import { TwoRayGroundModel } from "@eight2five/mobile/localization/models/TwoRay
 import { LogNormalModel } from "@eight2five/mobile/localization/models/LogNormalModel";
 import { DEFAULT_TX_POWER_DBM } from "@eight2five/mobile/localization/LocalizationConfig";
 
+/**
+ * Legend gradient swatch colors for the heatmap legend (low → high error).
+ * These are data-visualization colors, not theme tokens, so they are kept as
+ * literal RGB values and shared between the overlay and its legend.
+ */
+export const HEATMAP_GRADIENT_STOPS = [
+  "rgb(128, 0, 128)",
+  "rgb(160, 64, 96)",
+  "rgb(192, 128, 64)",
+  "rgb(224, 192, 32)",
+  "rgb(255, 255, 0)",
+] as const;
+
 export const HeatmapOverlay = ({
   width,
   length,

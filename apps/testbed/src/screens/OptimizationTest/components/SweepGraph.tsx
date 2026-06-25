@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Pressable } from "@eight2five/ui/pressable";
+import { Text } from "@eight2five/ui/text";
 import { SweepStepResult } from "../types";
-import { ACCENT_COLOR, styles } from "../styles";
+import { ACCENT_COLOR } from "../styles";
 
 export const SweepGraph = ({
   results,
@@ -41,10 +43,9 @@ export const SweepGraph = ({
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
       <Text
-        style={[
-          styles.resultText,
-          { fontWeight: "bold", marginBottom: 15, textAlign: "center" },
-        ]}
+        size="xs"
+        bold
+        className="mb-[15px] text-center font-mono text-foreground"
       >
         Error (m) vs {paramName}
       </Text>
@@ -57,6 +58,7 @@ export const SweepGraph = ({
           borderColor: "#ccc",
         }}
       >
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Gridlines */}
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
           <View
@@ -72,6 +74,7 @@ export const SweepGraph = ({
             }}
           />
         ))}
+        {/* Drawing code — intentionally uses RN primitives */}
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
           <View
             key={`grid-x-${t}`}
@@ -87,6 +90,7 @@ export const SweepGraph = ({
           />
         ))}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Y-axis labels */}
         <Text
           style={{
@@ -111,6 +115,7 @@ export const SweepGraph = ({
           0
         </Text>
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* X-axis labels */}
         <Text
           style={{
@@ -135,6 +140,7 @@ export const SweepGraph = ({
           {maxX.toFixed(1)}
         </Text>
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Data Line */}
         {data.length > 1 && (
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -171,6 +177,7 @@ export const SweepGraph = ({
           </View>
         )}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Data Points & Error Bars */}
         {data.map((d, i) => {
           const x = getX(d.val);
@@ -218,7 +225,7 @@ export const SweepGraph = ({
               )}
 
               {/* Point */}
-              <TouchableOpacity
+              <Pressable
                 onPress={() => onSelectPoint?.(i)}
                 style={{
                   position: "absolute",
