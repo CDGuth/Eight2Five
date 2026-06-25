@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { View, PanResponder } from "react-native";
+import { View } from "react-native";
 
 export const DraggableMarker = ({
   x,
@@ -29,39 +29,7 @@ export const DraggableMarker = ({
   style?: any;
 }) => {
   const startPosRef = useRef({ x: 0, y: 0 });
-  const propsRef = useRef({ x, y, scale, width, length, onDrag });
-  propsRef.current = { x, y, scale, width, length, onDrag };
-  const isEditableRef = useRef(isEditable);
-  isEditableRef.current = isEditable;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isEditableRef.current,
-      onMoveShouldSetPanResponder: () => isEditableRef.current,
-      onPanResponderGrant: () => {
-        if (!isEditableRef.current) return;
-        startPosRef.current = { x: propsRef.current.x, y: propsRef.current.y };
-        onDragStart?.();
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        if (!isEditableRef.current) return;
-        const { scale, width, length, onDrag } = propsRef.current;
-        if (scale === 0) return;
-
-        const dx = gestureState.dx / scale;
-        const dy = gestureState.dy / scale;
-
-        const newX = Math.max(0, Math.min(width, startPosRef.current.x + dx));
-        const newY = Math.max(0, Math.min(length, startPosRef.current.y + dy));
-
-        onDrag(newX, newY);
-      },
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderRelease: () => {
-        onDragEnd?.();
-      },
-    }),
-  ).current;
+  const startTouchRef = useRef({ pageX: 0, pageY: 0 });
 
   return (
     <View
@@ -81,7 +49,34 @@ export const DraggableMarker = ({
         style,
       ]}
       hitSlop={{ top: 30, bottom: 30, left: 30, right: 30 }}
-      {...panResponder.panHandlers}
+      onStartShouldSetResponder={() => isEditable}
+      onMoveShouldSetResponder={() => isEditable}
+      onResponderGrant={(event) => {
+        if (!isEditable) return;
+
+        startPosRef.current = { x, y };
+        startTouchRef.current = {
+          pageX: event.nativeEvent.pageX,
+          pageY: event.nativeEvent.pageY,
+        };
+        onDragStart?.();
+      }}
+      onResponderMove={(event) => {
+        if (!isEditable || scale === 0) return;
+
+        const dx =
+          (event.nativeEvent.pageX - startTouchRef.current.pageX) / scale;
+        const dy =
+          (event.nativeEvent.pageY - startTouchRef.current.pageY) / scale;
+        const newX = Math.max(0, Math.min(width, startPosRef.current.x + dx));
+        const newY = Math.max(0, Math.min(length, startPosRef.current.y + dy));
+
+        onDrag(newX, newY);
+      }}
+      onResponderTerminationRequest={() => false}
+      onResponderRelease={() => {
+        onDragEnd?.();
+      }}
     />
   );
 };

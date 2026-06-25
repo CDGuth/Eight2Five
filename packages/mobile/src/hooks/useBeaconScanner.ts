@@ -54,7 +54,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
   const engineRef = useRef<LocalizationEngine | null>(null);
   const sourceRef = useRef<BeaconSource | null>(null);
 
-  if (!engineRef.current) {
+  if (engineRef.current === null) {
     engineRef.current = new LocalizationEngine({
       environment: options.environment,
       fieldDimensions: options.fieldDimensions,
@@ -64,7 +64,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
     });
   }
 
-  if (!sourceRef.current) {
+  if (sourceRef.current === null) {
     sourceRef.current =
       options.source ??
       createBeaconSource(options.sourceKind ?? "auto", {
