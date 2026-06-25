@@ -92,7 +92,7 @@ export default function OptimizationTestScreen({
   const { state, setters, actions } = useOptimizationRunner();
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [useWhiteBackground] = useState(true);
+  const useWhiteBackground = true;
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
 

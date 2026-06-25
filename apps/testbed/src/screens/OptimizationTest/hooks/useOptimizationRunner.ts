@@ -374,7 +374,9 @@ export function useOptimizationRunner() {
 
       const optimizer = new MFASAOptimizer({
         ...params,
-        timeBudgetMs: 10,
+        timeBudgetMs:
+          parseFloat(iterationTimeLimit) ||
+          DEFAULT_MFASA_OPTIONS.timeBudgetMs,
       });
       currentOptimizerRef.current = optimizer;
 
@@ -385,6 +387,7 @@ export function useOptimizationRunner() {
       } else {
         trueX = parseFloat(manualTrueX) || width / 2;
         trueY = parseFloat(manualTrueY) || length / 2;
+        setCurrentTruePos({ x: trueX, y: trueY });
       }
 
       const { candidates, measurementKinds } = generateSimulationCandidates({
@@ -768,7 +771,12 @@ Success <2m: ${analysis.successRate2m.toFixed(1)}%`);
     addLog("Cancelling...");
   }, [addLog]);
 
-  const resetResults = useCallback(() => setResults([]), []);
+  const resetResults = useCallback(() => {
+    setResults([]);
+    setSweepResults([]);
+    setBatchAnalysis(null);
+    setLogBatches([]);
+  }, []);
 
   return useMemo(
     () => ({
