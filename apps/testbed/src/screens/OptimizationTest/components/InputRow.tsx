@@ -26,6 +26,7 @@ export const InputRow = ({
       <Box className="w-36">
         <Input>
           <InputField
+            testID="input-row-field"
             value={value}
             onChangeText={onChange}
             keyboardType="numeric"

@@ -1,6 +1,5 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { TextInput } from "react-native";
 import { InputRow } from "../components/InputRow";
 
 describe("InputRow", () => {
@@ -10,7 +9,7 @@ describe("InputRow", () => {
       <InputRow label="Value" value="1" onChange={onChange} />,
     );
 
-    const input = tree.root.findByType(TextInput);
+    const input = tree.root.findByProps({ testID: "input-row-field" });
     act(() => input.props.onChangeText("2"));
 
     expect(onChange).toHaveBeenCalledWith("2");
