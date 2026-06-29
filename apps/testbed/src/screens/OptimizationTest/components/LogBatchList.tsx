@@ -1,11 +1,12 @@
 import React from "react";
-import { Alert, ScrollView } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Box } from "@eight2five/ui/box";
 import { Button, ButtonText } from "@eight2five/ui/button";
+import { ScrollView } from "@eight2five/ui/scroll-view";
 import { Text } from "@eight2five/ui/text";
 
 import { ScrollLockView } from "./ScrollLockView";
+import { useTestbedToast } from "../../../hooks/useTestbedToast";
 import { LogBatch } from "../types";
 
 interface LogBatchListProps {
@@ -19,6 +20,8 @@ export const LogBatchList = ({
   onClearLogs,
   onToggleScroll,
 }: LogBatchListProps) => {
+  const showToast = useTestbedToast();
+
   const copyBatch = async (batch: LogBatch) => {
     const text = batch.entries
       .map(
@@ -26,7 +29,11 @@ export const LogBatchList = ({
       )
       .join("\n");
     await Clipboard.setStringAsync(text);
-    Alert.alert("Copied", "Logs copied to clipboard");
+    showToast({
+      title: "Copied",
+      description: "Logs copied to clipboard",
+      action: "success",
+    });
   };
 
   return (

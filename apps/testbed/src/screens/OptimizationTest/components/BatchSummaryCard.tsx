@@ -1,10 +1,10 @@
 import React from "react";
-import { Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Box } from "@eight2five/ui/box";
 import { Button, ButtonText } from "@eight2five/ui/button";
 import { Text } from "@eight2five/ui/text";
 
+import { useTestbedToast } from "../../../hooks/useTestbedToast";
 import { BatchAnalysis } from "../types";
 
 interface BatchSummaryCardProps {
@@ -12,10 +12,16 @@ interface BatchSummaryCardProps {
 }
 
 export const BatchSummaryCard = ({ batchAnalysis }: BatchSummaryCardProps) => {
+  const showToast = useTestbedToast();
+
   const copyAnalysis = async () => {
     const text = `Batch Analysis:\nAvg Error: ${batchAnalysis.avgError.toFixed(3)}m\nAvg Time: ${batchAnalysis.avgDuration.toFixed(2)}ms`;
     await Clipboard.setStringAsync(text);
-    Alert.alert("Copied", "Analysis copied to clipboard");
+    showToast({
+      title: "Copied",
+      description: "Analysis copied to clipboard",
+      action: "success",
+    });
   };
 
   return (

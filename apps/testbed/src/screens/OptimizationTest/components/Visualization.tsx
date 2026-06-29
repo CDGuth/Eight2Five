@@ -9,6 +9,10 @@ import { DraggableMarker } from "./DraggableMarker";
 import { HeatmapOverlay, HEATMAP_GRADIENT_STOPS } from "./HeatmapOverlay";
 import { InputRow } from "./InputRow";
 
+const ANCHOR_COLOR = "#333";
+const TRUE_POSITION_COLOR = "#2e7d32";
+const ESTIMATED_POSITION_COLOR = "#d32f2f";
+
 export const Visualization = ({
   width,
   length,
@@ -189,7 +193,7 @@ export const Visualization = ({
             scale={scale}
             width={width}
             length={length}
-            color="#333"
+            color={ANCHOR_COLOR}
             onDrag={(x, y) => onUpdateAnchor(i, x, y)}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -207,7 +211,7 @@ export const Visualization = ({
             scale={scale}
             width={width}
             length={length}
-            color="#2e7d32"
+            color={TRUE_POSITION_COLOR}
             size={16}
             onDrag={onUpdateTruePos}
             onDragStart={onDragStart}
@@ -232,7 +236,7 @@ export const Visualization = ({
               width: 16,
               height: 16,
               borderRadius: 8,
-              backgroundColor: "#d32f2f",
+              backgroundColor: ESTIMATED_POSITION_COLOR,
               borderWidth: 2,
               borderColor: "#fff",
               zIndex: 30,
@@ -253,7 +257,7 @@ export const Visualization = ({
                 width: 6,
                 height: 6,
                 borderRadius: 3,
-                backgroundColor: "rgba(255, 165, 0, 0.6)", // Orange
+                backgroundColor: "rgba(255, 165, 0, 0.6)",
                 zIndex: 40,
               }}
             />
@@ -263,20 +267,14 @@ export const Visualization = ({
       {/* Legend */}
       <Box className="mt-2.5 flex flex-row flex-wrap justify-center">
         <Box className="mb-2 mr-4 flex flex-row items-center">
-          <View
-            className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background"
-            style={{ backgroundColor: "#333" }}
-          />
+          <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-anchor" />
           <Text size="xs" className="text-muted-foreground">
             Anchor
           </Text>
         </Box>
         {(!isRandomTruePos || result) && (
           <Box className="mb-2 mr-4 flex flex-row items-center">
-            <View
-              className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background"
-              style={{ backgroundColor: "#2e7d32" }}
-            />
+            <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-true-position" />
             <Text size="xs" className="text-muted-foreground">
               True Position
             </Text>
@@ -285,10 +283,7 @@ export const Visualization = ({
         {result && (
           <>
             <Box className="mb-2 mr-4 flex flex-row items-center">
-              <View
-                className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background"
-                style={{ backgroundColor: "#d32f2f" }}
-              />
+              <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-estimated-position" />
               <Text size="xs" className="text-muted-foreground">
                 Estimated Position
               </Text>
@@ -296,19 +291,13 @@ export const Visualization = ({
             {showPopulation && (
               <>
                 <Box className="mb-2 mr-4 flex flex-row items-center">
-                  <View
-                    className="mr-1.5 h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: "rgba(100, 100, 100, 0.3)" }}
-                  />
+                  <View className="mr-1.5 h-2.5 w-2.5 rounded-full bg-testbed-initial-population" />
                   <Text size="xs" className="text-muted-foreground">
                     Initial Population
                   </Text>
                 </Box>
                 <Box className="mb-2 mr-4 flex flex-row items-center">
-                  <View
-                    className="mr-1.5 h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: "rgba(255, 165, 0, 0.6)" }}
-                  />
+                  <View className="mr-1.5 h-2.5 w-2.5 rounded-full bg-testbed-final-population" />
                   <Text size="xs" className="text-muted-foreground">
                     Final Population
                   </Text>

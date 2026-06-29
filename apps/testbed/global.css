@@ -2,3 +2,12 @@
 @import "uniwind";
 
 @source "../../packages/ui";
+
+@theme {
+  --color-testbed-anchor: rgb(51 51 51);
+  --color-testbed-true-position: rgb(46 125 50);
+  --color-testbed-estimated-position: rgb(211 47 47);
+  --color-testbed-initial-population: rgb(100 100 100 / 0.3);
+  --color-testbed-final-population: rgb(255 165 0 / 0.6);
+  --color-testbed-field-grid: rgb(0 0 0 / 0.1);
+}

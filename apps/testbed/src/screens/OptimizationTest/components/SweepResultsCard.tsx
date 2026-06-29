@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { captureRef } from "react-native-view-shot";
 import { Box } from "@eight2five/ui/box";
@@ -7,6 +7,7 @@ import { Button, ButtonText } from "@eight2five/ui/button";
 import { Text } from "@eight2five/ui/text";
 
 import { SweepGraph } from "./SweepGraph";
+import { useTestbedToast } from "../../../hooks/useTestbedToast";
 import { SweepConfig, SweepStepResult } from "../types";
 
 interface SweepResultsCardProps {
@@ -23,6 +24,7 @@ export const SweepResultsCard = ({
   onSelectPoint,
 }: SweepResultsCardProps) => {
   const graphRef = useRef<View>(null);
+  const showToast = useTestbedToast();
 
   const copyGraph = async () => {
     try {
@@ -32,10 +34,18 @@ export const SweepResultsCard = ({
         result: "base64",
       });
       await Clipboard.setImageAsync(base64);
-      Alert.alert("Success", "Graph copied");
+      showToast({
+        title: "Copied",
+        description: "Graph copied to clipboard",
+        action: "success",
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert("Error", "Failed to copy graph");
+      showToast({
+        title: "Error",
+        description: "Failed to copy graph",
+        action: "error",
+      });
     }
   };
 

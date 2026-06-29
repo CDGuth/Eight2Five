@@ -12,6 +12,24 @@ jest.mock("react-native-view-shot", () => ({
   captureRef: jest.fn().mockResolvedValue("mock-base64"),
 }));
 
+const mockToastShow = jest.fn();
+(globalThis as any).__TESTBED_TOAST_SHOW__ = mockToastShow;
+
+jest.mock("@eight2five/ui/toast", () => {
+  const React = require("react");
+  const { View, Text } = require("react-native");
+
+  return {
+    Toast: ({ children, ...props }: any) =>
+      React.createElement(View, props, children),
+    ToastTitle: ({ children, ...props }: any) =>
+      React.createElement(Text, props, children),
+    ToastDescription: ({ children, ...props }: any) =>
+      React.createElement(Text, props, children),
+    useToast: () => ({ show: mockToastShow }),
+  };
+});
+
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -112,4 +130,5 @@ afterEach(() => {
   jest.clearAllTimers();
   jest.useRealTimers();
   jest.clearAllMocks();
+  mockToastShow.mockClear();
 });

@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import * as Clipboard from "expo-clipboard";
 
+import { useTestbedToast } from "./useTestbedToast";
+
 export function useCaptureToClipboard() {
   const [isCapturing, setIsCapturing] = useState(false);
+  const showToast = useTestbedToast();
 
   const capture = async (
     ref: React.RefObject<View | null>,
@@ -20,10 +23,18 @@ export function useCaptureToClipboard() {
         ...options,
       });
       await Clipboard.setImageAsync(base64);
-      Alert.alert("Success", "Image copied");
+      showToast({
+        title: "Copied",
+        description: "Image copied to clipboard",
+        action: "success",
+      });
     } catch (e) {
       console.error(e);
-      Alert.alert("Error", "Failed to copy");
+      showToast({
+        title: "Error",
+        description: "Failed to copy image",
+        action: "error",
+      });
     } finally {
       setIsCapturing(false);
     }

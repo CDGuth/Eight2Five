@@ -1,6 +1,5 @@
 import React from "react";
 import { act } from "react-test-renderer";
-import { Alert } from "react-native";
 import { LabelWithTooltip } from "../components/LabelWithTooltip";
 import { renderWithAct } from "../../../testUtils/renderWithAct";
 
@@ -15,6 +14,6 @@ describe("LabelWithTooltip", () => {
     });
     act(() => tooltip.props.onPress());
 
-    expect(Alert.alert).toHaveBeenCalledWith("Help", "More info");
+    expect((globalThis as any).__TESTBED_TOAST_SHOW__).toHaveBeenCalled();
   });
 });

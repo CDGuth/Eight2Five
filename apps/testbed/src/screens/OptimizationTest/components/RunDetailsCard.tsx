@@ -1,10 +1,10 @@
 import React from "react";
-import { Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Box } from "@eight2five/ui/box";
 import { Button, ButtonText } from "@eight2five/ui/button";
 import { Text } from "@eight2five/ui/text";
 
+import { useTestbedToast } from "../../../hooks/useTestbedToast";
 import { RunResult } from "../types";
 
 interface RunDetailsCardProps {
@@ -12,6 +12,8 @@ interface RunDetailsCardProps {
 }
 
 export const RunDetailsCard = ({ result }: RunDetailsCardProps) => {
+  const showToast = useTestbedToast();
+
   const copyDetails = async () => {
     const text = [
       `Run ${result.id}`,
@@ -22,7 +24,11 @@ export const RunDetailsCard = ({ result }: RunDetailsCardProps) => {
       `Measurement Kinds: ${(result.measurementKinds ?? ["rssi"]).join(", ")}`,
     ].join("\n");
     await Clipboard.setStringAsync(text);
-    Alert.alert("Copied", "Run details copied to clipboard");
+    showToast({
+      title: "Copied",
+      description: "Run details copied to clipboard",
+      action: "success",
+    });
   };
 
   return (

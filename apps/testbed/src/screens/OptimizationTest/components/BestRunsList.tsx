@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView } from "react-native";
 import { Box } from "@eight2five/ui/box";
 import { Button, ButtonText } from "@eight2five/ui/button";
 import { Pressable } from "@eight2five/ui/pressable";
+import { ScrollView } from "@eight2five/ui/scroll-view";
 import { Text } from "@eight2five/ui/text";
 
 import { ScrollLockView } from "./ScrollLockView";

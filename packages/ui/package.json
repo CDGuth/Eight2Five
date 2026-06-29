@@ -6,10 +6,28 @@
     "./*": "./*/index.tsx"
   },
   "dependencies": {
+    "@expo/html-elements": "^0.12.5",
+    "@gluestack-ui/core": "^5.0.15",
+    "@gluestack-ui/utils": "^5.0.6",
+    "@gorhom/bottom-sheet": "^5.2.14",
+    "@legendapp/list": "^3.2.0",
+    "@legendapp/motion": "^2.5.3",
     "@react-aria/ssr": "^3.10.1",
     "@react-aria/utils": "^3.34.1",
+    "@react-native-community/datetimepicker": "^9.1.0",
     "@react-stately/toggle": "^3.10.1",
+    "ai": "^6.0.214",
+    "expo-document-picker": "~56.0.4",
+    "expo-glass-effect": "~56.0.4",
+    "expo-image-picker": "~56.0.18",
+    "lucide-react-native": "^1.22.0",
     "react-dom": "^19.2.3",
-    "react-native-svg": "^15.15.5"
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-keyboard-controller": "^1.21.12",
+    "react-native-markdown-display": "^7.0.2",
+    "react-native-reanimated": "^4.5.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "^15.15.5",
+    "uniwind": "^1.9.0"
   }
 }
