@@ -1,11 +1,12 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { TestbedLayout } from "../TestbedLayout";
+import { renderWithAct } from "../../testUtils/renderWithAct";
 
 describe("TestbedLayout", () => {
   it("renders header and home button", () => {
     const onBack = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <TestbedLayout title="Title" subtitle="Subtitle" onBack={onBack}>
         <></>
       </TestbedLayout>,
@@ -20,7 +21,7 @@ describe("TestbedLayout", () => {
 
   it("renders sub-back button when provided", () => {
     const onSubBack = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <TestbedLayout title="Title" onSubBack={onSubBack}>
         <></>
       </TestbedLayout>,
@@ -31,5 +32,15 @@ describe("TestbedLayout", () => {
     });
     act(() => subBackButton.props.onPress());
     expect(onSubBack).toHaveBeenCalled();
+  });
+
+  it("can render non-scrolling static content", () => {
+    const tree = renderWithAct(
+      <TestbedLayout title="Title" contentMode="static">
+        <></>
+      </TestbedLayout>,
+    );
+
+    expect(tree.root.findByProps({ children: "Title" })).toBeTruthy();
   });
 });

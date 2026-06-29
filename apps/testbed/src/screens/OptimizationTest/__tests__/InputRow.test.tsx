@@ -1,11 +1,12 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { InputRow } from "../components/InputRow";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 describe("InputRow", () => {
   it("invokes onChange when text updates", () => {
     const onChange = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <InputRow label="Value" value="1" onChange={onChange} />,
     );
 

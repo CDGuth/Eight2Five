@@ -1,7 +1,8 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { Text as MockText } from "react-native";
 import OptimizationSubappRoute from "../optimization";
+import { renderWithAct } from "../../../src/testUtils/renderWithAct";
 
 const mockSetParams = jest.fn();
 const mockUseLocalSearchParams = jest.fn(() => ({}));
@@ -13,8 +14,8 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockUseLocalSearchParams(),
 }));
 
-jest.mock("../../../src/components/TestbedLayout", () => ({
-  TestbedLayout: ({ children }: { children: React.ReactNode }) => (
+jest.mock("../../../src/subapps/SubappRouteLayout", () => ({
+  SubappRouteLayout: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
 }));
@@ -52,20 +53,20 @@ describe("Optimization route wiring", () => {
   });
 
   it("defaults to config view when no query param is provided", () => {
-    const tree = TestRenderer.create(<OptimizationSubappRoute />);
+    const tree = renderWithAct(<OptimizationSubappRoute />);
     const forcedView = tree.root.findByProps({ testID: "forced-view" });
     expect(forcedView.props.children).toBe("config");
   });
 
   it("maps view query param to results mode", () => {
     mockUseLocalSearchParams.mockReturnValue({ view: "results" });
-    const tree = TestRenderer.create(<OptimizationSubappRoute />);
+    const tree = renderWithAct(<OptimizationSubappRoute />);
     const forcedView = tree.root.findByProps({ testID: "forced-view" });
     expect(forcedView.props.children).toBe("results");
   });
 
   it("wires callbacks to router setParams", () => {
-    const tree = TestRenderer.create(<OptimizationSubappRoute />);
+    const tree = renderWithAct(<OptimizationSubappRoute />);
     const run = tree.root.findByProps({ testID: "run-complete" });
     const back = tree.root.findByProps({ testID: "back-config" });
 

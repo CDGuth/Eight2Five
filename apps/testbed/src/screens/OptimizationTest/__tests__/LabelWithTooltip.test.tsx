@@ -1,11 +1,12 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { Alert } from "react-native";
 import { LabelWithTooltip } from "../components/LabelWithTooltip";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 describe("LabelWithTooltip", () => {
   it("shows alert when pressed", () => {
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <LabelWithTooltip label="Help" tooltip="More info" />,
     );
 

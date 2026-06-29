@@ -1,11 +1,12 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { Text } from "react-native";
 import { CollapsibleSection } from "../components/CollapsibleSection";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 describe("CollapsibleSection", () => {
   it("collapses and expands children", () => {
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <CollapsibleSection title="Example">
         <Text>Child</Text>
       </CollapsibleSection>,

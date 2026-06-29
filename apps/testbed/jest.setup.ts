@@ -1,5 +1,4 @@
 import { Alert } from "react-native";
-import TestRenderer, { act } from "react-test-renderer";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,6 +20,57 @@ jest.mock("@expo/vector-icons", () => {
 
   return {
     MaterialIcons: MockIcon,
+  };
+});
+
+jest.mock("@shopify/react-native-skia", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const MockSkiaNode = ({ children, testID, ...props }: any) =>
+    React.createElement(View, { testID: testID ?? "skia-node", ...props }, children);
+
+  return {
+    Canvas: ({ children, testID, ...props }: any) =>
+      React.createElement(
+        View,
+        { testID: testID ?? "skia-canvas", ...props },
+        children,
+      ),
+    Rect: (props: any) =>
+      React.createElement(View, { testID: "skia-rect", ...props }),
+    Line: MockSkiaNode,
+    Path: MockSkiaNode,
+    Circle: MockSkiaNode,
+    LinearGradient: MockSkiaNode,
+    useFont: () => ({}),
+    vec: (x: number, y: number) => ({ x, y }),
+  };
+});
+
+jest.mock("victory-native", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  return {
+    CartesianChart: ({ children, data, yKeys = [] }: any) => {
+      const points = yKeys.reduce((acc: any, key: string) => {
+        acc[key] = data.map((datum: any, index: number) => ({
+          x: index,
+          y: datum[key],
+          xValue: datum.val,
+          yValue: datum[key],
+        }));
+        return acc;
+      }, {});
+      return React.createElement(
+        View,
+        { testID: "victory-cartesian-chart" },
+        typeof children === "function" ? children({ points }) : children,
+      );
+    },
+    Line: (props: any) =>
+      React.createElement(View, { testID: "victory-line", ...props }),
   };
 });
 
@@ -57,16 +107,6 @@ for (const helperPath of nativeAnimatedHelperPaths) {
 (globalThis as any).cancelAnimationFrame = () => {};
 
 jest.spyOn(Alert, "alert").mockImplementation(() => {});
-
-// Wrap TestRenderer.create in act() so tests don't need to do it manually
-const originalCreate = TestRenderer.create.bind(TestRenderer);
-(TestRenderer as any).create = (...args: Parameters<typeof originalCreate>) => {
-  let instance: TestRenderer.ReactTestRenderer | undefined;
-  act(() => {
-    instance = originalCreate(...args);
-  });
-  return instance as TestRenderer.ReactTestRenderer;
-};
 
 afterEach(() => {
   jest.clearAllTimers();

@@ -2,15 +2,13 @@ import React from "react";
 import { useRouter } from "expo-router";
 import { TestbedHome } from "../src/screens/TestbedHome";
 import { TestbedLayout } from "../src/components/TestbedLayout";
-import { SUBAPPS, SubappId } from "../src/subapps";
+import { getSubappById, SUBAPPS, SubappId } from "../src/subapps";
 
 export default function TestbedHomeRoute() {
   const router = useRouter();
 
   const handleSelect = (id: SubappId) => {
-    const selected = SUBAPPS.find((entry) => entry.id === id);
-    if (!selected) return;
-    router.push(selected.href);
+    router.push(getSubappById(id).href);
   };
 
   return (

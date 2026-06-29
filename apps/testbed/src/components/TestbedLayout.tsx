@@ -1,16 +1,21 @@
 import React from "react";
-import { ViewStyle, ScrollViewProps, LayoutAnimation } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ViewStyle,
+  ScrollViewProps,
+  LayoutAnimation,
+  useColorScheme,
+} from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Box } from "@eight2five/ui/box";
 import { Heading } from "@eight2five/ui/heading";
 import { HStack } from "@eight2five/ui/hstack";
 import { Pressable } from "@eight2five/ui/pressable";
+import { SafeAreaView } from "@eight2five/ui/safe-area-view";
 import { ScrollView } from "@eight2five/ui/scroll-view";
 import { Text } from "@eight2five/ui/text";
 import { VStack } from "@eight2five/ui/vstack";
 
-interface TestbedLayoutProps {
+export interface TestbedLayoutProps {
   title?: string;
   subtitle?: string;
   onBack?: () => void;
@@ -18,6 +23,7 @@ interface TestbedLayoutProps {
   children: React.ReactNode;
   contentStyle?: ViewStyle;
   scrollProps?: ScrollViewProps;
+  contentMode?: "scroll" | "static";
 }
 
 export function TestbedLayout({
@@ -28,9 +34,13 @@ export function TestbedLayout({
   children,
   contentStyle,
   scrollProps,
+  contentMode = "scroll",
 }: TestbedLayoutProps) {
   const showNav = Boolean(onBack) || Boolean(onSubBack);
   const isMultiNav = Boolean(onBack) && Boolean(onSubBack);
+  const colorScheme = useColorScheme();
+  const iconColor =
+    colorScheme === "dark" ? "rgb(245 245 245)" : "rgb(23 23 23)";
 
   // Trigger animation when nav state changes
   React.useEffect(() => {
@@ -59,11 +69,7 @@ export function TestbedLayout({
                       className="h-11 w-11 items-center justify-center"
                       testID="testbed-home-button"
                     >
-                      <MaterialIcons
-                        name="home"
-                        size={28}
-                        color="rgb(23 23 23)"
-                      />
+                      <MaterialIcons name="home" size={28} color={iconColor} />
                     </Pressable>
                   )}
                   {onSubBack && (
@@ -77,7 +83,7 @@ export function TestbedLayout({
                       <MaterialIcons
                         name="arrow-back"
                         size={28}
-                        color="rgb(23 23 23)"
+                        color={iconColor}
                       />
                     </Pressable>
                   )}
@@ -100,14 +106,20 @@ export function TestbedLayout({
           </HStack>
         )}
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={contentStyle}
-          showsVerticalScrollIndicator={false}
-          {...scrollProps}
-        >
-          {children}
-        </ScrollView>
+        {contentMode === "scroll" ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={contentStyle}
+            showsVerticalScrollIndicator={false}
+            {...scrollProps}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <Box className="flex-1" style={contentStyle}>
+            {children}
+          </Box>
+        )}
       </VStack>
     </SafeAreaView>
   );

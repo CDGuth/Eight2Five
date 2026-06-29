@@ -7,7 +7,6 @@ import { Progress, ProgressFilledTrack } from "@eight2five/ui/progress";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { Visualization } from "../components/Visualization";
-import { styles } from "../styles";
 import { RunResult } from "../types";
 
 interface VisualizationSectionProps {
@@ -80,7 +79,7 @@ export function VisualizationSection({
         ref={visualizationRef}
         collapsable={false}
         style={[
-          styles.sectionContent,
+          { padding: 16 },
           useWhiteBackground && { backgroundColor: "#fff" },
         ]}
       >

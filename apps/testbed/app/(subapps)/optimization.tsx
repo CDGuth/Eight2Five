@@ -1,7 +1,7 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import OptimizationTestScreen from "../../src/screens/OptimizationTest";
-import { TestbedLayout } from "../../src/components/TestbedLayout";
+import { SubappRouteLayout } from "../../src/subapps/SubappRouteLayout";
 
 export default function OptimizationSubappRoute() {
   const router = useRouter();
@@ -10,15 +10,12 @@ export default function OptimizationSubappRoute() {
   const forcedViewMode = params.view === "results" ? "results" : "config";
 
   return (
-    <TestbedLayout
-      title="Optimization Test"
-      subtitle="Experiment with optimization-based localization, propagation constants, and noise models."
-    >
+    <SubappRouteLayout subappId="optimization" contentMode="static">
       <OptimizationTestScreen
         forcedViewMode={forcedViewMode}
         onRunComplete={() => router.setParams({ view: "results" })}
         onBackToConfiguration={() => router.setParams({ view: "config" })}
       />
-    </TestbedLayout>
+    </SubappRouteLayout>
   );
 }

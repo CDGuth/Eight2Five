@@ -12,8 +12,6 @@ SplashScreen.setOptions({
   fade: true,
 });
 
-const OPTIMIZATION_SUBAPP = SUBAPPS.find((s) => s.id === "optimization");
-
 export default function RootLayout() {
   return (
     <GluestackUIProvider mode="system">
@@ -26,12 +24,13 @@ export default function RootLayout() {
               headerBackVisible: false,
             }}
           />
-          <Stack.Screen
-            name="(subapps)/optimization"
-            options={{
-              title: OPTIMIZATION_SUBAPP?.title ?? "Optimization Test",
-            }}
-          />
+          {SUBAPPS.map((subapp) => (
+            <Stack.Screen
+              key={subapp.id}
+              name={subapp.routeName}
+              options={{ title: subapp.title }}
+            />
+          ))}
         </Stack>
       </SafeAreaProvider>
     </GluestackUIProvider>

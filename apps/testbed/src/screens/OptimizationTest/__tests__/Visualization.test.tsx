@@ -1,9 +1,10 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { View } from "react-native";
 import { Visualization } from "../components/Visualization";
 import { HeatmapOverlay } from "../components/HeatmapOverlay";
 import { RunResult } from "../types";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 const sampleResult: RunResult = {
   id: 1,
@@ -32,7 +33,7 @@ const sampleResult: RunResult = {
 describe("Visualization", () => {
   it("renders heatmap when enabled and forwards toggle", () => {
     const onToggleHeatmap = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <Visualization
         width={10}
         length={10}

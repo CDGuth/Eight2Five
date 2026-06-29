@@ -9,12 +9,11 @@ Interactive playground for the MFASA optimizer, propagation models, and visualiz
 - Current optimization route: `app/(subapps)/optimization.tsx`
 
 ### Adding a Mini-App
-1. Add route metadata entry in `src/subapps/index.ts` (id, title, description, href).
+1. Add route metadata entry in `src/subapps/index.ts` (id, title, description, routeName, href).
 2. Add a route file under `app/(subapps)/` for the mini-app screen.
-3. Keep simulation/business logic in `src/screens/<MiniApp>/hooks` and reusable controls in `src/screens/<MiniApp>/components`.
-
-### Testbed Style Guide Skill
-- Use `.github/skills/testbed-style-guide/SKILL.md` as the first source of truth for testbed architecture and coding patterns.
+3. Wrap the route with `SubappRouteLayout` so titles/descriptions stay registry-driven.
+4. Keep simulation/business logic in `src/screens/<MiniApp>/hooks` and reusable controls in `src/screens/<MiniApp>/components`.
+5. Use `contentMode="static"` for canvas, Skia, map, or other gesture-heavy mini-apps that manage their own scrolling.
 
 ### Run
 ```bash
@@ -28,7 +27,6 @@ npm run ios:testbed
 Preferred from repo root:
 
 ```bash
-npm run validate:core
 npm run validate
 ```
 

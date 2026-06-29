@@ -1,11 +1,12 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { SubappCard } from "../SubappCard";
+import { renderWithAct } from "../../testUtils/renderWithAct";
 
 describe("SubappCard", () => {
   it("shows title, badge, and triggers press", () => {
     const onPress = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <SubappCard
         title="Diagnostics"
         description="Inspect beacon data"

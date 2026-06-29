@@ -1,8 +1,8 @@
 import React from "react";
-import TestRenderer from "react-test-renderer";
 import { View } from "react-native";
 import { HeatmapOverlay } from "../components/HeatmapOverlay";
 import { RunResult } from "../types";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 jest.mock("@eight2five/mobile/localization/models/TwoRayGroundModel", () => ({
   TwoRayGroundModel: jest.fn().mockImplementation(() => ({
@@ -39,8 +39,8 @@ const baseResult: RunResult = {
 };
 
 describe("HeatmapOverlay", () => {
-  it("renders a cell for each sample point", () => {
-    const tree = TestRenderer.create(
+  it("renders a Skia rect for each sample point", () => {
+    const tree = renderWithAct(
       <HeatmapOverlay
         width={10}
         length={10}
@@ -54,8 +54,11 @@ describe("HeatmapOverlay", () => {
       (node) => node.type === View && node.props.pointerEvents === "none",
     );
 
-    const cells = container.props.children as React.ReactElement[];
-    expect(Array.isArray(cells)).toBe(true);
-    expect(cells).toHaveLength(4);
+    expect(container).toBeTruthy();
+    expect(
+      tree.root.findAll(
+        (node) => node.type === View && node.props.testID === "skia-rect",
+      ),
+    ).toHaveLength(4);
   });
 });

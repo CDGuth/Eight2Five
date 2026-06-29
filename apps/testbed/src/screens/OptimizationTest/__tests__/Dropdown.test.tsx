@@ -1,9 +1,10 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { Dropdown } from "../components/Dropdown";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 const render = (element: React.ReactElement) => {
-  return TestRenderer.create(element);
+  return renderWithAct(element);
 };
 
 describe("Dropdown", () => {
