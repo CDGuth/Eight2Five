@@ -1,13 +1,20 @@
-import React, { useState, useRef, useCallback } from "react";
+import React from "react";
+import { Box } from "@eight2five/ui/box";
+import { FormControl } from "@eight2five/ui/form-control";
+import { HStack } from "@eight2five/ui/hstack";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  Pressable,
-  ScrollView,
-} from "react-native";
-import { styles } from "../styles";
+  Select,
+  SelectBackdrop,
+  SelectContent,
+  SelectDragIndicator,
+  SelectDragIndicatorWrapper,
+  SelectIcon,
+  SelectInput,
+  SelectItem,
+  SelectPortal,
+  SelectTrigger,
+} from "@eight2five/ui/select";
+import { ChevronDownIcon } from "@eight2five/ui/icon";
 import { LabelWithTooltip } from "./LabelWithTooltip";
 
 export const Dropdown = ({
@@ -27,130 +34,49 @@ export const Dropdown = ({
   onToggle?: (isOpen: boolean) => void;
   tooltip?: string;
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [menuLayout, setMenuLayout] = useState({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
-  const buttonRef = useRef<any>(null);
-
-  const closeMenu = useCallback(() => {
-    setIsOpen(false);
-    onToggle?.(false);
-  }, [onToggle]);
-
-  const updateMenuLayout = useCallback(() => {
-    requestAnimationFrame(() => {
-      buttonRef.current?.measureInWindow?.(
-        (x: number, y: number, width: number, height: number) => {
-          setMenuLayout({ x, y: y + height, width, height });
-        },
-      );
-    });
-  }, []);
-
-  const openMenu = useCallback(() => {
-    if (disabled) return;
-    onToggle?.(true);
-    requestAnimationFrame(() => {
-      if (!buttonRef.current?.measureInWindow) {
-        setIsOpen(true);
-        return;
-      }
-      buttonRef.current.measureInWindow(
-        (x: number, y: number, width: number, height: number) => {
-          setMenuLayout({ x, y: y + height, width, height });
-          setIsOpen(true);
-        },
-      );
-    });
-  }, [disabled, onToggle]);
-
-  const handleToggle = () => {
-    if (isOpen) {
-      closeMenu();
-      return;
-    }
-    openMenu();
-  };
-
-  const handleSelect = (val: string) => {
-    onSelect(val);
-    closeMenu();
-  };
+  const selectedLabel = options.find((option) => option.value === value)?.label;
 
   return (
-    <View
-      style={[
-        styles.inputRow,
-        { zIndex: isOpen ? 1000 : 1 },
-        disabled && { opacity: 0.5 },
-      ]}
-    >
-      {label ? (
-        <LabelWithTooltip label={label} tooltip={tooltip} />
-      ) : (
-        <View style={{ flex: 1 }} />
-      )}
-      <View style={styles.controlWrapper}>
-        <TouchableOpacity
-          ref={buttonRef}
-          style={styles.dropdownButton}
-          testID="dropdown-button"
-          onPress={() => !disabled && handleToggle()}
-          onLayout={updateMenuLayout}
-          disabled={disabled}
-        >
-          <Text style={styles.dropdownButtonText} numberOfLines={1}>
-            {options.find((o) => o.value === value)?.label || value}
-          </Text>
-        </TouchableOpacity>
-        {isOpen && (
-          <Modal
-            transparent
-            animationType="fade"
-            visible={isOpen}
-            onRequestClose={closeMenu}
+    <FormControl isDisabled={disabled} className={disabled ? "opacity-50" : ""}>
+      <HStack className="mb-3 items-center justify-between">
+        <Box className="mr-3 flex-1">
+          {label ? <LabelWithTooltip label={label} tooltip={tooltip} /> : null}
+        </Box>
+        <Box className="w-36">
+          <Select
+            selectedValue={value}
+            initialLabel={selectedLabel ?? value}
+            onValueChange={onSelect}
+            onOpen={() => onToggle?.(true)}
+            onClose={() => onToggle?.(false)}
+            isDisabled={disabled}
           >
-            <View
-              style={styles.dropdownModalContainer}
-              pointerEvents="box-none"
-            >
-              <Pressable style={styles.dropdownBackdrop} onPress={closeMenu} />
-              <View
-                style={[
-                  styles.dropdownList,
-                  styles.dropdownModalList,
-                  {
-                    top: menuLayout.y,
-                    left: menuLayout.x,
-                    width: menuLayout.width || 140,
-                  },
-                ]}
-              >
-                <ScrollView
-                  style={{ maxHeight: 220 }}
-                  nestedScrollEnabled={true}
-                  keyboardShouldPersistTaps="always"
-                  persistentScrollbar={true}
-                >
-                  {options.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={styles.dropdownItem}
-                      onPress={() => handleSelect(opt.value)}
-                    >
-                      <Text style={styles.dropdownItemText}>{opt.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-          </Modal>
-        )}
-      </View>
-    </View>
+            <SelectTrigger testID="dropdown-button" size="sm">
+              <SelectInput
+                value={selectedLabel ?? value}
+                placeholder="Select"
+                className="flex-1"
+              />
+              <SelectIcon as={ChevronDownIcon} className="mr-2" />
+            </SelectTrigger>
+            <SelectPortal>
+              <SelectBackdrop />
+              <SelectContent className="max-h-80">
+                <SelectDragIndicatorWrapper>
+                  <SelectDragIndicator />
+                </SelectDragIndicatorWrapper>
+                {options.map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    label={option.label}
+                    value={option.value}
+                  />
+                ))}
+              </SelectContent>
+            </SelectPortal>
+          </Select>
+        </Box>
+      </HStack>
+    </FormControl>
   );
 };

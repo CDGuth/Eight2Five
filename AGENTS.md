@@ -13,6 +13,10 @@ Expo-based React Native monorepo for tracking marching band performers through t
 - **`useBeaconScanner`**: The source-agnostic integration hook. **UI components must consume this**, not transport-specific providers.
 - Data Flow: `Provider Source → Parser/Adapter → Filter & Model → MFASA Optimizer → UI`. Keep side-by-side KBeacon BLE and PANS UWB support unless told otherwise.
 
+## UI System
+- **gluestack-ui v5** is the active UI system for shared app components. Some local agent skills may still reference gluestack-ui v4; they can be useful for general patterns, but always verify setup, APIs, styling-engine guidance, and generated component conventions against the official v5 documentation before making gluestack changes.
+- For future visualization work, prefer **React Native Skia** for complex custom 2D graphics and **Victory Native** for charts. If either dependency is added for shared mobile/testbed use, install it in `packages/mobile` per the shared mobile dependency policy and verify Expo compatibility.
+
 ## Dependency Management
 - **Shared Mobile Dependency Policy**: If a mobile package is used by both Expo apps, or belongs in shared mobile logic, install it in `packages/mobile` to keep future web/backend apps isolated from mobile dependencies.
 - Command: `npm install <package> --workspace @eight2five/mobile`

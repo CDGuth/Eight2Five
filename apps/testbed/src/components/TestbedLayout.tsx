@@ -1,18 +1,21 @@
 import React from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   ViewStyle,
   ScrollViewProps,
   LayoutAnimation,
+  useColorScheme,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { testbedStyles, testbedPalette } from "../styles/testbed";
+import { Box } from "@eight2five/ui/box";
+import { Heading } from "@eight2five/ui/heading";
+import { HStack } from "@eight2five/ui/hstack";
+import { Pressable } from "@eight2five/ui/pressable";
+import { SafeAreaView } from "@eight2five/ui/safe-area-view";
+import { ScrollView } from "@eight2five/ui/scroll-view";
+import { Text } from "@eight2five/ui/text";
+import { VStack } from "@eight2five/ui/vstack";
 
-interface TestbedLayoutProps {
+export interface TestbedLayoutProps {
   title?: string;
   subtitle?: string;
   onBack?: () => void;
@@ -20,6 +23,7 @@ interface TestbedLayoutProps {
   children: React.ReactNode;
   contentStyle?: ViewStyle;
   scrollProps?: ScrollViewProps;
+  contentMode?: "scroll" | "static";
 }
 
 export function TestbedLayout({
@@ -30,9 +34,13 @@ export function TestbedLayout({
   children,
   contentStyle,
   scrollProps,
+  contentMode = "scroll",
 }: TestbedLayoutProps) {
   const showNav = Boolean(onBack) || Boolean(onSubBack);
   const isMultiNav = Boolean(onBack) && Boolean(onSubBack);
+  const colorScheme = useColorScheme();
+  const iconColor =
+    colorScheme === "dark" ? "rgb(245 245 245)" : "rgb(23 23 23)";
 
   // Trigger animation when nav state changes
   React.useEffect(() => {
@@ -40,77 +48,79 @@ export function TestbedLayout({
   }, [onBack, onSubBack]);
 
   return (
-    <SafeAreaView style={testbedStyles.safeArea}>
-      <View style={testbedStyles.container}>
+    <SafeAreaView style={{ flex: 1 }}>
+      <VStack className="flex-1 bg-background px-5 py-4">
         {(title || subtitle || showNav) && (
-          <View style={testbedStyles.header}>
-            <View
-              style={[
-                testbedStyles.navColumn,
-                { width: showNav ? 72 : 0, overflow: "hidden" },
-              ]}
+          <HStack className="mb-4 mt-1 items-center">
+            <Box
+              style={{ width: showNav ? 72 : 0, overflow: "hidden" }}
+              className="items-center justify-center"
             >
               {showNav && (
-                <View
-                  style={[
-                    testbedStyles.floatingNav,
-                    {
-                      borderRadius: isMultiNav ? 24 : 25,
-                    },
-                  ]}
+                <Box
+                  style={{ borderRadius: isMultiNav ? 24 : 25 }}
+                  className="border border-border bg-card p-0.5 shadow-sm"
                 >
                   {onBack && (
-                    <TouchableOpacity
+                    <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="Go to testbed home"
                       onPress={onBack}
-                      style={testbedStyles.homeButton}
+                      className="h-11 w-11 items-center justify-center"
                       testID="testbed-home-button"
                     >
-                      <MaterialIcons
-                        name="home"
-                        size={28}
-                        style={testbedStyles.homeButtonIcon}
-                      />
-                    </TouchableOpacity>
+                      <MaterialIcons name="home" size={28} color={iconColor} />
+                    </Pressable>
                   )}
                   {onSubBack && (
-                    <TouchableOpacity
+                    <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="Go back"
                       onPress={onSubBack}
-                      style={testbedStyles.subBackButton}
+                      className="h-11 w-11 items-center justify-center border-t border-border"
                       testID="testbed-sub-back-button"
                     >
                       <MaterialIcons
                         name="arrow-back"
                         size={28}
-                        color={testbedPalette.accent}
+                        color={iconColor}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
-                </View>
+                </Box>
               )}
-            </View>
+            </Box>
 
-            <View style={testbedStyles.titleBlock}>
-              {title ? <Text style={testbedStyles.title}>{title}</Text> : null}
-              {subtitle ? (
-                <Text style={testbedStyles.subtitle}>{subtitle}</Text>
+            <VStack className="shrink">
+              {title ? (
+                <Heading size="xl" className="text-foreground">
+                  {title}
+                </Heading>
               ) : null}
-            </View>
-          </View>
+              {subtitle ? (
+                <Text size="sm" className="mt-0.5 text-muted-foreground">
+                  {subtitle}
+                </Text>
+              ) : null}
+            </VStack>
+          </HStack>
         )}
 
-        <ScrollView
-          style={testbedStyles.body}
-          contentContainerStyle={contentStyle}
-          showsVerticalScrollIndicator={false}
-          {...scrollProps}
-        >
-          {children}
-        </ScrollView>
-      </View>
+        {contentMode === "scroll" ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={contentStyle}
+            showsVerticalScrollIndicator={false}
+            {...scrollProps}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <Box className="flex-1" style={contentStyle}>
+            {children}
+          </Box>
+        )}
+      </VStack>
     </SafeAreaView>
   );
 }

@@ -1,7 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { styles } from "../styles";
+import { Box } from "@eight2five/ui/box";
+import { Card } from "@eight2five/ui/card";
+import { Heading } from "@eight2five/ui/heading";
+import { HStack } from "@eight2five/ui/hstack";
+import { Pressable } from "@eight2five/ui/pressable";
 
 export const CollapsibleSection = ({
   title,
@@ -15,20 +18,22 @@ export const CollapsibleSection = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <View style={styles.section}>
-      <TouchableOpacity
-        style={styles.sectionHeader}
+    <Card className="mb-5 overflow-hidden border border-border bg-card p-0">
+      <Pressable
         onPress={() => setIsOpen(!isOpen)}
-        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        accessibilityLabel={title}
+        className="bg-muted px-4 py-3"
       >
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <MaterialIcons
-          name={isOpen ? "remove" : "add"}
-          size={20}
-          style={styles.collapseIcon}
-        />
-      </TouchableOpacity>
-      {isOpen && <View style={styles.sectionContent}>{children}</View>}
-    </View>
+        <HStack className="items-center justify-between">
+          <Heading size="sm" className="text-primary">
+            {title}
+          </Heading>
+          <MaterialIcons name={isOpen ? "remove" : "add"} size={20} />
+        </HStack>
+      </Pressable>
+      {isOpen && <Box className="p-4">{children}</Box>}
+    </Card>
   );
 };

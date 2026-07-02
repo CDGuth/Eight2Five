@@ -1,9 +1,10 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
-import { View, Text, TouchableOpacity } from "react-native";
+import { act } from "react-test-renderer";
+import { View } from "react-native";
 import { Visualization } from "../components/Visualization";
 import { HeatmapOverlay } from "../components/HeatmapOverlay";
 import { RunResult } from "../types";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 const sampleResult: RunResult = {
   id: 1,
@@ -32,7 +33,7 @@ const sampleResult: RunResult = {
 describe("Visualization", () => {
   it("renders heatmap when enabled and forwards toggle", () => {
     const onToggleHeatmap = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <Visualization
         width={10}
         length={10}
@@ -69,14 +70,9 @@ describe("Visualization", () => {
     const overlay = tree.root.findByType(HeatmapOverlay);
     expect(overlay).toBeDefined();
 
-    const toggle = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((node) =>
-        node
-          .findAllByType(Text)
-          .some((child) => child.props.children === "Hide Heatmap"),
-      );
-    if (!toggle) throw new Error("Toggle not found");
+    const toggle = tree.root.findByProps({
+      accessibilityLabel: "Toggle heatmap",
+    });
     act(() => toggle.props.onPress());
     expect(onToggleHeatmap).toHaveBeenCalled();
   });

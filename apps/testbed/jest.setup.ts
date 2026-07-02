@@ -1,9 +1,6 @@
 import { Alert } from "react-native";
-import TestRenderer, { act } from "react-test-renderer";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-
-const mountedRenderers = new Set<TestRenderer.ReactTestRenderer>();
 
 // Basic mocks for native/Expo helpers used in tests
 jest.mock("expo-clipboard", () => ({
@@ -15,6 +12,24 @@ jest.mock("react-native-view-shot", () => ({
   captureRef: jest.fn().mockResolvedValue("mock-base64"),
 }));
 
+const mockToastShow = jest.fn();
+(globalThis as any).__TESTBED_TOAST_SHOW__ = mockToastShow;
+
+jest.mock("@eight2five/ui/toast", () => {
+  const React = require("react");
+  const { View, Text } = require("react-native");
+
+  return {
+    Toast: ({ children, ...props }: any) =>
+      React.createElement(View, props, children),
+    ToastTitle: ({ children, ...props }: any) =>
+      React.createElement(Text, props, children),
+    ToastDescription: ({ children, ...props }: any) =>
+      React.createElement(Text, props, children),
+    useToast: () => ({ show: mockToastShow }),
+  };
+});
+
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -23,6 +38,57 @@ jest.mock("@expo/vector-icons", () => {
 
   return {
     MaterialIcons: MockIcon,
+  };
+});
+
+jest.mock("@shopify/react-native-skia", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const MockSkiaNode = ({ children, testID, ...props }: any) =>
+    React.createElement(View, { testID: testID ?? "skia-node", ...props }, children);
+
+  return {
+    Canvas: ({ children, testID, ...props }: any) =>
+      React.createElement(
+        View,
+        { testID: testID ?? "skia-canvas", ...props },
+        children,
+      ),
+    Rect: (props: any) =>
+      React.createElement(View, { testID: "skia-rect", ...props }),
+    Line: MockSkiaNode,
+    Path: MockSkiaNode,
+    Circle: MockSkiaNode,
+    LinearGradient: MockSkiaNode,
+    useFont: () => ({}),
+    vec: (x: number, y: number) => ({ x, y }),
+  };
+});
+
+jest.mock("victory-native", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  return {
+    CartesianChart: ({ children, data, yKeys = [] }: any) => {
+      const points = yKeys.reduce((acc: any, key: string) => {
+        acc[key] = data.map((datum: any, index: number) => ({
+          x: index,
+          y: datum[key],
+          xValue: datum.val,
+          yValue: datum[key],
+        }));
+        return acc;
+      }, {});
+      return React.createElement(
+        View,
+        { testID: "victory-cartesian-chart" },
+        typeof children === "function" ? children({ points }) : children,
+      );
+    },
+    Line: (props: any) =>
+      React.createElement(View, { testID: "victory-line", ...props }),
   };
 });
 
@@ -60,32 +126,9 @@ for (const helperPath of nativeAnimatedHelperPaths) {
 
 jest.spyOn(Alert, "alert").mockImplementation(() => {});
 
-// Ensure all react-test-renderer create calls are wrapped in act by default
-const originalCreate = TestRenderer.create.bind(TestRenderer);
-(TestRenderer as any).create = (...args: Parameters<typeof originalCreate>) => {
-  let instance: TestRenderer.ReactTestRenderer | undefined;
-  act(() => {
-    instance = originalCreate(...args);
-  });
-  if (instance) {
-    mountedRenderers.add(instance);
-  }
-  return instance as TestRenderer.ReactTestRenderer;
-};
-
 afterEach(() => {
-  mountedRenderers.forEach((renderer) => {
-    try {
-      act(() => {
-        renderer.unmount();
-      });
-    } catch {
-      // Ignore cleanup errors to avoid masking assertion failures
-    }
-  });
-
-  mountedRenderers.clear();
   jest.clearAllTimers();
   jest.useRealTimers();
   jest.clearAllMocks();
+  mockToastShow.mockClear();
 });

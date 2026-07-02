@@ -1,11 +1,17 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, LayoutChangeEvent } from "react-native";
+import { View, LayoutChangeEvent } from "react-native";
 import { AnchorGeometry } from "@eight2five/mobile/localization/types";
+import { Box } from "@eight2five/ui/box";
+import { Pressable } from "@eight2five/ui/pressable";
+import { Text } from "@eight2five/ui/text";
 import { RunResult } from "../types";
-import { styles, ACCENT_COLOR } from "../styles";
 import { DraggableMarker } from "./DraggableMarker";
-import { HeatmapOverlay } from "./HeatmapOverlay";
+import { HeatmapOverlay, HEATMAP_GRADIENT_STOPS } from "./HeatmapOverlay";
 import { InputRow } from "./InputRow";
+
+const ANCHOR_COLOR = "#333";
+const TRUE_POSITION_COLOR = "#2e7d32";
+const ESTIMATED_POSITION_COLOR = "#d32f2f";
 
 export const Visualization = ({
   width,
@@ -67,84 +73,53 @@ export const Visualization = ({
   const finalPopulation = result?.finalPopulation;
 
   return (
-    <View style={useWhiteBackground && { backgroundColor: "#fff" }}>
+    <Box style={useWhiteBackground && { backgroundColor: "#fff" }}>
       {isSetup && !hideControls && (
-        <Text
-          style={{
-            fontSize: 12,
-            color: "#666",
-            marginBottom: 8,
-            textAlign: "center",
-          }}
-        >
+        <Text size="xs" className="mb-2 text-center text-muted-foreground">
           Drag the markers to configure the field.
         </Text>
       )}
       {!hideControls && (
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            minHeight: 20,
-            zIndex: 100,
-          }}
-        >
+        <Box className="z-[100] flex min-h-[20px] flex-row items-center justify-end">
           {!isSetup && !isRunning && (
             <>
               {result && (
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <TouchableOpacity
+                <Box className="flex-row items-center">
+                  <Pressable
                     onPress={onToggleHeatmap}
-                    style={{
-                      marginRight: 15,
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                    }}
+                    accessibilityLabel="Toggle heatmap"
+                    className="mr-[15px] px-3 py-2"
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Text
-                      style={{
-                        color: ACCENT_COLOR,
-                        fontWeight: "600",
-                        fontSize: 12,
-                      }}
-                    >
+                    <Text size="xs" className="font-semibold text-primary">
                       {showHeatmap ? "Hide Heatmap" : "Show Heatmap"}
                     </Text>
-                  </TouchableOpacity>
-                </View>
+                  </Pressable>
+                </Box>
               )}
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setShowPopulation(!showPopulation)}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                }}
+                accessibilityLabel="Toggle population"
+                className="px-3 py-2"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text
-                  style={{
-                    color: ACCENT_COLOR,
-                    fontWeight: "600",
-                    fontSize: 12,
-                  }}
-                >
+                <Text size="xs" className="font-semibold text-primary">
                   {showPopulation ? "Hide Population" : "Show Population"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </>
           )}
-        </View>
+        </Box>
       )}
-      <View
+      <Box
+        className="relative rounded-lg bg-muted"
         style={[
-          styles.field,
           { height: viewHeight || 200, marginVertical: 15 },
           useWhiteBackground && { backgroundColor: "#fff" },
         ]}
         onLayout={onLayout}
       >
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Grid Lines (5m intervals) */}
         {scale > 0 &&
           Array.from({ length: Math.floor(width / 5) + 1 }).map((_, i) => (
@@ -161,6 +136,7 @@ export const Visualization = ({
               }}
             />
           ))}
+        {/* Drawing code — intentionally uses RN primitives */}
         {scale > 0 &&
           Array.from({ length: Math.floor(length / 5) + 1 }).map((_, i) => (
             <View
@@ -188,6 +164,7 @@ export const Visualization = ({
           />
         )}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Initial Population */}
         {showPopulation &&
           initialPopulation?.map((p, i) => (
@@ -206,6 +183,7 @@ export const Visualization = ({
             />
           ))}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Anchors */}
         {anchors.map((a, i) => (
           <DraggableMarker
@@ -215,7 +193,7 @@ export const Visualization = ({
             scale={scale}
             width={width}
             length={length}
-            color="#333"
+            color={ANCHOR_COLOR}
             onDrag={(x, y) => onUpdateAnchor(i, x, y)}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -224,6 +202,7 @@ export const Visualization = ({
           />
         ))}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* True Position */}
         {(!isRandomTruePos || result) && (
           <DraggableMarker
@@ -232,7 +211,7 @@ export const Visualization = ({
             scale={scale}
             width={width}
             length={length}
-            color="#2e7d32"
+            color={TRUE_POSITION_COLOR}
             size={16}
             onDrag={onUpdateTruePos}
             onDragStart={onDragStart}
@@ -246,6 +225,7 @@ export const Visualization = ({
           />
         )}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Estimated Position */}
         {estPos && (
           <View
@@ -256,7 +236,7 @@ export const Visualization = ({
               width: 16,
               height: 16,
               borderRadius: 8,
-              backgroundColor: "#d32f2f",
+              backgroundColor: ESTIMATED_POSITION_COLOR,
               borderWidth: 2,
               borderColor: "#fff",
               zIndex: 30,
@@ -264,6 +244,7 @@ export const Visualization = ({
           />
         )}
 
+        {/* Drawing code — intentionally uses RN primitives */}
         {/* Final Population */}
         {showPopulation &&
           finalPopulation?.map((p, i) => (
@@ -276,104 +257,76 @@ export const Visualization = ({
                 width: 6,
                 height: 6,
                 borderRadius: 3,
-                backgroundColor: "rgba(255, 165, 0, 0.6)", // Orange
+                backgroundColor: "rgba(255, 165, 0, 0.6)",
                 zIndex: 40,
               }}
             />
           ))}
-      </View>
+      </Box>
 
       {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View
-            style={[styles.legendMarkerBase, { backgroundColor: "#333" }]}
-          />
-          <Text style={styles.legendText}>Anchor</Text>
-        </View>
+      <Box className="mt-2.5 flex flex-row flex-wrap justify-center">
+        <Box className="mb-2 mr-4 flex flex-row items-center">
+          <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-anchor" />
+          <Text size="xs" className="text-muted-foreground">
+            Anchor
+          </Text>
+        </Box>
         {(!isRandomTruePos || result) && (
-          <View style={styles.legendItem}>
-            <View
-              style={[styles.legendMarkerBase, { backgroundColor: "#2e7d32" }]}
-            />
-            <Text style={styles.legendText}>True Position</Text>
-          </View>
+          <Box className="mb-2 mr-4 flex flex-row items-center">
+            <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-true-position" />
+            <Text size="xs" className="text-muted-foreground">
+              True Position
+            </Text>
+          </Box>
         )}
         {result && (
           <>
-            <View style={styles.legendItem}>
-              <View
-                style={[
-                  styles.legendMarkerBase,
-                  { backgroundColor: "#d32f2f" },
-                ]}
-              />
-              <Text style={styles.legendText}>Estimated Position</Text>
-            </View>
+            <Box className="mb-2 mr-4 flex flex-row items-center">
+              <View className="mr-1.5 h-2.5 w-2.5 rounded-full border border-background bg-testbed-estimated-position" />
+              <Text size="xs" className="text-muted-foreground">
+                Estimated Position
+              </Text>
+            </Box>
             {showPopulation && (
               <>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendMarkerBase,
-                      {
-                        backgroundColor: "rgba(100, 100, 100, 0.3)",
-                        borderWidth: 0,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.legendText}>Initial Population</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendMarkerBase,
-                      {
-                        backgroundColor: "rgba(255, 165, 0, 0.6)",
-                        borderWidth: 0,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.legendText}>Final Population</Text>
-                </View>
+                <Box className="mb-2 mr-4 flex flex-row items-center">
+                  <View className="mr-1.5 h-2.5 w-2.5 rounded-full bg-testbed-initial-population" />
+                  <Text size="xs" className="text-muted-foreground">
+                    Initial Population
+                  </Text>
+                </Box>
+                <Box className="mb-2 mr-4 flex flex-row items-center">
+                  <View className="mr-1.5 h-2.5 w-2.5 rounded-full bg-testbed-final-population" />
+                  <Text size="xs" className="text-muted-foreground">
+                    Final Population
+                  </Text>
+                </Box>
               </>
             )}
           </>
         )}
         {showHeatmap && result && (
-          <View
-            style={[
-              styles.legendItem,
-              { width: "100%", justifyContent: "center", marginTop: 10 },
-            ]}
-          >
-            <Text style={[styles.legendText, { marginRight: 8 }]}>
+          <Box className="mt-2.5 flex w-full flex-row items-center justify-center">
+            <Text size="xs" className="mr-2 text-muted-foreground">
               Low Error
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                height: 12,
-                width: 120,
-                borderRadius: 6,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "#ddd",
-              }}
-            >
-              <View style={{ flex: 1, backgroundColor: "rgb(128, 0, 128)" }} />
-              <View style={{ flex: 1, backgroundColor: "rgb(160, 64, 96)" }} />
-              <View style={{ flex: 1, backgroundColor: "rgb(192, 128, 64)" }} />
-              <View style={{ flex: 1, backgroundColor: "rgb(224, 192, 32)" }} />
-              <View style={{ flex: 1, backgroundColor: "rgb(255, 255, 0)" }} />
+            <View className="h-3 w-[120px] flex-row overflow-hidden rounded-md border border-border">
+              {HEATMAP_GRADIENT_STOPS.map((color, i) => (
+                <View
+                  key={i}
+                  className="flex-1"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
             </View>
-            <Text style={[styles.legendText, { marginLeft: 8 }]}>
+            <Text size="xs" className="ml-2 text-muted-foreground">
               High Error
             </Text>
-          </View>
+          </Box>
         )}
         {showHeatmap && result && onResolutionChange && (
-          <View style={{ width: "100%", marginTop: 10, paddingHorizontal: 20 }}>
+          <Box className="mt-2.5 w-full px-5">
             <InputRow
               label="Heatmap Resolution"
               value={heatmapResolution}
@@ -388,9 +341,9 @@ export const Visualization = ({
               }}
               tooltip="The number of sample points per axis (e.g. 50x50). Higher values provide more detail but take longer to compute and render. Range: 10-100."
             />
-          </View>
+          </Box>
         )}
-      </View>
-    </View>
+      </Box>
+    </Box>
   );
 };

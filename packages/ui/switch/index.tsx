@@ -10,6 +10,13 @@ const UISwitch = createSwitch({
   Root: withStyleContext(RNSwitch),
 });
 
+type StyledSwitchProps = Omit<
+  React.ComponentProps<typeof UISwitch>,
+  'className'
+> & { className?: string };
+
+const StyledSwitch = UISwitch as React.ComponentType<StyledSwitchProps>;
+
 const switchStyle = tva({
   base: 'data-[focus=true]:outline-0 data-[focus=true]:ring-2 data-[focus=true]:ring-indicator-primary web:cursor-pointer disabled:cursor-not-allowed data-[disabled=true]:opacity-40 data-[invalid=true]:border-destructive data-[invalid=true]:rounded-xl data-[invalid=true]:border-2',
 
@@ -22,18 +29,18 @@ const switchStyle = tva({
   },
 });
 
-type ISwitchProps = React.ComponentProps<typeof UISwitch> &
-  VariantProps<typeof switchStyle>;
+type ISwitchProps = Omit<React.ComponentProps<typeof UISwitch>, 'className'> &
+  VariantProps<typeof switchStyle> & { className?: string };
 const Switch = React.forwardRef<
   React.ComponentRef<typeof UISwitch>,
   ISwitchProps
 >(function Switch({ className, size = 'md', ...props }, ref) {
   return (
-    <UISwitch
-      ref={ref}
-      {...props}
-      className={switchStyle({ size, class: className })}
-    />
+      <StyledSwitch
+        ref={ref}
+        {...props}
+        className={switchStyle({ size, class: className })}
+      />
   );
 });
 

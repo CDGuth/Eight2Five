@@ -1,6 +1,6 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { Text, TouchableOpacity } from "react-native";
+import { Text } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import OptimizationTestScreen from "..";
 import { RunResult } from "../types";
@@ -149,7 +149,6 @@ const setterNames = [
   "setFireflyPlacementMode",
   "setFireflySigma",
   "setIsRegenerateFirefliesEveryRun",
-  "setCurrentInitialFireflies",
   "setTestMode",
   "setNumRuns",
   "setSweepConfig",
@@ -243,34 +242,33 @@ describe("OptimizationTestScreen", () => {
     return tree;
   };
 
+  const findPressableByText = (
+    tree: TestRenderer.ReactTestRenderer,
+    text: string,
+  ) =>
+    tree.root
+      .findAll(
+        (node) =>
+          typeof node.props.onPress === "function" &&
+          node
+            .findAllByType(Text)
+            .some(
+              (textNode: TestRenderer.ReactTestInstance) =>
+                textNode.props.children === text,
+            ),
+      )
+      .at(0);
+
   it("triggers run action and copies visualization", async () => {
     const tree = render();
 
-    const runButton = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: TestRenderer.ReactTestInstance) =>
-        n
-          .findAllByType(Text)
-          .some(
-            (t: TestRenderer.ReactTestInstance) =>
-              t.props.children === "Run Optimization Test",
-          ),
-      );
+    const runButton = findPressableByText(tree, "Run Optimization Test");
     await act(async () => {
       await runButton?.props.onPress();
     });
     expect(mockActions.runOptimizationTest).toHaveBeenCalled();
 
-    const copyButton = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: TestRenderer.ReactTestInstance) =>
-        n
-          .findAllByType(Text)
-          .some(
-            (t: TestRenderer.ReactTestInstance) =>
-              t.props.children === "Copy Image",
-          ),
-      );
+    const copyButton = findPressableByText(tree, "Copy Image");
     await act(async () => {
       await copyButton?.props.onPress();
     });
@@ -282,16 +280,7 @@ describe("OptimizationTestScreen", () => {
     mockState = { ...createBaseState(), viewMode: "results", isRunning: false };
     const tree = render();
 
-    const configBackButton = tree.root
-      .findAllByType(TouchableOpacity)
-      .find((n: TestRenderer.ReactTestInstance) =>
-        n
-          .findAllByType(Text)
-          .some(
-            (t: TestRenderer.ReactTestInstance) =>
-              t.props.children === "Back to Configuration",
-          ),
-      );
+    const configBackButton = findPressableByText(tree, "Back to Configuration");
 
     act(() => configBackButton?.props.onPress());
 

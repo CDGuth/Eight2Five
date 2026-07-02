@@ -1,9 +1,10 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { Dropdown } from "../components/Dropdown";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 const render = (element: React.ReactElement) => {
-  return TestRenderer.create(element);
+  return renderWithAct(element);
 };
 
 describe("Dropdown", () => {
@@ -23,11 +24,10 @@ describe("Dropdown", () => {
       />,
     );
 
-    const dropdown = tree.root.findByType(Dropdown);
-    const button = tree.root.findByProps({ testID: "dropdown-button" });
+    const select = tree.root.findByProps({ selectedValue: "a" });
 
-    act(() => button.props.onPress());
-    act(() => dropdown.props.onSelect("b"));
+    act(() => select.props.onOpen());
+    act(() => select.props.onValueChange("b"));
 
     expect(onToggle).toHaveBeenCalledWith(true);
     expect(onSelect).toHaveBeenCalledWith("b");

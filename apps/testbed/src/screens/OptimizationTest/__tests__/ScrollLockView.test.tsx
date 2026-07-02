@@ -1,12 +1,13 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { View } from "react-native";
 import { ScrollLockView } from "../components/ScrollLockView";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 describe("ScrollLockView", () => {
   it("locks and unlocks scrolling when touched", () => {
     const onToggleScroll = jest.fn();
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <ScrollLockView onToggleScroll={onToggleScroll}>
         <View testID="content" />
       </ScrollLockView>,

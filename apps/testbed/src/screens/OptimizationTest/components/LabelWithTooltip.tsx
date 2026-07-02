@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
-import { styles } from "../styles";
-import { testbedPalette } from "../../../styles/testbed";
+import { HStack } from "@eight2five/ui/hstack";
+import { HelpCircleIcon, Icon } from "@eight2five/ui/icon";
+import { Pressable } from "@eight2five/ui/pressable";
+import { Text } from "@eight2five/ui/text";
+
+import { useTestbedToast } from "../../../hooks/useTestbedToast";
 
 export const LabelWithTooltip = ({
   label,
@@ -10,20 +12,29 @@ export const LabelWithTooltip = ({
 }: {
   label: string;
   tooltip?: string;
-}) => (
-  <View style={styles.labelContainer}>
-    <Text style={styles.labelText}>{label}</Text>
-    {tooltip && (
-      <TouchableOpacity
-        onPress={() => Alert.alert(label, tooltip)}
-        style={{ marginLeft: 6 }}
-      >
-        <MaterialIcons
-          name="help-outline"
-          size={16}
-          color={testbedPalette.muted}
-        />
-      </TouchableOpacity>
-    )}
-  </View>
-);
+}) => {
+  const showToast = useTestbedToast();
+
+  return (
+    <HStack space="xs" className="items-center">
+      <Text size="sm" className="text-foreground">
+        {label}
+      </Text>
+      {tooltip && (
+        <Pressable
+          onPress={() =>
+            showToast({ title: label, description: tooltip, action: "info" })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Show help for ${label}`}
+        >
+          <Icon
+            as={HelpCircleIcon}
+            size="sm"
+            className="text-muted-foreground"
+          />
+        </Pressable>
+      )}
+    </HStack>
+  );
+};

@@ -1,7 +1,8 @@
 import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
+import { act } from "react-test-renderer";
 import { View } from "react-native";
 import { DraggableMarker } from "../components/DraggableMarker";
+import { renderWithAct } from "../../../testUtils/renderWithAct";
 
 describe("DraggableMarker", () => {
   it("clamps drag movement within bounds", () => {
@@ -9,7 +10,7 @@ describe("DraggableMarker", () => {
     const onDragStart = jest.fn();
     const onDragEnd = jest.fn();
 
-    const tree = TestRenderer.create(
+    const tree = renderWithAct(
       <DraggableMarker
         x={5}
         y={5}
