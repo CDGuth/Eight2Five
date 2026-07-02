@@ -55,11 +55,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "20"
-          cache: npm
+          cache: pnpm
 
       - name: Setup Java
         if: ${{ inputs.platform == 'android' }}
@@ -94,16 +99,16 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Validate repository
         if: ${{ inputs.run_validation }}
         run: |
-          npm run lint
-          npm run type-check
-          npm run test
-          npm run validate:expo:doctor
-          npm run validate:expo:install-check
+          pnpm lint
+          pnpm type-check
+          pnpm test
+          pnpm validate:expo:doctor
+          pnpm validate:expo:install-check
 
       - name: Resolve build inputs
         id: resolve
@@ -172,7 +177,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! npx eas-cli@latest build --help | grep -- "--output" > /dev/null; then
+          if ! pnpm dlx eas-cli@latest build --help | grep -- "--output" > /dev/null; then
             echo "The installed EAS CLI does not support 'eas build --output'. Refusing to run a local build with an unknown artifact path." >&2
             exit 1
           fi
@@ -187,7 +192,7 @@ jobs:
           set -euo pipefail
 
           CMD=(
-            npx eas-cli@latest build
+            pnpm dlx eas-cli@latest build
             --local
             --platform "${{ steps.resolve.outputs.platform }}"
             --profile "${{ steps.resolve.outputs.profile }}"

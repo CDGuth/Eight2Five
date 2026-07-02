@@ -272,7 +272,7 @@ Deferred native-build and hardware validation checklist:
 From the repository root:
 
 ```bash
-npm run lint --workspace modules/expo-kbeaconpro
-npm run type-check --workspace modules/expo-kbeaconpro
-npm run test --workspace modules/expo-kbeaconpro
+pnpm --filter expo-kbeaconpro lint
+pnpm --filter expo-kbeaconpro type-check
+pnpm --filter expo-kbeaconpro test
 ```

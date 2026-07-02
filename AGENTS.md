@@ -19,13 +19,13 @@ Expo-based React Native monorepo for tracking marching band performers through t
 
 ## Dependency Management
 - **Shared Mobile Dependency Policy**: If a mobile package is used by both Expo apps, or belongs in shared mobile logic, install it in `packages/mobile` to keep future web/backend apps isolated from mobile dependencies.
-- Command: `npm install <package> --workspace @eight2five/mobile`
+- Command: `pnpm --filter @eight2five/mobile add <package>`
 
 ## Development & Verification
 Run from the root of the repository:
-- **`npm run validate`**: Runs linting, type-checking, testing, and Expo checks across all workspaces. Use this as your primary verification gate.
-- **`npm run validate:expo:doctor`**: Required after changing Expo config, SDKs, or native plugins.
-- **`npm run validate:expo:install-check`**: Required after any dependency updates to verify Expo compatibility.
+- **`pnpm validate`**: Runs linting, type-checking, testing, and Expo checks across all workspaces. Use this as your primary verification gate.
+- **`pnpm validate:expo:doctor`**: Required after changing Expo config, SDKs, or native plugins.
+- **`pnpm validate:expo:install-check`**: Required after any dependency updates to verify Expo compatibility.
 
 ## Context7
 Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service - even well-known ones like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. This includes API syntax, configuration, version migration, library-specific debugging, setup instructions, and CLI tool usage. Use even when you think you know the answer - your training data may not reflect recent changes. Prefer this over web search for library docs.

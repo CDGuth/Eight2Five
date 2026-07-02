@@ -18,9 +18,9 @@ This repository contains the production mobile client, feature testbed, shared l
 ## Quick Start
 
 ```bash
-npm ci
-npm run start:mobile
-npm run start:testbed
+pnpm install
+pnpm start:mobile
+pnpm start:testbed
 ```
 
 ## Validation Commands
@@ -28,21 +28,21 @@ npm run start:testbed
 Prefer the root validation entry points for most work:
 
 ```bash
-npm run validate:core
-npm run validate
+pnpm validate:core
+pnpm validate
 ```
 
-- `npm run validate:core` runs type-check, lint, and test across workspaces.
-- `npm run validate` adds Expo doctor and Expo install checks for the Expo app workspaces.
+- `pnpm validate:core` runs type-check, lint, and test across workspaces.
+- `pnpm validate` adds Expo doctor and Expo install checks for the Expo app workspaces.
 
 Use the lower-level commands directly when you only need a specific check:
 
 ```bash
-npm run type-check
-npm run lint
-npm run test
-npx expo-doctor
-npx expo install --check
+pnpm type-check
+pnpm lint
+pnpm test
+pnpm validate:expo:doctor
+pnpm validate:expo:install-check
 ```
 
 ## High-Level Architecture

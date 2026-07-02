@@ -14,15 +14,15 @@ Shared logic for localization, hooks, providers, and utilities used by apps in t
 Preferred from repo root:
 
 ```bash
-npm run validate:core
+pnpm validate:core
 ```
 
 Workspace-scoped checks:
 
 ```bash
-npm run lint --workspace @eight2five/mobile
-npm run type-check --workspace @eight2five/mobile
-npm run test --workspace @eight2five/mobile
+pnpm --filter @eight2five/mobile lint
+pnpm --filter @eight2five/mobile type-check
+pnpm --filter @eight2five/mobile test
 ```
 
 ## Provider abstractions

@@ -17,9 +17,9 @@ Interactive playground for the MFASA optimizer, propagation models, and visualiz
 
 ### Run
 ```bash
-npm run start:testbed      # from repo root
-npm run android:testbed
-npm run ios:testbed
+pnpm start:testbed      # from repo root
+pnpm android:testbed
+pnpm ios:testbed
 ```
 
 ### Quality
@@ -27,15 +27,15 @@ npm run ios:testbed
 Preferred from repo root:
 
 ```bash
-npm run validate
+pnpm validate
 ```
 
 Workspace-scoped checks:
 
 ```bash
-npm run lint --workspace apps/testbed
-npm run type-check --workspace apps/testbed
-npm run test --workspace apps/testbed
+pnpm --filter eight2five-testbed lint
+pnpm --filter eight2five-testbed type-check
+pnpm --filter eight2five-testbed test
 ```
 
 ### Key files
@@ -62,7 +62,7 @@ npm run test --workspace apps/testbed
 Use EAS from this directory when exporting builds for experiments:
 ```bash
 cd apps/testbed
-npm ci
-npm install -g eas-cli
+pnpm install
+pnpm add --global eas-cli
 EAS_NO_VCS=1 eas build --platform android --profile development
 ```

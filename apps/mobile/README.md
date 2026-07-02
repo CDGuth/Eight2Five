@@ -9,9 +9,9 @@ Primary production client for performer localization.
 
 ### Run
 ```bash
-npm run start:mobile      # from repo root
-npm run android:mobile    # run on Android device/emulator
-npm run ios:mobile        # run on iOS simulator/device
+pnpm start:mobile      # from repo root
+pnpm android:mobile    # run on Android device/emulator
+pnpm ios:mobile        # run on iOS simulator/device
 ```
 
 ### Quality
@@ -19,16 +19,16 @@ npm run ios:mobile        # run on iOS simulator/device
 Preferred from repo root:
 
 ```bash
-npm run validate:core
-npm run validate
+pnpm validate:core
+pnpm validate
 ```
 
 Workspace-scoped checks:
 
 ```bash
-npm run lint --workspace apps/mobile
-npm run type-check --workspace apps/mobile
-npm run test --workspace apps/mobile
+pnpm --filter eight2five-mobile lint
+pnpm --filter eight2five-mobile type-check
+pnpm --filter eight2five-mobile test
 ```
 
 ### Expo config
@@ -48,8 +48,8 @@ npm run test --workspace apps/mobile
 Use EAS (local or cloud) from this directory:
 ```bash
 cd apps/mobile
-npm ci
-npm install -g eas-cli
+pnpm install
+pnpm add --global eas-cli
 EAS_NO_VCS=1 eas build --platform android --profile development
 ```
 Adjust profile as needed (see root `eas.json`).

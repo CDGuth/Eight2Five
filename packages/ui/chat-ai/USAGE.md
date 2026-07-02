@@ -7,7 +7,7 @@ A compound component for building chat AI interfaces with a custom API.
 Make sure you have `@legendapp/list` installed:
 
 ```bash
-npm install @legendapp/list
+pnpm add @legendapp/list
 ```
 
 ## Basic Usage

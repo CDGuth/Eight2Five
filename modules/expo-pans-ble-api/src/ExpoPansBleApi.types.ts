@@ -71,10 +71,7 @@ export interface PansBleCapabilities {
 }
 
 export type PansBlePermissionState =
-  | "granted"
-  | "denied"
-  | "undetermined"
-  | "unavailable";
+  "granted" | "denied" | "undetermined" | "unavailable";
 
 export interface PansBlePermissionStatus {
   bluetooth: PansBlePermissionState;
