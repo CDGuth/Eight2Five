@@ -14,14 +14,15 @@
     "test": "jest --watchAll=false --passWithNoTests --runInBand",
     "validate:expo:doctor": "npx expo-doctor",
     "validate:expo:install-check": "npx expo install --check",
+    "validate:expo:install-fix": "npx expo install --fix",
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   },
   "dependencies": {
     "@eight2five/mobile": "*",
     "@eight2five/ui": "*",
-    "expo": "^56.0.12",
-    "expo-dev-client": "~56.0.20",
-    "expo-router": "~56.2.11",
+    "expo": "~56.0.13",
+    "expo-dev-client": "~56.0.21",
+    "expo-router": "~56.2.12",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0"
