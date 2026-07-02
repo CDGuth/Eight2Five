@@ -40,5 +40,31 @@ Do not use for: refactoring, writing scripts from scratch, debugging business lo
 ## Documentation
 - Detailed outdoor BLE localization math (Two-Ray Model) paper is at `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`.
 
+## Git Workflow
+
+This project follows a disciplined git workflow. The rules below are mandatory.
+
+### Feature Branch Workflow
+
+1. **Develop on personal feature branches.** All work happens on branches branched off `main`. Commit freely during development — noisy commits, temporary debug code, and experimentation are fine at this stage.
+2. **Interactive rebase before merging.** Before merging a feature branch into `main`, perform an interactive rebase (`git rebase -i main`) to:
+   - **Squash** noisy, incremental, or "wip" commits into logical units
+   - **Reword** commit messages so each commit describes *what* and *why* clearly
+   - **Reorder** commits for a logical narrative
+   - **Remove** temporary or debugging commits entirely
+   - The goal is a branch history that is clean, self-explanatory, and easy to review.
+3. **Merge into main with `--merge` via PR.** After the rebase is complete and the branch history is clean, open a pull request and merge using `gh pr merge --merge` (creates a merge commit, preserving individual commit history). All changes must go through a PR — **no direct or force pushes to `main` are allowed**. **Never merge with `--squash` or `--rebase`** — those flatten or discard history and are only acceptable on personal feature branches or non-shared branches that will never be merged into `main`.
+4. **Clean up local and remote branches after merging.** After the PR has been merged, delete the local feature branch (`git branch -d <branch-name>`) and the remote feature branch (`git push origin --delete <branch-name>` or via `gh pr merge --delete-branch`). This prevents stale branches from accumulating locally and on the remote.
+5. **Never rewrite history on shared branches.** Interactive rebasing is acceptable and encouraged for personal feature branches, but `main` (and any other long-lived shared branch) must **never** have its history rewritten.
+
+### Commit and Pull Request Conventions
+
+- When creating a commit, load the `conventional-commit` skill to produce properly structured commit messages.
+- When creating a pull request, load the `create-pr` skill to follow the project's PR conventions.
+
+### State-Changing Git Commands Require Approval
+
+**Always ask the user for explicit approval before running any state-changing git commands**, including but not limited to: `git add`, `git commit`, `git merge`, `git rebase`, `git reset`, `git push`, `git revert`, `git cherry-pick`, and `git rm`. Read-only commands (`git status`, `git log`, `git diff`, `git branch`) do not require approval.
+
 ## Git Notes
 - `.opencode/opencode.json` is set to `--skip-worktree` (local changes are ignored by git; the committed version is preserved). Do not try to commit changes to this file. If you need to modify it intentionally, run `git update-index --no-skip-worktree .opencode/opencode.json`, make your change, commit it, then re-apply `--skip-worktree`.
