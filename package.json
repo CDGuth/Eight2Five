@@ -23,6 +23,7 @@
     "test": "npm run test --workspaces --if-present",
     "validate:expo:doctor": "npm run validate:expo:doctor --workspaces --if-present",
     "validate:expo:install-check": "npm run validate:expo:install-check --workspaces --if-present",
+    "validate:expo:install-fix": "npm run validate:expo:install-fix --workspaces --if-present",
     "validate": "npm run type-check && npm run lint && npm run test && npm run validate:expo:doctor && npm run validate:expo:install-check"
   },
   "devDependencies": {
