@@ -24,11 +24,11 @@ Expo-based React Native monorepo for tracking marching band performers through t
 
 ## Development & Verification
 Run from the root of the repository:
-- **`npm run validate`**: Runs linting, type-checking, testing, and Expo checks across all workspaces. Use this as your primary verification gate.
+- **`npm run validate`**: Runs type-checking, linting, syncpack lint, testing, and Expo checks across all workspaces. Use this as your primary verification gate.
 - **`npm run syncpack:lint`**: Checks dependency version consistency across workspace manifests.
 - **`npm run syncpack:fix`**: Applies Syncpack's autofixes for dependency version consistency issues.
-- **`npm run validate:expo:doctor`**: Required after changing Expo config, SDKs, or native plugins.
-- **`npm run validate:expo:install-check`**: Required after any dependency updates to verify Expo compatibility.
+- **`npm run expo:doctor`**: Required after changing Expo config, SDKs, or native plugins.
+- **`npm run expo:install-check`**: Required after any dependency updates to verify Expo compatibility.
 
 ## Context7
 Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service - even well-known ones like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. This includes API syntax, configuration, version migration, library-specific debugging, setup instructions, and CLI tool usage. Use even when you think you know the answer - your training data may not reflect recent changes. Prefer this over web search for library docs.
