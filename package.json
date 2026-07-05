@@ -19,6 +19,8 @@
     "ios:testbed": "npm run ios --workspace apps/testbed",
     "lint": "npm run lint --workspaces --if-present",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "syncpack:lint": "syncpack lint",
+    "syncpack:fix": "syncpack fix",
     "type-check": "npm run type-check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "validate:expo:doctor": "npm run validate:expo:doctor --workspaces --if-present",
@@ -31,6 +33,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.20.0",
     "babel-preset-expo": "~56.0.4",
+    "syncpack": "^15.3.2",
     "typescript": "~6.0.3"
   }
 }

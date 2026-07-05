@@ -6,6 +6,7 @@ Expo-based React Native monorepo for tracking marching band performers through t
 - **`apps/mobile`**: Main React Native application used on the field.
 - **`apps/testbed`**: Sandbox app to validate localization algorithms (MFASA, path-loss models) and new features independent of the main app.
 - **`packages/mobile`** (`@eight2five/mobile`): Shared mobile logic provider. Includes localization (Kalman filter, MFASA optimizer), hooks, utils, and mobile dependency surface shared by the Expo apps.
+- **`packages/ui`** (`@eight2five/ui`): Shared gluestack-ui v5 component package consumed by Expo apps. Keep generated UI components and shared presentation primitives here rather than duplicating app-local UI code.
 - **`modules/expo-kbeaconpro`**: Native Expo module wrapping KBeaconPro SDKs (BLE).
 - **`modules/expo-pans-ble-api`**: Native Expo module for DWM1001/PANS interaction (UWB).
 
@@ -24,6 +25,8 @@ Expo-based React Native monorepo for tracking marching band performers through t
 ## Development & Verification
 Run from the root of the repository:
 - **`npm run validate`**: Runs linting, type-checking, testing, and Expo checks across all workspaces. Use this as your primary verification gate.
+- **`npm run syncpack:lint`**: Checks dependency version consistency across workspace manifests.
+- **`npm run syncpack:fix`**: Applies Syncpack's autofixes for dependency version consistency issues.
 - **`npm run validate:expo:doctor`**: Required after changing Expo config, SDKs, or native plugins.
 - **`npm run validate:expo:install-check`**: Required after any dependency updates to verify Expo compatibility.
 
@@ -36,9 +39,6 @@ Do not use for: refactoring, writing scripts from scratch, debugging business lo
 2. Pick the best match (ID format: `/org/project`) by: exact name match, description relevance, code snippet count, source reputation (High/Medium preferred), and benchmark score (higher is better). If results don't look right, try alternate names or queries (e.g., "next.js" not "nextjs", or rephrase the question). Use version-specific IDs when the user mentions a version
 3. `query-docs` with the selected library ID and the user's full question (not single words)
 4. Answer using the fetched docs
-
-## Documentation
-- Detailed outdoor BLE localization math (Two-Ray Model) paper is at `.github/docs/BLE-Based Outdoor Localization With Two-Ray Ground-Reflection Model Using Optimization Algorithms/llms-txt-documentation.md`.
 
 ## Git Workflow
 
