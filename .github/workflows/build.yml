@@ -40,14 +40,20 @@ on:
           - production
           - development-simulator (iOS only)
           - preview-simulator (iOS only)
-      run_validation:
-        description: Run validation scripts before building
+      run_validation_workflow:
+        description: Run validation workflow before building
         type: boolean
         required: true
         default: true
 
 jobs:
+  validate:
+    if: ${{ inputs.run_validation_workflow }}
+    uses: ./.github/workflows/validate.yml
+
   build:
+    needs: [validate]
+    if: ${{ always() && (!inputs.run_validation_workflow || needs.validate.result == 'success') }}
     runs-on: ${{ inputs.platform == 'android' && 'ubuntu-24.04' || 'macos-26' }}
     env:
       NODE_OPTIONS: --openssl-legacy-provider
@@ -95,15 +101,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Validate repository
-        if: ${{ inputs.run_validation }}
-        run: |
-          npm run lint
-          npm run type-check
-          npm run test
-          npm run validate:expo:doctor
-          npm run validate:expo:install-check
 
       - name: Resolve build inputs
         id: resolve

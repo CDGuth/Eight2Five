@@ -39,6 +39,8 @@ export type PansLocationDataMode = 0 | 1 | 2;
 export type PansWriteType = "withResponse" | "withoutResponse";
 
 export interface PansPresenceData {
+  /** Raw PANS BLE service-data bytes emitted by native discovery events. */
+  raw?: number[];
   rawOperationModeByte: number;
   rawUwbModeBits: number;
   role: PansNodeRole;

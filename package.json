@@ -23,9 +23,14 @@
     "syncpack:fix": "syncpack fix",
     "type-check": "npm run type-check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:native:expo-pans-ble-api:ios": "npm run test:native:ios --workspace expo-pans-ble-api",
+    "test:native:expo-pans-ble-api:android": "npm run test:native:android --workspace expo-pans-ble-api",
+    "test:native:expo-pans-ble-api": "npm run test:native:expo-pans-ble-api:ios && npm run test:native:expo-pans-ble-api:android",
     "expo:doctor": "npm run expo:doctor --workspaces --if-present",
     "expo:install-check": "npm run expo:install-check --workspaces --if-present",
     "expo:install-fix": "npm run expo:install-fix --workspaces --if-present",
+    "validate:expo:doctor": "npm run expo:doctor",
+    "validate:expo:install-check": "npm run expo:install-check",
     "validate": "npm run type-check && npm run lint && npm run syncpack:lint && npm run test && npm run expo:doctor && npm run expo:install-check"
   },
   "devDependencies": {

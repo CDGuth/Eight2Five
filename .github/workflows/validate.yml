@@ -1,4 +1,4 @@
-name: Test
+name: Validate
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - "LICENSE"
       - "docs/**"
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   test:
@@ -29,6 +30,9 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Run syncpack lint
+        run: npm run syncpack:lint
+
       - name: Run type checks
         run: npm run type-check
 
@@ -40,3 +44,30 @@ jobs:
 
       - name: Run Expo install check
         run: npm run validate:expo:install-check
+
+  native-module-tests:
+    name: Native module tests
+    runs-on: macos-26
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run expo-pans-ble-api native tests
+        run: npm run test:native:expo-pans-ble-api
