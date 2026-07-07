@@ -24,6 +24,17 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.3.3"
+
       - name: Install dependencies
         run: npm ci
 
@@ -39,35 +50,14 @@ jobs:
       - name: Run tests
         run: npm run test
 
+      - name: Run expo-pans-ble-api iOS native tests
+        run: npm run test:native:expo-pans-ble-api:ios
+
+      - name: Run expo-pans-ble-api Android native tests
+        run: npm run test:native:expo-pans-ble-api:android
+
       - name: Run Expo doctor
         run: npm run validate:expo:doctor
 
       - name: Run Expo install check
         run: npm run validate:expo:install-check
-
-  native-module-tests:
-    name: Native module tests
-    runs-on: macos-26
-    env:
-      NODE_OPTIONS: --openssl-legacy-provider
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run expo-pans-ble-api native tests
-        run: npm run test:native:expo-pans-ble-api
