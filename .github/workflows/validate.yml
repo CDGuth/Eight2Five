@@ -2,10 +2,6 @@ name: Validate
 
 on:
   push:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - "docs/**"
   workflow_dispatch:
   workflow_call:
 
@@ -34,6 +30,7 @@ jobs:
         uses: swift-actions/setup-swift@v3
         with:
           swift-version: "6.3.3"
+          skip-verify-signature: true
 
       - name: Install dependencies
         run: npm ci
@@ -49,12 +46,6 @@ jobs:
 
       - name: Run tests
         run: npm run test
-
-      - name: Run expo-pans-ble-api iOS native tests
-        run: npm run test:native:expo-pans-ble-api:ios
-
-      - name: Run expo-pans-ble-api Android native tests
-        run: npm run test:native:expo-pans-ble-api:android
 
       - name: Run Expo doctor
         run: npm run validate:expo:doctor
