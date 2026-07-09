@@ -18,6 +18,22 @@
       "headers": {
         "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
       }
+    },
+    "expo": {
+      "type": "remote",
+      "url": "https://mcp.expo.dev/mcp",
+      "enabled": true,
+      "oauth": {},
+      "timeout": 180000
+    },
+    "markitdown": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "markitdown-mcp"
+      ],
+      "enabled": true,
+      "timeout": 180000
     }
   },
   "agent": {
@@ -29,33 +45,15 @@
     },
     "engineer": {
       "mode": "primary",
-      "prompt": "{file:./agents/engineer.md}",
-      "temperature": 0.2,
-      "top_p": 0.9,
-      "model": "opencode-go/kimi-k2.6",
-      "options": {
-        "reasoningEffort": "high"
-      }
+      "prompt": "{file:./agents/engineer.md}"
     },
     "explore": {
       "mode": "subagent",
-      "prompt": "{file:./agents/explore.md}",
-      "temperature": 0.4,
-      "top_p": 0.95,
-      "model": "opencode-go/kimi-k2.6",
-      "options": {
-        "reasoningEffort": "medium"
-      }
+      "prompt": "{file:./agents/explore.md}"
     },
     "general": {
       "mode": "subagent",
-      "prompt": "{file:./agents/general.md}",
-      "temperature": 0.15,
-      "top_p": 0.9,
-      "model": "opencode-go/kimi-k2.6",
-      "options": {
-        "reasoningEffort": "medium"
-      }
+      "prompt": "{file:./agents/general.md}"
     }
   }
 }

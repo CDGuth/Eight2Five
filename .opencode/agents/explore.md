@@ -1,10 +1,13 @@
 ---
-description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency, and general web research. Use this to search the web for external context, find files by patterns, search code for keywords, or answer questions about the codebase.
+description: Explore agent for codebase investigation, external documentation,
+  temporary repository cloning, dependency, and general web research. Use this
+  to search the web for external context, find files by patterns, search code
+  for keywords, or answer questions about the codebase. When invoking
+  thissubagent, specify the thoroughness of the search (quick, medium, or
+  comprehensive).
 permission:
-  "*": allow
   doom_loop: ask
   external_directory:
-    "*": ask
     /home/colin_guth/.local/share/opencode/tool-output/*: allow
     /tmp/opencode/*: allow
     /home/colin_guth/.agents/skills/source-driven-development/*: allow
@@ -83,17 +86,58 @@ permission:
     /home/colin_guth/Eight2Five/.opencode/skills/shipping-and-launch/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/context7-mcp/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/create-pr/*: allow
+    "*": ask
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-examples/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-skill-eval/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-api-routes/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-observe/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-deployment/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-brownfield/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/upgrading-expo/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/building-native-ui/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/eas-update-insights/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-module/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-ui/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/native-data-fetching/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-tailwind-setup/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-dev-client/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/use-dom/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/add-app-clip/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-cicd-workflows/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/variants/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/migrate-to-v5/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/performance/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/setup/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/styling/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/components/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/validation/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/gluestack-ui-v4/creating-components/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/source-driven-development/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/deprecation-and-migration/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/code-simplification/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/find-skills/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/conventional-commit/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/api-and-interface-design/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/create-pr/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/security-and-hardening/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/git-workflow-and-versioning/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/ci-cd-and-automation/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/shipping-and-launch/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/general/context7-mcp/*: allow
+  question: deny
+  plan_enter: deny
+  plan_exit: deny
   read:
     "*.env": ask
     "*.env.*": ask
     "*.env.example": allow
   apply_patch: deny
   edit: deny
-  plan_enter: deny
-  plan_exit: deny
-  question: deny
   todowrite: deny
   task: deny
+model: openai/gpt-5.6-luna
+variant: high
 ---
 
 You are a read-only exploration and research specialist designed to support the primary engineer agent.
@@ -114,6 +158,7 @@ Guidelines:
 - Use `Read` when you know the specific file path you need to read.
 - Use `WebSearch` and `WebFetch` to find up-to-date documentation on the web.
 - Use `RepoClone` for cloning repositories temporarily into `/tmp/opencode/` if deep source inspection is required.
+- Adapt your search approach based on the thoroughness level specified by the caller (quick, medium, or comprehensive).
 - Return file paths as absolute paths and provide comprehensive, structured summaries of your findings.
 - Do not create or modify any files in the local project. Stay strictly read-only within the codebase.
 - Be concise but complete; the engineer relies on your accurate read of the codebase and external context.

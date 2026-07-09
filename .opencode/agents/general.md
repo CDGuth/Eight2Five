@@ -1,11 +1,10 @@
 ---
-
-description: General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.
+description: General-purpose agent for researching complex questions and
+  executing multi-step tasks. Use this agent to execute multiple units of work
+  in parallel.
 permission:
-  "*": allow
   doom_loop: ask
   external_directory:
-    "*": ask
     /home/colin_guth/.local/share/opencode/tool-output/*: allow
     /tmp/opencode/*: allow
     /home/colin_guth/.agents/skills/deprecation-and-migration/*: allow
@@ -100,16 +99,25 @@ permission:
     /home/colin_guth/Eight2Five/.opencode/skills/general/ci-cd-and-automation/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/general/shipping-and-launch/*: allow
     /home/colin_guth/Eight2Five/.opencode/skills/general/context7-mcp/*: allow
+    "*": ask
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-examples/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/add-app-clip/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-ui/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-brownfield/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-observe/*: allow
+    /home/colin_guth/Eight2Five/.agents/skills/expo/expo-skill-eval/*: allow
   question: deny
   plan_enter: deny
   plan_exit: deny
-  repo_clone: deny
-  repo_overview: deny
   read:
     "*.env": ask
     "*.env.*": ask
     "*.env.example": allow
   todowrite: deny
+  repo_clone: deny
+  repo_overview: deny
+model: openai/gpt-5.6-luna
+variant: high
 ---
 
 ---
