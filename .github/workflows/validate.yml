@@ -2,12 +2,25 @@ name: Validate
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
+    inputs:
+      run_native_module_compilation:
+        description: Compile production iOS and Android native-module bridges
+        required: false
+        default: false
+        type: boolean
   workflow_call:
+    inputs:
+      run_native_module_compilation:
+        description: Compile production iOS and Android native-module bridges
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   validate:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     env:
       NODE_OPTIONS: --openssl-legacy-provider
     steps:
@@ -32,6 +45,13 @@ jobs:
           swift-version: "6.3.3"
           skip-verify-signature: true
 
+      - name: Setup Android SDK
+        if: ${{ github.event_name == 'pull_request' || inputs.run_native_module_compilation }}
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: 14742923
+          packages: platform-tools
+
       - name: Install dependencies
         run: npm ci
 
@@ -52,3 +72,7 @@ jobs:
 
       - name: Run Expo install check
         run: npm run validate:expo:install-check
+
+      - name: Compile production native modules
+        if: ${{ github.event_name == 'pull_request' || inputs.run_native_module_compilation }}
+        run: npm run test:native:compile
