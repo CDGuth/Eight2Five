@@ -116,8 +116,6 @@ permission:
   todowrite: deny
   repo_clone: deny
   repo_overview: deny
-model: openai/gpt-5.6-luna
-variant: high
 ---
 
 ---

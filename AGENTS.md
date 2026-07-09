@@ -68,3 +68,4 @@ This project follows a disciplined git workflow. The rules below are mandatory.
 
 ## Git Notes
 - `.opencode/opencode.json` is set to `--skip-worktree` (local changes are ignored by git; the committed version is preserved). Do not try to commit changes to this file. If you need to modify it intentionally, run `git update-index --no-skip-worktree .opencode/opencode.json`, make your change, commit it, then re-apply `--skip-worktree`.
+- Files under `.opencode/agents/` are also marked `--skip-worktree` so that per-developer agent customizations (model, variant, permissions) stay local and never accidentally get committed.

@@ -136,8 +136,6 @@ permission:
   edit: deny
   todowrite: deny
   task: deny
-model: openai/gpt-5.6-luna
-variant: high
 ---
 
 You are a read-only exploration and research specialist designed to support the primary engineer agent.
