@@ -9,6 +9,12 @@ android {
     versionName "0.0.0"
     consumerProguardFiles 'consumer-rules.pro'
   }
+
+  sourceSets {
+    main {
+      java.srcDirs += ['../android-core/src/main/kotlin']
+    }
+  }
 }
 
 dependencies {

@@ -1,81 +1,78 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const moduleDir = join(rootDir, "modules", "expo-pans-ble-api");
-const sourceFile = join(
-  moduleDir,
-  "android",
+const coreDir = join(rootDir, "modules", "expo-pans-ble-api", "android-core");
+const buildFile = join(coreDir, "build.gradle.kts");
+const coreSource = join(
+  coreDir,
   "src",
   "main",
-  "java",
+  "kotlin",
   "expo",
   "modules",
   "pansbleapi",
-  "PansBleApiJvmContract.java",
+  "PansBleApiCore.kt",
 );
-const testFile = join(
-  moduleDir,
-  "android",
+const coreTest = join(
+  coreDir,
   "src",
   "test",
-  "java",
+  "kotlin",
   "expo",
   "modules",
   "pansbleapi",
-  "PansBleApiJvmContractTest.java",
+  "PansBleApiCoreTest.kt",
 );
-const classesDir = mkdtempSync(join(tmpdir(), "expo-pans-ble-api-android-tests-"));
 
-try {
-  assertFileExists(sourceFile);
-  assertFileExists(testFile);
-  run("javac", ["-version"], { capture: true });
-  run("java", ["-version"], { capture: true });
-  run("javac", ["-d", classesDir, sourceFile, testFile]);
-  run("java", ["-ea", "-cp", classesDir, "expo.modules.pansbleapi.PansBleApiJvmContractTest"]);
-} finally {
-  rmSync(classesDir, { recursive: true, force: true });
+assertFileExists(buildFile);
+assertFileExists(coreSource);
+assertFileExists(coreTest);
+
+const gradleCommand = findGradleCommand();
+const args = ["--no-daemon", "--console=plain", "cleanTest", "test"];
+const result = spawnSync(gradleCommand.command, [...gradleCommand.args, ...args], {
+  cwd: coreDir,
+  encoding: "utf8",
+  shell: process.platform === "win32" && gradleCommand.shell === true,
+  stdio: "inherit",
+});
+
+if (result.error) {
+  throw result.error;
+}
+
+if (result.status !== 0) {
+  throw new Error(`Kotlin JVM tests failed with exit code ${result.status}`);
 }
 
 function assertFileExists(filePath) {
   if (!existsSync(filePath)) {
-    throw new Error(`Required Android JVM test source file not found: ${filePath}`);
+    throw new Error(`Required Kotlin JVM test file not found: ${filePath}`);
   }
 }
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    encoding: "utf8",
-    shell: false,
-    stdio: options.capture ? "pipe" : "inherit",
-  });
+function findGradleCommand() {
+  const wrapperCandidates = [
+    join(rootDir, "node_modules", "@react-native", "gradle-plugin", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
+    join(rootDir, "node_modules", "react-native-reanimated", "android", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
+  ];
 
-  if (options.capture) {
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-  }
-
-  if (result.error) {
-    if (result.error.code === "ENOENT") {
-      throw new Error(
-        `Required command '${command}' was not found. Install a JDK so expo-pans-ble-api Android JVM tests can run.`,
-      );
+  for (const candidate of wrapperCandidates) {
+    if (existsSync(candidate)) {
+      return {
+        command: candidate,
+        args: [],
+        shell: false,
+      };
     }
-    throw result.error;
-  }
-
-  if (result.status !== 0) {
-    throw new Error(
-      `Command failed with exit code ${result.status}: ${command} ${args.join(" ")}`,
-    );
   }
 
   return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    command: "gradle",
+    args: [],
+    shell: true,
   };
 }

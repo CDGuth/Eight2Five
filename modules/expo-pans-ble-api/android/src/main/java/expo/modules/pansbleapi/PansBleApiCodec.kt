@@ -1,42 +1,43 @@
 package expo.modules.pansbleapi
 
 import android.bluetooth.BluetoothGattCharacteristic
-import android.os.Build
 import java.util.UUID
 
 internal object PansBleApiCodec {
   fun validatePayload(payload: List<Int>): ByteArray {
-    return PansBleApiJvmContract.validatePayload(payload)
+    return PansBleApiCore.validatePayload(payload)
   }
 
   fun normalizeUuidString(uuid: String): String {
-    return PansBleApiJvmContract.normalizeUuidString(uuid)
+    return PansBleApiCore.normalizeUuidString(uuid)
   }
 
-  fun parseUuid(uuid: String): UUID = UUID.fromString(normalizeUuidString(uuid))
+  fun parseUuid(uuid: String): UUID {
+    return PansBleApiCore.parseUuid(uuid)
+  }
 
   fun normalizeDeviceId(deviceId: String): String {
-    return PansBleApiJvmContract.normalizeDeviceId(deviceId)
+    return PansBleApiCore.normalizeDeviceId(deviceId)
   }
 
   fun validPansServiceData(serviceData: ByteArray?): ByteArray? {
-    return PansBleApiJvmContract.validPansServiceData(serviceData)
+    return PansBleApiCore.validPansServiceData(serviceData)
   }
 
   fun extractPansServiceData(serviceDataByUuid: Map<UUID, ByteArray>): ByteArray? {
-    return PansBleApiJvmContract.extractPansServiceData(serviceDataByUuid)
+    return PansBleApiCore.extractPansServiceData(serviceDataByUuid)
   }
 
   fun decodePresence(bytes: ByteArray): Map<String, Any>? {
-    return PansBleApiJvmContract.decodePresence(bytes)
+    return PansBleApiCore.decodePresence(bytes)
   }
 
   fun missingRequiredCharacteristics(characteristicUuids: Collection<UUID>): List<UUID> {
-    return PansBleApiJvmContract.missingRequiredCharacteristics(characteristicUuids)
+    return PansBleApiCore.missingRequiredCharacteristics(characteristicUuids)
   }
 
   fun requiredPermissionsForSdk(sdkInt: Int): List<String> {
-    return PansBleApiJvmContract.requiredPermissionsForSdk(sdkInt)
+    return PansBleApiCore.requiredPermissionsForSdk(sdkInt)
   }
 
   fun normalizeWriteType(writeType: String?): Int {

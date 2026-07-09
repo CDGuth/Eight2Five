@@ -7,6 +7,10 @@ module.exports = defineConfig([
   expoConfig,
   eslintPluginPrettierRecommended,
   {
-    ignores: ["dist/*"],
+    ignores: [
+      "dist/*",
+      "modules/expo-pans-ble-api/android-core/build/**",
+      "modules/expo-pans-ble-api/android-core/.gradle/**",
+    ],
   },
 ]);
