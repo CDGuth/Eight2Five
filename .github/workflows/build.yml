@@ -50,9 +50,6 @@ jobs:
   validate:
     if: ${{ inputs.run_validation_workflow }}
     uses: ./.github/workflows/validate.yml
-    with:
-      # The local EAS build below compiles the requested app and platform.
-      run_native_module_compilation: false
 
   build:
     needs: [validate]
