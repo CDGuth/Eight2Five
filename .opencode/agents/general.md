@@ -4,20 +4,49 @@ mode: subagent
 permission:
   "*": allow
   doom_loop: ask
-  plan_enter: deny
-  plan_exit: deny
   question: deny
   todowrite: deny
   task: deny
   external_directory:
     "*": ask
-    ~/.local/share/opencode/tool-output/*: allow
-    /tmp/opencode/*: allow
+    "~/.local/share/opencode/tool-output/*": allow
+    "/tmp/opencode/*": allow
   read:
     "*": allow
     "*.env": ask
     "*.env.*": ask
     "*.env.example": allow
+  bash:
+    "*": allow
+    "git add*": deny
+    "git rm*": deny
+    "git mv*": deny
+    "git commit*": deny
+    "git merge*": deny
+    "git rebase*": deny
+    "git reset*": deny
+    "git revert*": deny
+    "git cherry-pick*": deny
+    "git push*": deny
+    "git pull*": deny
+    "git stash*": deny
+    "git checkout*": deny
+    "git switch*": deny
+    "git restore*": deny
+    "git clean*": deny
+    "git tag*": deny
+    "git update-index*": deny
+    "git apply*": deny
+    "git am*": deny
+    "git filter-branch*": deny
+    "git submodule*": deny
+    "git branch -d*": deny
+    "git branch -D*": deny
+    "git branch -m*": deny
+    "gh pr merge*": deny
+    "gh pr close*": deny
+    "gh pr edit*": deny
+    "gh release*": deny
 ---
 
 You are a general-purpose subagent assisting the primary engineer agent with well-scoped implementation tasks.

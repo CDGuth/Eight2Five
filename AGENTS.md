@@ -62,10 +62,6 @@ This project follows a disciplined git workflow. The rules below are mandatory.
 - When creating a commit, load the `conventional-commit` skill to produce properly structured commit messages.
 - When creating a pull request, load the `create-pr` skill to follow the project's PR conventions.
 
-### State-Changing Git Commands Require Approval
-
-**Always ask the user for explicit approval before running any state-changing git commands**, including but not limited to: `git add`, `git commit`, `git merge`, `git rebase`, `git reset`, `git push`, `git revert`, `git cherry-pick`, and `git rm`. Read-only commands (`git status`, `git log`, `git diff`, `git branch`) do not require approval.
-
 ## Git Notes
 - `.opencode/opencode.json` is set to `--skip-worktree` (local changes are ignored by git; the committed version is preserved). Do not try to commit changes to this file. If you need to modify it intentionally, run `git update-index --no-skip-worktree .opencode/opencode.json`, make your change, commit it, then re-apply `--skip-worktree`.
 - Files under `.opencode/agents/` are also marked `--skip-worktree` so that per-developer agent customizations (model, variant, permissions) stay local and never accidentally get committed.

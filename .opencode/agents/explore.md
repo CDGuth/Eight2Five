@@ -2,6 +2,7 @@
 description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency research, and general web research. Specify quick, medium, or comprehensive thoroughness when invoking this subagent.
 mode: subagent
 permission:
+  "*": allow
   doom_loop: ask
   edit: deny
   write: deny
@@ -10,8 +11,6 @@ permission:
   task: deny
   todowrite: deny
   question: deny
-  plan_enter: deny
-  plan_exit: deny
   expo_add_library: deny
   expo_appstore_delete_review_response: deny
   expo_appstore_reply_review: deny
@@ -24,8 +23,8 @@ permission:
   expo_workflow_run: deny
   external_directory:
     "*": ask
-    ~/.local/share/opencode/tool-output/*: allow
-    /tmp/opencode/*: allow
+    "~/.local/share/opencode/tool-output/*": allow
+    "/tmp/opencode/*": allow
   read:
     "*": allow
     "*.env": ask
@@ -36,7 +35,7 @@ permission:
   list: allow
   bash:
     "*": deny
-    pwd: allow
+    "pwd": allow
     "git status*": allow
     "git diff*": allow
     "git log*": allow
@@ -59,6 +58,35 @@ permission:
     "npm view*": allow
     "npm info*": allow
     "npm ls*": allow
+    "git add*": deny
+    "git rm*": deny
+    "git mv*": deny
+    "git commit*": deny
+    "git merge*": deny
+    "git rebase*": deny
+    "git reset*": deny
+    "git revert*": deny
+    "git cherry-pick*": deny
+    "git push*": deny
+    "git pull*": deny
+    "git stash*": deny
+    "git checkout*": deny
+    "git switch*": deny
+    "git restore*": deny
+    "git clean*": deny
+    "git tag*": deny
+    "git update-index*": deny
+    "git apply*": deny
+    "git am*": deny
+    "git filter-branch*": deny
+    "git submodule*": deny
+    "git branch -d*": deny
+    "git branch -D*": deny
+    "git branch -m*": deny
+    "gh pr merge*": deny
+    "gh pr close*": deny
+    "gh pr edit*": deny
+    "gh release*": deny
   webfetch: allow
   websearch: allow
   lsp: allow
