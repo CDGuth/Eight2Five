@@ -7,11 +7,11 @@ import { renderWithAct } from "../../testUtils/renderWithAct";
 
 const fakeSubapps: TestbedSubapp[] = [
   {
-    id: "optimization",
-    title: "optimization playground",
-    description: "Run localization scenarios",
-    routeName: "(subapps)/optimization",
-    href: "/(subapps)/optimization" as Href,
+    id: "demo",
+    title: "demo playground",
+    description: "Run a demo scenario",
+    routeName: "(subapps)/demo",
+    href: "/(subapps)/demo" as Href,
   },
 ];
 
@@ -23,9 +23,9 @@ describe("TestbedHome", () => {
     );
 
     const card = tree.root.findByProps({
-      testID: "subapp-card-optimization playground",
+      testID: "subapp-card-demo playground",
     });
     act(() => card.props.onPress());
-    expect(onSelect).toHaveBeenCalledWith("optimization");
+    expect(onSelect).toHaveBeenCalledWith("demo");
   });
 });

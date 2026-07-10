@@ -1,35 +1,24 @@
-import { BeaconState } from "../types/BeaconProtocol";
-
 /**
- * Represents raw beacon sample enriched with parsed packets.
+ * Measurement consumed by the localization layer after provider parsing.
+ * Purely distance/position based: BLE RSSI ranging has been retired in favor
+ * of UWB-derived ranges and direct position reports.
  */
 export interface BeaconMeasurement {
   mac: string;
-  /** Timestamp (ms) most recent packet arrived. */
+  /** Timestamp (ms) most recent sample arrived. */
   lastSeen: number;
-  /** Most recent filtered RSSI value (dBm). */
-  filteredRssi: number;
   /** Observation mode used to produce this measurement. */
-  measurementKind?: "rssi" | "distance" | "position";
-  /** Optional direct ranging distance in meters for UWB-style providers. */
+  measurementKind?: "distance" | "position";
+  /** Direct ranging distance in meters (e.g. UWB). */
   distanceMeters?: number;
-  /** Optional quality factor on direct ranging observation. */
+  /** Optional quality factor on the observation. */
   quality?: number;
   /** Source provider identifier for diagnostics. */
   source?: string;
-  /** Tx power from identity frame if available (dBm). */
-  txPower?: number;
-  /**
-   * Beacon-provided relative coordinates in percent (0-100).
-   * Optional because not every advertisement contains the slot yet.
-   */
-  xPercent?: number;
-  yPercent?: number;
-  zCm?: number;
 }
 
 /**
- * Describes the geometry of field anchors for conversion from percent to meters.
+ * Describes the geometry of field anchors for the optimizer.
  */
 export interface FieldDimensions {
   widthMeters: number;
@@ -40,75 +29,11 @@ export interface FieldDimensions {
 
 export type EnvironmentMode = "indoor" | "outdoor";
 
-/**
- * Provides heights needed by propagation models.
- */
-export interface HeightConfig {
-  transmitterHeightMeters: number;
-  receiverHeightMeters: number;
-}
-
-/**
- * Envelope of constants required by propagation formulas.
- */
-export interface PropagationConstants extends HeightConfig {
-  /** Carrier frequency in Hz. */
-  frequencyHz: number;
-  /** Transmitter antenna gain (linear, not dBi). */
-  transmitterGain: number;
-  /** Receiver antenna gain (linear, not dBi). */
-  receiverGain: number;
-  /** Reflection coefficient magnitude (0-1). */
-  reflectionCoefficient: number;
-}
-
 export interface SearchBounds {
   xMin: number;
   xMax: number;
   yMin: number;
   yMax: number;
-}
-
-/**
- * Contract every propagation model must follow. Each model can interpret
- * the optional parameters differently.
- */
-export interface PropagationModel {
-  estimateRssi(params: {
-    distanceMeters: number;
-    txPowerDbm: number;
-    constants: PropagationConstants;
-  }): number;
-}
-
-/**
- * Base contract for RSSI smoothing implementations.
- */
-export interface RssiFilter {
-  filterSample(rssi: number): number;
-}
-
-export interface WeightingConfig {
-  enabled: boolean;
-  model: "linear" | "inverse-rssi";
-  base?: number;
-  scale?: number;
-  param?: number;
-}
-
-/**
- * Structure consumed by optimization layers.
- */
-export interface OptimizationInput {
-  candidate: BeaconMeasurement[];
-  anchors: AnchorGeometry[];
-  propagation: PropagationModel;
-  constants: PropagationConstants;
-  bounds: SearchBounds;
-  timeBudgetMs?: number;
-  iterationTimeLimitMs?: number;
-  initialPopulation?: { x: number; y: number }[];
-  weighting?: WeightingConfig;
 }
 
 export interface AnchorGeometry {
@@ -123,6 +48,7 @@ export interface AnchorGeometry {
 export interface FieldConfiguration {
   id: string;
   name?: string;
+  /** Descriptive only; the distance-based solver does not branch on it. */
   environment: EnvironmentMode;
   fieldDimensions: FieldDimensions;
   anchors: AnchorGeometry[];
@@ -163,6 +89,18 @@ export interface LocalizationOptimizer {
 }
 
 /**
+ * Structure consumed by optimization layers.
+ */
+export interface OptimizationInput {
+  candidate: BeaconMeasurement[];
+  anchors: AnchorGeometry[];
+  bounds: SearchBounds;
+  timeBudgetMs?: number;
+  iterationTimeLimitMs?: number;
+  initialPopulation?: { x: number; y: number }[];
+}
+
+/**
  * Exposed API for the localization engine to provide data back to UI.
  */
 export interface LocalizationSnapshot {
@@ -173,21 +111,9 @@ export interface LocalizationSnapshot {
 export interface EnvironmentConfigUpdate {
   environment?: EnvironmentMode;
   fieldDimensions?: FieldDimensions;
-  propagationConstants?: Partial<PropagationConstants>;
-}
-
-export interface RssiDistanceEstimator {
-  estimateDistanceMeters(params: {
-    rssiDbm: number;
-    txPowerDbm: number;
-    propagation: PropagationModel;
-    constants: PropagationConstants;
-    searchBounds: SearchBounds;
-  }): number;
 }
 
 export interface LocalizationEngineApi {
-  ingest(beacon: BeaconState): void;
   ingestObservation(observation: LocalizationObservation): void;
   getSnapshot(): LocalizationSnapshot;
   setEnvironment(config: EnvironmentConfigUpdate): void;
@@ -199,15 +125,10 @@ export interface LocalizationObservation {
   mac: string;
   observedAtMs: number;
   source: string;
-  measurementKind: "rssi" | "distance" | "position";
-  rssiDbm?: number;
+  measurementKind: "distance" | "position";
   distanceMeters?: number;
   positionXMeters?: number;
   positionYMeters?: number;
   positionZMeters?: number;
   quality?: number;
-  txPowerDbm?: number;
-  xPercent?: number;
-  yPercent?: number;
-  zCm?: number;
 }

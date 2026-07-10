@@ -1,7 +1,4 @@
-import {
-  DEFAULT_MFASA_OPTIONS,
-  DEFAULT_TX_POWER_DBM,
-} from "../LocalizationConfig";
+import { DEFAULT_MFASA_OPTIONS } from "../LocalizationConfig";
 import type {
   AnchorGeometry,
   LocalizationOptimizer,
@@ -320,72 +317,38 @@ export class MFASAOptimizer implements LocalizationOptimizer {
     if (metrics) {
       metrics.evaluations += 1;
     }
-    const { candidate, propagation, constants, weighting } = opts;
+    const { candidate } = opts;
     if (!candidate.length || !anchorMap.size) {
       return Number.POSITIVE_INFINITY;
     }
 
-    let weightedSumSq = 0;
-    let sumWeights = 0;
+    let sumSq = 0;
     let used = 0;
 
     candidate.forEach((measurement) => {
       const anchor = anchorMap.get(measurement.mac);
       if (!anchor) return;
 
+      if (!Number.isFinite(measurement.distanceMeters)) {
+        return;
+      }
+
       const horizontalDistance = Math.hypot(
         position.x - anchor.x,
         position.y - anchor.y,
       );
 
-      let diff = Number.NaN;
-      if (Number.isFinite(measurement.distanceMeters)) {
-        diff = (measurement.distanceMeters as number) - horizontalDistance;
-      } else if (Number.isFinite(measurement.filteredRssi)) {
-        const txPower = measurement.txPower ?? DEFAULT_TX_POWER_DBM;
-        const estimated = propagation.estimateRssi({
-          distanceMeters: horizontalDistance,
-          txPowerDbm: txPower,
-          constants,
-        });
-        diff = measurement.filteredRssi - estimated;
-      }
+      const diff = (measurement.distanceMeters as number) - horizontalDistance;
 
-      if (!Number.isFinite(diff)) {
-        return;
-      }
-
-      let weight = 1.0;
-      if (weighting?.enabled) {
-        // Use filtered RSSI magnitude as proxy for distance/quality
-        const rssi = measurement.filteredRssi;
-        const base = weighting.base ?? 120;
-        const scale = weighting.scale ?? 1.0;
-        const param = weighting.param ?? 1.0;
-
-        if (weighting.model === "linear") {
-          // Default: Math.max(1, 120 + rssi)
-          if (Number.isFinite(rssi)) {
-            weight = Math.max(1, (base + rssi) * scale);
-          }
-        } else if (weighting.model === "inverse-rssi") {
-          // Default: 1.0 / |RSSI|
-          if (Number.isFinite(rssi)) {
-            weight = scale / Math.pow(Math.abs(Math.min(-1, rssi)), param);
-          }
-        }
-      }
-
-      weightedSumSq += weight * diff ** 2;
-      sumWeights += weight;
+      sumSq += diff ** 2;
       used += 1;
     });
 
-    if (!used || sumWeights === 0) {
+    if (!used) {
       return Number.POSITIVE_INFINITY;
     }
 
-    return Math.sqrt(weightedSumSq / sumWeights);
+    return Math.sqrt(sumSq / used);
   }
 
   private buildAnchorMap(anchors: AnchorGeometry[]) {

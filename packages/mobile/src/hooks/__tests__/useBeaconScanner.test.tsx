@@ -1,43 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useBeaconScanner } from "../useBeaconScanner";
-import { APP_NAMESPACE } from "../../types/BeaconProtocol";
-import {
-  startScanning,
-  stopScanning,
-  addBeaconDiscoveredListener,
-  KBAdvType,
-} from "expo-kbeaconpro";
 import { BeaconSource } from "../../providers";
 import { startScanning as startPansScanning } from "expo-pans-ble-api";
-
-let mockListener: ((event: { beacons: any[] }) => void) | null = null;
-
-const mockRemove = jest.fn();
-
-jest.mock("expo-kbeaconpro", () => {
-  const startScanning = jest.fn(async () => undefined);
-  const stopScanning = jest.fn();
-  const addBeaconDiscoveredListener = jest.fn((listener: any) => {
-    mockListener = listener;
-    return { remove: mockRemove };
-  });
-
-  return {
-    KBAdvType: {
-      IBeacon: 0,
-      EddyTLM: 1,
-      EddyUID: 2,
-      EddyURL: 3,
-      Sensor: 4,
-      System: 5,
-      EBeacon: 6,
-      Unknown: 255,
-    },
-    startScanning,
-    stopScanning,
-    addBeaconDiscoveredListener,
-  };
-});
 
 jest.mock("expo-pans-ble-api", () => ({
   addConnectionStateChangedListener: jest.fn(() => ({ remove: jest.fn() })),
@@ -59,44 +23,6 @@ jest.mock("expo-pans-ble-api", () => ({
   stopScanning: jest.fn(),
 }));
 
-const MAX_UINT32 = 4294967295;
-
-function asciiToHex(str: string): string {
-  let hex = "";
-  for (let i = 0; i < str.length; i++) {
-    hex += str.charCodeAt(i).toString(16).padStart(2, "0");
-  }
-  return "0x" + hex.toUpperCase();
-}
-
-function encodePercent(percent: number): number {
-  return Math.round((percent / 100) * MAX_UINT32);
-}
-
-function numberToHex(value: number, bytes: number): string {
-  return (value >>> 0).toString(16).padStart(bytes * 2, "0");
-}
-
-function buildIdentityPacket(flags: number, txPower: number) {
-  const sidBytes = [0x01, flags, txPower & 0xff, 0x00, 0x00, 0x00];
-  return {
-    nid: asciiToHex(APP_NAMESPACE),
-    sid: "0x" + sidBytes.map((b) => b.toString(16).padStart(2, "0")).join(""),
-  };
-}
-
-function buildPositionPacket(xPercent: number, yPercent: number, zCm: number) {
-  const xHex = numberToHex(encodePercent(xPercent), 4);
-  const yHex = numberToHex(encodePercent(yPercent), 4);
-  const zHex = ((zCm < 0 ? zCm & 0xffff : zCm) & 0xffff)
-    .toString(16)
-    .padStart(4, "0");
-  return {
-    nid: "0x" + xHex + yHex + zHex,
-    sid: "0x020000000000",
-  };
-}
-
 async function flushAsyncEffects(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -108,29 +34,12 @@ describe("useBeaconScanner", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
-    (startScanning as jest.Mock).mockResolvedValue(undefined);
     (startPansScanning as jest.Mock).mockResolvedValue(undefined);
-    mockListener = null;
-    mockRemove.mockClear();
   });
 
   afterEach(() => {
     jest.clearAllTimers();
     jest.useRealTimers();
-  });
-
-  it("starts scanning on mount and stops on unmount", async () => {
-    const { unmount } = renderHook(() =>
-      useBeaconScanner({ sourceKind: "kbeacon" }),
-    );
-    await flushAsyncEffects();
-
-    expect(startScanning).toHaveBeenCalledTimes(1);
-    expect(addBeaconDiscoveredListener).toHaveBeenCalledTimes(1);
-
-    unmount();
-    expect(mockRemove).toHaveBeenCalledTimes(1);
-    expect(stopScanning).toHaveBeenCalledTimes(1);
   });
 
   it("awaits source startup before subscribing", async () => {
@@ -184,78 +93,57 @@ describe("useBeaconScanner", () => {
     consoleSpy.mockRestore();
   });
 
-  it("surfaces rejected auto source startup when all providers fail", async () => {
-    const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-    (startScanning as jest.Mock).mockRejectedValueOnce(
-      new Error("kbeacon failed"),
-    );
-    (startPansScanning as jest.Mock).mockRejectedValueOnce(
-      new Error("pans failed"),
-    );
-
-    const { result, unmount } = renderHook(() =>
-      useBeaconScanner({ sourceKind: "auto" }),
-    );
+  it("defaults to the pans-ble source kind", async () => {
+    const { unmount } = renderHook(() => useBeaconScanner());
     await flushAsyncEffects();
 
-    expect(result.current.startupError).toEqual(expect.any(Error));
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "Failed to start scanning:",
-      expect.any(Error),
-    );
-
-    unmount();
-    consoleSpy.mockRestore();
-  });
-
-  it("does not surface an auto startup error when one provider starts", async () => {
-    (startScanning as jest.Mock).mockRejectedValueOnce(
-      new Error("kbeacon failed"),
-    );
-    (startPansScanning as jest.Mock).mockResolvedValueOnce(undefined);
-
-    const { result, unmount } = renderHook(() =>
-      useBeaconScanner({ sourceKind: "auto" }),
-    );
-    await flushAsyncEffects();
-
-    expect(result.current.startupError).toBeUndefined();
+    expect(startPansScanning).toHaveBeenCalledTimes(1);
 
     unmount();
   });
 
-  it("updates beacon map when discovery events fire", async () => {
-    const { result, unmount } = renderHook(() =>
-      useBeaconScanner({ sourceKind: "kbeacon" }),
-    );
+  it("ingests distance observations into the localization engine", async () => {
+    let listener: ((event: { observations: any[] }) => void) | null = null;
+    const remove = jest.fn();
+    const source: BeaconSource = {
+      start: jest.fn(async () => undefined),
+      stop: jest.fn(),
+      subscribe: jest.fn((l: any) => {
+        listener = l;
+        return { remove };
+      }),
+    };
+
+    const { result, unmount } = renderHook(() => useBeaconScanner({ source }));
     await flushAsyncEffects();
 
-    expect(mockListener).toBeTruthy();
-
-    const identity = buildIdentityPacket(0x07, -60);
-    const position = buildPositionPacket(10, 90, 123);
+    expect(listener).toBeTruthy();
 
     await act(async () => {
-      mockListener?.({
-        beacons: [
+      listener?.({
+        observations: [
           {
-            mac: "AA:BB:CC:DD:EE:FF",
-            rssi: -65,
-            advPackets: [
-              { advType: KBAdvType.EddyUID, ...identity },
-              { advType: KBAdvType.EddyUID, ...position },
-            ],
+            mac: "uwb-anchor-cdef",
+            observedAtMs: Date.now(),
+            source: "pans-ble-uwb",
+            measurementKind: "distance",
+            distanceMeters: 4.25,
+            quality: 91,
           },
         ],
       });
     });
 
-    const entry = result.current.beacons.get("AA:BB:CC:DD:EE:FF");
-    expect(entry).toBeDefined();
-    expect(entry?.identity?.flags.isConfigured).toBe(true);
-    expect(entry?.position?.xPercent).toBeCloseTo(10, 5);
-    expect(entry?.position?.yPercent).toBeCloseTo(90, 5);
-    expect(entry?.position?.zCm).toBe(123);
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(result.current.beacons).toHaveLength(1);
+    expect(result.current.beacons[0]).toMatchObject({
+      mac: "uwb-anchor-cdef",
+      distanceMeters: 4.25,
+      measurementKind: "distance",
+    });
 
     unmount();
   });

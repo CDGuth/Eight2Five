@@ -1,22 +1,39 @@
-import { createKBeaconSource } from "./KBeaconSource";
 import { createPansBleSource, PansBleSourceOptions } from "./PansBleSource";
-import { createAutoBeaconSource } from "./AutoSource";
 import { BeaconSource, BeaconSourceKind } from "./types";
 
 export interface BeaconSourceFactoryOptions {
   pans?: PansBleSourceOptions;
-  onError?: (
-    error: unknown,
-    sourceKind: Exclude<BeaconSourceKind, "auto">,
-  ) => void;
+  onError?: (error: unknown, sourceKind: BeaconSourceKind) => void;
 }
 
 export function createBeaconSource(
-  kind: BeaconSourceKind = "auto",
+  kind: BeaconSourceKind = "pans-ble",
   options: BeaconSourceFactoryOptions = {},
 ): BeaconSource {
-  if (kind === "auto") return createAutoBeaconSource(options);
-  if (kind === "pans-ble") return createPansBleSource(options.pans);
+  const source = createPansBleSource(options.pans);
 
-  return createKBeaconSource();
+  if (options.onError) {
+    const userOnError = options.onError;
+    return {
+      async start() {
+        try {
+          await source.start();
+        } catch (error) {
+          userOnError(error, kind);
+          throw error;
+        }
+      },
+      stop() {
+        source.stop();
+      },
+      subscribe(listener) {
+        return source.subscribe(listener);
+      },
+      destroy() {
+        source.destroy?.();
+      },
+    };
+  }
+
+  return source;
 }

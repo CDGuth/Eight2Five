@@ -2,7 +2,8 @@ import React from "react";
 import { useRouter } from "expo-router";
 import { TestbedHome } from "../src/screens/TestbedHome";
 import { TestbedLayout } from "../src/components/TestbedLayout";
-import { getSubappById, SUBAPPS, SubappId } from "../src/subapps";
+import { getSubappById, SUBAPPS } from "../src/subapps";
+import type { SubappId } from "../src/subapps";
 
 export default function TestbedHomeRoute() {
   const router = useRouter();

@@ -4,7 +4,7 @@ import { SubappCard } from "../components/SubappCard";
 import { SUBAPPS, SubappId, TestbedSubapp } from "../subapps";
 
 interface TestbedHomeProps {
-  subapps?: TestbedSubapp[];
+  subapps?: readonly TestbedSubapp[];
   onSelect: (id: SubappId) => void;
 }
 

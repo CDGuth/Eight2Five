@@ -5,7 +5,6 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "modules/expo-kbeaconpro",
     "modules/expo-pans-ble-api"
   ],
   "scripts": {
