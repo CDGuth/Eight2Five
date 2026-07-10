@@ -259,7 +259,7 @@ Supported workflow inputs:
 - `app`: `mobile` or `testbed`
 - `platform`: `ios` or `android`
 - `profile`: `development`, `preview`, `production`, `development-simulator (iOS only)`, or `preview-simulator (iOS only)`
-- `run_validation`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
+- `run_validation_workflow`: runs lint, type-check, tests, Expo doctor, and Expo install checks before building
 
 Android APK artifacts come from the `development` or `preview` profiles. Android AAB artifacts come from the `production` profile. There is no production-like APK build profile.
 

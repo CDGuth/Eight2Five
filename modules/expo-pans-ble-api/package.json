@@ -7,7 +7,9 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json",
-    "test": "jest __tests__ --watchAll=false --passWithNoTests --runInBand"
+    "test": "jest __tests__ --watchAll=false --passWithNoTests --runInBand",
+    "test:native:ios": "cd ios && swift test",
+    "test:native:android": "node ../../scripts/run-expo-pans-ble-api-android-tests.mjs"
   },
   "expo": {
     "plugin": "./app.plugin.js"

@@ -3,15 +3,11 @@ import ExpoModulesCore
 import Foundation
 
 public class ExpoPansBleApiModule: Module {
-  private let pansServiceUuid = CBUUID(string: "680c21d9-c946-4c1f-9c11-baa1c21329e7")
-  private let gapServiceUuid = CBUUID(string: "00001800-0000-1000-8000-00805f9b34fb")
-  private let requiredCommonCharacteristicUuids = Set([
-    CBUUID(string: "3f0afd88-7770-46b0-b5e7-9fc099598964"),
-    CBUUID(string: "80f9d8bc-3bff-45bb-a181-2d6a37991208"),
-    CBUUID(string: "a02b947e-df97-4516-996a-1882521e0ead"),
-    CBUUID(string: "003bbdf2-c634-4b3d-ab56-7ec889b89a37"),
-    CBUUID(string: "1e63b1eb-d4ed-444e-af54-c1e965192501"),
-  ])
+  private let pansServiceUuid = CBUUID(string: PansBleApiConstants.pansServiceUuid)
+  private let gapServiceUuid = CBUUID(string: PansBleApiConstants.gapServiceUuid)
+  private let requiredCommonCharacteristicUuids = Set(
+    PansBleApiConstants.requiredCommonCharacteristicUuids.map { CBUUID(string: $0) }
+  )
 
   private var centralManager: CBCentralManager?
   private var bluetoothDelegate: ExpoPansBleApiBluetoothDelegate?
@@ -97,14 +93,7 @@ public class ExpoPansBleApiModule: Module {
     }
 
     Function("getCapabilities") {
-      [
-        "transport": "ble",
-        "supportsScanning": true,
-        "supportsConnection": true,
-        "supportsNotifications": true,
-        "supportsMtuRequest": false,
-        "supportsMaximumWriteValueLength": true,
-      ] as [String: Any]
+      PansBleApiConstants.iosCapabilities
     }
 
     Function("getPermissionStatus") {
@@ -241,7 +230,7 @@ public class ExpoPansBleApiModule: Module {
       "name": name,
       "rssi": RSSI.intValue,
       "lastSeenMs": Date().timeIntervalSince1970 * 1000.0,
-      "presence": decodePresence(pansData),
+      "presence": PansBleApiCodec.decodePresence(pansData),
     ]
     sendEvent("onDeviceDiscovered", ["devices": Array(discoveredMetadata.values)])
   }
@@ -446,9 +435,11 @@ public class ExpoPansBleApiModule: Module {
 
   private func extractPansServiceData(advertisementData: [String: Any]) -> Data? {
     guard let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data],
-          let pansData = serviceData[pansServiceUuid],
-          pansData.count >= 2 else { return nil }
-    return pansData
+          !serviceData.isEmpty else { return nil }
+
+    var serviceDataByUuid = [String: Data]()
+    serviceData.forEach { serviceDataByUuid[$0.key.uuidString] = $0.value }
+    return PansBleApiCodec.extractPansServiceData(serviceDataByUuid)
   }
 
   private func enqueue(deviceId: String, operation: GattOperation) {
@@ -579,41 +570,22 @@ public class ExpoPansBleApiModule: Module {
     }
   }
 
-  private func decodePresence(_ data: Data) -> [String: Any?] {
-    let op = Int(data[0])
-    let uwbBits = op & 0x03
-    var presence: [String: Any?] = [
-      "rawOperationModeByte": op,
-      "rawUwbModeBits": uwbBits,
-      "role": (op & 0x80) != 0 ? "anchor" : "tag",
-      "errorIndicated": (op & 0x10) != 0,
-      "initiator": (op & 0x08) != 0,
-      "bridge": (op & 0x04) != 0,
-      "changeCounter": Int(data[1]),
-    ]
-    switch uwbBits {
-    case 0: presence["uwbMode"] = "off"
-    case 1: presence["uwbMode"] = "passive"
-    case 2: presence["uwbMode"] = "active"
-    default: break
-    }
-    return presence
-  }
-
   private func parseUuid(_ value: String, promise: Promise) -> CBUUID? {
-    guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-      promise.reject("INVALID_ARGUMENT", "UUID string must be non-empty.")
+    do {
+      return CBUUID(string: try PansBleApiCodec.normalizeUuidString(value))
+    } catch {
+      promise.reject("INVALID_ARGUMENT", error.localizedDescription)
       return nil
     }
-    return CBUUID(string: value)
   }
 
   private func validatePayload(_ payload: [Int], promise: Promise) -> Data? {
-    guard payload.allSatisfy({ 0...255 ~= $0 }) else {
-      promise.reject("INVALID_ARGUMENT", "Payload must contain byte values in range 0..255.")
+    do {
+      return try PansBleApiCodec.validatePayload(payload)
+    } catch {
+      promise.reject("INVALID_ARGUMENT", error.localizedDescription)
       return nil
     }
-    return Data(payload.map { UInt8($0) })
   }
 
   private func normalizeWriteType(_ writeType: String?, promise: Promise) -> CBCharacteristicWriteType? {

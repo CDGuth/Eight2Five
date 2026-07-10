@@ -29,22 +29,6 @@ import java.util.UUID
 class ExpoPansBleApiModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
 
-  private val pansServiceUuid: UUID = UUID.fromString("680c21d9-c946-4c1f-9c11-baa1c21329e7")
-  private val gapServiceUuid: UUID = UUID.fromString("00001800-0000-1000-8000-00805f9b34fb")
-  private val cccdUuid: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-  private val operationModeUuid: UUID = UUID.fromString("3f0afd88-7770-46b0-b5e7-9fc099598964")
-  private val networkIdUuid: UUID = UUID.fromString("80f9d8bc-3bff-45bb-a181-2d6a37991208")
-  private val locationDataModeUuid: UUID = UUID.fromString("a02b947e-df97-4516-996a-1882521e0ead")
-  private val locationDataUuid: UUID = UUID.fromString("003bbdf2-c634-4b3d-ab56-7ec889b89a37")
-  private val deviceInfoUuid: UUID = UUID.fromString("1e63b1eb-d4ed-444e-af54-c1e965192501")
-  private val requiredCommonCharacteristicUuids = setOf(
-    operationModeUuid,
-    networkIdUuid,
-    locationDataModeUuid,
-    locationDataUuid,
-    deviceInfoUuid
-  )
-
   private val discoveredDevices = mutableMapOf<String, BluetoothDevice>()
   private val discoveredMetadata = mutableMapOf<String, Map<String, Any?>>()
   private val connections = mutableMapOf<String, ConnectionContext>()
@@ -138,14 +122,7 @@ class ExpoPansBleApiModule : Module() {
     }
 
     Function("getCapabilities") {
-      mapOf(
-        "transport" to "ble",
-        "supportsScanning" to true,
-        "supportsConnection" to true,
-        "supportsNotifications" to true,
-        "supportsMtuRequest" to true,
-        "supportsMaximumWriteValueLength" to false
-      )
+      PansBleApiConstants.androidCapabilities
     }
 
     Function("getPermissionStatus") {
@@ -368,7 +345,7 @@ class ExpoPansBleApiModule : Module() {
         return
       }
 
-      val pansService = gatt.getService(pansServiceUuid)
+      val pansService = gatt.getService(PansBleApiConstants.pansServiceUuid)
       if (pansService == null) {
         context.pendingConnectPromise?.reject("SERVICE_NOT_FOUND", "PANS network-node service was not discovered.", null)
         context.pendingConnectPromise = null
@@ -377,9 +354,9 @@ class ExpoPansBleApiModule : Module() {
       }
 
       cacheCharacteristics(context, pansService)
-      gatt.getService(gapServiceUuid)?.let { cacheCharacteristics(context, it) }
+      gatt.getService(PansBleApiConstants.gapServiceUuid)?.let { cacheCharacteristics(context, it) }
 
-      val missing = requiredCommonCharacteristicUuids.filterNot { context.characteristics.containsKey(it) }
+      val missing = PansBleApiCodec.missingRequiredCharacteristics(context.characteristics.keys)
       if (missing.isNotEmpty()) {
         context.pendingConnectPromise?.reject(
           "CHARACTERISTIC_NOT_FOUND",
@@ -465,7 +442,7 @@ class ExpoPansBleApiModule : Module() {
       "name" to (record?.deviceName ?: device.name),
       "rssi" to result.rssi,
       "lastSeenMs" to System.currentTimeMillis().toDouble(),
-      "presence" to decodePresence(serviceData)
+      "presence" to PansBleApiCodec.decodePresence(serviceData)
     )
     discoveredDevices[deviceId] = device
     discoveredMetadata[deviceId] = metadata
@@ -473,28 +450,8 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun extractPansServiceData(result: ScanResult): ByteArray? {
-    val serviceData = result.scanRecord?.getServiceData(ParcelUuid(pansServiceUuid)) ?: return null
-    return serviceData.takeIf { it.size >= 2 }
-  }
-
-  private fun decodePresence(bytes: ByteArray): Map<String, Any?> {
-    val op = bytes[0].toInt() and 0xff
-    val uwbBits = op and 0x03
-    val presence = mutableMapOf<String, Any?>(
-      "rawOperationModeByte" to op,
-      "rawUwbModeBits" to uwbBits,
-      "role" to if ((op and 0x80) != 0) "anchor" else "tag",
-      "errorIndicated" to ((op and 0x10) != 0),
-      "initiator" to ((op and 0x08) != 0),
-      "bridge" to ((op and 0x04) != 0),
-      "changeCounter" to (bytes[1].toInt() and 0xff)
-    )
-    when (uwbBits) {
-      0 -> presence["uwbMode"] = "off"
-      1 -> presence["uwbMode"] = "passive"
-      2 -> presence["uwbMode"] = "active"
-    }
-    return presence
+    val serviceData = result.scanRecord?.getServiceData(ParcelUuid(PansBleApiConstants.pansServiceUuid)) ?: return null
+    return PansBleApiCodec.validPansServiceData(serviceData)
   }
 
   private fun enqueue(deviceId: String, operation: GattOperation) {
@@ -589,7 +546,7 @@ class ExpoPansBleApiModule : Module() {
     if (!gatt.setCharacteristicNotification(characteristic, operation.enabled)) {
       return StartResult.Failed("OPERATION_FAILED", "Failed to set local notification state.")
     }
-    val descriptor = characteristic.getDescriptor(cccdUuid)
+    val descriptor = characteristic.getDescriptor(PansBleApiConstants.cccdUuid)
     if (descriptor == null) {
       rollbackLocalNotificationState(gatt, characteristic, previousLocalState)
       return StartResult.Failed("CHARACTERISTIC_NOT_FOUND", "CCCD descriptor was not found for ${operation.uuid}.")
@@ -754,11 +711,7 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun requiredPermissions(): List<String> {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-      listOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
+    return PansBleApiCodec.requiredPermissionsForSdk(Build.VERSION.SDK_INT)
   }
 
   private fun hasRequiredPermissions(): Boolean {
@@ -804,32 +757,19 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun normalizeDeviceId(deviceId: String): String {
-    val trimmed = deviceId.trim()
-    if (trimmed.isEmpty()) throw IllegalArgumentException("deviceId must be non-empty.")
-    return trimmed.uppercase()
+    return PansBleApiCodec.normalizeDeviceId(deviceId)
   }
 
   private fun parseUuid(uuid: String): UUID {
-    return try {
-      UUID.fromString(uuid)
-    } catch (error: IllegalArgumentException) {
-      throw IllegalArgumentException("Invalid characteristic UUID: $uuid")
-    }
+    return PansBleApiCodec.parseUuid(uuid)
   }
 
   private fun validatePayload(payload: List<Int>): ByteArray {
-    if (payload.any { it !in 0..255 }) {
-      throw IllegalArgumentException("Payload must contain byte values in range 0..255.")
-    }
-    return payload.map { it.toByte() }.toByteArray()
+    return PansBleApiCodec.validatePayload(payload)
   }
 
   private fun normalizeWriteType(writeType: String?): Int {
-    return when (writeType ?: "withResponse") {
-      "withResponse" -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-      "withoutResponse" -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-      else -> throw IllegalArgumentException("writeType must be withResponse or withoutResponse.")
-    }
+    return PansBleApiCodec.normalizeWriteType(writeType)
   }
 
   private fun allocateOperationId(): Long = nextOperationId++

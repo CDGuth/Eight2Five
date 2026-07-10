@@ -16,6 +16,7 @@ expo-env.d.ts
 # Native
 .kotlin/
 .build/
+**/.build/
 *.orig.*
 *.jks
 *.p8
@@ -55,6 +56,9 @@ yarn-error.*
 !modules/expo-pans-ble-api/ios/**
 !modules/expo-pans-ble-api/android
 !modules/expo-pans-ble-api/android/**
+modules/expo-pans-ble-api/ios/.build/
+modules/expo-pans-ble-api/android-core/build/
+modules/expo-pans-ble-api/android-core/.gradle/
 
 # gradle
 *.gradle

@@ -46,14 +46,6 @@
     "engineer": {
       "mode": "primary",
       "prompt": "{file:./agents/engineer.md}"
-    },
-    "explore": {
-      "mode": "subagent",
-      "prompt": "{file:./agents/explore.md}"
-    },
-    "general": {
-      "mode": "subagent",
-      "prompt": "{file:./agents/general.md}"
     }
   }
 }
