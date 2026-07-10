@@ -21,7 +21,7 @@ jest.mock("expo-modules-core", () => ({
 }));
 
 describe("PansLocationDataParser", () => {
-  test("adapts calculated coordinates with meters and zCm compatibility", () => {
+  test("adapts calculated coordinates with meters", () => {
     const frame = parsePansLocationDataPayload([
       0,
       ...i32(1500),
@@ -39,7 +39,6 @@ describe("PansLocationDataParser", () => {
       positionXMeters: 1.5,
       positionYMeters: -2.25,
       positionZMeters: 0.75,
-      zCm: 75,
       quality: 80,
     });
   });

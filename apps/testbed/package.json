@@ -60,7 +60,6 @@
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
       "../../packages/mobile/src/**/*.{ts,tsx}",
-      "../../modules/expo-kbeaconpro/src/**/*.{ts,tsx}",
       "../../modules/expo-pans-ble-api/src/**/*.{ts,tsx}"
     ],
     "setupFilesAfterEnv": [

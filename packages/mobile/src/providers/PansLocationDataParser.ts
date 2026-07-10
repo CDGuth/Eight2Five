@@ -15,10 +15,7 @@ import type {
 import { LocalizationObservation } from "../localization/types";
 
 export type PansDistanceSample = PansLocationData["distances"][number];
-export type PansPositionSample = NonNullable<PansLocationData["position"]> & {
-  /** Deprecated compatibility alias. Prefer zMeters. */
-  zCm?: number;
-};
+export type PansPositionSample = NonNullable<PansLocationData["position"]>;
 export type PansLocationDataFrame = PansLocationData;
 export type PansProxyPositionSample = PansProxyPosition;
 export type PansOperationModeSample = PansOperationMode;
@@ -47,7 +44,6 @@ export function locationFrameToObservations(
       positionXMeters: frame.position.xMeters,
       positionYMeters: frame.position.yMeters,
       positionZMeters: frame.position.zMeters,
-      zCm: Math.round(frame.position.zMeters * 100),
       quality: frame.position.quality,
     });
   }

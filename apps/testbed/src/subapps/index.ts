@@ -9,19 +9,15 @@ export interface SubappConfig {
   href: Href;
 }
 
-export const SUBAPPS = [
-  {
-    id: "optimization" as const,
-    title: "Optimization Test",
-    description:
-      "Experiment with optimization-based localization, propagation constants, noise models, and variable sweep runs.",
-    routeName: "(subapps)/optimization",
-    href: "/(subapps)/optimization" as Href,
-  },
-] satisfies SubappConfig[];
+/**
+ * Registry of testbed subapps. Currently empty while the optimization
+ * playground has been retired; the scaffolding remains so new subapps can be
+ * registered here without re-establishing the routing/layout plumbing.
+ */
+export const SUBAPPS: readonly SubappConfig[] = [];
 
-export type SubappId = (typeof SUBAPPS)[number]["id"];
-export type TestbedSubapp = SubappConfig & { id: SubappId };
+export type SubappId = SubappConfig["id"];
+export type TestbedSubapp = SubappConfig;
 
 export function getSubappById(id: SubappId): TestbedSubapp {
   const subapp = SUBAPPS.find((entry) => entry.id === id);

@@ -48,17 +48,6 @@ const config: ExpoConfig = {
     "expo-asset",
     "expo-sharing",
     [
-      "../../modules/expo-kbeaconpro/app.plugin.js",
-      {
-        bluetoothAlwaysUsageDescription:
-          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
-        bluetoothPeripheralUsageDescription:
-          "This app uses Bluetooth to find, connect and communicate with KBeaconPro devices.",
-        locationWhenInUseUsageDescription:
-          "This app uses your location to scan for nearby KBeaconPro devices.",
-      },
-    ],
-    [
       "../../modules/expo-pans-ble-api/app.plugin.js",
       {
         bluetoothAlwaysUsageDescription:
