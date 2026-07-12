@@ -16,6 +16,27 @@ import type {
 export const PANS_MANAGER_DB_NAME = "eight2five-pans-manager.db";
 export const PANS_MANAGER_SCHEMA_VERSION = 1;
 
+export interface OpenPansManagerRepositoryResult {
+  repository: SqlitePansManagerRepository;
+  close(): Promise<void>;
+}
+
+/**
+ * Opens manager storage without requiring an app workspace to depend on
+ * expo-sqlite directly. The caller still owns repository initialization so it
+ * can report opening and migration failures separately.
+ */
+export async function openPansManagerRepository(
+  databaseName = PANS_MANAGER_DB_NAME,
+): Promise<OpenPansManagerRepositoryResult> {
+  const { openDatabaseAsync } = await import("expo-sqlite");
+  const database = await openDatabaseAsync(databaseName);
+  return {
+    repository: new SqlitePansManagerRepository(database),
+    close: async () => await database.closeAsync(),
+  };
+}
+
 type SqlValue = string | number | null;
 type Row = Record<string, SqlValue>;
 
