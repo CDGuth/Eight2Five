@@ -58,8 +58,39 @@ jobs:
     env:
       NODE_OPTIONS: --openssl-legacy-provider
     steps:
+      - name: Show requested build options
+        shell: bash
+        env:
+          BUILD_APP: ${{ inputs.app }}
+          BUILD_PLATFORM: ${{ inputs.platform }}
+          BUILD_PROFILE: ${{ inputs.profile }}
+          RUN_VALIDATION: ${{ inputs.run_validation_workflow }}
+        run: |
+          set -euo pipefail
+          printf 'App: %s\n' "$BUILD_APP"
+          printf 'Platform: %s\n' "$BUILD_PLATFORM"
+          printf 'Profile: %s\n' "$BUILD_PROFILE"
+          printf 'Run validation workflow: %s\n' "$RUN_VALIDATION"
+
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Free disk space for Android build
+        if: ${{ inputs.platform == 'android' }}
+        uses: justinthelaw/maximize-github-runner-space@6324f43808f0fd33e16ee8a0141fca09974b38e0 # v0.10.0
+        with:
+          cleanup-profile: custom
+          remove-dotnet: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-swift: "true"
+          remove-julia: "true"
+          remove-browsers: "true"
+          remove-docker-images: "true"
+          remove-powershell: "true"
+          remove-miniconda: "true"
+          remove-homebrew: "true"
+          remove-vcpkg: "true"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -174,6 +205,13 @@ jobs:
             exit 1
           fi
 
+      - name: Show disk space before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+          df -i "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+
       - name: Build locally with EAS
         working-directory: ${{ steps.resolve.outputs.app_dir }}
         env:
@@ -197,6 +235,14 @@ jobs:
           fi
 
           "${CMD[@]}"
+
+      - name: Show disk space after build
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+          df -i "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
 
       - name: Verify build artifact exists
         shell: bash
