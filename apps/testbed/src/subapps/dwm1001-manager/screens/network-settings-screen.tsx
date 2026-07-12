@@ -10,6 +10,7 @@ import {
   SectionCard,
   StatePanel,
   TextField,
+  SelectField,
 } from "../components/manager-ui";
 
 export function NetworkSettingsScreen() {
@@ -21,8 +22,21 @@ export function NetworkSettingsScreen() {
   const [pan, setPan] = React.useState(network ? String(network.panId) : "");
   const [notes, setNotes] = React.useState(network?.notes ?? "");
   const [exportJson, setExportJson] = React.useState("");
+  const [exportFormat, setExportFormat] = React.useState<"csv" | "json">(
+    "json",
+  );
   const [message, setMessage] = React.useState<string>();
   const [error, setError] = React.useState<string>();
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const loadedNetworkId = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!network || loadedNetworkId.current === network.id) return;
+    loadedNetworkId.current = network.id;
+    setName(network.name);
+    setPan(String(network.panId));
+    setNotes(network.notes ?? "");
+  }, [network]);
 
   if (!network) {
     return (
@@ -34,7 +48,7 @@ export function NetworkSettingsScreen() {
 
   const save = async () => {
     setError(undefined);
-    const panId = Number(pan);
+    const panId = parsePanInput(pan);
     if (!name.trim()) return setError("Name is required.");
     if (
       manager.networks.some(
@@ -45,7 +59,7 @@ export function NetworkSettingsScreen() {
     )
       return setError("A network with this name already exists.");
     if (!Number.isInteger(panId) || panId < 0 || panId > 0xffff) {
-      return setError("PAN ID must be a decimal integer from 0 to 65535.");
+      return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
     }
     try {
       await manager.saveNetwork({
@@ -63,10 +77,37 @@ export function NetworkSettingsScreen() {
 
   const exportProfile = async () => {
     try {
-      setExportJson(await manager.exportNetworkJson(network.id));
+      setExportJson(await manager.exportNetwork(network.id, exportFormat));
     } catch (exportError) {
       setError(displayError(exportError));
     }
+  };
+
+  const reviewHardwareMigration = () => {
+    const panId = parsePanInput(pan);
+    if (!name.trim()) return setError("Name is required.");
+    if (
+      manager.networks.some(
+        (item) =>
+          item.id !== network.id &&
+          item.name.trim().toLowerCase() === name.trim().toLowerCase(),
+      )
+    )
+      return setError("A network with this name already exists.");
+    if (!Number.isInteger(panId) || panId < 0 || panId > 0xffff)
+      return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
+    if (panId === network.panId)
+      return setError("Choose a different PAN ID for hardware migration.");
+    router.push({
+      pathname: `/(subapps)/dwm1001-manager/networks/${network.id}/batch-configure`,
+      params: {
+        migration: "1",
+        oldPanId: String(network.panId),
+        newPanId: String(panId),
+        name: name.trim(),
+        notes: notes.trim(),
+      },
+    } as never);
   };
 
   const deleteProfile = async () => {
@@ -82,15 +123,14 @@ export function NetworkSettingsScreen() {
     <ManagerScreen>
       <SectionCard
         title="Local profile settings"
-        description="Changing the PAN below updates local storage only. Hardware PAN migration requires an online verified batch flow and is not implemented on this screen."
+        description="Choose local-only save or review a sequential, verified hardware migration for all known members."
       >
         <TextField label="Name" value={name} onChangeText={setName} />
         <TextField
-          label="Local PAN ID (decimal)"
+          label="Intended PAN ID (decimal or hexadecimal)"
           value={pan}
           onChangeText={setPan}
-          keyboardType="number-pad"
-          helper="Local-only. This does not reconfigure anchors or tags."
+          helper="The saved PAN changes only after a hardware migration verifies every known member."
         />
         <TextField
           label="Notes"
@@ -99,21 +139,30 @@ export function NetworkSettingsScreen() {
           multiline
         />
         <ManagerButton
-          label="Save local settings"
+          label="Save local profile only"
           onPress={() => void save()}
         />
         <ManagerButton
-          label="Hardware PAN migration (requires online batch)"
+          label="Review hardware PAN migration"
           variant="outline"
-          isDisabled
+          onPress={reviewHardwareMigration}
         />
         {message ? <StatePanel state="success" message={message} /> : null}
         {error ? <StatePanel state="error" message={error} /> : null}
       </SectionCard>
 
       <SectionCard title="Export profile">
+        <SelectField
+          label="Format"
+          value={exportFormat}
+          onChange={(value) => setExportFormat(value as "csv" | "json")}
+          choices={[
+            { label: "JSON", value: "json" },
+            { label: "CSV", value: "csv" },
+          ]}
+        />
         <ManagerButton
-          label="Generate validated JSON"
+          label={`Generate selectable ${exportFormat.toUpperCase()}`}
           variant="outline"
           onPress={() => void exportProfile()}
         />
@@ -126,8 +175,8 @@ export function NetworkSettingsScreen() {
           </Text>
         ) : null}
         <Text selectable className="text-sm text-gray-600">
-          Copy/share is unavailable until an app-safe adapter is added. Select
-          the JSON manually on supported platforms.
+          Select the generated text manually. No clipboard or filesystem access
+          is used.
         </Text>
       </SectionCard>
 
@@ -135,12 +184,39 @@ export function NetworkSettingsScreen() {
         title="Delete local profile"
         description="Deletes local profile data only. It does not reset or alter hardware."
       >
-        <ManagerButton
-          label="Delete local profile"
-          variant="destructive"
-          onPress={() => void deleteProfile()}
-        />
+        {confirmingDelete ? (
+          <>
+            <StatePanel
+              state="error"
+              message={`Confirm deletion of local profile “${network.name}”. DWM1001 hardware will not be reset.`}
+            />
+            <ManagerButton
+              label={`Confirm delete ${network.name}`}
+              variant="destructive"
+              onPress={() => void deleteProfile()}
+            />
+            <ManagerButton
+              label="Cancel"
+              variant="ghost"
+              onPress={() => setConfirmingDelete(false)}
+            />
+          </>
+        ) : (
+          <ManagerButton
+            label="Delete local profile"
+            variant="destructive"
+            onPress={() => setConfirmingDelete(true)}
+          />
+        )}
       </SectionCard>
     </ManagerScreen>
   );
+}
+
+function parsePanInput(value: string): number {
+  const text = value.trim();
+  if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text.slice(2), 16);
+  if (/^[0-9a-f]*[a-f][0-9a-f]*$/i.test(text)) return Number.parseInt(text, 16);
+  if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10);
+  return Number.NaN;
 }

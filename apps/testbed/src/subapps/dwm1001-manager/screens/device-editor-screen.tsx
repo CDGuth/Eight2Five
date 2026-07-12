@@ -37,9 +37,6 @@ export function DeviceEditorScreen() {
   const [ledEnabled, setLedEnabled] = React.useState(
     initial?.ledEnabled ?? true,
   );
-  const [updateEnabled, setUpdateEnabled] = React.useState(
-    initial?.firmwareUpdateEnabled ?? true,
-  );
   const [initiator, setInitiator] = React.useState(
     initial?.role === "anchor" ? initial.initiatorEnabled : false,
   );
@@ -93,19 +90,22 @@ export function DeviceEditorScreen() {
     setError(undefined);
     setResult(undefined);
     try {
-      const panId = pan.trim() ? Number(pan) : undefined;
+      const panId = pan.trim() ? parsePanInput(pan) : undefined;
       if (
         panId !== undefined &&
         (!Number.isInteger(panId) || panId < 0 || panId > 0xffff)
       ) {
-        throw new Error("PAN ID must be a decimal integer from 0 to 65535.");
+        throw new Error(
+          "PAN ID must be an integer from 0 to 65535, in decimal or hexadecimal.",
+        );
       }
       const common = {
         ...(label ? { label } : {}),
         ...(panId !== undefined ? { panId } : {}),
         uwbMode: uwbMode as "off" | "passive" | "active",
         ledEnabled,
-        firmwareUpdateEnabled: updateEnabled,
+        // Firmware participation is intentionally not exposed in this UI.
+        firmwareUpdateEnabled: initial?.firmwareUpdateEnabled ?? false,
       };
       let config: ManagedDeviceConfig;
       if (role === "anchor") {
@@ -162,10 +162,9 @@ export function DeviceEditorScreen() {
           onChangeText={setLabel}
         />
         <TextField
-          label="PAN ID (decimal)"
+          label="PAN ID (decimal or hexadecimal)"
           value={pan}
           onChangeText={setPan}
-          keyboardType="number-pad"
         />
         <SelectField
           label="Role"
@@ -189,11 +188,6 @@ export function DeviceEditorScreen() {
           ]}
         />
         <SwitchField label="LED" value={ledEnabled} onChange={setLedEnabled} />
-        <SwitchField
-          label="Firmware update participation"
-          value={updateEnabled}
-          onChange={setUpdateEnabled}
-        />
       </SectionCard>
 
       {role === "anchor" ? (
@@ -292,4 +286,12 @@ export function DeviceEditorScreen() {
       </SectionCard>
     </ManagerScreen>
   );
+}
+
+function parsePanInput(value: string): number {
+  const text = value.trim();
+  if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text.slice(2), 16);
+  if (/^[0-9a-f]*[a-f][0-9a-f]*$/i.test(text)) return Number.parseInt(text, 16);
+  if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10);
+  return Number.NaN;
 }

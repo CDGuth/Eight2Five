@@ -4,7 +4,7 @@ import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
 import { VStack } from "@eight2five/ui/vstack";
 
-import { useManagedNetwork } from "../manager-context";
+import { useManagedNetwork, usePansManager } from "../manager-context";
 import { ManagedDeviceRow } from "../components/managed-device-row";
 import {
   KeyValue,
@@ -17,8 +17,24 @@ import {
 export function NetworkDashboardScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
   const router = useRouter();
+  const manager = usePansManager();
   const { network, devices } = useManagedNetwork(networkId);
   const [renderedAt] = React.useState(() => Date.now());
+  const openedNetworkId = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!network || openedNetworkId.current === network.id) return;
+    openedNetworkId.current = network.id;
+    void manager
+      .saveNetwork({
+        ...network,
+        lastOpenedAt: Date.now(),
+        updatedAt: network.updatedAt,
+      })
+      .catch(() => {
+        openedNetworkId.current = undefined;
+      });
+  }, [manager, network]);
 
   if (!network) {
     return (
@@ -80,14 +96,40 @@ export function NetworkDashboardScreen() {
             }
           />
           <ManagerButton
-            label="Grid (coming later)"
+            label="Network grid"
             variant="outline"
-            isDisabled
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/grid` as never,
+              )
+            }
           />
           <ManagerButton
-            label="Batch configure (coming later)"
+            label="Batch configure"
             variant="outline"
-            isDisabled
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/batch-configure` as never,
+              )
+            }
+          />
+          <ManagerButton
+            label="Observed topology"
+            variant="outline"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/topology` as never,
+              )
+            }
+          />
+          <ManagerButton
+            label="Position logs"
+            variant="outline"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/log` as never,
+              )
+            }
           />
           <ManagerButton
             label="All devices"

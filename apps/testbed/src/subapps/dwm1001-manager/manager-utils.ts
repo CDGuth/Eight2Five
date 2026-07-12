@@ -44,7 +44,7 @@ export function defaultConfigForDevice(
       ...(device.label ? { label: device.label } : {}),
       uwbMode: "active",
       ledEnabled: true,
-      firmwareUpdateEnabled: true,
+      firmwareUpdateEnabled: false,
       initiatorEnabled: false,
     };
   }
@@ -53,7 +53,7 @@ export function defaultConfigForDevice(
     ...(device.label ? { label: device.label } : {}),
     uwbMode: "active",
     ledEnabled: true,
-    firmwareUpdateEnabled: true,
+    firmwareUpdateEnabled: false,
     locationEngineEnabled: true,
     lowPowerModeEnabled: false,
     stationaryDetectionEnabled: true,

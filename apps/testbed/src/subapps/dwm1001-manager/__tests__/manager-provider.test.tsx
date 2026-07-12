@@ -161,9 +161,14 @@ function createRuntimeValue(
       assignPanId: jest.fn(),
     },
     batch: {} as PansManagerRuntime["batch"],
-    logs: { flush: jest.fn().mockResolvedValue(undefined) },
+    logs: {
+      flush: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRuntime["logs"],
+    topology: {} as PansManagerRuntime["topology"],
+    createPositionStream: jest.fn(),
     networkExport: {
       exportNetworkJson: jest.fn(),
+      exportNetworkCsv: jest.fn(),
       validateImport: jest.fn(),
       importNetwork: jest.fn(),
     },

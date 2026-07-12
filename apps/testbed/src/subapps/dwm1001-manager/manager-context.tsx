@@ -5,6 +5,8 @@ import type {
   ManagedDeviceConfig,
   ManagedNetwork,
   PansBatchOperationService,
+  PansBatchRunOptions,
+  PansBatchRunResult,
   PansConfigurationResult,
   PansConfigurationService,
   PansDeviceSessionManager,
@@ -15,6 +17,14 @@ import type {
   PansNetworkExport,
   PansNetworkExportService,
   PansPositionLogService,
+  PansPositionStreamService,
+  PansTopologyService,
+  ObservedPansTopology,
+  StartPositionLogOptions,
+  AppendPositionSampleOptions,
+  PositionLogSample,
+  PositionLogSession,
+  PansPosition,
 } from "@eight2five/mobile/pans-manager";
 
 import {
@@ -49,10 +59,23 @@ export interface PansManagerRuntime {
     "inspect" | "configureDevice" | "assignPanId"
   >;
   batch: PansBatchOperationService;
-  logs: Pick<PansPositionLogService, "flush">;
+  logs: Pick<
+    PansPositionLogService,
+    | "flush"
+    | "startSession"
+    | "appendSample"
+    | "stopSession"
+    | "exportCsv"
+    | "exportJson"
+  >;
+  topology: PansTopologyService;
+  createPositionStream(): PansPositionStreamService;
   networkExport: Pick<
     PansNetworkExportService,
-    "exportNetworkJson" | "validateImport" | "importNetwork"
+    | "exportNetworkJson"
+    | "exportNetworkCsv"
+    | "validateImport"
+    | "importNetwork"
   >;
   closeStorage(): Promise<void>;
 }
@@ -108,11 +131,31 @@ interface PansManagerContextValue {
     deviceId: string,
     config: ManagedDeviceConfig,
   ): Promise<PansConfigurationResult>;
+  assignDevicePan(
+    deviceId: string,
+    panId: number,
+  ): Promise<PansConfigurationResult>;
   disconnectDevice(deviceId: string): Promise<void>;
   exportNetworkJson(networkId: string): Promise<string>;
+  exportNetwork(networkId: string, format: "csv" | "json"): Promise<string>;
   importNetwork(input: string): Promise<PansNetworkExport>;
   managerSettings: PansManagerSettings | undefined;
   saveManagerSettings(settings: PansManagerSettings): Promise<void>;
+  refreshTopology(networkId: string): Promise<ObservedPansTopology>;
+  createPositionStream(): PansPositionStreamService;
+  runBatch<T>(options: PansBatchRunOptions<T>): Promise<PansBatchRunResult<T>>;
+  startPositionLog(
+    options: StartPositionLogOptions,
+  ): Promise<PositionLogSession>;
+  appendPositionSample(
+    sessionId: string,
+    position: PansPosition,
+    options: AppendPositionSampleOptions,
+  ): Promise<PositionLogSample>;
+  stopPositionLog(sessionId: string): Promise<PositionLogSession | undefined>;
+  listPositionLogs(networkId: string): Promise<PositionLogSession[]>;
+  listPositionSamples(sessionId: string): Promise<PositionLogSample[]>;
+  exportPositionLog(sessionId: string, format: "csv" | "json"): Promise<string>;
 }
 
 const PansManagerContext = React.createContext<PansManagerContextValue | null>(
@@ -396,6 +439,16 @@ export function PansManagerProvider({
     [refreshPersisted, runtime],
   );
 
+  const assignDevicePan = React.useCallback(
+    async (deviceId: string, panId: number) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const result = await runtime.configuration.assignPanId(deviceId, panId);
+      await refreshPersisted();
+      return result;
+    },
+    [refreshPersisted, runtime],
+  );
+
   const disconnectDevice = React.useCallback(
     async (deviceId: string) => {
       if (!runtime) return;
@@ -409,6 +462,16 @@ export function PansManagerProvider({
     async (networkId: string) => {
       if (!runtime) throw new Error("Manager is not ready.");
       return await runtime.networkExport.exportNetworkJson(networkId);
+    },
+    [runtime],
+  );
+
+  const exportNetwork = React.useCallback(
+    async (networkId: string, format: "csv" | "json") => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return format === "csv"
+        ? await runtime.networkExport.exportNetworkCsv(networkId)
+        : await runtime.networkExport.exportNetworkJson(networkId);
     },
     [runtime],
   );
@@ -428,6 +491,89 @@ export function PansManagerProvider({
       if (!runtime) throw new Error("Manager is not ready.");
       await runtime.repository.saveSettings(settings);
       setManagerSettings(settings);
+    },
+    [runtime],
+  );
+
+  const refreshTopology = React.useCallback(
+    async (networkId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return await runtime.topology.refresh(
+        devices.filter(
+          (device) =>
+            device.networkId === networkId && device.role === "anchor",
+        ),
+      );
+    },
+    [devices, runtime],
+  );
+
+  const createPositionStream = React.useCallback(() => {
+    if (!runtime) throw new Error("Manager is not ready.");
+    return runtime.createPositionStream();
+  }, [runtime]);
+
+  const runBatch = React.useCallback(
+    async <T,>(options: PansBatchRunOptions<T>) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return await runtime.batch.run(options);
+    },
+    [runtime],
+  );
+
+  const startPositionLog = React.useCallback(
+    async (options: StartPositionLogOptions) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return await runtime.logs.startSession(options);
+    },
+    [runtime],
+  );
+
+  const appendPositionSample = React.useCallback(
+    async (
+      sessionId: string,
+      position: PansPosition,
+      options: AppendPositionSampleOptions,
+    ) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return await runtime.logs.appendSample(sessionId, position, options);
+    },
+    [runtime],
+  );
+
+  const stopPositionLog = React.useCallback(
+    async (sessionId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return await runtime.logs.stopSession(sessionId);
+    },
+    [runtime],
+  );
+
+  const listPositionLogs = React.useCallback(
+    async (networkId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return (await runtime.repository.listPositionLogSessions()).filter(
+        (session) => session.networkId === networkId,
+      );
+    },
+    [runtime],
+  );
+
+  const listPositionSamples = React.useCallback(
+    async (sessionId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      await runtime.logs.flush(sessionId);
+      return await runtime.repository.listPositionLogSamples(sessionId);
+    },
+    [runtime],
+  );
+
+  const exportPositionLog = React.useCallback(
+    async (sessionId: string, format: "csv" | "json") => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return format === "csv"
+        ? await runtime.logs.exportCsv(sessionId)
+        : await runtime.logs.exportJson(sessionId);
     },
     [runtime],
   );
@@ -466,11 +612,22 @@ export function PansManagerProvider({
       saveDevice,
       inspectDevice,
       configureDevice,
+      assignDevicePan,
       disconnectDevice,
       exportNetworkJson,
+      exportNetwork,
       importNetwork,
       managerSettings,
       saveManagerSettings,
+      refreshTopology,
+      createPositionStream,
+      runBatch,
+      startPositionLog,
+      appendPositionSample,
+      stopPositionLog,
+      listPositionLogs,
+      listPositionSamples,
+      exportPositionLog,
     }),
     [
       initialization,
@@ -497,11 +654,22 @@ export function PansManagerProvider({
       saveDevice,
       inspectDevice,
       configureDevice,
+      assignDevicePan,
       disconnectDevice,
       exportNetworkJson,
+      exportNetwork,
       importNetwork,
       managerSettings,
       saveManagerSettings,
+      refreshTopology,
+      createPositionStream,
+      runBatch,
+      startPositionLog,
+      appendPositionSample,
+      stopPositionLog,
+      listPositionLogs,
+      listPositionSamples,
+      exportPositionLog,
     ],
   );
 
@@ -568,7 +736,24 @@ export function useManagedDevice(deviceId: string) {
 
 export function usePansBatchAndLogs() {
   const manager = usePansManager();
-  return { refresh: manager.refreshPersisted };
+  return {
+    runBatch: manager.runBatch,
+    startLog: manager.startPositionLog,
+    appendSample: manager.appendPositionSample,
+    stopLog: manager.stopPositionLog,
+    listLogs: manager.listPositionLogs,
+    listSamples: manager.listPositionSamples,
+    exportLog: manager.exportPositionLog,
+    refresh: manager.refreshPersisted,
+  };
+}
+
+export function usePansLiveNetwork() {
+  const manager = usePansManager();
+  return {
+    refreshTopology: manager.refreshTopology,
+    createPositionStream: manager.createPositionStream,
+  };
 }
 
 async function createDefaultRuntime(
@@ -593,6 +778,10 @@ async function createDefaultRuntime(
       undefined,
       settings.connectionTimeoutMs,
     );
+    const logs = new manager.PansPositionLogService(storage.repository, {
+      memoryCap: settings.positionLogMemoryCap,
+      flushSize: settings.positionLogFlushSize,
+    });
     return {
       repository: storage.repository,
       discovery,
@@ -602,10 +791,10 @@ async function createDefaultRuntime(
         storage.repository,
       ),
       batch: new manager.PansBatchOperationService(storage.repository),
-      logs: new manager.PansPositionLogService(storage.repository, {
-        memoryCap: settings.positionLogMemoryCap,
-        flushSize: settings.positionLogFlushSize,
-      }),
+      logs,
+      topology: new manager.PansTopologyService(sessions),
+      createPositionStream: () =>
+        new manager.PansPositionStreamService(sessions),
       networkExport: new manager.PansNetworkExportService(storage.repository),
       closeStorage: storage.close,
     };

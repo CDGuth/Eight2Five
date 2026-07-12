@@ -77,9 +77,12 @@ function dashboardRuntime(): PansManagerRuntime {
       assignPanId: jest.fn(),
     },
     batch: {} as PansManagerRuntime["batch"],
-    logs: { flush: jest.fn() },
+    logs: { flush: jest.fn() } as unknown as PansManagerRuntime["logs"],
+    topology: {} as PansManagerRuntime["topology"],
+    createPositionStream: jest.fn(),
     networkExport: {
       exportNetworkJson: jest.fn(),
+      exportNetworkCsv: jest.fn(),
       validateImport: jest.fn(),
       importNetwork: jest.fn(),
     },

@@ -36,6 +36,22 @@ export default function Dwm1001ManagerLayout() {
           options={{ title: "Network Settings" }}
         />
         <Stack.Screen
+          name="networks/[networkId]/batch-configure"
+          options={{ title: "Batch Configure" }}
+        />
+        <Stack.Screen
+          name="networks/[networkId]/grid"
+          options={{ title: "Network Grid" }}
+        />
+        <Stack.Screen
+          name="networks/[networkId]/topology"
+          options={{ title: "Observed Topology" }}
+        />
+        <Stack.Screen
+          name="networks/[networkId]/log"
+          options={{ title: "Position Logs" }}
+        />
+        <Stack.Screen
           name="devices/[deviceId]/index"
           options={{ title: "Device" }}
         />
@@ -46,6 +62,10 @@ export default function Dwm1001ManagerLayout() {
         <Stack.Screen
           name="devices/[deviceId]/diagnostics"
           options={{ title: "Diagnostics" }}
+        />
+        <Stack.Screen
+          name="devices/[deviceId]/firmware"
+          options={{ title: "Firmware Update Disabled" }}
         />
         <Stack.Screen name="settings" options={{ title: "Manager Settings" }} />
         <Stack.Screen name="import" options={{ title: "Import Profile" }} />
