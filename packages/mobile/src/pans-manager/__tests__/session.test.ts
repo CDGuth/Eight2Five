@@ -21,6 +21,8 @@ function gateway(
     readDeviceInfo: jest.fn(),
     readAnchorList: jest.fn(),
     readClusterInfo: jest.fn(),
+    readStatistics: jest.fn(),
+    readAnchorMacStats: jest.fn(),
     readLocationData: jest.fn(),
     subscribeLocationData: jest.fn(),
     unsubscribeLocationData: jest.fn(),

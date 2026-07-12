@@ -14,5 +14,6 @@ export * from "./PansNetworkExportService";
 export * from "./PansCommissioningService";
 export * from "./PansTopologyService";
 export * from "./PansPositionStreamService";
+export * from "./PansDiagnosticsService";
 export * from "./pans-network-grid-math";
 export * from "./PansNetworkGrid";

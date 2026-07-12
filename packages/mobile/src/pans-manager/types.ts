@@ -173,6 +173,41 @@ export interface PansInspectionResult {
   warnings: string[];
 }
 
+export type PansDiagnosticsSection =
+  | "label"
+  | "pan"
+  | "deviceInfo"
+  | "locationDataMode"
+  | "updateRate"
+  | "clusterInfo"
+  | "anchorList"
+  | "statistics"
+  | "anchorMacStats";
+
+export interface PansDiagnosticsWarning {
+  section: PansDiagnosticsSection;
+  code: ManagerErrorCode;
+  message: string;
+}
+
+/** A single explicit connected read. Operation mode is the only required section. */
+export interface PansDiagnosticsResult {
+  deviceId: string;
+  transportDeviceId: string;
+  capturedAt: number;
+  operationMode: PansOperationMode;
+  label?: string;
+  panId?: number;
+  deviceInfo?: PansDeviceInfo;
+  locationDataMode?: PansLocationDataMode;
+  updateRate?: PansTagUpdateRate;
+  clusterInfo?: PansClusterInfo;
+  anchorList?: PansAnchorList;
+  statistics?: number[];
+  anchorMacStats?: number[];
+  warnings: PansDiagnosticsWarning[];
+}
+
 export type ConfigurationOutcome = "verified" | "partial" | "failure";
 
 export interface PansConfigurationResult {

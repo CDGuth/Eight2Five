@@ -5,6 +5,7 @@ import {
   disconnect,
   patchOperationMode,
   readAnchorList,
+  readAnchorMacStats,
   readClusterInfo,
   readDeviceInfo,
   readLabel,
@@ -12,6 +13,7 @@ import {
   readLocationDataMode,
   readNetworkId,
   readOperationMode,
+  readStatistics,
   readTagUpdateRate,
   subscribeLocationData,
   unsubscribeLocationData,
@@ -55,6 +57,8 @@ export interface PansNativeGateway {
   readDeviceInfo(deviceId: string): Promise<PansDeviceInfo>;
   readAnchorList(deviceId: string): Promise<PansAnchorList>;
   readClusterInfo(deviceId: string): Promise<PansClusterInfo>;
+  readStatistics(deviceId: string): Promise<number[]>;
+  readAnchorMacStats(deviceId: string): Promise<number[]>;
   readLocationData(deviceId: string): Promise<PansLocationData>;
   subscribeLocationData(deviceId: string): Promise<boolean>;
   unsubscribeLocationData(deviceId: string): Promise<boolean>;
@@ -96,6 +100,8 @@ export const defaultPansNativeGateway: PansNativeGateway = {
   readDeviceInfo,
   readAnchorList,
   readClusterInfo,
+  readStatistics,
+  readAnchorMacStats,
   readLocationData,
   subscribeLocationData,
   unsubscribeLocationData,
@@ -124,6 +130,8 @@ export interface ConnectedPansSession {
   readDeviceInfo(): Promise<PansDeviceInfo>;
   readAnchorList(): Promise<PansAnchorList>;
   readClusterInfo(): Promise<PansClusterInfo>;
+  readStatistics(): Promise<number[]>;
+  readAnchorMacStats(): Promise<number[]>;
   readLocationData(): Promise<PansLocationData>;
   subscribeLocationData(): Promise<boolean>;
   unsubscribeLocationData(): Promise<boolean>;
@@ -361,6 +369,10 @@ export class PansDeviceSessionManager {
         await this.gateway.readAnchorList(transportDeviceId),
       readClusterInfo: async () =>
         await this.gateway.readClusterInfo(transportDeviceId),
+      readStatistics: async () =>
+        await this.gateway.readStatistics(transportDeviceId),
+      readAnchorMacStats: async () =>
+        await this.gateway.readAnchorMacStats(transportDeviceId),
       readLocationData: async () =>
         await this.gateway.readLocationData(transportDeviceId),
       subscribeLocationData: async () =>
