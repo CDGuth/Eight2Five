@@ -450,8 +450,12 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun extractPansServiceData(result: ScanResult): ByteArray? {
-    val serviceData = result.scanRecord?.getServiceData(ParcelUuid(PansBleApiConstants.pansServiceUuid)) ?: return null
-    return PansBleApiCodec.validPansServiceData(serviceData)
+    val scanRecord = result.scanRecord ?: return null
+    val parsedServiceData = scanRecord.getServiceData(
+      ParcelUuid(PansBleApiConstants.pansServiceUuid),
+    )
+    return PansBleApiCodec.validPansServiceData(parsedServiceData)
+      ?: PansBleApiCodec.extractPansServiceDataFromScanRecord(scanRecord.bytes)
   }
 
   private fun enqueue(deviceId: String, operation: GattOperation) {

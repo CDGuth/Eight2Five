@@ -1,5 +1,7 @@
 package expo.modules.pansbleapi
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
 import java.util.UUID
 
@@ -86,6 +88,43 @@ object PansBleApiCore {
     return validPansServiceData(serviceDataByUuid[pansServiceUuid])
   }
 
+  /**
+   * Extracts the DWM1001 presence payload directly from raw BLE advertisement
+   * bytes. The DRTLS Manager uses the same fallback because some Android BLE
+   * stacks do not expose 128-bit service-data records through ScanRecord's
+   * parsed service-data map even though the raw AD structure is present.
+   */
+  fun extractPansServiceDataFromScanRecord(scanRecord: ByteArray?): ByteArray? {
+    if (scanRecord == null) return null
+
+    var offset = 0
+    while (offset < scanRecord.size) {
+      val recordLength = scanRecord[offset].toInt() and 0xff
+      if (recordLength == 0) break
+
+      val recordEnd = offset + 1 + recordLength
+      if (recordEnd > scanRecord.size || recordLength < 1) return null
+
+      val type = scanRecord[offset + 1].toInt() and 0xff
+      val dataStart = offset + 2
+      val dataLength = recordLength - 1
+      if (type == SERVICE_DATA_128_BIT_AD_TYPE && dataLength >= UUID_BYTE_COUNT + MIN_PRESENCE_PAYLOAD_BYTES) {
+        val advertisedUuid = decodeBle128BitUuid(
+          scanRecord.copyOfRange(dataStart, dataStart + UUID_BYTE_COUNT),
+        )
+        if (advertisedUuid == pansServiceUuid) {
+          return validPansServiceData(
+            scanRecord.copyOfRange(dataStart + UUID_BYTE_COUNT, recordEnd),
+          )
+        }
+      }
+
+      offset = recordEnd
+    }
+
+    return null
+  }
+
   fun decodePresence(bytes: ByteArray): Map<String, Any>? {
     if (bytes.size < 2) return null
 
@@ -128,4 +167,18 @@ object PansBleApiCore {
       listOf("android.permission.ACCESS_FINE_LOCATION")
     }
   }
+
+  private fun decodeBle128BitUuid(bytes: ByteArray): UUID {
+    require(bytes.size == UUID_BYTE_COUNT) {
+      "A 128-bit BLE UUID must contain exactly 16 bytes."
+    }
+    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    val leastSignificantBits = buffer.long
+    val mostSignificantBits = buffer.long
+    return UUID(mostSignificantBits, leastSignificantBits)
+  }
+
+  private const val SERVICE_DATA_128_BIT_AD_TYPE = 0x21
+  private const val UUID_BYTE_COUNT = 16
+  private const val MIN_PRESENCE_PAYLOAD_BYTES = 2
 }

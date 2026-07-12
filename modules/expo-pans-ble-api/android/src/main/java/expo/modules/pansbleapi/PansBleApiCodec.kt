@@ -28,6 +28,10 @@ internal object PansBleApiCodec {
     return PansBleApiCore.extractPansServiceData(serviceDataByUuid)
   }
 
+  fun extractPansServiceDataFromScanRecord(scanRecord: ByteArray?): ByteArray? {
+    return PansBleApiCore.extractPansServiceDataFromScanRecord(scanRecord)
+  }
+
   fun decodePresence(bytes: ByteArray): Map<String, Any>? {
     return PansBleApiCore.decodePresence(bytes)
   }
