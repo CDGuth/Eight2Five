@@ -11,7 +11,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json",
-    "test": "jest src/providers src/hooks --watchAll=false --passWithNoTests --runInBand"
+    "test": "jest src/providers src/hooks src/pans-manager --watchAll=false --passWithNoTests --runInBand"
   },
   "peerDependencies": {
     "react": "19.2.3",

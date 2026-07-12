@@ -1,0 +1,294 @@
+import type {
+  PansBleDevice,
+  PansDeviceInfo,
+  PansDistance,
+  PansLocationDataMode,
+  PansNodeRole,
+  PansOperationMode,
+  PansPosition,
+  PansPresenceData,
+  PansTagUpdateRate,
+  PansUwbMode,
+} from "expo-pans-ble-api";
+import type { ManagerErrorCode } from "./errors";
+
+export interface CoordinateBounds {
+  minXMeters: number;
+  maxXMeters: number;
+  minYMeters: number;
+  maxYMeters: number;
+  minZMeters: number;
+  maxZMeters: number;
+}
+
+export interface DefaultTagModeSettings {
+  locationEngineEnabled: boolean;
+  lowPowerModeEnabled: boolean;
+  stationaryDetectionEnabled: boolean;
+  locationDataMode: PansLocationDataMode;
+  movingUpdateRateMs: number;
+  stationaryUpdateRateMs: number;
+}
+
+export interface ManagedNetworkSettings {
+  coordinateBounds: CoordinateBounds;
+  defaultAnchorHeightMeters: number;
+  staleDeviceTimeoutMs: number;
+  defaultTagMode: DefaultTagModeSettings;
+  scanDurationMs: number;
+  autoConnect: boolean;
+  positionLogRetentionDays: number;
+  positionLogMaxSamples: number;
+}
+
+export const DEFAULT_MANAGED_NETWORK_SETTINGS: ManagedNetworkSettings = {
+  coordinateBounds: {
+    minXMeters: -1_000,
+    maxXMeters: 1_000,
+    minYMeters: -1_000,
+    maxYMeters: 1_000,
+    minZMeters: -100,
+    maxZMeters: 100,
+  },
+  defaultAnchorHeightMeters: 2,
+  staleDeviceTimeoutMs: 10_000,
+  defaultTagMode: {
+    locationEngineEnabled: true,
+    lowPowerModeEnabled: false,
+    stationaryDetectionEnabled: true,
+    locationDataMode: 0,
+    movingUpdateRateMs: 100,
+    stationaryUpdateRateMs: 1_000,
+  },
+  scanDurationMs: 15_000,
+  autoConnect: false,
+  positionLogRetentionDays: 30,
+  positionLogMaxSamples: 100_000,
+};
+
+export interface ManagedNetwork {
+  id: string;
+  name: string;
+  panId: number;
+  settings: ManagedNetworkSettings;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+  lastOpenedAt?: number;
+}
+
+export interface ManagedDeviceConfigBase {
+  label?: string;
+  panId?: number;
+  role: PansNodeRole;
+  uwbMode: PansUwbMode;
+  ledEnabled: boolean;
+  firmwareUpdateEnabled: boolean;
+}
+
+export interface ManagedTagConfig extends ManagedDeviceConfigBase {
+  role: "tag";
+  locationEngineEnabled: boolean;
+  lowPowerModeEnabled: boolean;
+  stationaryDetectionEnabled: boolean;
+  locationDataMode: PansLocationDataMode;
+  movingUpdateRateMs?: number;
+  stationaryUpdateRateMs?: number;
+}
+
+export interface ManagedAnchorConfig extends ManagedDeviceConfigBase {
+  role: "anchor";
+  initiatorEnabled: boolean;
+  position?: PansPosition;
+}
+
+export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
+
+export interface ManagedDevice {
+  id: string;
+  networkId?: string;
+  transportDeviceId: string;
+  macAddress?: string;
+  nodeIdHex?: string;
+  nickname?: string;
+  label?: string;
+  role?: PansNodeRole;
+  lastKnownConfig?: ManagedDeviceConfig;
+  lastSeenAt?: number;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type DeviceCompatibility =
+  | "compatible"
+  | "unknown"
+  | "incompatible"
+  | "malformed";
+
+export interface DiscoveredDeviceSnapshot {
+  transportDeviceId: string;
+  macAddress?: string;
+  name?: string;
+  rssi: number;
+  lastSeenAt: number;
+  presence?: PansPresenceData;
+  compatibility: DeviceCompatibility;
+  firstSeenAt?: number;
+  stale?: boolean;
+  reason?: string;
+  rawDevice?: PansBleDevice;
+}
+
+export type VerifiedWriteStatus =
+  | "verified"
+  | "written-unverified"
+  | "mismatch"
+  | "failed"
+  | "skipped";
+
+export interface VerifiedWrite {
+  field: string;
+  status: VerifiedWriteStatus;
+  requested?: unknown;
+  actual?: unknown;
+  warning?: string;
+  errorCode?: ManagerErrorCode;
+}
+
+export interface PansInspectionResult {
+  deviceId: string;
+  transportDeviceId: string;
+  inspectedAt: number;
+  label?: string;
+  panId?: number;
+  operationMode: PansOperationMode;
+  locationDataMode?: PansLocationDataMode;
+  updateRate?: PansTagUpdateRate;
+  deviceInfo?: PansDeviceInfo;
+  warnings: string[];
+}
+
+export type ConfigurationOutcome = "verified" | "partial" | "failure";
+
+export interface PansConfigurationResult {
+  deviceId: string;
+  transportDeviceId: string;
+  outcome: ConfigurationOutcome;
+  inspected?: PansInspectionResult;
+  writes: VerifiedWrite[];
+  warnings: string[];
+  error?: { code: ManagerErrorCode; message: string };
+}
+
+export type BatchOperationStatus = "running" | "completed" | "cancelled";
+
+export type BatchItemStatus =
+  | "pending"
+  | "connecting"
+  | "writing"
+  | "verifying"
+  | "succeeded"
+  | "failed"
+  | "skipped";
+
+export interface PansBatchOperationRecord {
+  id: string;
+  type: string;
+  status: BatchOperationStatus;
+  totalItems: number;
+  completedItems: number;
+  startedAt: number;
+  completedAt?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PansBatchOperationItem {
+  batchId: string;
+  deviceId: string;
+  index: number;
+  status: BatchItemStatus;
+  attempts: number;
+  startedAt?: number;
+  completedAt?: number;
+  result?: unknown;
+  error?: { code: ManagerErrorCode; message: string };
+}
+
+export interface PositionLogSession {
+  id: string;
+  networkId: string;
+  panId: number;
+  deviceId: string;
+  startedAt: number;
+  endedAt?: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PositionLogSample {
+  sessionId: string;
+  sequence: number;
+  timestampMs: number;
+  networkId: string;
+  panId: number;
+  deviceId: string;
+  nodeId?: string;
+  label?: string;
+  xMeters: number;
+  yMeters: number;
+  zMeters: number;
+  quality: number;
+  solver: string;
+  anchorCount: number;
+  distances?: PansDistance[];
+  notes?: string;
+  eventMarker?: string;
+}
+
+export interface DeviceConfigurationSnapshot {
+  deviceId: string;
+  capturedAt: number;
+  config: ManagedDeviceConfig;
+  inspection?: PansInspectionResult;
+}
+
+export interface PansManagerSettings {
+  discoveryStaleAfterMs: number;
+  connectionTimeoutMs: number;
+  positionLogMemoryCap: number;
+  positionLogFlushSize: number;
+}
+
+export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
+  discoveryStaleAfterMs: 10_000,
+  connectionTimeoutMs: 10_000,
+  positionLogMemoryCap: 1_000,
+  positionLogFlushSize: 100,
+};
+
+export const PANS_NETWORK_EXPORT_VERSION = 1 as const;
+
+export interface PansNetworkExport {
+  schema: "eight2five.pans-network";
+  version: typeof PANS_NETWORK_EXPORT_VERSION;
+  exportedAt: number;
+  network: ManagedNetwork;
+  devices: ManagedDevice[];
+  configurations: DeviceConfigurationSnapshot[];
+}
+
+export interface NetworkDeviceAssociation {
+  networkId: string;
+  deviceId: string;
+  associatedAt: number;
+}
+
+export type NetworkSettings = ManagedNetworkSettings;
+export type DiscoverySnapshot = DiscoveredDeviceSnapshot;
+export type InspectionResult = PansInspectionResult;
+export type ConfigurationResult = PansConfigurationResult;
+export type BatchOperationRecord = PansBatchOperationRecord;
+export type BatchOperationItem = PansBatchOperationItem;
+export type ManagerSettings = PansManagerSettings;
+export type NetworkExportSchema = PansNetworkExport;

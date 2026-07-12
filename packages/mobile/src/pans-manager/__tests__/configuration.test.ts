@@ -1,0 +1,191 @@
+import { InMemoryPansManagerRepository } from "../InMemoryPansManagerRepository";
+import { PansConfigurationService } from "../PansConfigurationService";
+import type { PansNativeGateway } from "../PansDeviceSessionManager";
+import { PansDeviceSessionManager } from "../PansDeviceSessionManager";
+
+jest.mock("expo-pans-ble-api", () => ({}));
+
+const mode = {
+  role: "anchor" as const,
+  uwbMode: "active" as const,
+  selectedFirmware: 1 as const,
+  accelerometerEnabled: false,
+  ledEnabled: true,
+  firmwareUpdateEnabled: false,
+  initiatorEnabled: false,
+  lowPowerModeEnabled: false,
+  locationEngineEnabled: false,
+  raw: [0, 0] as [number, number],
+};
+
+describe("PansConfigurationService", () => {
+  test("inspection tolerates unavailable optional characteristics", async () => {
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      readLabel: jest.fn(async () => {
+        throw {
+          code: "CHARACTERISTIC_NOT_FOUND",
+          message: "label unavailable",
+        };
+      }),
+      readNetworkId: jest.fn(async () => 7),
+      readDeviceInfo: jest.fn(async () => {
+        throw { code: "UNSUPPORTED", message: "device info unavailable" };
+      }),
+      writeLabel: jest.fn(),
+      writeNetworkId: jest.fn(),
+      patchOperationMode: jest.fn(),
+      readLocationDataMode: jest.fn(),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "device",
+      transportDeviceId: "transport-device",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await expect(service.inspect("device")).resolves.toMatchObject({
+      deviceId: "device",
+      transportDeviceId: "transport-device",
+      panId: 7,
+      warnings: [
+        "label is unavailable on this device.",
+        "device information is unavailable on this device.",
+      ],
+    });
+  });
+
+  test("writes deterministically, reports readback mismatch, and persists partial state", async () => {
+    const calls: string[] = [];
+    const labels = ["old", "wrong", "wrong"];
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => {
+        calls.push("readLabel");
+        return labels.shift() ?? "wrong";
+      }),
+      writeLabel: jest.fn(async () => {
+        calls.push("writeLabel");
+        return true;
+      }),
+      readNetworkId: jest.fn(async () => {
+        calls.push("readPan");
+        return 7;
+      }),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => {
+        calls.push("readMode");
+        return mode;
+      }),
+      patchOperationMode: jest.fn(async () => mode),
+      readLocationDataMode: jest.fn(),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+      readDeviceInfo: jest.fn(async () => {
+        calls.push("readInfo");
+        return { raw: [] };
+      }),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "device",
+      transportDeviceId: "transport-device",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+    const result = await service.configureDevice("device", {
+      role: "anchor",
+      label: "new",
+      panId: 7,
+      uwbMode: "active",
+      ledEnabled: true,
+      firmwareUpdateEnabled: false,
+      initiatorEnabled: false,
+    });
+    expect(result.outcome).toBe("partial");
+    expect(result.writes[0]).toMatchObject({
+      field: "label",
+      status: "mismatch",
+      actual: "wrong",
+    });
+    expect(calls.slice(0, 6)).toEqual([
+      "readMode",
+      "readLabel",
+      "readPan",
+      "readInfo",
+      "writeLabel",
+      "readLabel",
+    ]);
+    expect(await repository.getLatestDeviceSnapshot("device")).toBeDefined();
+    expect(await repository.getDevice("device")).toMatchObject({
+      lastKnownConfig: { role: "anchor" },
+    });
+  });
+
+  test("rejects changed update rates before any writes", async () => {
+    const tagMode = { ...mode, role: "tag" as const };
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "tag"),
+      writeLabel: jest.fn(),
+      readNetworkId: jest.fn(async () => 1),
+      writeNetworkId: jest.fn(),
+      readOperationMode: jest.fn(async () => tagMode),
+      patchOperationMode: jest.fn(),
+      readLocationDataMode: jest.fn(async () => 1 as const),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(async () => ({
+        movingUpdateRateMs: 100,
+        stationaryUpdateRateMs: 1000,
+        raw: [],
+      })),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "tag",
+      transportDeviceId: "transport-tag",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+    await expect(
+      service.configureTag("tag", {
+        role: "tag",
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        locationEngineEnabled: false,
+        lowPowerModeEnabled: false,
+        stationaryDetectionEnabled: false,
+        locationDataMode: 1,
+        movingUpdateRateMs: 200,
+      }),
+    ).resolves.toMatchObject({
+      outcome: "failure",
+      error: { code: "UNSUPPORTED_FEATURE" },
+    });
+    expect(native.patchOperationMode).not.toHaveBeenCalled();
+  });
+});

@@ -1,0 +1,255 @@
+import { ManagerError } from "./errors";
+import type { PansManagerRepository } from "./PansManagerRepository";
+import {
+  PANS_NETWORK_EXPORT_VERSION,
+  type DeviceConfigurationSnapshot,
+  type ManagedDevice,
+  type ManagedNetwork,
+  type PansNetworkExport,
+} from "./types";
+import {
+  assertPanId,
+  assertUniqueName,
+  normalizeDeviceConfig,
+} from "./validation";
+
+export class PansNetworkExportService {
+  constructor(
+    private readonly repository: PansManagerRepository,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  async exportNetwork(networkId: string): Promise<PansNetworkExport> {
+    const network = await this.repository.getNetwork(networkId);
+    if (!network) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "The requested network does not exist.",
+      );
+    }
+    const devices = await this.repository.listNetworkDevices(networkId);
+    const configurations = (
+      await Promise.all(
+        devices.map(
+          async (device) =>
+            await this.repository.getLatestDeviceSnapshot(device.id),
+        ),
+      )
+    ).filter(
+      (snapshot): snapshot is DeviceConfigurationSnapshot =>
+        snapshot !== undefined,
+    );
+    return {
+      schema: "eight2five.pans-network",
+      version: PANS_NETWORK_EXPORT_VERSION,
+      exportedAt: this.now(),
+      network: clone(network),
+      devices: clone(devices),
+      configurations: clone(configurations),
+    };
+  }
+
+  async exportNetworkJson(networkId: string): Promise<string> {
+    return JSON.stringify(await this.exportNetwork(networkId), null, 2);
+  }
+
+  validateImport(input: string | unknown): PansNetworkExport {
+    let value: unknown = input;
+    if (typeof input === "string") {
+      try {
+        value = JSON.parse(input) as unknown;
+      } catch (error) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "Network import is not valid JSON.",
+          { cause: error },
+        );
+      }
+    }
+    if (!isRecord(value) || value.schema !== "eight2five.pans-network") {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "Network import has an unknown schema.",
+      );
+    }
+    if (value.version !== PANS_NETWORK_EXPORT_VERSION) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "Network import version is unsupported.",
+      );
+    }
+    rejectSecrets(value);
+    if (!isFiniteNumber(value.exportedAt)) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "Network import timestamp is invalid.",
+      );
+    }
+    validateNetwork(value.network);
+    if (!Array.isArray(value.devices) || !Array.isArray(value.configurations)) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "Network import device data is invalid.",
+      );
+    }
+    const identities = new Set<string>();
+    value.devices.forEach((device) => {
+      validateDevice(device);
+      const typed = device as unknown as ManagedDevice;
+      if (identities.has(typed.id)) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "Network import contains duplicate device IDs.",
+        );
+      }
+      identities.add(typed.id);
+    });
+    value.configurations.forEach((snapshot) => {
+      if (
+        !isRecord(snapshot) ||
+        typeof snapshot.deviceId !== "string" ||
+        !identities.has(snapshot.deviceId) ||
+        !isFiniteNumber(snapshot.capturedAt)
+      ) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "Network import contains an invalid snapshot.",
+        );
+      }
+      normalizeDeviceConfig(snapshot.config as never);
+    });
+    return clone(value as unknown as PansNetworkExport);
+  }
+
+  async importNetwork(input: string | unknown): Promise<PansNetworkExport> {
+    const data = this.validateImport(input);
+    const existing = await this.repository.listNetworks();
+    assertUniqueName(
+      data.network.name,
+      existing.map((network) => network.name),
+      existing.find((network) => network.id === data.network.id)?.name,
+    );
+    await this.repository.saveNetwork(data.network);
+    for (const device of data.devices) {
+      await this.repository.saveDevice(device);
+      await this.repository.associateDevice({
+        networkId: data.network.id,
+        deviceId: device.id,
+        associatedAt: data.exportedAt,
+      });
+    }
+    for (const snapshot of data.configurations) {
+      await this.repository.saveDeviceSnapshot(snapshot);
+    }
+    return data;
+  }
+}
+
+function validateNetwork(value: unknown): asserts value is ManagedNetwork {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !value.id.trim() ||
+    typeof value.name !== "string" ||
+    !value.name.trim() ||
+    !isFiniteNumber(value.createdAt) ||
+    !isFiniteNumber(value.updatedAt) ||
+    !isRecord(value.settings)
+  ) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "Network import metadata is invalid.",
+    );
+  }
+  assertPanId(value.panId as number);
+  validateNetworkSettings(value.settings);
+}
+
+function validateDevice(value: unknown): asserts value is ManagedDevice {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !value.id.trim() ||
+    typeof value.transportDeviceId !== "string" ||
+    !value.transportDeviceId.trim() ||
+    !isFiniteNumber(value.createdAt) ||
+    !isFiniteNumber(value.updatedAt)
+  ) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "Network import contains an invalid device.",
+    );
+  }
+}
+
+function rejectSecrets(value: unknown, path = "export"): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => rejectSecrets(item, `${path}[${index}]`));
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      /^(password|passphrase|secret|accessToken|refreshToken|apiKey|privateKey)$/i.test(
+        key,
+      )
+    ) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        `Network import must not contain secrets (${path}.${key}).`,
+      );
+    }
+    rejectSecrets(item, `${path}.${key}`);
+  }
+}
+
+function validateNetworkSettings(value: unknown): void {
+  if (!isRecord(value)) invalidSettings();
+  const bounds = value.coordinateBounds;
+  const tag = value.defaultTagMode;
+  if (
+    !isRecord(bounds) ||
+    !isRecord(tag) ||
+    ![
+      bounds.minXMeters,
+      bounds.maxXMeters,
+      bounds.minYMeters,
+      bounds.maxYMeters,
+      bounds.minZMeters,
+      bounds.maxZMeters,
+      value.defaultAnchorHeightMeters,
+      value.staleDeviceTimeoutMs,
+      value.scanDurationMs,
+      value.positionLogRetentionDays,
+      value.positionLogMaxSamples,
+      tag.movingUpdateRateMs,
+      tag.stationaryUpdateRateMs,
+    ].every(isFiniteNumber) ||
+    typeof value.autoConnect !== "boolean" ||
+    typeof tag.locationEngineEnabled !== "boolean" ||
+    typeof tag.lowPowerModeEnabled !== "boolean" ||
+    typeof tag.stationaryDetectionEnabled !== "boolean" ||
+    ![0, 1, 2].includes(tag.locationDataMode as number)
+  ) {
+    invalidSettings();
+  }
+}
+
+function invalidSettings(): never {
+  throw new ManagerError(
+    "INVALID_CONFIGURATION",
+    "Network import settings are invalid.",
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
