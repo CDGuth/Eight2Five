@@ -76,6 +76,7 @@ function dashboardRuntime(): PansManagerRuntime {
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
     },
+    diagnostics: { inspect: jest.fn() },
     batch: {} as PansManagerRuntime["batch"],
     logs: { flush: jest.fn() } as unknown as PansManagerRuntime["logs"],
     topology: {} as PansManagerRuntime["topology"],

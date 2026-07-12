@@ -19,6 +19,9 @@ export function DeviceSummaryScreen() {
   const router = useRouter();
   const manager = usePansManager();
   const device = useManagedDevice(deviceId);
+  const network = manager.networks.find(
+    (item) => item.id === device?.networkId,
+  );
   const [inspection, setInspection] = React.useState<PansInspectionResult>();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string>();
@@ -60,6 +63,16 @@ export function DeviceSummaryScreen() {
           value={device.role ?? "Pending inspection"}
         />
         <KeyValue
+          label="Saved network association"
+          value={
+            network?.name ?? (device.networkId ? device.networkId : "None")
+          }
+        />
+        <KeyValue
+          label="Saved position"
+          value={formatSavedPosition(device.lastKnownConfig)}
+        />
+        <KeyValue
           label="Last seen"
           value={formatRelativeTime(device.lastSeenAt)}
         />
@@ -94,6 +107,10 @@ export function DeviceSummaryScreen() {
           <KeyValue label="Role" value={inspection.operationMode.role} />
           <KeyValue label="UWB" value={inspection.operationMode.uwbMode} />
           <KeyValue
+            label="Active firmware slot"
+            value={inspection.operationMode.selectedFirmware}
+          />
+          <KeyValue
             label="Initiator"
             value={inspection.operationMode.initiatorEnabled ? "On" : "Off"}
           />
@@ -102,12 +119,44 @@ export function DeviceSummaryScreen() {
             value={inspection.operationMode.ledEnabled ? "On" : "Off"}
           />
           <KeyValue
+            label="Location engine"
+            value={
+              inspection.operationMode.locationEngineEnabled ? "On" : "Off"
+            }
+          />
+          <KeyValue
+            label="Low power"
+            value={inspection.operationMode.lowPowerModeEnabled ? "On" : "Off"}
+          />
+          <KeyValue
+            label="Accelerometer / stationary detection"
+            value={inspection.operationMode.accelerometerEnabled ? "On" : "Off"}
+          />
+          <KeyValue
+            label="Firmware update participation"
+            value={
+              inspection.operationMode.firmwareUpdateEnabled ? "On" : "Off"
+            }
+          />
+          <KeyValue
+            label="Hardware version"
+            value={inspection.deviceInfo?.hardwareVersion ?? "Unavailable"}
+          />
+          <KeyValue
             label="Firmware 1"
             value={inspection.deviceInfo?.firmware1Version ?? "Unavailable"}
           />
           <KeyValue
             label="Firmware 2"
             value={inspection.deviceInfo?.firmware2Version ?? "Unavailable"}
+          />
+          <KeyValue
+            label="Firmware 1 checksum"
+            value={formatChecksum(inspection.deviceInfo?.firmware1Checksum)}
+          />
+          <KeyValue
+            label="Firmware 2 checksum"
+            value={formatChecksum(inspection.deviceInfo?.firmware2Checksum)}
           />
           {inspection.updateRate ? (
             <Text selectable className="text-sm text-gray-600">
@@ -150,4 +199,19 @@ export function DeviceSummaryScreen() {
       </SectionCard>
     </ManagerScreen>
   );
+}
+
+function formatChecksum(value: number | undefined): string {
+  return value === undefined
+    ? "Unavailable"
+    : `0x${value.toString(16).toUpperCase().padStart(8, "0")}`;
+}
+
+function formatSavedPosition(
+  config:
+    | import("@eight2five/mobile/pans-manager").ManagedDeviceConfig
+    | undefined,
+): string {
+  if (config?.role !== "anchor" || !config.position) return "None";
+  return `${config.position.xMeters} m, ${config.position.yMeters} m, ${config.position.zMeters} m`;
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
 
 import { useManagedNetwork, usePansManager } from "../manager-context";
@@ -9,9 +10,14 @@ import {
   ManagerScreen,
   SectionCard,
   StatePanel,
+  SwitchField,
   TextField,
   SelectField,
 } from "../components/manager-ui";
+import {
+  networkSettingsToForm,
+  parseNetworkSettingsForm,
+} from "../network-settings-form";
 
 export function NetworkSettingsScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
@@ -21,6 +27,11 @@ export function NetworkSettingsScreen() {
   const [name, setName] = React.useState(network?.name ?? "");
   const [pan, setPan] = React.useState(network ? String(network.panId) : "");
   const [notes, setNotes] = React.useState(network?.notes ?? "");
+  const [settingsForm, setSettingsForm] = React.useState(() =>
+    networkSettingsToForm(
+      network?.settings ?? DEFAULT_MANAGED_NETWORK_SETTINGS,
+    ),
+  );
   const [exportJson, setExportJson] = React.useState("");
   const [exportFormat, setExportFormat] = React.useState<"csv" | "json">(
     "json",
@@ -36,6 +47,7 @@ export function NetworkSettingsScreen() {
     setName(network.name);
     setPan(String(network.panId));
     setNotes(network.notes ?? "");
+    setSettingsForm(networkSettingsToForm(network.settings));
   }, [network]);
 
   if (!network) {
@@ -61,12 +73,15 @@ export function NetworkSettingsScreen() {
     if (!Number.isInteger(panId) || panId < 0 || panId > 0xffff) {
       return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
     }
+    const parsedSettings = parseNetworkSettingsForm(settingsForm);
+    if ("error" in parsedSettings) return setError(parsedSettings.error);
     try {
       await manager.saveNetwork({
         ...network,
         name: name.trim(),
         panId,
         notes: notes.trim() || undefined,
+        settings: parsedSettings.settings,
         updatedAt: Date.now(),
       });
       setMessage("Local profile updated. No hardware was changed.");
@@ -130,7 +145,7 @@ export function NetworkSettingsScreen() {
           label="Intended PAN ID (decimal or hexadecimal)"
           value={pan}
           onChangeText={setPan}
-          helper="The saved PAN changes only after a hardware migration verifies every known member."
+          helper="Local-only save updates profile metadata without touching hardware. Use migration to write and verify known nodes."
         />
         <TextField
           label="Notes"
@@ -149,6 +164,202 @@ export function NetworkSettingsScreen() {
         />
         {message ? <StatePanel state="success" message={message} /> : null}
         {error ? <StatePanel state="error" message={error} /> : null}
+      </SectionCard>
+
+      <SectionCard
+        title="Coordinate bounds"
+        description="All coordinates and heights are stored in meters. Imperial units are not accepted."
+      >
+        <TextField
+          label="Minimum X (meters)"
+          value={settingsForm.minXMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, minXMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Maximum X (meters)"
+          value={settingsForm.maxXMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, maxXMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Minimum Y (meters)"
+          value={settingsForm.minYMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, minYMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Maximum Y (meters)"
+          value={settingsForm.maxYMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, maxYMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Minimum Z (meters)"
+          value={settingsForm.minZMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, minZMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Maximum Z (meters)"
+          value={settingsForm.maxZMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({ ...current, maxZMeters: value }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextField
+          label="Default anchor height (meters)"
+          value={settingsForm.defaultAnchorHeightMeters}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              defaultAnchorHeightMeters: value,
+            }))
+          }
+          keyboardType="numbers-and-punctuation"
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Discovery and connection defaults"
+        description="These are per-network defaults. Manager global settings remain separate."
+      >
+        <TextField
+          label="Stale device timeout (seconds)"
+          value={settingsForm.staleDeviceTimeoutSeconds}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              staleDeviceTimeoutSeconds: value,
+            }))
+          }
+          keyboardType="decimal-pad"
+        />
+        <TextField
+          label="Scan duration (seconds)"
+          value={settingsForm.scanDurationSeconds}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              scanDurationSeconds: value,
+            }))
+          }
+          keyboardType="decimal-pad"
+        />
+        <SwitchField
+          label="Auto-connect"
+          description="Saved connection policy metadata. This v1 manager never connects merely because a device was discovered."
+          value={settingsForm.autoConnect}
+          onChange={(value) =>
+            setSettingsForm((current) => ({ ...current, autoConnect: value }))
+          }
+        />
+      </SectionCard>
+
+      <SectionCard title="Default tag behavior">
+        <SwitchField
+          label="Location engine"
+          value={settingsForm.locationEngineEnabled}
+          onChange={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              locationEngineEnabled: value,
+            }))
+          }
+        />
+        <SwitchField
+          label="Low power mode"
+          value={settingsForm.lowPowerModeEnabled}
+          onChange={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              lowPowerModeEnabled: value,
+            }))
+          }
+        />
+        <SwitchField
+          label="Accelerometer / stationary detection"
+          value={settingsForm.stationaryDetectionEnabled}
+          onChange={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              stationaryDetectionEnabled: value,
+            }))
+          }
+        />
+        <SelectField
+          label="Location data mode"
+          value={String(settingsForm.locationDataMode)}
+          onChange={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              locationDataMode: Number(value) as 0 | 1 | 2,
+            }))
+          }
+          choices={[
+            { label: "Position only (0)", value: "0" },
+            { label: "Distances only (1)", value: "1" },
+            { label: "Position and distances (2)", value: "2" },
+          ]}
+        />
+        <TextField
+          label="Default moving interval (ms)"
+          value={settingsForm.movingUpdateRateMs}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              movingUpdateRateMs: value,
+            }))
+          }
+          keyboardType="decimal-pad"
+        />
+        <TextField
+          label="Default stationary interval (ms)"
+          value={settingsForm.stationaryUpdateRateMs}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              stationaryUpdateRateMs: value,
+            }))
+          }
+          keyboardType="decimal-pad"
+        />
+      </SectionCard>
+
+      <SectionCard title="Position log retention">
+        <TextField
+          label="Retention (days)"
+          value={settingsForm.positionLogRetentionDays}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              positionLogRetentionDays: value,
+            }))
+          }
+          keyboardType="number-pad"
+        />
+        <TextField
+          label="Maximum samples"
+          value={settingsForm.positionLogMaxSamples}
+          onChangeText={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              positionLogMaxSamples: value,
+            }))
+          }
+          keyboardType="number-pad"
+        />
       </SectionCard>
 
       <SectionCard title="Export profile">

@@ -10,6 +10,8 @@ import type {
   PansConfigurationResult,
   PansConfigurationService,
   PansDeviceSessionManager,
+  PansDiagnosticsResult,
+  PansDiagnosticsService,
   PansDiscoveryService,
   PansInspectionResult,
   PansManagerRepository,
@@ -58,6 +60,7 @@ export interface PansManagerRuntime {
     PansConfigurationService,
     "inspect" | "configureDevice" | "assignPanId"
   >;
+  diagnostics: Pick<PansDiagnosticsService, "inspect">;
   batch: PansBatchOperationService;
   logs: Pick<
     PansPositionLogService,
@@ -127,6 +130,7 @@ interface PansManagerContextValue {
   deleteNetwork(networkId: string): Promise<void>;
   saveDevice(device: ManagedDevice): Promise<void>;
   inspectDevice(deviceId: string): Promise<PansInspectionResult>;
+  inspectDiagnostics(deviceId: string): Promise<PansDiagnosticsResult>;
   configureDevice(
     deviceId: string,
     config: ManagedDeviceConfig,
@@ -426,6 +430,19 @@ export function PansManagerProvider({
     [runtime],
   );
 
+  const inspectDiagnostics = React.useCallback(
+    async (deviceId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const device = devices.find((item) => item.id === deviceId);
+      if (!device) throw new Error("Managed device not found.");
+      return await runtime.diagnostics.inspect(
+        device.id,
+        device.transportDeviceId,
+      );
+    },
+    [devices, runtime],
+  );
+
   const configureDevice = React.useCallback(
     async (deviceId: string, config: ManagedDeviceConfig) => {
       if (!runtime) throw new Error("Manager is not ready.");
@@ -611,6 +628,7 @@ export function PansManagerProvider({
       deleteNetwork,
       saveDevice,
       inspectDevice,
+      inspectDiagnostics,
       configureDevice,
       assignDevicePan,
       disconnectDevice,
@@ -653,6 +671,7 @@ export function PansManagerProvider({
       deleteNetwork,
       saveDevice,
       inspectDevice,
+      inspectDiagnostics,
       configureDevice,
       assignDevicePan,
       disconnectDevice,
@@ -790,6 +809,7 @@ async function createDefaultRuntime(
         sessions,
         storage.repository,
       ),
+      diagnostics: new manager.PansDiagnosticsService(sessions),
       batch: new manager.PansBatchOperationService(storage.repository),
       logs,
       topology: new manager.PansTopologyService(sessions),

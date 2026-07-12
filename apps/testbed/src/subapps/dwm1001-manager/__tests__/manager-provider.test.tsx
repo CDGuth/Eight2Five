@@ -9,6 +9,7 @@ import {
   type PansManagerRuntime,
   useManagerReadiness,
   usePansDiscovery,
+  usePansManager,
 } from "../manager-context";
 
 describe("PansManagerProvider", () => {
@@ -88,6 +89,43 @@ describe("PansManagerProvider", () => {
     expect(tree.root.findByProps({ children: "ready" })).toBeTruthy();
     await act(async () => tree.unmount());
   });
+
+  it("resolves a managed device ID before requesting diagnostics", async () => {
+    const inspect = jest.fn().mockResolvedValue({ capturedAt: 1 });
+    const runtime = createRuntimeValue({
+      repository: {
+        listNetworks: jest.fn().mockResolvedValue([]),
+        listDevices: jest.fn().mockResolvedValue([
+          {
+            id: "managed-1",
+            transportDeviceId: "transport-1",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ]),
+        getSettings: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PansManagerRepository,
+      diagnostics: { inspect },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <DiagnosticsHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    await act(async () => {
+      await tree.root
+        .findByProps({ testID: "inspect-diagnostics" })
+        .props.onPress();
+    });
+
+    expect(inspect).toHaveBeenCalledWith("managed-1", "transport-1");
+    await act(async () => tree.unmount());
+  });
 });
 
 function ProviderHarness() {
@@ -105,6 +143,18 @@ function ProviderHarness() {
         <ButtonText>Retry</ButtonText>
       </Button>
     </>
+  );
+}
+
+function DiagnosticsHarness() {
+  const manager = usePansManager();
+  return (
+    <Button
+      testID="inspect-diagnostics"
+      onPress={() => manager.inspectDiagnostics("managed-1")}
+    >
+      <ButtonText>Inspect diagnostics</ButtonText>
+    </Button>
   );
 }
 
@@ -160,6 +210,7 @@ function createRuntimeValue(
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
     },
+    diagnostics: { inspect: jest.fn() },
     batch: {} as PansManagerRuntime["batch"],
     logs: {
       flush: jest.fn().mockResolvedValue(undefined),
