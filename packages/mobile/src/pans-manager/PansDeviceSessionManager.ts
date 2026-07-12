@@ -1,20 +1,31 @@
 import {
+  addLocationDataListener,
   connect,
+  decodeLocationData,
   disconnect,
   patchOperationMode,
+  readAnchorList,
+  readClusterInfo,
   readDeviceInfo,
   readLabel,
+  readLocationData,
   readLocationDataMode,
   readNetworkId,
   readOperationMode,
   readTagUpdateRate,
+  subscribeLocationData,
+  unsubscribeLocationData,
   writeLabel,
   writeLocationDataMode,
   writeNetworkId,
   writePersistedPosition,
 } from "expo-pans-ble-api";
 import type {
+  PansAnchorList,
+  PansCharacteristicNotificationEvent,
+  PansClusterInfo,
   PansDeviceInfo,
+  PansLocationData,
   PansLocationDataMode,
   PansOperationMode,
   PansOperationModePatch,
@@ -42,6 +53,15 @@ export interface PansNativeGateway {
   ): Promise<boolean>;
   readTagUpdateRate(deviceId: string): Promise<PansTagUpdateRate>;
   readDeviceInfo(deviceId: string): Promise<PansDeviceInfo>;
+  readAnchorList(deviceId: string): Promise<PansAnchorList>;
+  readClusterInfo(deviceId: string): Promise<PansClusterInfo>;
+  readLocationData(deviceId: string): Promise<PansLocationData>;
+  subscribeLocationData(deviceId: string): Promise<boolean>;
+  unsubscribeLocationData(deviceId: string): Promise<boolean>;
+  addLocationDataListener(
+    listener: (event: PansLocationNotification) => void,
+  ): PansLocationSubscription;
+  decodeLocationData(payload: number[]): PansLocationData;
   writePersistedPosition(
     deviceId: string,
     position: Omit<PansPosition, "zMeters" | "quality"> & {
@@ -49,6 +69,16 @@ export interface PansNativeGateway {
       quality?: number;
     },
   ): Promise<boolean>;
+}
+
+/** Manager-safe notification shape; characteristic UUIDs remain in the gateway. */
+export interface PansLocationNotification {
+  transportDeviceId: string;
+  payload: number[];
+}
+
+export interface PansLocationSubscription {
+  remove(): void;
 }
 
 export const defaultPansNativeGateway: PansNativeGateway = {
@@ -64,6 +94,19 @@ export const defaultPansNativeGateway: PansNativeGateway = {
   writeLocationDataMode,
   readTagUpdateRate,
   readDeviceInfo,
+  readAnchorList,
+  readClusterInfo,
+  readLocationData,
+  subscribeLocationData,
+  unsubscribeLocationData,
+  addLocationDataListener: (listener) =>
+    addLocationDataListener((event: PansCharacteristicNotificationEvent) =>
+      listener({
+        transportDeviceId: event.deviceId,
+        payload: event.payload,
+      }),
+    ),
+  decodeLocationData,
   writePersistedPosition,
 };
 
@@ -79,6 +122,15 @@ export interface ConnectedPansSession {
   writeLocationDataMode(mode: PansLocationDataMode): Promise<boolean>;
   readTagUpdateRate(): Promise<PansTagUpdateRate>;
   readDeviceInfo(): Promise<PansDeviceInfo>;
+  readAnchorList(): Promise<PansAnchorList>;
+  readClusterInfo(): Promise<PansClusterInfo>;
+  readLocationData(): Promise<PansLocationData>;
+  subscribeLocationData(): Promise<boolean>;
+  unsubscribeLocationData(): Promise<boolean>;
+  addLocationDataListener(
+    listener: (event: PansLocationNotification) => void,
+  ): PansLocationSubscription;
+  decodeLocationData(payload: number[]): PansLocationData;
   writePersistedPosition(
     position: Omit<PansPosition, "zMeters" | "quality"> & {
       zMeters?: number;
@@ -96,6 +148,11 @@ interface ConnectionEntry {
   leases: number;
 }
 
+interface LiveLease {
+  deviceId: string;
+  token: symbol;
+}
+
 export interface PansSessionOptions {
   timeoutMs?: number;
 }
@@ -104,6 +161,8 @@ export interface PansSessionOptions {
 export class PansDeviceSessionManager {
   private readonly connections = new Map<string, ConnectionEntry>();
   private mutationTail: Promise<void> = Promise.resolve();
+  private pendingMutations = 0;
+  private liveLease?: LiveLease;
 
   constructor(
     private readonly gateway: PansNativeGateway = defaultPansNativeGateway,
@@ -115,41 +174,71 @@ export class PansDeviceSessionManager {
     operation: (session: ConnectedPansSession) => Promise<T>,
     options: PansSessionOptions = {},
   ): Promise<T> {
-    return await this.serializeMutation(async () => {
-      await this.acquire(transportDeviceId, options.timeoutMs);
-      let operationError: ManagerError | undefined;
-      try {
-        return await operation(this.connectedSession(transportDeviceId));
-      } catch (error) {
-        operationError = normalizeManagerError(error);
-        throw operationError;
-      } finally {
+    this.assertNoLiveLease();
+    this.pendingMutations += 1;
+    try {
+      return await this.serializeMutation(async () => {
+        this.assertNoLiveLease();
+        await this.acquire(transportDeviceId, options.timeoutMs);
+        let operationError: ManagerError | undefined;
         try {
-          await this.release(transportDeviceId);
-        } catch (cleanupError) {
-          if (!operationError) throw cleanupError;
+          return await operation(this.connectedSession(transportDeviceId));
+        } catch (error) {
+          operationError = normalizeManagerError(error);
+          throw operationError;
+        } finally {
+          try {
+            await this.release(transportDeviceId);
+          } catch (cleanupError) {
+            if (!operationError) throw cleanupError;
+          }
         }
-      }
-    });
+      });
+    } finally {
+      this.pendingMutations -= 1;
+    }
   }
 
   async openLiveSession(
     transportDeviceId: string,
     options: PansSessionOptions = {},
   ): Promise<PansLiveSession> {
-    await this.acquire(transportDeviceId, options.timeoutMs);
+    if (this.liveLease || this.pendingMutations > 0) throw sessionBusyError();
+    const lease: LiveLease = {
+      deviceId: transportDeviceId,
+      token: Symbol("pans-live-session"),
+    };
+    // Reserve the one global live slot before connecting so concurrent opens
+    // cannot both pass the check above.
+    this.liveLease = lease;
+    try {
+      await this.acquire(transportDeviceId, options.timeoutMs);
+    } catch (error) {
+      if (this.liveLease?.token === lease.token) this.liveLease = undefined;
+      throw error;
+    }
     let closed = false;
     return {
       ...this.connectedSession(transportDeviceId),
       close: async () => {
         if (closed) return;
         closed = true;
-        await this.release(transportDeviceId);
+        try {
+          await this.release(transportDeviceId);
+        } finally {
+          if (this.liveLease?.token === lease.token) this.liveLease = undefined;
+        }
       },
     };
   }
 
   async closeDevice(deviceId: string): Promise<void> {
+    if (this.liveLease?.deviceId === deviceId || this.pendingMutations > 0)
+      throw sessionBusyError();
+    await this.forceCloseDevice(deviceId);
+  }
+
+  private async forceCloseDevice(deviceId: string): Promise<void> {
     const entry = this.connections.get(deviceId);
     if (!entry) return;
     entry.leases = 0;
@@ -165,9 +254,10 @@ export class PansDeviceSessionManager {
   }
 
   async closeAll(): Promise<void> {
+    this.liveLease = undefined;
     const deviceIds = Array.from(this.connections.keys());
     const results = await Promise.allSettled(
-      deviceIds.map(async (id) => await this.closeDevice(id)),
+      deviceIds.map(async (id) => await this.forceCloseDevice(id)),
     );
     const failure = results.find(
       (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -241,6 +331,10 @@ export class PansDeviceSessionManager {
     }
   }
 
+  private assertNoLiveLease(): void {
+    if (this.liveLease) throw sessionBusyError();
+  }
+
   private connectedSession(transportDeviceId: string): ConnectedPansSession {
     return {
       transportDeviceId,
@@ -263,8 +357,32 @@ export class PansDeviceSessionManager {
         await this.gateway.readTagUpdateRate(transportDeviceId),
       readDeviceInfo: async () =>
         await this.gateway.readDeviceInfo(transportDeviceId),
+      readAnchorList: async () =>
+        await this.gateway.readAnchorList(transportDeviceId),
+      readClusterInfo: async () =>
+        await this.gateway.readClusterInfo(transportDeviceId),
+      readLocationData: async () =>
+        await this.gateway.readLocationData(transportDeviceId),
+      subscribeLocationData: async () =>
+        await this.gateway.subscribeLocationData(transportDeviceId),
+      unsubscribeLocationData: async () =>
+        await this.gateway.unsubscribeLocationData(transportDeviceId),
+      addLocationDataListener: (listener) =>
+        this.gateway.addLocationDataListener(listener),
+      decodeLocationData: (payload) => this.gateway.decodeLocationData(payload),
       writePersistedPosition: async (position) =>
         await this.gateway.writePersistedPosition(transportDeviceId, position),
     };
   }
+}
+
+function sessionBusyError(): ManagerError {
+  return new ManagerError(
+    "GATT_FAILURE",
+    "A live position session or device configuration is already active.",
+    {
+      isRetryable: true,
+      recovery: "Stop the live position session, then retry.",
+    },
+  );
 }

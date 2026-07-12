@@ -188,4 +188,67 @@ describe("PansConfigurationService", () => {
     });
     expect(native.patchOperationMode).not.toHaveBeenCalled();
   });
+
+  test("migrates only the PAN ID and requires exact readback", async () => {
+    const panReads = [1, 2, 2];
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "anchor"),
+      writeLabel: jest.fn(),
+      readNetworkId: jest.fn(async () => panReads.shift() ?? 2),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      patchOperationMode: jest.fn(),
+      readLocationDataMode: jest.fn(),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+      readDeviceInfo: jest.fn(async () => ({
+        nodeIdHex: "0001",
+        lowNodeId: 1,
+        hardwareVersion: 1,
+        firmware1Version: 1,
+        firmware2Version: 1,
+        firmware1Checksum: 1,
+        firmware2Checksum: 1,
+        operationFlags: 0,
+        raw: [],
+      })),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 1,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+        position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await expect(service.assignPanId("anchor", 2)).resolves.toMatchObject({
+      outcome: "verified",
+      inspected: { panId: 2 },
+      writes: [{ field: "panId", status: "verified", actual: 2 }],
+    });
+    expect(native.patchOperationMode).not.toHaveBeenCalled();
+    expect(native.writePersistedPosition).not.toHaveBeenCalled();
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      lastKnownConfig: {
+        panId: 2,
+        position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
+      },
+    });
+  });
 });

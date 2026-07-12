@@ -2,15 +2,19 @@ import type {
   PansBleDevice,
   PansDeviceInfo,
   PansDistance,
+  PansAnchorList,
+  PansClusterInfo,
   PansLocationDataMode,
   PansNodeRole,
   PansOperationMode,
-  PansPosition,
+  PansPosition as ExpoPansPosition,
   PansPresenceData,
   PansTagUpdateRate,
   PansUwbMode,
 } from "expo-pans-ble-api";
 import type { ManagerErrorCode } from "./errors";
+
+export type PansPosition = ExpoPansPosition;
 
 export interface CoordinateBounds {
   minXMeters: number;
@@ -244,6 +248,48 @@ export interface PositionLogSample {
   distances?: PansDistance[];
   notes?: string;
   eventMarker?: string;
+}
+
+export interface PansTopologyObservation {
+  deviceId: string;
+  transportDeviceId: string;
+  observedAt: number;
+  localNodeIdHex?: string;
+  anchorList?: PansAnchorList;
+  clusterInfo?: PansClusterInfo;
+  errors: string[];
+}
+
+export interface ObservedTopologyNode {
+  key: string;
+  nodeIdHex?: string;
+  localDeviceId?: string;
+  observedByDeviceIds: string[];
+}
+
+export interface ObservedTopologyEdge {
+  sourceKey: string;
+  targetKey: string;
+  observedByDeviceId: string;
+}
+
+/** A point-in-time observation, never a claim that missing edges cannot communicate. */
+export interface ObservedPansTopology {
+  observedAt: number;
+  nodes: ObservedTopologyNode[];
+  edges: ObservedTopologyEdge[];
+  observations: PansTopologyObservation[];
+  uncertainty: string;
+}
+
+export interface PansPositionStreamSample {
+  deviceId: string;
+  transportDeviceId: string;
+  receivedAt: number;
+  source: "initial-read" | "notification";
+  position?: PansPosition;
+  distances: PansDistance[];
+  diagnostics: string[];
 }
 
 export interface DeviceConfigurationSnapshot {

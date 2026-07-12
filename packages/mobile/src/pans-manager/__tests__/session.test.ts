@@ -19,13 +19,20 @@ function gateway(
     writeLocationDataMode: jest.fn(),
     readTagUpdateRate: jest.fn(),
     readDeviceInfo: jest.fn(),
+    readAnchorList: jest.fn(),
+    readClusterInfo: jest.fn(),
+    readLocationData: jest.fn(),
+    subscribeLocationData: jest.fn(),
+    unsubscribeLocationData: jest.fn(),
+    addLocationDataListener: jest.fn(() => ({ remove: jest.fn() })),
+    decodeLocationData: jest.fn(),
     writePersistedPosition: jest.fn(),
     ...overrides,
   } as PansNativeGateway;
 }
 
 describe("PansDeviceSessionManager", () => {
-  test("deduplicates simultaneous opens and disconnects after the final lease", async () => {
+  test("reserves exactly one live session while its connection opens", async () => {
     let resolve!: (connected: boolean) => void;
     const connect = jest.fn(
       () =>
@@ -36,15 +43,56 @@ describe("PansDeviceSessionManager", () => {
     const native = gateway({ connect });
     const manager = new PansDeviceSessionManager(native);
     const firstPromise = manager.openLiveSession("device");
-    const secondPromise = manager.openLiveSession("device");
+    await expect(manager.openLiveSession("device")).rejects.toMatchObject({
+      code: "GATT_FAILURE",
+      isRetryable: true,
+    });
     await Promise.resolve();
     expect(connect).toHaveBeenCalledTimes(1);
     resolve(true);
-    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+    const first = await firstPromise;
     await first.close();
-    expect(native.disconnect).not.toHaveBeenCalled();
-    await second.close();
     expect(native.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects configuration during a live lease without disconnecting it", async () => {
+    const native = gateway();
+    const manager = new PansDeviceSessionManager(native);
+    const live = await manager.openLiveSession("tag");
+
+    await expect(
+      manager.withConnectedDevice("anchor", async () => undefined),
+    ).rejects.toMatchObject({ code: "GATT_FAILURE", isRetryable: true });
+    expect(native.connect).toHaveBeenCalledTimes(1);
+    expect(native.disconnect).not.toHaveBeenCalled();
+
+    await live.close();
+    await manager.withConnectedDevice("anchor", async () => undefined);
+    expect(native.disconnect).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects a live open while a queued mutation owns the manager", async () => {
+    let finish!: () => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const manager = new PansDeviceSessionManager(gateway());
+    const mutation = manager.withConnectedDevice(
+      "anchor",
+      async () =>
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+          markStarted();
+        }),
+    );
+    await started;
+
+    await expect(manager.openLiveSession("tag")).rejects.toMatchObject({
+      code: "GATT_FAILURE",
+    });
+    finish();
+    await mutation;
   });
 
   test("serializes global mutation transactions and guarantees cleanup", async () => {

@@ -53,6 +53,46 @@ export class PansNetworkExportService {
     return JSON.stringify(await this.exportNetwork(networkId), null, 2);
   }
 
+  async exportNetworkCsv(networkId: string): Promise<string> {
+    const data = await this.exportNetwork(networkId);
+    const rows: unknown[][] = [
+      [
+        "network_id",
+        "network_name",
+        "pan_id",
+        "device_id",
+        "transport_device_id",
+        "node_id",
+        "label",
+        "role",
+        "x_m",
+        "y_m",
+        "z_m",
+        "initiator",
+      ],
+      ...data.devices.map((device) => {
+        const config = device.lastKnownConfig;
+        const position =
+          config?.role === "anchor" ? config.position : undefined;
+        return [
+          data.network.id,
+          data.network.name,
+          data.network.panId,
+          device.id,
+          device.transportDeviceId,
+          device.nodeIdHex ?? "",
+          device.nickname ?? device.label ?? "",
+          device.role ?? config?.role ?? "",
+          position?.xMeters ?? "",
+          position?.yMeters ?? "",
+          position?.zMeters ?? "",
+          config?.role === "anchor" ? config.initiatorEnabled : "",
+        ];
+      }),
+    ];
+    return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  }
+
   validateImport(input: string | unknown): PansNetworkExport {
     let value: unknown = input;
     if (typeof input === "string") {
@@ -143,6 +183,11 @@ export class PansNetworkExportService {
     }
     return data;
   }
+}
+
+function csvCell(value: unknown): string {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function validateNetwork(value: unknown): asserts value is ManagedNetwork {

@@ -23,6 +23,14 @@ describe("PansPositionLogService exports", () => {
         label: 'a,"b"\nline',
         solver: "pans",
         anchorCount: 4,
+        distances: [
+          {
+            nodeId: 7,
+            anchorKey: "anchor-7",
+            distanceMeters: 2.5,
+            quality: 80,
+          },
+        ],
         notes: "exact JSON note",
         eventMarker: "start",
       },
@@ -51,9 +59,53 @@ describe("PansPositionLogService exports", () => {
         quality: 99,
         solver: "pans",
         anchorCount: 4,
+        distances: [
+          {
+            nodeId: 7,
+            anchorKey: "anchor-7",
+            distanceMeters: 2.5,
+            quality: 80,
+          },
+        ],
         notes: "exact JSON note",
         eventMarker: "start",
       },
     ]);
+  });
+
+  test("serializes high-rate appends across buffer flushes", async () => {
+    const repository = new InMemoryPansManagerRepository();
+    const service = new PansPositionLogService(repository, {
+      flushSize: 1,
+      createId: () => "high-rate",
+      now: () => 10,
+    });
+    await service.startSession({
+      networkId: "network",
+      panId: 1,
+      deviceId: "tag",
+    });
+
+    await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        service.appendSample(
+          "high-rate",
+          {
+            xMeters: index,
+            yMeters: index,
+            zMeters: 0,
+            quality: 100,
+          },
+          { solver: "pans", anchorCount: 4, timestampMs: index },
+        ),
+      ),
+    );
+    await service.stopSession("high-rate");
+
+    const samples = await repository.listPositionLogSamples("high-rate");
+    expect(samples).toHaveLength(20);
+    expect(samples.map((sample) => sample.sequence)).toEqual(
+      Array.from({ length: 20 }, (_, index) => index),
+    );
   });
 });

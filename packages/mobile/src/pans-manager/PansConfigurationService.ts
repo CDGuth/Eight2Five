@@ -57,10 +57,73 @@ export class PansConfigurationService {
   ): Promise<PansConfigurationResult> {
     assertPanId(panId);
     const device = await this.requireDevice(deviceId);
-    const config =
-      device.lastKnownConfig ??
-      configFromInspection(await this.inspect(deviceId));
-    return await this.configureDevice(deviceId, { ...config, panId });
+    const writes: VerifiedWrite[] = [];
+    const warnings: string[] = [];
+    let inspected: PansInspectionResult | undefined;
+    try {
+      const result = await this.sessions.withConnectedDevice(
+        device.transportDeviceId,
+        async (session) => {
+          const before = await inspectConnected(session, device.id, this.now);
+          inspected = before;
+          warnings.push(...before.warnings);
+          if (before.panId !== panId) {
+            requireWrite(
+              await session.writeNetworkId(panId),
+              "PAN ID",
+              deviceId,
+            );
+            const actual = await session.readNetworkId();
+            writes.push(verified("panId", panId, actual));
+          }
+          return await inspectConnected(session, device.id, this.now);
+        },
+      );
+      inspected = result;
+      warnings.push(
+        ...result.warnings.filter((warning) => !warnings.includes(warning)),
+      );
+      const config = configFromInspection(result);
+      if (
+        config.role === "anchor" &&
+        device.lastKnownConfig?.role === "anchor" &&
+        device.lastKnownConfig.position
+      ) {
+        config.position = device.lastKnownConfig.position;
+      }
+      await this.persistConfiguration(device, { ...config, panId }, result);
+      const mismatch = writes.some((write) => write.status !== "verified");
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: mismatch || warnings.length ? "partial" : "verified",
+        inspected: result,
+        writes,
+        warnings,
+        ...(mismatch
+          ? {
+              error: {
+                code: "VERIFY_MISMATCH" as const,
+                message: "PAN ID readback did not match the requested value.",
+              },
+            }
+          : {}),
+      };
+    } catch (error) {
+      const normalized = normalizeManagerError(error, {
+        deviceId,
+        operation: "assignPanId",
+      });
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: writes.length ? "partial" : "failure",
+        ...(inspected ? { inspected } : {}),
+        writes,
+        warnings,
+        error: { code: normalized.code, message: normalized.message },
+      };
+    }
   }
 
   async writeLabel(
@@ -157,7 +220,16 @@ export class PansConfigurationService {
             );
           }
 
-          if (config.role === "anchor" && config.position) {
+          if (
+            config.role === "anchor" &&
+            config.position &&
+            !positionsEqual(
+              config.position,
+              device.lastKnownConfig?.role === "anchor"
+                ? device.lastKnownConfig.position
+                : undefined,
+            )
+          ) {
             requireWrite(
               await session.writePersistedPosition(config.position),
               "persisted position",
@@ -233,21 +305,45 @@ export class PansConfigurationService {
     inspection: PansInspectionResult,
   ): Promise<void> {
     const updatedAt = this.now();
+    const persistedConfig = mergePersistedConfig(
+      device.lastKnownConfig,
+      config,
+    );
     await this.repository.saveDevice({
       ...device,
       label: inspection.label ?? config.label ?? device.label,
       role: inspection.operationMode.role,
       nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? device.nodeIdHex,
-      lastKnownConfig: config,
+      lastKnownConfig: persistedConfig,
       updatedAt,
     });
     await this.repository.saveDeviceSnapshot({
       deviceId: device.id,
       capturedAt: updatedAt,
-      config,
+      config: persistedConfig,
       inspection,
     });
   }
+}
+
+function mergePersistedConfig(
+  previous: ManagedDeviceConfig | undefined,
+  next: ManagedDeviceConfig,
+): ManagedDeviceConfig {
+  if (!previous || previous.role !== next.role) return next;
+  return { ...previous, ...next } as ManagedDeviceConfig;
+}
+
+function positionsEqual(
+  left: ManagedAnchorConfig["position"],
+  right: ManagedAnchorConfig["position"],
+): boolean {
+  return (
+    left?.xMeters === right?.xMeters &&
+    left?.yMeters === right?.yMeters &&
+    left?.zMeters === right?.zMeters &&
+    left?.quality === right?.quality
+  );
 }
 
 async function inspectConnected(

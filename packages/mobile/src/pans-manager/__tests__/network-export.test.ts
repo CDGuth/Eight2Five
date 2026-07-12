@@ -29,6 +29,9 @@ describe("PansNetworkExportService", () => {
     const json = await exporter.exportNetworkJson("network");
     expect(json).toContain('"schema": "eight2five.pans-network"');
     expect(json.toLowerCase()).not.toContain("password");
+    const csv = await exporter.exportNetworkCsv("network");
+    expect(csv).toContain("network_id,network_name,pan_id,device_id");
+    expect(csv).toContain("network,Field,4660,device,ios-transport-id");
 
     const destination = new InMemoryPansManagerRepository();
     await new PansNetworkExportService(destination).importNetwork(json);

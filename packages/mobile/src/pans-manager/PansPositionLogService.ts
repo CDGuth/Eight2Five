@@ -34,6 +34,7 @@ export class PansPositionLogService {
   private readonly buffers = new Map<string, PositionLogSample[]>();
   private readonly sessions = new Map<string, PositionLogSession>();
   private readonly nextSequences = new Map<string, number>();
+  private readonly operationTails = new Map<string, Promise<void>>();
   private readonly memoryCap: number;
   private readonly flushSize: number;
   private readonly now: () => number;
@@ -76,73 +77,87 @@ export class PansPositionLogService {
     position: PansPosition,
     options: AppendPositionSampleOptions,
   ): Promise<PositionLogSample> {
-    validateLoggedPosition(position);
-    const session =
-      this.sessions.get(sessionId) ??
-      (await this.repository.getPositionLogSession(sessionId));
-    if (!session) {
-      throw new ManagerError(
-        "STORAGE_FAILURE",
-        "The position log session does not exist.",
-      );
-    }
-    this.sessions.set(sessionId, session);
-    const sequence = this.nextSequences.get(sessionId) ?? 0;
-    const sample: PositionLogSample = {
-      sessionId,
-      sequence,
-      timestampMs: options.timestampMs ?? this.now(),
-      networkId: session.networkId,
-      panId: session.panId,
-      deviceId: session.deviceId,
-      ...(options.nodeId !== undefined ? { nodeId: options.nodeId } : {}),
-      ...(options.label !== undefined ? { label: options.label } : {}),
-      xMeters: position.xMeters,
-      yMeters: position.yMeters,
-      zMeters: position.zMeters,
-      quality: position.quality,
-      solver: options.solver,
-      anchorCount: options.anchorCount,
-      ...(options.distances ? { distances: options.distances } : {}),
-      ...(options.notes !== undefined ? { notes: options.notes } : {}),
-      ...(options.eventMarker !== undefined
-        ? { eventMarker: options.eventMarker }
-        : {}),
-    };
-    this.nextSequences.set(sessionId, sequence + 1);
-    const buffer = this.buffers.get(sessionId) ?? [];
-    buffer.push(sample);
-    if (buffer.length > this.memoryCap)
-      buffer.splice(0, buffer.length - this.memoryCap);
-    this.buffers.set(sessionId, buffer);
-    if (buffer.length >= this.flushSize) await this.flush(sessionId);
-    return sample;
+    return await this.enqueue(sessionId, async () => {
+      validateLoggedPosition(position);
+      const session =
+        this.sessions.get(sessionId) ??
+        (await this.repository.getPositionLogSession(sessionId));
+      if (!session) {
+        throw new ManagerError(
+          "STORAGE_FAILURE",
+          "The position log session does not exist.",
+        );
+      }
+      if (session.endedAt !== undefined) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "The position log session is already closed.",
+        );
+      }
+      this.sessions.set(sessionId, session);
+      let sequence = this.nextSequences.get(sessionId);
+      if (sequence === undefined) {
+        const persisted =
+          await this.repository.listPositionLogSamples(sessionId);
+        sequence = (persisted.at(-1)?.sequence ?? -1) + 1;
+      }
+      const sample: PositionLogSample = {
+        sessionId,
+        sequence,
+        timestampMs: options.timestampMs ?? this.now(),
+        networkId: session.networkId,
+        panId: session.panId,
+        deviceId: session.deviceId,
+        ...(options.nodeId !== undefined ? { nodeId: options.nodeId } : {}),
+        ...(options.label !== undefined ? { label: options.label } : {}),
+        xMeters: position.xMeters,
+        yMeters: position.yMeters,
+        zMeters: position.zMeters,
+        quality: position.quality,
+        solver: options.solver,
+        anchorCount: options.anchorCount,
+        ...(options.distances ? { distances: options.distances } : {}),
+        ...(options.notes !== undefined ? { notes: options.notes } : {}),
+        ...(options.eventMarker !== undefined
+          ? { eventMarker: options.eventMarker }
+          : {}),
+      };
+      this.nextSequences.set(sessionId, sequence + 1);
+      const buffer = this.buffers.get(sessionId) ?? [];
+      buffer.push(sample);
+      if (buffer.length > this.memoryCap)
+        buffer.splice(0, buffer.length - this.memoryCap);
+      this.buffers.set(sessionId, buffer);
+      if (buffer.length >= this.flushSize) await this.flushBuffer(sessionId);
+      return sample;
+    });
   }
 
   async flush(sessionId?: string): Promise<void> {
     const sessionIds = sessionId
       ? [sessionId]
-      : Array.from(this.buffers.keys());
+      : Array.from(
+          new Set([...this.buffers.keys(), ...this.operationTails.keys()]),
+        );
     for (const id of sessionIds) {
-      const samples = this.buffers.get(id) ?? [];
-      if (!samples.length) continue;
-      await this.repository.appendPositionLogSamples(samples);
-      this.buffers.set(id, []);
+      await this.enqueue(id, async () => await this.flushBuffer(id));
     }
   }
 
   async stopSession(
     sessionId: string,
   ): Promise<PositionLogSession | undefined> {
-    await this.flush(sessionId);
-    const session = await this.repository.getPositionLogSession(sessionId);
-    if (!session) return undefined;
-    const finished = { ...session, endedAt: this.now() };
-    await this.repository.savePositionLogSession(finished);
-    this.buffers.delete(sessionId);
-    this.sessions.delete(sessionId);
-    this.nextSequences.delete(sessionId);
-    return finished;
+    return await this.enqueue(sessionId, async () => {
+      await this.flushBuffer(sessionId);
+      const session = await this.repository.getPositionLogSession(sessionId);
+      if (!session) return undefined;
+      const finished = { ...session, endedAt: this.now() };
+      await this.repository.savePositionLogSession(finished);
+      this.buffers.delete(sessionId);
+      this.sessions.delete(sessionId);
+      this.nextSequences.delete(sessionId);
+      return finished;
+    });
   }
 
   async exportCsv(sessionId: string): Promise<string> {
@@ -188,6 +203,42 @@ export class PansPositionLogService {
     const session = await this.repository.getPositionLogSession(sessionId);
     const samples = await this.repository.listPositionLogSamples(sessionId);
     return JSON.stringify({ session, samples });
+  }
+
+  private async flushBuffer(sessionId: string): Promise<void> {
+    const samples = this.buffers.get(sessionId) ?? [];
+    if (!samples.length) return;
+    // Detach first so samples received while storage is writing enter a fresh
+    // buffer and can never be cleared by this flush.
+    this.buffers.set(sessionId, []);
+    try {
+      await this.repository.appendPositionLogSamples(samples);
+    } catch (error) {
+      this.buffers.set(sessionId, [
+        ...samples,
+        ...(this.buffers.get(sessionId) ?? []),
+      ]);
+      throw error;
+    }
+  }
+
+  private async enqueue<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.operationTails.get(sessionId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.operationTails.set(sessionId, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.operationTails.get(sessionId) === tail)
+        this.operationTails.delete(sessionId);
+    }
   }
 }
 

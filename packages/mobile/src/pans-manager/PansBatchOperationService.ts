@@ -13,6 +13,7 @@ export interface PansBatchRunOptions<T> {
   operation(deviceId: string): Promise<T>;
   signal?: AbortSignal;
   metadata?: Record<string, unknown>;
+  onItemChange?(item: PansBatchOperationItem): void;
 }
 
 export interface PansBatchRunResult<T = unknown> {
@@ -42,7 +43,14 @@ export class PansBatchOperationService {
         startedAt,
         metadata: options.metadata,
       } satisfies PansBatchOperationRecord);
-    operation = { ...operation, status: "running", completedAt: undefined };
+    operation = {
+      ...operation,
+      type: options.type,
+      status: "running",
+      totalItems: options.deviceIds.length,
+      completedAt: undefined,
+      metadata: operation.metadata ?? options.metadata,
+    };
     await this.repository.saveBatchOperation(operation);
 
     const items = new Map(
@@ -62,6 +70,7 @@ export class PansBatchOperationService {
         };
         items.set(deviceId, item);
         await this.repository.saveBatchItem(item);
+        options.onItemChange?.(item);
       }
     }
 
@@ -72,19 +81,30 @@ export class PansBatchOperationService {
       let item: PansBatchOperationItem = {
         ...retained,
         status: "connecting",
-        attempts: 0,
         startedAt: this.now(),
         completedAt: undefined,
         result: undefined,
         error: undefined,
       };
       await this.repository.saveBatchItem(item);
+      options.onItemChange?.(item);
 
+      const priorAttempts = retained.attempts;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
-        item = await this.setItemStatus(item, "writing", { attempts: attempt });
+        item = await this.setItemStatus(
+          item,
+          "writing",
+          { attempts: priorAttempts + attempt },
+          options.onItemChange,
+        );
         try {
           const result = await options.operation(deviceId);
-          item = await this.setItemStatus(item, "verifying", { result });
+          item = await this.setItemStatus(
+            item,
+            "verifying",
+            { result },
+            options.onItemChange,
+          );
           item = {
             ...item,
             status: "succeeded",
@@ -98,7 +118,12 @@ export class PansBatchOperationService {
             operation: options.type,
           });
           if (attempt === 1 && isTransientManagerError(normalized)) {
-            item = await this.setItemStatus(item, "connecting");
+            item = await this.setItemStatus(
+              item,
+              "connecting",
+              {},
+              options.onItemChange,
+            );
             continue;
           }
           item = {
@@ -112,6 +137,7 @@ export class PansBatchOperationService {
       }
       items.set(deviceId, item);
       await this.repository.saveBatchItem(item);
+      options.onItemChange?.(item);
       operation = await this.saveProgress(operation, items);
     }
 
@@ -130,6 +156,7 @@ export class PansBatchOperationService {
           };
           items.set(item.deviceId, skipped);
           await this.repository.saveBatchItem(skipped);
+          options.onItemChange?.(skipped);
         }
       }
     }
@@ -157,9 +184,11 @@ export class PansBatchOperationService {
     item: PansBatchOperationItem,
     status: BatchItemStatus,
     patch: Partial<PansBatchOperationItem> = {},
+    onItemChange?: (item: PansBatchOperationItem) => void,
   ): Promise<PansBatchOperationItem> {
     const next = { ...item, ...patch, status };
     await this.repository.saveBatchItem(next);
+    onItemChange?.(next);
     return next;
   }
 
