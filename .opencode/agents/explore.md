@@ -1,5 +1,5 @@
 ---
-description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency research, and general web research. Specify quick, medium, or comprehensive thoroughness when invoking this subagent.
+description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency research, and general web research.
 mode: subagent
 permission:
   "*": allow
