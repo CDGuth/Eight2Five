@@ -3,6 +3,18 @@
 
 @source "../../packages/ui";
 
+@layer theme {
+  :where(.light, .light *) {
+    --primary: 60 110 200;
+    --primary-foreground: 255 255 255;
+  }
+
+  :where(.dark, .dark *) {
+    --primary: 90 137 220;
+    --primary-foreground: 0 0 0;
+  }
+}
+
 @theme {
   --color-testbed-anchor: rgb(51 51 51);
   --color-testbed-true-position: rgb(46 125 50);

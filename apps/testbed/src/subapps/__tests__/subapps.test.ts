@@ -19,4 +19,20 @@ describe("testbed subapp registry", () => {
       expect(getSubappById(subapp.id).title).toBe(subapp.title);
     }
   });
+
+  it("registers the DWM1001 manager", () => {
+    expect(getSubappById("dwm1001-manager")).toEqual(
+      expect.objectContaining({
+        title: "DWM1001 Network Manager",
+        badge: "Hardware",
+        href: "/(subapps)/dwm1001-manager",
+      }),
+    );
+  });
+
+  it("rejects unknown subapp ids", () => {
+    expect(() => getSubappById("missing")).toThrow(
+      "Unknown testbed subapp: missing",
+    );
+  });
 });

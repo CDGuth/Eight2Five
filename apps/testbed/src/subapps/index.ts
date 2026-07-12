@@ -9,17 +9,22 @@ export interface SubappConfig {
   href: Href;
 }
 
-/**
- * Registry of testbed subapps. Currently empty while the optimization
- * playground has been retired; the scaffolding remains so new subapps can be
- * registered here without re-establishing the routing/layout plumbing.
- */
-export const SUBAPPS: readonly SubappConfig[] = [];
+export const SUBAPPS = [
+  {
+    id: "dwm1001-manager",
+    title: "DWM1001 Network Manager",
+    description:
+      "Discover, configure, inspect, and visualize DWM1001 PANS networks.",
+    badge: "Hardware",
+    routeName: "(subapps)/dwm1001-manager",
+    href: "/(subapps)/dwm1001-manager" as Href,
+  },
+] as const satisfies readonly SubappConfig[];
 
 export type SubappId = SubappConfig["id"];
 export type TestbedSubapp = SubappConfig;
 
-export function getSubappById(id: SubappId): TestbedSubapp {
+export function getSubappById(id: string): TestbedSubapp {
   const subapp = SUBAPPS.find((entry) => entry.id === id);
   if (!subapp) {
     throw new Error(`Unknown testbed subapp: ${id}`);

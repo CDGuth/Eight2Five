@@ -28,7 +28,7 @@ export default function RootLayout() {
             <Stack.Screen
               key={subapp.id}
               name={subapp.routeName}
-              options={{ title: subapp.title }}
+              options={{ title: subapp.title, headerShown: false }}
             />
           ))}
         </Stack>
