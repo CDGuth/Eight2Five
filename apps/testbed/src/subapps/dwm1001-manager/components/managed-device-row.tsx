@@ -1,9 +1,15 @@
 import React from "react";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 import { Badge, BadgeText } from "@eight2five/ui/badge";
-import { Button, ButtonText } from "@eight2five/ui/button";
+import { Card } from "@eight2five/ui/card";
 import { HStack } from "@eight2five/ui/hstack";
+import { Pressable } from "@eight2five/ui/pressable";
 import { Text } from "@eight2five/ui/text";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { formatRelativeTime } from "../manager-utils";
@@ -17,34 +23,51 @@ export function ManagedDeviceRow({
   offline?: boolean;
   onPress(): void;
 }) {
+  const theme = useEight2FiveTheme();
+
   return (
-    <Button
-      variant="outline"
-      className="min-h-20 h-auto justify-start p-4"
+    <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       testID={`managed-device-${device.id}`}
     >
-      <VStack className="flex-1 items-start gap-2">
-        <HStack className="w-full items-center justify-between gap-2">
-          <ButtonText className="text-base">
-            {device.nickname || device.label || device.transportDeviceId}
-          </ButtonText>
-          <Badge variant={offline ? "destructive" : "secondary"}>
-            <BadgeText>
-              {offline ? "offline" : (device.role ?? "pending")}
-            </BadgeText>
-          </Badge>
-        </HStack>
-        <Text selectable className="text-xs text-gray-600">
-          {device.transportDeviceId} · seen{" "}
-          {formatRelativeTime(device.lastSeenAt)}
-        </Text>
-        {device.notes?.includes("failed") ? (
-          <Text selectable className="text-xs text-red-700">
-            {device.notes}
+      <Card
+        className="p-0"
+        style={{
+          borderWidth: 0,
+          borderRadius: eight2FiveRadii.sm,
+          backgroundColor: theme.surface,
+          padding: 14,
+        }}
+      >
+        <VStack style={{ gap: 6 }}>
+          <HStack className="items-center justify-between" style={{ gap: 8 }}>
+            <Text
+              className="flex-1"
+              style={{
+                color: theme.text,
+                fontFamily: eight2FiveFonts.styleSemibold,
+              }}
+            >
+              {device.nickname || device.label || device.transportDeviceId}
+            </Text>
+            <Badge variant={offline ? "destructive" : "secondary"}>
+              <BadgeText>
+                {offline ? "offline" : (device.role ?? "unconfigured")}
+              </BadgeText>
+            </Badge>
+          </HStack>
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            {device.transportDeviceId} · seen{" "}
+            {formatRelativeTime(device.lastSeenAt)}
           </Text>
-        ) : null}
-      </VStack>
-    </Button>
+          {device.notes?.includes("failed") ? (
+            <Text selectable size="sm" style={{ color: theme.danger }}>
+              {device.notes}
+            </Text>
+          ) : null}
+        </VStack>
+      </Card>
+    </Pressable>
   );
 }

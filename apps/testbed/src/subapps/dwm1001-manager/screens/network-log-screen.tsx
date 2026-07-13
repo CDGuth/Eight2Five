@@ -6,6 +6,7 @@ import type {
   PositionLogSession,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import {
@@ -25,6 +26,7 @@ import { displayError } from "../manager-utils";
 
 export function NetworkLogScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
+  const theme = useEight2FiveTheme();
   const { network, devices } = useManagedNetwork(networkId);
   const { startLog, appendSample, stopLog, listLogs, listSamples, exportLog } =
     usePansBatchAndLogs();
@@ -201,7 +203,7 @@ export function NetworkLogScreen() {
     <ManagerScreen>
       <SectionCard
         title="Live position log"
-        description="Select a tag and explicitly start. Samples use the DWM1001 internal solver source and the decoded distance anchor count."
+        description="Select a tag and start recording positions."
       >
         <SelectField
           label="Tag"
@@ -246,8 +248,8 @@ export function NetworkLogScreen() {
       </SectionCard>
 
       <SectionCard
-        title="Persisted sessions"
-        description="Sessions without an end time were interrupted and remain persisted."
+        title="Saved sessions"
+        description="Interrupted sessions remain available."
       >
         <SelectField
           label="Session"
@@ -276,7 +278,14 @@ export function NetworkLogScreen() {
         {exportText ? (
           <Text
             selectable
-            className="rounded-lg bg-gray-100 p-3 font-mono text-xs text-black"
+            size="xs"
+            style={{
+              borderRadius: eight2FiveRadii.sm,
+              backgroundColor: theme.surface,
+              color: theme.text,
+              fontFamily: "monospace",
+              padding: 12,
+            }}
           >
             {exportText}
           </Text>
@@ -289,7 +298,8 @@ export function NetworkLogScreen() {
             <Text
               key={`${sample.sessionId}-${sample.sequence}`}
               selectable
-              className="font-mono text-xs text-gray-700"
+              size="xs"
+              style={{ color: theme.text, fontFamily: "monospace" }}
             >
               {sample.sequence}: {sample.xMeters.toFixed(3)},{" "}
               {sample.yMeters.toFixed(3)}, {sample.zMeters.toFixed(3)} m ·
@@ -298,7 +308,7 @@ export function NetworkLogScreen() {
             </Text>
           ))}
           {!recent.length ? (
-            <Text selectable className="text-sm text-gray-600">
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
               No samples loaded.
             </Text>
           ) : null}

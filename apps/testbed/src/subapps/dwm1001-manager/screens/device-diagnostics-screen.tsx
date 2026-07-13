@@ -2,6 +2,7 @@ import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import type { PansDiagnosticsResult } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useManagedDevice, usePansManager } from "../manager-context";
 import { bytesToHex } from "../manager-utils";
@@ -15,6 +16,7 @@ import {
 
 export function DeviceDiagnosticsScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const device = useManagedDevice(deviceId);
   const advertisement = manager.discoveries.find(
@@ -50,7 +52,7 @@ export function DeviceDiagnosticsScreen() {
     <ManagerScreen>
       <SectionCard
         title="Advertisement"
-        description="Latest deduplicated discovery snapshot; this screen does not start scanning."
+        description="Most recent nearby-device data."
       >
         <KeyValue
           label="BLE name"
@@ -107,7 +109,7 @@ export function DeviceDiagnosticsScreen() {
 
       <SectionCard
         title="Connected diagnostics"
-        description="Refresh explicitly connects and reads supported GATT characteristics."
+        description="Refresh to connect and read the device."
       >
         <ManagerButton
           label="Refresh diagnostics"
@@ -326,7 +328,14 @@ export function DeviceDiagnosticsScreen() {
       <SectionCard title="Raw export">
         <Text
           selectable
-          className="rounded-lg bg-gray-100 p-3 font-mono text-xs text-black"
+          size="xs"
+          style={{
+            borderRadius: eight2FiveRadii.sm,
+            backgroundColor: theme.surface,
+            color: theme.text,
+            fontFamily: "monospace",
+            padding: 12,
+          }}
         >
           {JSON.stringify({ advertisement, diagnostics }, null, 2)}
         </Text>
@@ -336,8 +345,8 @@ export function DeviceDiagnosticsScreen() {
           variant="outline"
           isDisabled
         />
-        <Text selectable className="text-sm text-gray-600">
-          No app-safe clipboard or file adapter is declared for this manager UI.
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          Clipboard and file export are not configured.
         </Text>
       </SectionCard>
     </ManagerScreen>

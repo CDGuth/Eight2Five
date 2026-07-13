@@ -2,12 +2,17 @@ import React from "react";
 import { useRouter } from "expo-router";
 import { HStack } from "@eight2five/ui/hstack";
 import { Text } from "@eight2five/ui/text";
+import {
+  eight2FiveFonts,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import {
   useManagedNetworks,
-  usePansManager,
   usePansDiscovery,
+  usePansManager,
 } from "../manager-context";
 import { displayError } from "../manager-utils";
 import { DiscoveryDeviceRow } from "../components/discovery-device-row";
@@ -23,6 +28,7 @@ type DiscoveryFilter = "all" | "unassigned" | "saved" | "incompatible";
 
 export function DiscoveryScreen() {
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const discovery = usePansDiscovery();
   const { networks, devices } = useManagedNetworks();
@@ -46,13 +52,6 @@ export function DiscoveryScreen() {
     }
     return true;
   });
-  const panGroups = new Set(
-    visible
-      .map(
-        (item) => persistedByTransport.get(item.transportDeviceId)?.networkId,
-      )
-      .filter(Boolean),
-  ).size;
 
   const openDevice = async (
     item: (typeof discovery.discoveries)[number],
@@ -71,27 +70,31 @@ export function DiscoveryScreen() {
     }
   };
 
-  const assign = async () => {
+  const addToNetwork = async () => {
     if (!networkId) {
-      setActionError(
-        "Choose a saved network before assigning selected devices.",
-      );
+      setActionError("Choose a network first.");
       return;
     }
     try {
       await discovery.assign(networkId, Array.from(discovery.selectedIds));
+      router.replace(
+        `/(subapps)/dwm1001-manager/networks/${networkId}` as never,
+      );
     } catch (error) {
       setActionError(displayError(error));
     }
   };
 
+  const selectedCount = discovery.selectedIds.size;
+
   return (
     <ManagerScreen>
       <SectionCard
-        title="Explicit BLE discovery"
-        description="Permission is requested only when Start scan is pressed. Devices are never saved or configured automatically."
+        title="Discover devices"
+        description="Power the DWM1001-DEV units, start a scan, then select the devices for your network."
+        tone="accent"
       >
-        <HStack className="flex-wrap gap-2">
+        <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
           <ManagerButton
             label={discovery.isScanning ? "Scanning…" : "Start scan"}
             onPress={() => void discovery.start()}
@@ -117,47 +120,67 @@ export function DiscoveryScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Discovery summary">
-        <Text selectable className="text-gray-700">
-          {discovery.discoveries.length} total · {discovery.selectedIds.size}{" "}
-          selected · {panGroups} saved PAN groups ·{" "}
-          {discovery.discoveries.filter((item) => item.stale).length} stale
-        </Text>
+      <SectionCard
+        title={`${discovery.discoveries.length} devices found`}
+        tone="quiet"
+      >
         <SelectField
-          label="Device section"
+          label="Show"
           value={filter}
           onChange={(value) => setFilter(value as DiscoveryFilter)}
           choices={[
             { label: "All nearby", value: "all" },
-            { label: "Unassigned", value: "unassigned" },
-            { label: "Saved nearby", value: "saved" },
+            { label: "Not in a network", value: "unassigned" },
+            { label: "Saved", value: "saved" },
             { label: "Incompatible", value: "incompatible" },
           ]}
         />
       </SectionCard>
 
-      {discovery.selectedIds.size ? (
+      {selectedCount ? (
         <SectionCard
-          title="Assign selected locally"
-          description="This associates saved records only. It does not write a PAN to hardware."
+          title={`${selectedCount} selected`}
+          description="Create a new network or add the devices to one you already saved."
+          tone="accent"
         >
-          <SelectField
-            label="Network"
-            value={networkId}
-            onChange={setNetworkId}
-            choices={networks.map((network) => ({
-              label: network.name,
-              value: network.id,
-            }))}
-          />
           <ManagerButton
-            label={`Assign ${discovery.selectedIds.size} devices`}
-            onPress={() => void assign()}
+            label="Create network"
+            onPress={() =>
+              router.push("/(subapps)/dwm1001-manager/networks/new" as never)
+            }
           />
+          {networks.length ? (
+            <VStack style={{ gap: eight2FiveSpacing.sm }}>
+              <Text
+                size="sm"
+                style={{
+                  color: theme.text,
+                  fontFamily: eight2FiveFonts.styleSemibold,
+                }}
+              >
+                Add to an existing network
+              </Text>
+              <SelectField
+                label="Network"
+                value={networkId}
+                onChange={setNetworkId}
+                choices={networks.map((network) => ({
+                  label: network.name,
+                  value: network.id,
+                }))}
+              />
+              <ManagerButton
+                label="Add devices"
+                variant="outline"
+                isDisabled={!networkId}
+                onPress={() => void addToNetwork()}
+              />
+            </VStack>
+          ) : null}
         </SectionCard>
       ) : null}
 
-      <VStack space="md">
+      <VStack style={{ gap: eight2FiveSpacing.sm }}>
         {visible.map((item) => (
           <DiscoveryDeviceRow
             key={item.transportDeviceId || `${item.lastSeenAt}`}
@@ -174,14 +197,14 @@ export function DiscoveryScreen() {
             state="info"
             message={
               discovery.isScanning
-                ? "Waiting for DWM1001 advertisements…"
-                : "No devices in this section. Start a scan when ready."
+                ? "Waiting for advertisements…"
+                : "Start a scan to find devices."
             }
           />
         ) : null}
         {busyId ? (
-          <Text selectable className="text-sm text-gray-600">
-            Working with {busyId}…
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            Opening {busyId}…
           </Text>
         ) : null}
       </VStack>

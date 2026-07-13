@@ -1,5 +1,6 @@
 import React from "react";
 import { Button, ButtonText } from "@eight2five/ui/button";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 interface ActionButtonProps {
   children: string;
@@ -16,14 +17,34 @@ export function ActionButton({
   variant = "default",
   className,
 }: ActionButtonProps) {
+  const theme = useEight2FiveTheme();
+  const visual =
+    variant === "destructive"
+      ? { background: theme.danger, foreground: theme.raw.white }
+      : variant === "outline"
+        ? { background: theme.accentSoft, foreground: theme.accent }
+        : variant === "secondary"
+          ? { background: theme.surfaceStrong, foreground: theme.text }
+          : variant === "ghost"
+            ? { background: "transparent", foreground: theme.accent }
+            : { background: theme.accent, foreground: theme.raw.white };
+
   return (
     <Button
       onPress={onPress}
       isDisabled={isDisabled}
       variant={variant}
-      className={className}
+      className={`min-h-12 rounded-xl px-5 ${className ?? ""}`}
+      style={{
+        backgroundColor: visual.background,
+        borderWidth: 0,
+        boxShadow:
+          variant === "default" || variant === "destructive"
+            ? `0 5px 14px ${theme.shadowStrong}`
+            : undefined,
+      }}
     >
-      <ButtonText>{children}</ButtonText>
+      <ButtonText style={{ color: visual.foreground }}>{children}</ButtonText>
     </Button>
   );
 }

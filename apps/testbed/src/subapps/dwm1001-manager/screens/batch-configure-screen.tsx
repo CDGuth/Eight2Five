@@ -7,6 +7,7 @@ import type {
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { BatchResults } from "../components/batch-results";
@@ -36,6 +37,7 @@ export function BatchConfigureScreen() {
     name?: string;
     notes?: string;
   }>();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const { network, devices } = useManagedNetwork(params.networkId);
   const migration = params.migration === "1";
@@ -236,7 +238,7 @@ export function BatchConfigureScreen() {
             ? "Review hardware PAN migration"
             : "Batch configuration plan"
         }
-        description="Writes run one device at a time with readback verification. Successful devices are never rolled back."
+        description="Writes run one device at a time and verify the result."
       >
         {devices.map((device) => (
           <SwitchField
@@ -333,7 +335,7 @@ export function BatchConfigureScreen() {
           />
         ) : (
           <VStack space="sm">
-            <Text selectable className="text-sm text-gray-700">
+            <Text selectable size="sm" style={{ color: theme.text }}>
               {selectedDevices.length} device(s), sequential verified writes.{" "}
               {migration
                 ? `Old PAN ${params.oldPanId}; new PAN ${targetPanId}. Local PAN changes only after all succeed.`

@@ -1,12 +1,8 @@
-export const DWM1001_MANAGER_THEME = {
-  primary: "#3c6ec8",
-  background: "#ffffff",
-  foreground: "#111111",
-  muted: "#6b7280",
-  border: "#d1d5db",
-  success: "#26734d",
-  warning: "#9a6700",
-  danger: "#b42318",
-} as const;
+export {
+  eight2FiveBaseColors,
+  eight2FiveDarkColors,
+  eight2FiveLightColors,
+  eight2FiveThemes as DWM1001_MANAGER_THEME,
+} from "@eight2five/ui/theme";
 
-export const managerControlClassName = "min-h-11";
+export const managerControlClassName = "min-h-12";

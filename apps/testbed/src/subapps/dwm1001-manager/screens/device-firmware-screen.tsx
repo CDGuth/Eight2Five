@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Text } from "@eight2five/ui/text";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import {
@@ -12,12 +13,13 @@ import { useManagedDevice } from "../manager-context";
 
 export function DeviceFirmwareScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
+  const theme = useEight2FiveTheme();
   const device = useManagedDevice(deviceId);
   return (
     <ManagerScreen>
       <StatePanel
         state="info"
-        message="Firmware update is disabled in this release. This deep-linked page cannot select files, connect a transport, or execute an update."
+        message="Firmware update is disabled in this release."
       />
       <SectionCard
         title="Hardware qualification checklist"
@@ -35,7 +37,7 @@ export function DeviceFirmwareScreen() {
             "Review packet sizing, write pacing, and platform BLE behavior.",
             "Complete a separately reviewed transport and release safety plan.",
           ].map((item) => (
-            <Text key={item} selectable className="text-sm text-gray-700">
+            <Text key={item} selectable size="sm" style={{ color: theme.text }}>
               • {item}
             </Text>
           ))}

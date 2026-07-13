@@ -2,6 +2,7 @@ import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useManagedNetwork, usePansManager } from "../manager-context";
 import { displayError } from "../manager-utils";
@@ -22,6 +23,7 @@ import {
 export function NetworkSettingsScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const { network } = useManagedNetwork(networkId);
   const [name, setName] = React.useState(network?.name ?? "");
@@ -84,7 +86,7 @@ export function NetworkSettingsScreen() {
         settings: parsedSettings.settings,
         updatedAt: Date.now(),
       });
-      setMessage("Local profile updated. No hardware was changed.");
+      setMessage("Network settings saved. Hardware was not changed.");
     } catch (saveError) {
       setError(displayError(saveError));
     }
@@ -137,15 +139,15 @@ export function NetworkSettingsScreen() {
   return (
     <ManagerScreen>
       <SectionCard
-        title="Local profile settings"
-        description="Choose local-only save or review a sequential, verified hardware migration for all known members."
+        title="Network details"
+        description="Save app settings or review a verified PAN change for every saved device."
       >
         <TextField label="Name" value={name} onChangeText={setName} />
         <TextField
-          label="Intended PAN ID (decimal or hexadecimal)"
+          label="PAN ID"
           value={pan}
           onChangeText={setPan}
-          helper="Local-only save updates profile metadata without touching hardware. Use migration to write and verify known nodes."
+          helper="Saving here does not write the PAN ID to devices."
         />
         <TextField
           label="Notes"
@@ -154,11 +156,11 @@ export function NetworkSettingsScreen() {
           multiline
         />
         <ManagerButton
-          label="Save local profile only"
+          label="Save network settings"
           onPress={() => void save()}
         />
         <ManagerButton
-          label="Review hardware PAN migration"
+          label="Review PAN change"
           variant="outline"
           onPress={reviewHardwareMigration}
         />
@@ -168,7 +170,7 @@ export function NetworkSettingsScreen() {
 
       <SectionCard
         title="Coordinate bounds"
-        description="All coordinates and heights are stored in meters. Imperial units are not accepted."
+        description="Coordinates and heights use meters."
       >
         <TextField
           label="Minimum X (meters)"
@@ -232,8 +234,8 @@ export function NetworkSettingsScreen() {
       </SectionCard>
 
       <SectionCard
-        title="Discovery and connection defaults"
-        description="These are per-network defaults. Manager global settings remain separate."
+        title="Discovery and connection"
+        description="Defaults for this network."
       >
         <TextField
           label="Stale device timeout (seconds)"
@@ -259,7 +261,7 @@ export function NetworkSettingsScreen() {
         />
         <SwitchField
           label="Auto-connect"
-          description="Saved connection policy metadata. This v1 manager never connects merely because a device was discovered."
+          description="Discovery alone never connects to a device."
           value={settingsForm.autoConnect}
           onChange={(value) =>
             setSettingsForm((current) => ({ ...current, autoConnect: value }))
@@ -362,7 +364,7 @@ export function NetworkSettingsScreen() {
         />
       </SectionCard>
 
-      <SectionCard title="Export profile">
+      <SectionCard title="Export network">
         <SelectField
           label="Format"
           value={exportFormat}
@@ -380,26 +382,32 @@ export function NetworkSettingsScreen() {
         {exportJson ? (
           <Text
             selectable
-            className="rounded-lg bg-gray-100 p-3 font-mono text-xs text-black"
+            size="xs"
+            style={{
+              borderRadius: eight2FiveRadii.sm,
+              backgroundColor: theme.surface,
+              color: theme.text,
+              fontFamily: "monospace",
+              padding: 12,
+            }}
           >
             {exportJson}
           </Text>
         ) : null}
-        <Text selectable className="text-sm text-gray-600">
-          Select the generated text manually. No clipboard or filesystem access
-          is used.
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          Select the generated text to copy it manually.
         </Text>
       </SectionCard>
 
       <SectionCard
-        title="Delete local profile"
-        description="Deletes local profile data only. It does not reset or alter hardware."
+        title="Delete saved network"
+        description="Removes app data only; hardware is not reset."
       >
         {confirmingDelete ? (
           <>
             <StatePanel
               state="error"
-              message={`Confirm deletion of local profile “${network.name}”. DWM1001 hardware will not be reset.`}
+              message={`Delete “${network.name}” from this app? Hardware will not be reset.`}
             />
             <ManagerButton
               label={`Confirm delete ${network.name}`}
@@ -414,7 +422,7 @@ export function NetworkSettingsScreen() {
           </>
         ) : (
           <ManagerButton
-            label="Delete local profile"
+            label="Delete saved network"
             variant="destructive"
             onPress={() => setConfirmingDelete(true)}
           />

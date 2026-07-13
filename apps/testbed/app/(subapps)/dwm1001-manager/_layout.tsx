@@ -1,20 +1,31 @@
 import React from "react";
 import { Stack } from "expo-router";
+import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { PansManagerProvider } from "../../../src/subapps/dwm1001-manager";
 
 export default function Dwm1001ManagerLayout() {
+  const theme = useEight2FiveTheme();
+
   return (
     <PansManagerProvider>
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
           headerBackButtonDisplayMode: "minimal",
-          headerTintColor: "#3c6ec8",
-          contentStyle: { backgroundColor: "#ffffff" },
+          headerTintColor: theme.accent,
+          headerStyle: { backgroundColor: theme.background },
+          headerTitleStyle: {
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          },
+          contentStyle: { backgroundColor: theme.background },
         }}
       >
-        <Stack.Screen name="index" options={{ title: "DWM1001 Manager" }} />
+        <Stack.Screen
+          name="index"
+          options={{ title: "DWM1001-DEV Network Manager" }}
+        />
         <Stack.Screen
           name="discovery"
           options={{ title: "Discover Devices" }}
@@ -41,7 +52,7 @@ export default function Dwm1001ManagerLayout() {
         />
         <Stack.Screen
           name="networks/[networkId]/grid"
-          options={{ title: "Network Grid" }}
+          options={{ title: "Position & Track" }}
         />
         <Stack.Screen
           name="networks/[networkId]/topology"

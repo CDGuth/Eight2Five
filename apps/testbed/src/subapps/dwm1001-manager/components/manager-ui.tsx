@@ -22,24 +22,36 @@ import {
   SelectContent,
   SelectDragIndicator,
   SelectDragIndicatorWrapper,
+  SelectIcon,
   SelectInput,
   SelectItem,
   SelectPortal,
   SelectTrigger,
-  SelectIcon,
 } from "@eight2five/ui/select";
 import { Spinner } from "@eight2five/ui/spinner";
 import { Switch } from "@eight2five/ui/switch";
 import { Text } from "@eight2five/ui/text";
 import { Textarea, TextareaInput } from "@eight2five/ui/textarea";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 export function ManagerScreen({ children }: { children: React.ReactNode }) {
+  const theme = useEight2FiveTheme();
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        padding: eight2FiveSpacing.md,
+        gap: eight2FiveSpacing.md,
+        paddingBottom: eight2FiveSpacing.xxl,
+      }}
       keyboardShouldPersistTaps="handled"
     >
       {children}
@@ -52,24 +64,44 @@ export function SectionCard({
   description,
   children,
   testID,
+  tone = "default",
 }: {
   title: string;
   description?: string;
   children?: React.ReactNode;
   testID?: string;
+  tone?: "default" | "accent" | "quiet";
 }) {
+  const theme = useEight2FiveTheme();
+  const backgroundColor =
+    tone === "accent"
+      ? theme.accentSoft
+      : tone === "quiet"
+        ? theme.surface
+        : theme.surfaceRaised;
+
   return (
     <Card
       testID={testID}
-      className="rounded-xl border border-gray-200 bg-white p-4"
+      className="p-0"
+      style={{
+        backgroundColor,
+        borderWidth: 0,
+        borderRadius: eight2FiveRadii.md,
+        padding: eight2FiveSpacing.md,
+        boxShadow:
+          tone === "default"
+            ? `0 8px 24px ${theme.shadow}`
+            : `0 2px 8px ${theme.shadow}`,
+      }}
     >
-      <VStack space="md">
-        <VStack space="xs">
-          <Heading size="md" className="text-black">
+      <VStack style={{ gap: eight2FiveSpacing.md }}>
+        <VStack style={{ gap: four }}>
+          <Heading size="md" style={{ color: theme.text }}>
             {title}
           </Heading>
           {description ? (
-            <Text selectable className="text-sm text-gray-600">
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
               {description}
             </Text>
           ) : null}
@@ -77,6 +109,55 @@ export function SectionCard({
         {children}
       </VStack>
     </Card>
+  );
+}
+
+const four = 4;
+
+export function SetupStep({
+  number,
+  title,
+  detail,
+  complete = false,
+}: {
+  number: number;
+  title: string;
+  detail?: string;
+  complete?: boolean;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <HStack className="items-start" style={{ gap: eight2FiveSpacing.sm }}>
+      <Text
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          textAlign: "center",
+          lineHeight: 28,
+          color: complete ? theme.background : theme.accent,
+          backgroundColor: complete ? theme.success : theme.accentSoft,
+          fontFamily: eight2FiveFonts.styleBold,
+        }}
+      >
+        {complete ? "✓" : number}
+      </Text>
+      <VStack className="flex-1" style={{ gap: 2 }}>
+        <Text
+          style={{
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          }}
+        >
+          {title}
+        </Text>
+        {detail ? (
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            {detail}
+          </Text>
+        ) : null}
+      </VStack>
+    </HStack>
   );
 }
 
@@ -89,28 +170,55 @@ export function StatePanel({
   message: string;
   onRetry?: () => void;
 }) {
+  const theme = useEight2FiveTheme();
+  const palette = {
+    error: { background: theme.dangerSoft, foreground: theme.danger },
+    success: { background: theme.successSoft, foreground: theme.success },
+    info: { background: theme.accentSoft, foreground: theme.accent },
+    loading: { background: theme.surface, foreground: theme.accent },
+  }[state];
+
   if (state === "loading") {
     return (
-      <HStack className="min-h-11 items-center gap-3 rounded-lg border border-gray-200 p-3">
-        <Spinner color="#3c6ec8" />
-        <Text selectable className="text-gray-700">
+      <HStack
+        className="min-h-11 items-center"
+        style={{
+          gap: eight2FiveSpacing.sm,
+          borderRadius: eight2FiveRadii.sm,
+          backgroundColor: palette.background,
+          padding: 12,
+        }}
+      >
+        <Spinner color={palette.foreground} />
+        <Text selectable style={{ color: theme.text }}>
           {message}
         </Text>
       </HStack>
     );
   }
+
   return (
-    <Alert variant={state === "error" ? "destructive" : "default"}>
-      <VStack className="flex-1 gap-2">
-        <AlertText selectable>{message}</AlertText>
+    <Alert
+      variant={state === "error" ? "destructive" : "default"}
+      style={{
+        borderWidth: 0,
+        borderRadius: eight2FiveRadii.sm,
+        backgroundColor: palette.background,
+        padding: 12,
+      }}
+    >
+      <VStack className="flex-1" style={{ gap: eight2FiveSpacing.sm }}>
+        <AlertText
+          selectable
+          style={{
+            color: state === "error" ? palette.foreground : theme.text,
+            fontFamily: eight2FiveFonts.utilityRegular,
+          }}
+        >
+          {message}
+        </AlertText>
         {onRetry ? (
-          <Button
-            variant="outline"
-            className="min-h-11 self-start"
-            onPress={onRetry}
-          >
-            <ButtonText>Retry</ButtonText>
-          </Button>
+          <ManagerButton label="Retry" variant="outline" onPress={onRetry} />
         ) : null}
       </VStack>
     </Alert>
@@ -120,19 +228,42 @@ export function StatePanel({
 export function ManagerButton({
   label,
   loading,
+  variant = "default",
+  className,
   ...props
 }: Omit<React.ComponentProps<typeof Button>, "children"> & {
   label: string;
   loading?: boolean;
 }) {
+  const theme = useEight2FiveTheme();
+  const visual =
+    variant === "destructive"
+      ? { background: theme.danger, foreground: theme.raw.white }
+      : variant === "outline"
+        ? { background: theme.accentSoft, foreground: theme.accent }
+        : variant === "secondary"
+          ? { background: theme.surfaceStrong, foreground: theme.text }
+          : variant === "ghost" || variant === "link"
+            ? { background: "transparent", foreground: theme.accent }
+            : { background: theme.accent, foreground: theme.raw.white };
+
   return (
     <Button
       {...props}
+      variant={variant}
       isDisabled={props.isDisabled || loading}
-      className={`min-h-11 ${props.className ?? ""}`}
+      className={`min-h-12 rounded-xl px-5 ${className ?? ""}`}
+      style={{
+        backgroundColor: visual.background,
+        borderWidth: 0,
+        boxShadow:
+          variant === "default" || variant === "destructive"
+            ? `0 5px 14px ${theme.shadowStrong}`
+            : undefined,
+      }}
     >
-      {loading ? <ButtonSpinner /> : null}
-      <ButtonText>{label}</ButtonText>
+      {loading ? <ButtonSpinner color={visual.foreground} /> : null}
+      <ButtonText style={{ color: visual.foreground }}>{label}</ButtonText>
     </Button>
   );
 }
@@ -153,36 +284,75 @@ export function TextField({
   error?: string;
   multiline?: boolean;
 } & Omit<React.ComponentProps<typeof InputField>, "value" | "onChangeText">) {
+  const theme = useEight2FiveTheme();
   return (
     <FormControl isInvalid={Boolean(error)}>
       <FormControlLabel>
-        <FormControlLabelText>{label}</FormControlLabelText>
+        <FormControlLabelText
+          style={{
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          }}
+        >
+          {label}
+        </FormControlLabelText>
       </FormControlLabel>
       {multiline ? (
-        <Textarea className="min-h-24">
+        <Textarea
+          className="min-h-24"
+          style={{
+            borderWidth: 0,
+            borderRadius: eight2FiveRadii.sm,
+            backgroundColor: theme.surface,
+          }}
+        >
           <TextareaInput
             value={value}
             onChangeText={onChangeText}
+            style={{
+              color: theme.text,
+              fontFamily: eight2FiveFonts.utilityRegular,
+            }}
             {...inputProps}
           />
         </Textarea>
       ) : (
-        <Input className="min-h-11">
+        <Input
+          className="min-h-12"
+          style={{
+            borderWidth: 0,
+            borderRadius: eight2FiveRadii.sm,
+            backgroundColor: theme.surface,
+          }}
+        >
           <InputField
             value={value}
             onChangeText={onChangeText}
+            style={{
+              color: theme.text,
+              fontFamily: eight2FiveFonts.utilityRegular,
+            }}
             {...inputProps}
           />
         </Input>
       )}
       {helper ? (
         <FormControlHelper>
-          <FormControlHelperText>{helper}</FormControlHelperText>
+          <FormControlHelperText
+            style={{
+              color: theme.textMuted,
+              fontFamily: eight2FiveFonts.utilityRegular,
+            }}
+          >
+            {helper}
+          </FormControlHelperText>
         </FormControlHelper>
       ) : null}
       {error ? (
         <FormControlError>
-          <FormControlErrorText selectable>{error}</FormControlErrorText>
+          <FormControlErrorText selectable style={{ color: theme.danger }}>
+            {error}
+          </FormControlErrorText>
         </FormControlError>
       ) : null}
     </FormControl>
@@ -207,24 +377,48 @@ export function SelectField({
   onChange(value: string): void;
   helper?: string;
 }) {
+  const theme = useEight2FiveTheme();
   return (
     <FormControl>
       <FormControlLabel>
-        <FormControlLabelText>{label}</FormControlLabelText>
+        <FormControlLabelText
+          style={{
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          }}
+        >
+          {label}
+        </FormControlLabelText>
       </FormControlLabel>
       <Select selectedValue={value} onValueChange={onChange}>
-        <SelectTrigger size="lg" className="min-h-11">
+        <SelectTrigger
+          size="lg"
+          className="min-h-12"
+          style={{
+            borderWidth: 0,
+            borderRadius: eight2FiveRadii.sm,
+            backgroundColor: theme.surface,
+          }}
+        >
           <SelectInput
             value={
               choices.find((choice) => choice.value === value)?.label ?? value
             }
             className="flex-1"
+            style={{
+              color: theme.text,
+              fontFamily: eight2FiveFonts.utilityRegular,
+            }}
           />
-          <SelectIcon as={ChevronDownIcon} className="mr-3" />
+          <SelectIcon
+            as={ChevronDownIcon}
+            className="mr-3"
+            style={{ color: theme.icon }}
+          />
         </SelectTrigger>
         <SelectPortal>
           <SelectBackdrop />
-          <SelectContent>
+          <SelectContent style={{ backgroundColor: theme.surfaceRaised }}>
             <SelectDragIndicatorWrapper>
               <SelectDragIndicator />
             </SelectDragIndicatorWrapper>
@@ -240,7 +434,9 @@ export function SelectField({
       </Select>
       {helper ? (
         <FormControlHelper>
-          <FormControlHelperText>{helper}</FormControlHelperText>
+          <FormControlHelperText style={{ color: theme.textMuted }}>
+            {helper}
+          </FormControlHelperText>
         </FormControlHelper>
       ) : null}
     </FormControl>
@@ -260,12 +456,23 @@ export function SwitchField({
   onChange(value: boolean): void;
   disabled?: boolean;
 }) {
+  const theme = useEight2FiveTheme();
   return (
-    <HStack className="min-h-11 items-center justify-between gap-4">
-      <VStack className="flex-1">
-        <Text className="font-medium text-black">{label}</Text>
+    <HStack
+      className="min-h-11 items-center justify-between"
+      style={{ gap: 16 }}
+    >
+      <VStack className="flex-1" style={{ gap: 2 }}>
+        <Text
+          style={{
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          }}
+        >
+          {label}
+        </Text>
         {description ? (
-          <Text selectable className="text-sm text-gray-600">
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
             {description}
           </Text>
         ) : null}
@@ -274,7 +481,7 @@ export function SwitchField({
         value={value}
         onValueChange={onChange}
         disabled={disabled}
-        trackColor={{ false: "#d1d5db", true: "#3c6ec8" }}
+        trackColor={{ false: theme.surfaceStrong, true: theme.accent }}
       />
     </HStack>
   );
@@ -287,12 +494,21 @@ export function KeyValue({
   label: string;
   value: React.ReactNode;
 }) {
+  const theme = useEight2FiveTheme();
   return (
-    <HStack className="min-h-8 items-start justify-between gap-4">
-      <Text className="text-sm text-gray-600">{label}</Text>
+    <HStack className="min-h-8 items-start justify-between" style={{ gap: 16 }}>
+      <Text size="sm" style={{ color: theme.textMuted }}>
+        {label}
+      </Text>
       <Text
         selectable
-        className="shrink text-right text-sm font-medium text-black"
+        size="sm"
+        className="shrink text-right"
+        style={{
+          color: theme.text,
+          fontFamily: eight2FiveFonts.utilitySemibold,
+          fontVariant: ["tabular-nums"],
+        }}
       >
         {value}
       </Text>

@@ -10,6 +10,7 @@ import {
 import { headingStyle } from './styles';
 import type { VariantProps } from '@gluestack-ui/utils/nativewind-utils';
 import { withUniwind } from 'uniwind';
+import { eight2FiveFonts } from '../theme';
 
 type IHeadingProps = VariantProps<typeof headingStyle> &
   React.ComponentPropsWithoutRef<typeof H1Base> & {
@@ -184,7 +185,7 @@ const MappedHeading = memo(
 
 const Heading = memo(
   forwardRef<React.ComponentRef<typeof H1>, IHeadingProps>(function Heading(
-    { className, size = 'lg', as: AsComp, ...props },
+    { className, size = 'lg', as: AsComp, style, ...props },
     ref
   ) {
     const {
@@ -211,13 +212,20 @@ const Heading = memo(
             highlight: highlight as boolean,
             class: className,
           })}
+          style={[{ fontFamily: eight2FiveFonts.styleBold }, style]}
           {...props}
         />
       );
     }
 
     return (
-      <MappedHeading className={className} size={size} ref={ref} {...props} />
+      <MappedHeading
+        className={className}
+        size={size}
+        style={[{ fontFamily: eight2FiveFonts.styleBold }, style]}
+        ref={ref}
+        {...props}
+      />
     );
   })
 );

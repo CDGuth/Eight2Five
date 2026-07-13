@@ -16,6 +16,7 @@ import type {
 import type { PansPositionStreamService } from "@eight2five/mobile/pans-manager/PansPositionStreamService";
 import { HStack } from "@eight2five/ui/hstack";
 import { Text } from "@eight2five/ui/text";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import {
   ManagerButton,
@@ -34,6 +35,7 @@ import { displayError } from "../manager-utils";
 
 export function NetworkGridScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
+  const theme = useEight2FiveTheme();
   const live = usePansLiveNetwork();
   const manager = usePansManager();
   const { network, devices } = useManagedNetwork(networkId);
@@ -213,8 +215,9 @@ export function NetworkGridScreen() {
   return (
     <ManagerScreen>
       <SectionCard
-        title="Metric network grid"
-        description="X increases right; Y increases up. Pinch to zoom, drag to pan, and tap a node to select it."
+        title="Position anchors"
+        description="Enter measured coordinates or place anchors on the grid. X increases right; Y increases up."
+        tone="accent"
       >
         <PansNetworkGrid
           nodes={nodes}
@@ -231,9 +234,8 @@ export function NetworkGridScreen() {
           }}
           height={gridHeight}
         />
-        <Text selectable className="text-xs text-gray-600">
-          {chooseGridInterval(viewport.metersPerPixel)} m grid interval · model
-          coordinates remain in meters
+        <Text selectable size="xs" style={{ color: theme.textMuted }}>
+          {chooseGridInterval(viewport.metersPerPixel)} m grid interval
         </Text>
         <HStack className="flex-wrap gap-2">
           <ManagerButton
@@ -270,8 +272,8 @@ export function NetworkGridScreen() {
           onChange={setFollow}
         />
         <SwitchField
-          label="Edit selected anchor position"
-          description="Select an anchor, enable edit mode, then long-press the desired coordinate. A separate confirmation is required before writing."
+          label="Edit anchor position"
+          description="Select an anchor, enable editing, then long-press its measured coordinate."
           value={editMode}
           onChange={(enabled) => {
             setEditMode(enabled);
@@ -280,15 +282,15 @@ export function NetworkGridScreen() {
           disabled={running}
         />
         {pendingCoordinate ? (
-          <SectionCard title="Confirm anchor coordinate write">
-            <Text selectable className="text-sm text-gray-700">
+          <SectionCard title="Confirm anchor position" tone="quiet">
+            <Text selectable size="sm" style={{ color: theme.text }}>
               Move the selected anchor to X{" "}
               {pendingCoordinate.xMeters.toFixed(3)} m, Y{" "}
               {pendingCoordinate.yMeters.toFixed(3)} m. Existing Z and quality
               values will be retained.
             </Text>
             <ManagerButton
-              label="Confirm and write position"
+              label="Save anchor position"
               onPress={() => void confirmPosition()}
             />
             <ManagerButton
@@ -304,8 +306,8 @@ export function NetworkGridScreen() {
       </SectionCard>
 
       <SectionCard
-        title="Live tag position"
-        description="No connection starts until Start live position is pressed."
+        title="Track tags"
+        description="Choose a configured tag to show its live position."
       >
         <SelectField
           label="Tag"
@@ -322,13 +324,13 @@ export function NetworkGridScreen() {
         />
         {running ? (
           <ManagerButton
-            label="Stop live position"
+            label="Stop tracking"
             variant="outline"
             onPress={() => void stop()}
           />
         ) : (
           <ManagerButton
-            label="Start live position"
+            label="Start tracking"
             loading={starting}
             isDisabled={!tagId || starting}
             onPress={() => void start()}

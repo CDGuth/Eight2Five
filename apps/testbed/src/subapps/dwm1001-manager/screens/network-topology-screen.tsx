@@ -2,6 +2,12 @@ import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import type { ObservedPansTopology } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import {
@@ -16,6 +22,7 @@ import { displayError } from "../manager-utils";
 
 export function NetworkTopologyScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
+  const theme = useEight2FiveTheme();
   const { network, devices } = useManagedNetwork(networkId);
   const { refreshTopology } = usePansLiveNetwork();
   const [topology, setTopology] = React.useState<ObservedPansTopology>();
@@ -55,7 +62,7 @@ export function NetworkTopologyScreen() {
     <ManagerScreen>
       <SectionCard
         title="Observed topology"
-        description="This page performs fresh anchor-list and cluster reads only when requested. It does not continuously poll."
+        description="Refresh to read anchor and cluster relationships."
       >
         <KeyValue
           label="Local anchor membership"
@@ -103,7 +110,8 @@ export function NetworkTopologyScreen() {
                   <Text
                     key={`${edge.sourceKey}-${edge.targetKey}-${index}`}
                     selectable
-                    className="text-sm text-black"
+                    size="sm"
+                    style={{ color: theme.text }}
                   >
                     {edge.sourceKey} → {edge.targetKey} (reported by{" "}
                     {edge.observedByDeviceId})
@@ -111,30 +119,40 @@ export function NetworkTopologyScreen() {
                 ))}
               </VStack>
             ) : (
-              <Text selectable className="text-sm text-gray-600">
-                No neighbor edges were returned during this observation.
+              <Text selectable size="sm" style={{ color: theme.textMuted }}>
+                No neighbor edges were reported.
               </Text>
             )}
           </SectionCard>
           <SectionCard title="Anchor observations">
-            <VStack space="md">
+            <VStack style={{ gap: eight2FiveSpacing.md }}>
               {topology.observations.map((observation) => (
                 <VStack
                   key={observation.deviceId}
-                  space="xs"
-                  className="rounded-lg border border-gray-200 p-3"
+                  style={{
+                    gap: 4,
+                    borderRadius: eight2FiveRadii.sm,
+                    backgroundColor: theme.surface,
+                    padding: 12,
+                  }}
                 >
-                  <Text selectable className="font-medium text-black">
+                  <Text
+                    selectable
+                    style={{
+                      color: theme.text,
+                      fontFamily: eight2FiveFonts.styleSemibold,
+                    }}
+                  >
                     {devices.find(
                       (device) => device.id === observation.deviceId,
                     )?.nickname || observation.deviceId}
                   </Text>
-                  <Text selectable className="text-sm text-gray-600">
+                  <Text selectable size="sm" style={{ color: theme.textMuted }}>
                     Local node: {observation.localNodeIdHex ?? "unknown"};
                     anchors reported:{" "}
                     {observation.anchorList?.anchors.length ?? "unavailable"}
                   </Text>
-                  <Text selectable className="text-sm text-gray-600">
+                  <Text selectable size="sm" style={{ color: theme.textMuted }}>
                     Cluster seat:{" "}
                     {observation.clusterInfo?.seatNumber ?? "unavailable"}; map:{" "}
                     {observation.clusterInfo?.clusterMap ?? "unavailable"};

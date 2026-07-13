@@ -23,7 +23,7 @@ describe("testbed subapp registry", () => {
   it("registers the DWM1001 manager", () => {
     expect(getSubappById("dwm1001-manager")).toEqual(
       expect.objectContaining({
-        title: "DWM1001 Network Manager",
+        title: "DWM1001-DEV Network Manager",
         badge: "Hardware",
         href: "/(subapps)/dwm1001-manager",
       }),

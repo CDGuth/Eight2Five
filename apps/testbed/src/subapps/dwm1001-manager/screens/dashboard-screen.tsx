@@ -1,23 +1,31 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import { Badge, BadgeText } from "@eight2five/ui/badge";
-import { Button, ButtonText } from "@eight2five/ui/button";
+import { Card } from "@eight2five/ui/card";
 import { HStack } from "@eight2five/ui/hstack";
+import { Pressable } from "@eight2five/ui/pressable";
 import { Text } from "@eight2five/ui/text";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { useManagedNetworks, useManagerReadiness } from "../manager-context";
 import { formatRelativeTime } from "../manager-utils";
 import {
-  KeyValue,
   ManagerButton,
   ManagerScreen,
   SectionCard,
+  SetupStep,
   StatePanel,
 } from "../components/manager-ui";
 
 export function DashboardScreen() {
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const readiness = useManagerReadiness();
   const { networks, devices } = useManagedNetworks();
   const [renderedAt] = React.useState(() => Date.now());
@@ -25,24 +33,40 @@ export function DashboardScreen() {
   return (
     <ManagerScreen>
       <SectionCard
-        title="Readiness"
-        description="Discovery is always explicit. Opening this screen never asks for Bluetooth permission or starts a scan."
+        title="Set up a DWM1001 network"
+        description="Follow the MDEK1001 setup order."
         testID="manager-readiness"
+        tone="accent"
       >
-        <KeyValue
-          label="Native module"
-          value={statusLabel(readiness.moduleStatus)}
-        />
-        <KeyValue
-          label="Local storage"
-          value={statusLabel(readiness.storageStatus)}
-        />
-        <KeyValue
-          label="Bluetooth permission"
-          value={readiness.permission?.bluetooth ?? "Not checked"}
-        />
+        <VStack style={{ gap: eight2FiveSpacing.md }}>
+          <SetupStep
+            number={1}
+            title="Prepare the hardware"
+            detail="Place four powered anchors high, at the same height, in a rectangle. Power at least one tag."
+          />
+          <SetupStep
+            number={2}
+            title="Discover and create a network"
+            detail="Scan, select the units, and name the network."
+          />
+          <SetupStep
+            number={3}
+            title="Configure anchors and tags"
+            detail="Set UWB to Active and choose exactly one initiator anchor."
+          />
+          <SetupStep
+            number={4}
+            title="Position the anchors"
+            detail="Measure and enter X, Y, and Z coordinates."
+          />
+          <SetupStep
+            number={5}
+            title="Track tags"
+            detail="Open Position & Track to view live locations."
+          />
+        </VStack>
         {readiness.initialization === "initializing" ? (
-          <StatePanel state="loading" message="Initializing manager storage…" />
+          <StatePanel state="loading" message="Preparing network manager…" />
         ) : null}
         {readiness.error ? (
           <StatePanel
@@ -51,12 +75,8 @@ export function DashboardScreen() {
             onRetry={readiness.retry}
           />
         ) : null}
-        <StatePanel
-          state="info"
-          message="DWM1001 access requires a custom development build. Device firmware and its exposed PANS GATT characteristics must also be compatible."
-        />
         <ManagerButton
-          label="Discover devices"
+          label="Start device discovery"
           testID="discover-devices"
           isDisabled={readiness.initialization !== "ready"}
           onPress={() =>
@@ -65,24 +85,23 @@ export function DashboardScreen() {
         />
       </SectionCard>
 
-      <SectionCard title="Saved network profiles">
+      <SectionCard title="Networks">
         {networks.length === 0 ? (
-          <VStack className="items-start gap-3 rounded-lg bg-gray-50 p-4">
-            <Text className="font-medium text-black">No saved profiles</Text>
-            <Text selectable className="text-sm text-gray-600">
-              Create a local network profile, then explicitly add and configure
-              nearby devices.
+          <VStack style={{ gap: eight2FiveSpacing.sm }}>
+            <Text
+              style={{
+                color: theme.text,
+                fontFamily: eight2FiveFonts.styleSemibold,
+              }}
+            >
+              No saved networks
             </Text>
-            <ManagerButton
-              label="Create first network"
-              variant="outline"
-              onPress={() =>
-                router.push("/(subapps)/dwm1001-manager/networks/new" as never)
-              }
-            />
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
+              Start discovery to create your first network.
+            </Text>
           </VStack>
         ) : (
-          <VStack space="md">
+          <VStack style={{ gap: eight2FiveSpacing.sm }}>
             {networks.map((network) => {
               const members = devices.filter(
                 (device) => device.networkId === network.id,
@@ -94,75 +113,91 @@ export function DashboardScreen() {
                     network.settings.staleDeviceTimeoutMs,
               ).length;
               return (
-                <Button
+                <Pressable
                   key={network.id}
-                  variant="outline"
-                  className="min-h-20 h-auto justify-start p-4"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${network.name}`}
                   onPress={() =>
                     router.push(
                       `/(subapps)/dwm1001-manager/networks/${network.id}` as never,
                     )
                   }
                 >
-                  <VStack className="flex-1 items-start gap-1">
-                    <HStack className="w-full items-center justify-between gap-2">
-                      <ButtonText className="text-base">
-                        {network.name}
-                      </ButtonText>
-                      <Badge variant={offline ? "outline" : "secondary"}>
-                        <BadgeText>
-                          {offline ? `${offline} offline` : "healthy"}
-                        </BadgeText>
-                      </Badge>
-                    </HStack>
-                    <ButtonText className="text-xs text-gray-600">
-                      {members.length} devices · PAN 0x
-                      {network.panId
-                        .toString(16)
-                        .toUpperCase()
-                        .padStart(4, "0")}
-                    </ButtonText>
-                    <ButtonText className="text-xs text-gray-600">
-                      Last opened{" "}
-                      {formatRelativeTime(network.lastOpenedAt, renderedAt)}
-                    </ButtonText>
-                  </VStack>
-                </Button>
+                  <Card
+                    className="p-0"
+                    style={{
+                      borderWidth: 0,
+                      borderRadius: eight2FiveRadii.sm,
+                      backgroundColor: theme.surface,
+                      padding: 14,
+                    }}
+                  >
+                    <VStack style={{ gap: 4 }}>
+                      <HStack
+                        className="items-center justify-between"
+                        style={{ gap: 8 }}
+                      >
+                        <Text
+                          className="flex-1"
+                          style={{
+                            color: theme.text,
+                            fontFamily: eight2FiveFonts.styleSemibold,
+                          }}
+                        >
+                          {network.name}
+                        </Text>
+                        <Badge variant={offline ? "outline" : "secondary"}>
+                          <BadgeText>
+                            {offline ? `${offline} offline` : "Ready"}
+                          </BadgeText>
+                        </Badge>
+                      </HStack>
+                      <Text
+                        selectable
+                        size="sm"
+                        style={{ color: theme.textMuted }}
+                      >
+                        {members.length} devices · PAN 0x
+                        {network.panId
+                          .toString(16)
+                          .toUpperCase()
+                          .padStart(4, "0")}
+                      </Text>
+                      <Text
+                        selectable
+                        size="sm"
+                        style={{ color: theme.textSubtle }}
+                      >
+                        Opened{" "}
+                        {formatRelativeTime(network.lastOpenedAt, renderedAt)}
+                      </Text>
+                    </VStack>
+                  </Card>
+                </Pressable>
               );
             })}
           </VStack>
         )}
       </SectionCard>
 
-      <SectionCard title="Manager actions">
-        <VStack space="sm">
+      <SectionCard title="More" tone="quiet">
+        <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
           <ManagerButton
-            label="Create network"
-            variant="outline"
-            onPress={() =>
-              router.push("/(subapps)/dwm1001-manager/networks/new" as never)
-            }
-          />
-          <ManagerButton
-            label="Import profile"
+            label="Import network"
             variant="outline"
             onPress={() =>
               router.push("/(subapps)/dwm1001-manager/import" as never)
             }
           />
           <ManagerButton
-            label="Manager settings"
+            label="Settings"
             variant="ghost"
             onPress={() =>
               router.push("/(subapps)/dwm1001-manager/settings" as never)
             }
           />
-        </VStack>
+        </HStack>
       </SectionCard>
     </ManagerScreen>
   );
-}
-
-function statusLabel(status: string): string {
-  return status === "ready" ? "Ready" : status === "error" ? "Failed" : status;
 }

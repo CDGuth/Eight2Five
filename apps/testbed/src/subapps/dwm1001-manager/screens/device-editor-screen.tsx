@@ -7,6 +7,7 @@ import type {
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useManagedDevice, usePansManager } from "../manager-context";
 import { defaultConfigForDevice, displayError } from "../manager-utils";
@@ -22,6 +23,7 @@ import {
 
 export function DeviceEditorScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const device = useManagedDevice(deviceId);
   const initial = device ? defaultConfigForDevice(device) : undefined;
@@ -109,12 +111,40 @@ export function DeviceEditorScreen() {
       };
       let config: ManagedDeviceConfig;
       if (role === "anchor") {
+        if (
+          initiator &&
+          manager.devices.some(
+            (item) =>
+              item.id !== device.id &&
+              item.networkId === device.networkId &&
+              item.lastKnownConfig?.role === "anchor" &&
+              item.lastKnownConfig.initiatorEnabled,
+          )
+        ) {
+          throw new Error(
+            "Another anchor is already the initiator. Disable it before assigning a new one.",
+          );
+        }
         const position = {
           xMeters: Number(x),
           yMeters: Number(y),
           zMeters: Number(z),
           quality: Number(quality),
         };
+        if (
+          !Number.isFinite(position.xMeters) ||
+          !Number.isFinite(position.yMeters) ||
+          !Number.isFinite(position.zMeters)
+        ) {
+          throw new Error("Enter valid X, Y, and Z coordinates.");
+        }
+        if (
+          !Number.isInteger(position.quality) ||
+          position.quality < 1 ||
+          position.quality > 100
+        ) {
+          throw new Error("Position quality must be an integer from 1 to 100.");
+        }
         config = {
           ...common,
           role: "anchor",
@@ -148,26 +178,15 @@ export function DeviceEditorScreen() {
   return (
     <ManagerScreen>
       <SectionCard
-        title="Common configuration"
-        description="Save connects, writes supported fields, reads them back where possible, and persists the result."
+        title="Identify and configure"
+        description="Match the physical unit, then set its network role."
+        tone="accent"
       >
-        <TextField
-          label="Nickname (local only)"
-          value={nickname}
-          onChangeText={setNickname}
-        />
-        <TextField
-          label="Device label (max 16 UTF-8 bytes)"
-          value={label}
-          onChangeText={setLabel}
-        />
-        <TextField
-          label="PAN ID (decimal or hexadecimal)"
-          value={pan}
-          onChangeText={setPan}
-        />
+        <TextField label="Name" value={nickname} onChangeText={setNickname} />
+        <TextField label="Device label" value={label} onChangeText={setLabel} />
+        <TextField label="Network ID (PAN)" value={pan} onChangeText={setPan} />
         <SelectField
-          label="Role"
+          label="Node type"
           value={role}
           onChange={(value) => setRole(value as "anchor" | "tag")}
           choices={[
@@ -187,13 +206,19 @@ export function DeviceEditorScreen() {
             { label: "Off", value: "off" },
           ]}
         />
-        <SwitchField label="LED" value={ledEnabled} onChange={setLedEnabled} />
+        <SwitchField
+          label="LED"
+          description="Turn this off and save to identify the unit."
+          value={ledEnabled}
+          onChange={setLedEnabled}
+        />
       </SectionCard>
 
       {role === "anchor" ? (
         <SectionCard title="Anchor settings">
           <SwitchField
             label="Initiator"
+            description="Exactly one anchor in the network must be the initiator."
             value={initiator}
             onChange={setInitiator}
           />
@@ -221,22 +246,21 @@ export function DeviceEditorScreen() {
             onChangeText={setQuality}
             keyboardType="number-pad"
           />
-          <Text selectable className="text-sm text-gray-600">
-            Persisted anchor position currently cannot be read back, so it is
-            reported as written but unverified.
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            Measure coordinates to centimeter accuracy.
           </Text>
         </SectionCard>
       ) : (
         <SectionCard title="Tag settings">
           <SwitchField
-            label="Location solver"
+            label="Location engine"
             value={solver}
             onChange={setSolver}
           />
           <SwitchField
-            label="Low power"
-            value={lowPower}
-            onChange={setLowPower}
+            label="Responsive mode"
+            value={!lowPower}
+            onChange={(enabled) => setLowPower(!enabled)}
           />
           <SwitchField
             label="Stationary detection"
@@ -253,16 +277,15 @@ export function DeviceEditorScreen() {
               { label: "Position + distances", value: "2" },
             ]}
           />
-          <Text selectable className="text-sm text-gray-600">
-            Moving and stationary update rates are read-only in this build; the
-            native API does not support writing them.
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            Update rates are read-only.
           </Text>
         </SectionCard>
       )}
 
-      <SectionCard title="Apply">
+      <SectionCard title="Save">
         <ManagerButton
-          label="Save and verify"
+          label="Save configuration"
           loading={saving}
           onPress={() => void save()}
         />
@@ -278,7 +301,12 @@ export function DeviceEditorScreen() {
           />
         ) : null}
         {result?.writes.map((write) => (
-          <Text key={write.field} selectable className="text-sm text-gray-700">
+          <Text
+            key={write.field}
+            selectable
+            size="sm"
+            style={{ color: write.warning ? theme.warning : theme.textMuted }}
+          >
             {write.field}: {write.status}
             {write.warning ? ` — ${write.warning}` : ""}
           </Text>

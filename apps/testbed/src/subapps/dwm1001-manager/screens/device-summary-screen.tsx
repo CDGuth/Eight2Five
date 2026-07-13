@@ -2,6 +2,7 @@ import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { PansInspectionResult } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/text";
+import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { useManagedDevice, usePansManager } from "../manager-context";
@@ -17,6 +18,7 @@ import {
 export function DeviceSummaryScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const device = useManagedDevice(deviceId);
   const network = manager.networks.find(
@@ -50,7 +52,7 @@ export function DeviceSummaryScreen() {
     <ManagerScreen>
       <SectionCard
         title={device.nickname || device.label || "DWM1001 device"}
-        description="Hardware inspection only occurs when Refresh from device is pressed."
+        description="Refresh to read the current device configuration."
       >
         <KeyValue label="Transport ID" value={device.transportDeviceId} />
         <KeyValue
@@ -159,7 +161,7 @@ export function DeviceSummaryScreen() {
             value={formatChecksum(inspection.deviceInfo?.firmware2Checksum)}
           />
           {inspection.updateRate ? (
-            <Text selectable className="text-sm text-gray-600">
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
               Update rates (read-only): moving{" "}
               {inspection.updateRate.movingUpdateRateMs} ms, stationary{" "}
               {inspection.updateRate.stationaryUpdateRateMs} ms.

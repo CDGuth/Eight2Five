@@ -1,7 +1,9 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
+import { HStack } from "@eight2five/ui/hstack";
 import { Text } from "@eight2five/ui/text";
+import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { useManagedNetwork, usePansManager } from "../manager-context";
@@ -11,12 +13,14 @@ import {
   ManagerButton,
   ManagerScreen,
   SectionCard,
+  SetupStep,
   StatePanel,
 } from "../components/manager-ui";
 
 export function NetworkDashboardScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const { network, devices } = useManagedNetwork(networkId);
   const [renderedAt] = React.useState(() => Date.now());
@@ -39,10 +43,7 @@ export function NetworkDashboardScreen() {
   if (!network) {
     return (
       <ManagerScreen>
-        <StatePanel
-          state="error"
-          message="This saved network profile was not found."
-        />
+        <StatePanel state="error" message="Network not found." />
       </ManagerScreen>
     );
   }
@@ -50,21 +51,27 @@ export function NetworkDashboardScreen() {
   const offline = (device: ManagedDevice) =>
     !device.lastSeenAt ||
     renderedAt - device.lastSeenAt > network.settings.staleDeviceTimeoutMs;
+  const anchors = devices.filter((device) => device.role === "anchor");
+  const tags = devices.filter((device) => device.role === "tag");
+  const initiators = anchors.filter(
+    (device) =>
+      device.lastKnownConfig?.role === "anchor" &&
+      device.lastKnownConfig.initiatorEnabled,
+  );
+  const positionedAnchors = anchors.filter(
+    (device) =>
+      device.lastKnownConfig?.role === "anchor" &&
+      Boolean(device.lastKnownConfig.position),
+  );
+  const configured =
+    anchors.length >= 4 && tags.length >= 1 && initiators.length === 1;
+  const positioned =
+    anchors.length > 0 && positionedAnchors.length === anchors.length;
   const sections = [
+    { title: "Anchors", devices: anchors.filter((device) => !offline(device)) },
+    { title: "Tags", devices: tags.filter((device) => !offline(device)) },
     {
-      title: "Anchors",
-      devices: devices.filter(
-        (device) => device.role === "anchor" && !offline(device),
-      ),
-    },
-    {
-      title: "Tags",
-      devices: devices.filter(
-        (device) => device.role === "tag" && !offline(device),
-      ),
-    },
-    {
-      title: "Pending configuration",
+      title: "Needs configuration",
       devices: devices.filter((device) => !device.role && !offline(device)),
     },
     { title: "Offline", devices: devices.filter(offline) },
@@ -81,59 +88,46 @@ export function NetworkDashboardScreen() {
             .padStart(4, "0")}`}
         />
         <KeyValue label="Devices" value={devices.length} />
-        <KeyValue
-          label="Health"
-          value={devices.some(offline) ? "Attention needed" : "Healthy"}
-        />
+        <KeyValue label="Anchors" value={anchors.length} />
+        <KeyValue label="Tags" value={tags.length} />
       </SectionCard>
 
-      <SectionCard title="Network actions">
-        <VStack space="sm">
+      <SectionCard title="Network setup" tone="accent">
+        <VStack style={{ gap: eight2FiveSpacing.md }}>
+          <SetupStep
+            number={1}
+            title="Add devices"
+            detail={`${devices.length} devices in this network`}
+            complete={devices.length > 0}
+          />
+          <SetupStep
+            number={2}
+            title="Configure anchors and tags"
+            detail={`${anchors.length} anchors · ${tags.length} tags · ${initiators.length} initiator`}
+            complete={configured}
+          />
+          <SetupStep
+            number={3}
+            title="Position anchors"
+            detail={`${positionedAnchors.length} of ${anchors.length} anchors positioned`}
+            complete={positioned}
+          />
+          <SetupStep
+            number={4}
+            title="Track tags"
+            detail="Open the live grid after setup is complete."
+          />
+        </VStack>
+        <VStack style={{ gap: eight2FiveSpacing.sm }}>
           <ManagerButton
             label="Add devices"
+            variant="outline"
             onPress={() =>
               router.push("/(subapps)/dwm1001-manager/discovery" as never)
             }
           />
           <ManagerButton
-            label="Network grid"
-            variant="outline"
-            onPress={() =>
-              router.push(
-                `/(subapps)/dwm1001-manager/networks/${network.id}/grid` as never,
-              )
-            }
-          />
-          <ManagerButton
-            label="Batch configure"
-            variant="outline"
-            onPress={() =>
-              router.push(
-                `/(subapps)/dwm1001-manager/networks/${network.id}/batch-configure` as never,
-              )
-            }
-          />
-          <ManagerButton
-            label="Observed topology"
-            variant="outline"
-            onPress={() =>
-              router.push(
-                `/(subapps)/dwm1001-manager/networks/${network.id}/topology` as never,
-              )
-            }
-          />
-          <ManagerButton
-            label="Position logs"
-            variant="outline"
-            onPress={() =>
-              router.push(
-                `/(subapps)/dwm1001-manager/networks/${network.id}/log` as never,
-              )
-            }
-          />
-          <ManagerButton
-            label="All devices"
-            variant="ghost"
+            label="Configure devices"
             onPress={() =>
               router.push(
                 `/(subapps)/dwm1001-manager/networks/${network.id}/devices` as never,
@@ -141,11 +135,11 @@ export function NetworkDashboardScreen() {
             }
           />
           <ManagerButton
-            label="Settings, export & delete"
-            variant="ghost"
+            label="Position & track"
+            variant="outline"
             onPress={() =>
               router.push(
-                `/(subapps)/dwm1001-manager/networks/${network.id}/settings` as never,
+                `/(subapps)/dwm1001-manager/networks/${network.id}/grid` as never,
               )
             }
           />
@@ -158,7 +152,7 @@ export function NetworkDashboardScreen() {
           title={`${section.title} (${section.devices.length})`}
         >
           {section.devices.length ? (
-            <VStack space="sm">
+            <VStack style={{ gap: eight2FiveSpacing.sm }}>
               {section.devices.map((device) => (
                 <ManagedDeviceRow
                   key={device.id}
@@ -173,12 +167,53 @@ export function NetworkDashboardScreen() {
               ))}
             </VStack>
           ) : (
-            <Text selectable className="text-sm text-gray-600">
-              No devices in this section.
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
+              None
             </Text>
           )}
         </SectionCard>
       ))}
+
+      <SectionCard title="Advanced tools" tone="quiet">
+        <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
+          <ManagerButton
+            label="Batch configure"
+            variant="outline"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/batch-configure` as never,
+              )
+            }
+          />
+          <ManagerButton
+            label="Topology"
+            variant="outline"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/topology` as never,
+              )
+            }
+          />
+          <ManagerButton
+            label="Logs"
+            variant="ghost"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/log` as never,
+              )
+            }
+          />
+          <ManagerButton
+            label="Network settings"
+            variant="ghost"
+            onPress={() =>
+              router.push(
+                `/(subapps)/dwm1001-manager/networks/${network.id}/settings` as never,
+              )
+            }
+          />
+        </HStack>
+      </SectionCard>
     </ManagerScreen>
   );
 }

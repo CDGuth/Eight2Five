@@ -35,7 +35,7 @@ describe("DashboardScreen", () => {
 
     expect(tree.root.findByProps({ testID: "manager-readiness" })).toBeTruthy();
     expect(
-      tree.root.findByProps({ children: "No saved profiles" }),
+      tree.root.findByProps({ children: "No saved networks" }),
     ).toBeTruthy();
     expect(runtime.discovery.requestPermissions).not.toHaveBeenCalled();
     expect(runtime.discovery.start).not.toHaveBeenCalled();

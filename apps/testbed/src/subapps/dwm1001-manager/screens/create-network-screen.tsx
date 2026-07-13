@@ -1,6 +1,11 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import { Text } from "@eight2five/ui/text";
+import {
+  eight2FiveFonts,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/vstack";
 
 import { usePansManager } from "../manager-context";
@@ -15,12 +20,15 @@ import {
 
 export function CreateNetworkScreen() {
   const router = useRouter();
+  const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const [name, setName] = React.useState("");
-  const [panText, setPanText] = React.useState("");
-  const [notes, setNotes] = React.useState("");
+  const [panText, setPanText] = React.useState(() =>
+    formatPan(generatePan(manager.networks)),
+  );
   const [error, setError] = React.useState<string>();
   const [result, setResult] = React.useState<string>();
+  const [createdNetworkId, setCreatedNetworkId] = React.useState<string>();
   const [saving, setSaving] = React.useState(false);
 
   const parsedPan = parsePanInput(panText);
@@ -32,47 +40,38 @@ export function CreateNetworkScreen() {
   const duplicatePan = Number.isInteger(parsedPan)
     ? manager.networks.some((network) => network.panId === parsedPan)
     : false;
-
-  const generatePan = () => {
-    const used = new Set(manager.networks.map((network) => network.panId));
-    let candidate = 0;
-    do candidate = Math.floor(Math.random() * 0xfffe) + 1;
-    while (used.has(candidate));
-    setPanText(`0x${candidate.toString(16).toUpperCase().padStart(4, "0")}`);
-  };
+  const selected = manager.discoveries.filter((item) =>
+    manager.selectedDiscoveryIds.has(item.transportDeviceId),
+  );
 
   const save = async () => {
     setError(undefined);
     setResult(undefined);
-    if (!name.trim()) return setError("Network name is required.");
-    if (duplicateName)
-      return setError("A network with this name already exists.");
+    if (!name.trim()) return setError("Enter a network name.");
+    if (duplicateName) return setError("That network name is already in use.");
     if (!Number.isInteger(parsedPan) || parsedPan < 0 || parsedPan > 0xffff) {
-      return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
+      return setError("Network ID must be between 0 and 65535.");
     }
     setSaving(true);
     try {
-      const selected = manager.discoveries.filter((item) =>
-        manager.selectedDiscoveryIds.has(item.transportDeviceId),
-      );
       const created = await manager.createNetwork({
         name,
         panId: parsedPan,
-        notes,
         discoveries: selected,
       });
       const failures = created.configurations.filter(
         (configuration) => configuration.outcome === "failure",
       );
       if (failures.length) {
+        setCreatedNetworkId(created.network.id);
         setResult(
-          `Profile saved. ${failures.length} device PAN assignment(s) failed and remain recorded for retry.`,
+          `Network created. ${failures.length} device${failures.length === 1 ? "" : "s"} could not be assigned.`,
         );
-      } else {
-        router.replace(
-          `/(subapps)/dwm1001-manager/networks/${created.network.id}` as never,
-        );
+        return;
       }
+      router.replace(
+        `/(subapps)/dwm1001-manager/networks/${created.network.id}` as never,
+      );
     } catch (saveError) {
       setError(displayError(saveError));
     } finally {
@@ -83,60 +82,101 @@ export function CreateNetworkScreen() {
   return (
     <ManagerScreen>
       <SectionCard
-        title="Create local profile"
-        description="The profile is saved first. Selected nearby devices are then persisted and assigned the PAN sequentially with readback verification."
+        title="Name the network"
+        description="The selected devices will be added to this network."
+        tone="accent"
       >
         <TextField
-          label="Unique name"
+          label="Network name"
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
-          error={
-            duplicateName
-              ? "Name is already used (case-insensitive)."
-              : undefined
-          }
+          autoFocus
+          error={duplicateName ? "Name already used." : undefined}
         />
-        <TextField
-          label="16-bit PAN ID"
-          value={panText}
-          onChangeText={setPanText}
-          placeholder="0x1234 or 4660"
-          autoCapitalize="characters"
-          helper={
-            duplicatePan
-              ? "Warning: another local profile uses this PAN."
-              : "Hexadecimal and decimal are accepted."
-          }
-        />
-        <ManagerButton
-          label="Generate unused PAN"
-          variant="outline"
-          onPress={generatePan}
-        />
-        <TextField
-          label="Notes"
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-        />
-        <VStack className="gap-1 rounded-lg bg-gray-50 p-3">
-          <Text className="font-medium text-black">Selected discoveries</Text>
-          <Text selectable className="text-sm text-gray-600">
-            {manager.selectedDiscoveryIds.size} device(s). No hardware write
-            occurs until Save profile is pressed.
+        <VStack style={{ gap: 4 }}>
+          <Text
+            style={{
+              color: theme.text,
+              fontFamily: eight2FiveFonts.styleSemibold,
+            }}
+          >
+            Devices
+          </Text>
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            {selected.length} selected
           </Text>
         </VStack>
-        {error ? <StatePanel state="error" message={error} /> : null}
-        {result ? <StatePanel state="success" message={result} /> : null}
+      </SectionCard>
+
+      <SectionCard
+        title="Network ID"
+        description="A unique PAN ID was generated automatically."
+        tone="quiet"
+      >
+        <TextField
+          label="PAN ID"
+          value={panText}
+          onChangeText={setPanText}
+          placeholder="0x1234"
+          autoCapitalize="characters"
+          helper={
+            duplicatePan ? "Another saved network uses this ID." : undefined
+          }
+        />
         <ManagerButton
-          label="Save profile"
+          label="Generate another"
+          variant="ghost"
+          onPress={() => setPanText(formatPan(generatePan(manager.networks)))}
+        />
+      </SectionCard>
+
+      {error ? <StatePanel state="error" message={error} /> : null}
+      {result ? <StatePanel state="info" message={result} /> : null}
+      {createdNetworkId ? (
+        <ManagerButton
+          label="Open network"
+          onPress={() =>
+            router.replace(
+              `/(subapps)/dwm1001-manager/networks/${createdNetworkId}` as never,
+            )
+          }
+        />
+      ) : (
+        <ManagerButton
+          label={
+            selected.length ? "Create network & add devices" : "Create network"
+          }
           loading={saving}
           onPress={() => void save()}
         />
-      </SectionCard>
+      )}
+      {!selected.length ? (
+        <Text
+          selectable
+          size="sm"
+          style={{
+            color: theme.textMuted,
+            paddingHorizontal: eight2FiveSpacing.sm,
+          }}
+        >
+          You can add devices after the network is created.
+        </Text>
+      ) : null}
     </ManagerScreen>
   );
+}
+
+function generatePan(networks: { panId: number }[]): number {
+  const used = new Set(networks.map((network) => network.panId));
+  let candidate = 0;
+  do candidate = Math.floor(Math.random() * 0xfffe) + 1;
+  while (used.has(candidate));
+  return candidate;
+}
+
+function formatPan(value: number): string {
+  return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
 function parsePanInput(value: string): number {
