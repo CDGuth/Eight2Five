@@ -35,13 +35,22 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "./assets/splash-icon.png",
+        image: "./assets/splash-icons/testbed-ios-splash-icon-light.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         dark: {
-          image: "./assets/splash-icon-dark.png",
+          image: "./assets/splash-icons/testbed-ios-splash-icon-dark.png",
           backgroundColor: "#000000",
+        },
+        android: {
+          image:
+            "./assets/splash-icons/testbed-android-splash-icon-light.png",
+          dark: {
+            image:
+              "./assets/splash-icons/testbed-android-splash-icon-dark.png",
+            backgroundColor: "#000000",
+          },
         },
       },
     ],
