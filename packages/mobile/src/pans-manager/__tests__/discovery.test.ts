@@ -173,4 +173,43 @@ describe("PansDiscoveryService", () => {
       jest.useRealTimers();
     }
   });
+
+  test("synchronizes service state when native scanning stops for GATT", async () => {
+    jest.useFakeTimers();
+    let state: "scanning" | "stopped" = "scanning";
+    const gateway: PansDiscoveryGateway = {
+      getPermissionStatus: () => ({ bluetooth: "granted" }),
+      requestPermissions: jest.fn(),
+      startScanning: jest.fn(async () => undefined),
+      stopScanning: jest.fn(),
+      clearDevices: jest.fn(),
+      getScanDiagnostics: () => ({
+        state,
+        buildId: "test-build",
+        scanSessionId: 1,
+        rawResultCount: 1,
+        pansResultCount: 1,
+        parsedServiceDataHitCount: 1,
+        rawAdvertisementHitCount: 0,
+        rejectedResultCount: 0,
+      }),
+      addDeviceDiscoveredListener: () => ({ remove: jest.fn() }),
+      addErrorListener: () => ({ remove: jest.fn() }),
+    };
+    const service = new PansDiscoveryService(gateway, {
+      diagnosticsPollIntervalMs: 100,
+    });
+
+    try {
+      await service.start();
+      state = "stopped";
+      jest.advanceTimersByTime(100);
+
+      expect(service.isScanning).toBe(false);
+      expect(gateway.stopScanning).not.toHaveBeenCalled();
+    } finally {
+      service.stop();
+      jest.useRealTimers();
+    }
+  });
 });

@@ -8,6 +8,7 @@ import {
   PANS_BLE_UUIDS,
   patchOperationMode,
   readLocationData,
+  requestExplicitDisconnect,
   subscribeLocationData,
   unsubscribeLocationData,
   writeLocationDataMode,
@@ -82,6 +83,11 @@ export function createPansBleSource(
           if (activeTagDeviceId === deviceId) activeTagDeviceId = undefined;
           configuredDevices.delete(deviceId);
           if (shouldDisconnect && !teardownAlreadyStarted) {
+            try {
+              await requestExplicitDisconnect(deviceId);
+            } catch {
+              // Older PANS firmware may not accept the workaround write.
+            }
             await disconnect(deviceId);
           }
         }

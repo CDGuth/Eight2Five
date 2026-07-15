@@ -9,6 +9,7 @@ function gateway(
   return {
     connect: jest.fn(async () => true),
     disconnect: jest.fn(async () => true),
+    requestExplicitDisconnect: jest.fn(async () => true),
     readLabel: jest.fn(),
     writeLabel: jest.fn(),
     readNetworkId: jest.fn(),
@@ -54,6 +55,7 @@ describe("PansDeviceSessionManager", () => {
     resolve(true);
     const first = await firstPromise;
     await first.close();
+    expect(native.requestExplicitDisconnect).toHaveBeenCalledWith("device");
     expect(native.disconnect).toHaveBeenCalledTimes(1);
   });
 

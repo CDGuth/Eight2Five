@@ -88,6 +88,7 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
   }, [options.snapshotIntervalMs]);
 
   useEffect(() => {
+    let active = true;
     let subscription: { remove(): void } | null = null;
     const source = sourceRef.current;
 
@@ -95,9 +96,6 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
 
     const start = async () => {
       try {
-        await source.start();
-        setStartupError(undefined);
-
         subscription = source.subscribe((event: BeaconSourceEvent) => {
           const observations = event.observations ?? [];
           if (!observations.length) return;
@@ -106,15 +104,23 @@ export function useBeaconScanner(options: UseBeaconScannerOptions = {}) {
             engineRef.current?.ingestObservation(observation);
           });
         });
+        await source.start();
+        if (!active) return;
+        setStartupError(undefined);
       } catch (e) {
-        setStartupError(e);
-        console.error("Failed to start scanning:", e);
+        subscription?.remove();
+        subscription = null;
+        if (active) {
+          setStartupError(e);
+          console.error("Failed to start scanning:", e);
+        }
       }
     };
 
     start();
 
     return () => {
+      active = false;
       subscription?.remove();
       source.stop();
       source.destroy?.();

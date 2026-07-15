@@ -30,6 +30,7 @@ jest.mock("expo-pans-ble-api", () => ({
   stopScanning: jest.fn(),
   connect: jest.fn(async () => true),
   disconnect: jest.fn(async () => true),
+  requestExplicitDisconnect: jest.fn(async () => true),
   patchOperationMode: jest.fn(async () => ({ raw: [0, 0] })),
   writeLocationDataMode: jest.fn(async () => true),
   subscribeLocationData: jest.fn(async () => true),
@@ -77,6 +78,7 @@ const pans = jest.requireMock("expo-pans-ble-api") as {
   startScanning: jest.Mock;
   connect: jest.Mock;
   disconnect: jest.Mock;
+  requestExplicitDisconnect: jest.Mock;
   patchOperationMode: jest.Mock;
   writeLocationDataMode: jest.Mock;
   subscribeLocationData: jest.Mock;
@@ -92,6 +94,7 @@ describe("PansBleSource", () => {
     errorListener = undefined;
     pans.startScanning.mockResolvedValue(undefined);
     pans.connect.mockResolvedValue(true);
+    pans.requestExplicitDisconnect.mockResolvedValue(true);
     pans.readLocationData.mockResolvedValue({
       distances: [],
       raw: [],
@@ -221,6 +224,7 @@ describe("PansBleSource", () => {
     await flushPromises();
 
     expect(pans.unsubscribeLocationData).toHaveBeenCalledWith("tag-1");
+    expect(pans.requestExplicitDisconnect).toHaveBeenCalledWith("tag-1");
     expect(pans.disconnect).toHaveBeenCalledWith("tag-1");
   });
 

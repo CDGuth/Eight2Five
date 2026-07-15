@@ -72,6 +72,8 @@ Codec helpers live in TypeScript and are covered by Jest tests.
 
 Android discovery accepts the documented two-byte PANS presence payload under the 128-bit service-data UUID. It checks Android's parsed service-data map first and then parses raw AD type `0x21` bytes for stacks that omit the record from the parsed map. The manager uses one bounded foreground scan; start it before pressing SW2 because a DWM1001-DEV normally advertises for only about 20 seconds after power-up or Bluetooth wake-up.
 
+Android scanning is intentionally foreground-only. Entering the background or starting a GATT connection stops the active scan. Scan callbacks carry a session generation so late results from an earlier scan are discarded, and native discovery events are rate-limited while retained device metadata is expired. Manager-owned disconnects attempt the documented PANS explicit-disconnect write before closing GATT, with a best-effort fallback for older firmware.
+
 `requestMtu(deviceId, mtu)` is Android-only. Platforms without explicit MTU negotiation support reject direct calls with `UNSUPPORTED`; iOS firmware-update transport sizing uses `getMaximumWriteValueLength(deviceId, writeType)` instead.
 
 ## Provisioning role transitions

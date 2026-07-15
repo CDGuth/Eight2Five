@@ -13,6 +13,7 @@ import {
   readLocationDataMode,
   readNetworkId,
   readOperationMode,
+  requestExplicitDisconnect,
   readStatistics,
   readTagUpdateRate,
   subscribeLocationData,
@@ -39,6 +40,7 @@ import { ManagerError, normalizeManagerError } from "./errors";
 export interface PansNativeGateway {
   connect(deviceId: string, timeoutMs?: number): Promise<boolean>;
   disconnect(deviceId: string): Promise<boolean>;
+  requestExplicitDisconnect(deviceId: string): Promise<boolean>;
   readLabel(deviceId: string): Promise<string>;
   writeLabel(deviceId: string, label: string): Promise<boolean>;
   readNetworkId(deviceId: string): Promise<number>;
@@ -88,6 +90,7 @@ export interface PansLocationSubscription {
 export const defaultPansNativeGateway: PansNativeGateway = {
   connect,
   disconnect,
+  requestExplicitDisconnect,
   readLabel,
   writeLabel,
   readNetworkId,
@@ -252,7 +255,7 @@ export class PansDeviceSessionManager {
     entry.leases = 0;
     try {
       await entry.connection;
-      await this.gateway.disconnect(deviceId);
+      await this.disconnectCleanly(deviceId);
     } catch (error) {
       throw normalizeManagerError(error);
     } finally {
@@ -316,7 +319,7 @@ export class PansDeviceSessionManager {
     if (entry.leases > 0) return;
     try {
       await entry.connection;
-      await this.gateway.disconnect(deviceId);
+      await this.disconnectCleanly(deviceId);
     } catch (error) {
       throw normalizeManagerError(error);
     } finally {
@@ -337,6 +340,16 @@ export class PansDeviceSessionManager {
     } finally {
       releaseQueue();
     }
+  }
+
+  private async disconnectCleanly(deviceId: string): Promise<void> {
+    try {
+      await this.gateway.requestExplicitDisconnect(deviceId);
+    } catch {
+      // The PANS write is an Android compatibility hint. Always close GATT even
+      // when older firmware does not expose or accept the characteristic.
+    }
+    await this.gateway.disconnect(deviceId);
   }
 
   private assertNoLiveLease(): void {

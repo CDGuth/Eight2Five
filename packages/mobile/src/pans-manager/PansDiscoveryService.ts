@@ -279,6 +279,13 @@ export class PansDiscoveryService {
 
   private refreshDiagnostics(): void {
     const native = this.gateway.getScanDiagnostics();
+    const nativeEndedScan =
+      this.scanning &&
+      (native.state === "stopped" || native.state === "failed");
+    if (nativeEndedScan) {
+      this.scanning = false;
+      this.clearScanStopTimer();
+    }
     const elapsed = native.startedAtMs
       ? Math.max(0, this.now() - native.startedAtMs)
       : 0;
@@ -291,10 +298,16 @@ export class PansDiscoveryService {
             : undefined
         : undefined;
     const next = { ...native, ...(warning ? { warning } : {}) };
-    if (JSON.stringify(next) === JSON.stringify(this.diagnostics)) return;
-    this.diagnostics = next;
-    const snapshot = this.getDiagnostics();
-    this.diagnosticsListeners.forEach((listener) => listener(snapshot));
+    if (JSON.stringify(next) !== JSON.stringify(this.diagnostics)) {
+      this.diagnostics = next;
+      const snapshot = this.getDiagnostics();
+      this.diagnosticsListeners.forEach((listener) => listener(snapshot));
+    }
+    if (nativeEndedScan) {
+      this.stopDiagnosticsPolling();
+      this.cleanupScanSubscriptions();
+      this.lastStoppedAt = this.now();
+    }
   }
 
   private cleanupScanSubscriptions(): void {
