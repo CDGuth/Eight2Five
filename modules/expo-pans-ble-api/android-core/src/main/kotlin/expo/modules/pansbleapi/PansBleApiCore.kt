@@ -81,7 +81,7 @@ object PansBleApiCore {
   }
 
   fun validPansServiceData(serviceData: ByteArray?): ByteArray? {
-    return serviceData?.takeIf { it.size >= 2 }
+    return serviceData?.takeIf { it.size == MIN_PRESENCE_PAYLOAD_BYTES }
   }
 
   fun extractPansServiceData(serviceDataByUuid: Map<UUID, ByteArray>): ByteArray? {

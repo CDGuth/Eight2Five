@@ -336,6 +336,7 @@ export interface DeviceConfigurationSnapshot {
 
 export interface PansManagerSettings {
   discoveryStaleAfterMs: number;
+  discoveryScanDurationMs: number;
   connectionTimeoutMs: number;
   positionLogMemoryCap: number;
   positionLogFlushSize: number;
@@ -343,10 +344,17 @@ export interface PansManagerSettings {
 
 export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
   discoveryStaleAfterMs: 10_000,
+  discoveryScanDurationMs: 25_000,
   connectionTimeoutMs: 10_000,
   positionLogMemoryCap: 1_000,
   positionLogFlushSize: 100,
 };
+
+export function normalizePansManagerSettings(
+  settings?: Partial<PansManagerSettings>,
+): PansManagerSettings {
+  return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...settings };
+}
 
 export const PANS_NETWORK_EXPORT_VERSION = 1 as const;
 

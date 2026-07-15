@@ -53,6 +53,8 @@ export interface PansDiscoveryServiceOptions {
   staleAfterMs?: number;
   diagnosticsPollIntervalMs?: number;
   noResultWatchdogMs?: number;
+  scanDurationMs?: number;
+  restartCooldownMs?: number;
   now?: () => number;
 }
 
@@ -68,13 +70,17 @@ export class PansDiscoveryService {
   private subscription?: RemovableSubscription;
   private errorSubscription?: RemovableSubscription;
   private diagnosticsTimer?: ReturnType<typeof setInterval>;
+  private scanStopTimer?: ReturnType<typeof setTimeout>;
   private diagnostics: PansBleScanDiagnostics;
   private scanning = false;
   private readonly staleAfterMs: number;
   private readonly diagnosticsPollIntervalMs: number;
   private readonly noResultWatchdogMs: number;
+  private readonly scanDurationMs: number;
+  private readonly restartCooldownMs: number;
   private readonly now: () => number;
   private pendingAsyncError?: ManagerError;
+  private lastStoppedAt?: number;
 
   constructor(
     private readonly gateway: PansDiscoveryGateway = defaultPansDiscoveryGateway,
@@ -83,6 +89,8 @@ export class PansDiscoveryService {
     this.staleAfterMs = options.staleAfterMs ?? 10_000;
     this.diagnosticsPollIntervalMs = options.diagnosticsPollIntervalMs ?? 1_000;
     this.noResultWatchdogMs = options.noResultWatchdogMs ?? 5_000;
+    this.scanDurationMs = options.scanDurationMs ?? 25_000;
+    this.restartCooldownMs = options.restartCooldownMs ?? 3_000;
     this.now = options.now ?? Date.now;
     this.diagnostics = this.gateway.getScanDiagnostics();
   }
@@ -101,6 +109,15 @@ export class PansDiscoveryService {
 
   async start(): Promise<void> {
     if (this.scanning) return;
+    if (
+      this.lastStoppedAt !== undefined &&
+      this.now() - this.lastStoppedAt < this.restartCooldownMs
+    ) {
+      throw new ManagerError(
+        "SCAN_THROTTLED",
+        "Wait a few seconds before starting another Bluetooth scan.",
+      );
+    }
     if (!permissionsGranted(this.gateway.getPermissionStatus())) {
       throw new ManagerError(
         "PERMISSION_DENIED",
@@ -120,6 +137,7 @@ export class PansDiscoveryService {
       this.scanning = true;
       this.refreshDiagnostics();
       this.startDiagnosticsPolling();
+      this.scanStopTimer = setTimeout(() => this.stop(), this.scanDurationMs);
     } catch (error) {
       this.cleanupScanSubscriptions();
       throw normalizeManagerError(error);
@@ -127,11 +145,14 @@ export class PansDiscoveryService {
   }
 
   stop(): void {
+    const wasScanning = this.scanning;
     if (this.scanning) this.gateway.stopScanning();
     this.scanning = false;
+    this.clearScanStopTimer();
     this.stopDiagnosticsPolling();
     this.cleanupScanSubscriptions();
     this.refreshDiagnostics();
+    if (wasScanning) this.lastStoppedAt = this.now();
   }
 
   clear(): void {
@@ -229,11 +250,14 @@ export class PansDiscoveryService {
   private handleNativeError(error: PansApiError): void {
     const normalized = normalizeManagerError(error, { operation: "discovery" });
     this.pendingAsyncError = normalized;
+    const wasScanning = this.scanning;
     this.scanning = false;
+    this.clearScanStopTimer();
     this.stopDiagnosticsPolling();
     this.cleanupScanSubscriptions();
     this.refreshDiagnostics();
     this.errorListeners.forEach((listener) => listener(normalized));
+    if (wasScanning) this.lastStoppedAt = this.now();
   }
 
   private startDiagnosticsPolling(): void {
@@ -246,6 +270,11 @@ export class PansDiscoveryService {
   private stopDiagnosticsPolling(): void {
     if (this.diagnosticsTimer) clearInterval(this.diagnosticsTimer);
     this.diagnosticsTimer = undefined;
+  }
+
+  private clearScanStopTimer(): void {
+    if (this.scanStopTimer) clearTimeout(this.scanStopTimer);
+    this.scanStopTimer = undefined;
   }
 
   private refreshDiagnostics(): void {

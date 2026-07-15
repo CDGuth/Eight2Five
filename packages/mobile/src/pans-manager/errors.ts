@@ -3,6 +3,7 @@ import type { PansApiError, PansApiErrorCode } from "expo-pans-ble-api";
 export type ManagerErrorCode =
   | "PERMISSION_DENIED"
   | "LOCATION_SERVICES_DISABLED"
+  | "SCAN_THROTTLED"
   | "BLUETOOTH_DISABLED"
   | "DEVICE_NOT_FOUND"
   | "DEVICE_OFFLINE"
@@ -140,6 +141,7 @@ function safeNativeMessage(
 function retryableByCode(code: ManagerErrorCode): boolean {
   return (
     code === "DEVICE_OFFLINE" ||
+    code === "SCAN_THROTTLED" ||
     code === "CONNECTION_TIMEOUT" ||
     code === "GATT_FAILURE"
   );
@@ -151,6 +153,7 @@ function recoveryForCode(code: ManagerErrorCode): string | undefined {
   if (code === "BLUETOOTH_DISABLED") return "Enable Bluetooth and retry.";
   if (code === "LOCATION_SERVICES_DISABLED")
     return "Enable Location services and retry.";
+  if (code === "SCAN_THROTTLED") return "Wait briefly before scanning again.";
   if (retryableByCode(code)) return "Move closer to the device and retry.";
   return undefined;
 }

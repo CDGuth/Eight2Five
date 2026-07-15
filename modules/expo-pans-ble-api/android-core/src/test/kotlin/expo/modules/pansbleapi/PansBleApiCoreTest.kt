@@ -95,14 +95,15 @@ class PansBleApiCoreTest {
   fun presenceServiceDataExtractionAndDecodingAreDefensive() {
     assertNull(PansBleApiCore.validPansServiceData(byteArrayOf()))
     assertNull(PansBleApiCore.validPansServiceData(byteArrayOf(0x9a.toByte())))
+    assertNull(PansBleApiCore.validPansServiceData(byteArrayOf(0x9a.toByte(), 0x07, 0xff.toByte())))
     assertNull(PansBleApiCore.decodePresence(byteArrayOf()))
     assertNull(PansBleApiCore.decodePresence(byteArrayOf(0x9a.toByte())))
 
     val serviceData = linkedMapOf(
-      PansBleApiCore.pansServiceUuid to byteArrayOf(0x9a.toByte(), 0x07, 0xff.toByte()),
+      PansBleApiCore.pansServiceUuid to byteArrayOf(0x9a.toByte(), 0x07),
     )
     assertUnsignedBytes(
-      listOf(0x9a, 0x07, 0xff),
+      listOf(0x9a, 0x07),
       assertNotNull(PansBleApiCore.extractPansServiceData(serviceData)),
     )
   }

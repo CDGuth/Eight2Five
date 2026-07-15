@@ -86,12 +86,15 @@ export function DiscoveryScreen() {
   };
 
   const selectedCount = discovery.selectedIds.size;
+  const scanDurationSeconds = Math.round(
+    (manager.managerSettings?.discoveryScanDurationMs ?? 25_000) / 1_000,
+  );
 
   return (
     <ManagerScreen>
       <SectionCard
         title="Discover devices"
-        description="Power the DWM1001-DEV units, start a scan, then select the devices for your network."
+        description={`Start the ${scanDurationSeconds}-second scan first, then press SW2 on each DWM1001-DEV. Bluetooth advertisements stop about 20 seconds after power-up or SW2 wake-up.`}
         tone="accent"
       >
         <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
@@ -121,6 +124,12 @@ export function DiscoveryScreen() {
         ) : null}
         {discovery.diagnostics?.warning ? (
           <StatePanel state="info" message={discovery.diagnostics.warning} />
+        ) : null}
+        {discovery.isScanning ? (
+          <StatePanel
+            state="info"
+            message="Scan active. Press SW2 now and keep other BLE manager apps disconnected."
+          />
         ) : null}
         {discovery.error ? (
           <StatePanel state="error" message={discovery.error} />

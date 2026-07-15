@@ -124,4 +124,53 @@ describe("PansDiscoveryService", () => {
     );
     expect(service.getDiagnostics().lastError?.nativeCode).toBe(6);
   });
+
+  test("stops a bounded scan and rejects an immediate restart", async () => {
+    jest.useFakeTimers();
+    let now = 1_000;
+    const gateway: PansDiscoveryGateway = {
+      getPermissionStatus: () => ({ bluetooth: "granted" }),
+      requestPermissions: jest.fn(),
+      startScanning: jest.fn(async () => undefined),
+      stopScanning: jest.fn(),
+      clearDevices: jest.fn(),
+      getScanDiagnostics: () => ({
+        state: "scanning",
+        buildId: "test-build",
+        scanSessionId: 1,
+        rawResultCount: 0,
+        pansResultCount: 0,
+        parsedServiceDataHitCount: 0,
+        rawAdvertisementHitCount: 0,
+        rejectedResultCount: 0,
+        startedAtMs: 1_000,
+      }),
+      addDeviceDiscoveredListener: () => ({ remove: jest.fn() }),
+      addErrorListener: () => ({ remove: jest.fn() }),
+    };
+    const service = new PansDiscoveryService(gateway, {
+      now: () => now,
+      scanDurationMs: 100,
+      restartCooldownMs: 50,
+    });
+
+    try {
+      await service.start();
+      now = 1_100;
+      jest.advanceTimersByTime(100);
+
+      expect(service.isScanning).toBe(false);
+      expect(gateway.stopScanning).toHaveBeenCalledTimes(1);
+      await expect(service.start()).rejects.toMatchObject({
+        code: "SCAN_THROTTLED",
+      });
+
+      now = 1_150;
+      await service.start();
+      expect(gateway.startScanning).toHaveBeenCalledTimes(2);
+      service.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

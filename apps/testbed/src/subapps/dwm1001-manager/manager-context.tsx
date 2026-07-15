@@ -218,14 +218,14 @@ export function PansManagerProvider({
 
   const refreshPersisted = React.useCallback(async () => {
     if (!runtime) return;
-    const [nextNetworks, nextDevices, nextSettings] = await Promise.all([
+    const [nextNetworks, nextDevices, savedSettings] = await Promise.all([
       runtime.repository.listNetworks(),
       runtime.repository.listDevices(),
       runtime.repository.getSettings(),
     ]);
     setNetworks(nextNetworks);
     setDevices(nextDevices);
-    setManagerSettings(nextSettings);
+    setManagerSettings(managerSettingsWithDefaults(savedSettings));
   }, [runtime]);
 
   React.useEffect(() => {
@@ -238,16 +238,18 @@ export function PansManagerProvider({
       .then(async (created) => {
         opened = created;
         if (!active) return;
-        const [savedNetworks, savedDevices, savedSettings] = await Promise.all([
-          created.repository.listNetworks(),
-          created.repository.listDevices(),
-          created.repository.getSettings(),
-        ]);
+        const [savedNetworks, savedDevices, storedSettings] = await Promise.all(
+          [
+            created.repository.listNetworks(),
+            created.repository.listDevices(),
+            created.repository.getSettings(),
+          ],
+        );
         if (!active) return;
         setRuntime(created);
         setNetworks(savedNetworks);
         setDevices(savedDevices);
-        setManagerSettings(savedSettings);
+        setManagerSettings(managerSettingsWithDefaults(storedSettings));
         setPermission(created.discovery.getPermissionStatus());
         setDiscoveryDiagnostics(created.discovery.getDiagnostics());
         setInitialization("ready");
@@ -812,11 +814,12 @@ async function createDefaultRuntime(
   try {
     await storage.repository.initialize();
     reporter.storage("ready");
-    const settings =
-      (await storage.repository.getSettings()) ??
-      manager.DEFAULT_PANS_MANAGER_SETTINGS;
+    const settings = manager.normalizePansManagerSettings(
+      await storage.repository.getSettings(),
+    );
     const discovery = new manager.PansDiscoveryService(undefined, {
       staleAfterMs: settings.discoveryStaleAfterMs,
+      scanDurationMs: settings.discoveryScanDurationMs,
     });
     const sessions = new manager.PansDeviceSessionManager(
       undefined,
@@ -870,4 +873,17 @@ function permissionFailureMessage(status: ManagerPermissionStatus): string {
     return "Precise location permission is required to receive DWM1001 scan results.";
   }
   return "Nearby Devices permission is required to discover DWM1001 devices.";
+}
+
+function managerSettingsWithDefaults(
+  settings: Partial<PansManagerSettings> | undefined,
+): PansManagerSettings {
+  return {
+    discoveryStaleAfterMs: 10_000,
+    discoveryScanDurationMs: 25_000,
+    connectionTimeoutMs: 10_000,
+    positionLogMemoryCap: 1_000,
+    positionLogFlushSize: 100,
+    ...settings,
+  };
 }

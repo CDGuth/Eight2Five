@@ -12,6 +12,7 @@ import {
 
 const FALLBACKS = {
   discoveryStaleAfterMs: 10_000,
+  discoveryScanDurationMs: 25_000,
   connectionTimeoutMs: 10_000,
   positionLogMemoryCap: 1_000,
   positionLogFlushSize: 100,
@@ -26,6 +27,9 @@ export function ManagerSettingsScreen() {
   const [timeout, setTimeout] = React.useState(
     String(settings.connectionTimeoutMs),
   );
+  const [scanDuration, setScanDuration] = React.useState(
+    String(settings.discoveryScanDurationMs),
+  );
   const [memoryCap, setMemoryCap] = React.useState(
     String(settings.positionLogMemoryCap),
   );
@@ -38,21 +42,24 @@ export function ManagerSettingsScreen() {
   const save = async () => {
     setError(undefined);
     setMessage(undefined);
-    const values = [stale, timeout, memoryCap, flushSize].map(Number);
+    const values = [stale, scanDuration, timeout, memoryCap, flushSize].map(
+      Number,
+    );
     if (values.some((value) => !Number.isSafeInteger(value) || value <= 0)) {
       setError("All manager settings must be positive integers.");
       return;
     }
-    if (values[3] > values[2]) {
+    if (values[4] > values[3]) {
       setError("Position log flush size cannot exceed the memory cap.");
       return;
     }
     try {
       await manager.saveManagerSettings({
         discoveryStaleAfterMs: values[0],
-        connectionTimeoutMs: values[1],
-        positionLogMemoryCap: values[2],
-        positionLogFlushSize: values[3],
+        discoveryScanDurationMs: values[1],
+        connectionTimeoutMs: values[2],
+        positionLogMemoryCap: values[3],
+        positionLogFlushSize: values[4],
       });
       setMessage(
         "Settings saved. Reopen the manager to apply service timing changes.",
@@ -72,6 +79,12 @@ export function ManagerSettingsScreen() {
           label="Discovery stale after (ms)"
           value={stale}
           onChangeText={setStale}
+          keyboardType="number-pad"
+        />
+        <TextField
+          label="Discovery scan duration (ms)"
+          value={scanDuration}
+          onChangeText={setScanDuration}
           keyboardType="number-pad"
         />
         <TextField
