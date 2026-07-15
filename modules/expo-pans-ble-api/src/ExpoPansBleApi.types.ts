@@ -81,7 +81,33 @@ export type PansBlePermissionState =
 export interface PansBlePermissionStatus {
   bluetooth: PansBlePermissionState;
   location?: PansBlePermissionState;
+  bluetoothState?: "enabled" | "disabled" | "unavailable";
+  locationServices?: "enabled" | "disabled" | "unavailable";
   canAskAgain?: boolean;
+}
+
+export type PansBleScanState =
+  | "idle"
+  | "starting"
+  | "scanning"
+  | "stopped"
+  | "failed"
+  | "unsupported";
+
+export interface PansBleScanDiagnostics {
+  state: PansBleScanState;
+  buildId: string;
+  scanSessionId: number;
+  rawResultCount: number;
+  pansResultCount: number;
+  parsedServiceDataHitCount: number;
+  rawAdvertisementHitCount: number;
+  rejectedResultCount: number;
+  startedAtMs?: number;
+  lastResultAtMs?: number;
+  lastPansResultAtMs?: number;
+  lastError?: PansApiError;
+  warning?: string;
 }
 
 export interface ConnectionStateChangeEvent {
@@ -101,6 +127,7 @@ export interface PansCharacteristicNotificationEvent {
 export type PansApiErrorCode =
   | "UNSUPPORTED"
   | "PERMISSION_DENIED"
+  | "LOCATION_SERVICES_DISABLED"
   | "BLUETOOTH_UNAVAILABLE"
   | "DEVICE_NOT_FOUND"
   | "NOT_CONNECTED"
@@ -115,6 +142,8 @@ export type PansApiErrorCode =
 export interface PansApiError {
   code: PansApiErrorCode;
   message: string;
+  nativeCode?: number;
+  operation?: string;
 }
 
 export interface PansResult<T = void> {

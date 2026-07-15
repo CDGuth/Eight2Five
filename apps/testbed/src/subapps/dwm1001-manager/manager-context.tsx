@@ -13,6 +13,7 @@ import type {
   PansDiagnosticsResult,
   PansDiagnosticsService,
   PansDiscoveryService,
+  PansDiscoveryDiagnostics,
   PansInspectionResult,
   PansManagerRepository,
   PansManagerSettings,
@@ -40,6 +41,8 @@ export type ManagerStepStatus = "checking" | "opening" | "ready" | "error";
 export interface ManagerPermissionStatus {
   bluetooth: "granted" | "denied" | "undetermined" | "unavailable";
   location?: "granted" | "denied" | "undetermined" | "unavailable";
+  bluetoothState?: "enabled" | "disabled" | "unavailable";
+  locationServices?: "enabled" | "disabled" | "unavailable";
   canAskAgain?: boolean;
 }
 
@@ -54,6 +57,9 @@ export interface PansManagerRuntime {
     | "stop"
     | "clear"
     | "subscribe"
+    | "subscribeErrors"
+    | "subscribeDiagnostics"
+    | "getDiagnostics"
   >;
   sessions: Pick<PansDeviceSessionManager, "closeDevice" | "closeAll">;
   configuration: Pick<
@@ -117,6 +123,7 @@ interface PansManagerContextValue {
   discoveries: DiscoveredDeviceSnapshot[];
   isScanning: boolean;
   discoveryError?: string;
+  discoveryDiagnostics: PansDiscoveryDiagnostics | undefined;
   selectedDiscoveryIds: Set<string>;
   toggleDiscoverySelection(id: string): void;
   clearDiscoverySelection(): void;
@@ -195,6 +202,8 @@ export function PansManagerProvider({
   >([]);
   const [isScanning, setIsScanning] = React.useState(false);
   const [discoveryError, setDiscoveryError] = React.useState<string>();
+  const [discoveryDiagnostics, setDiscoveryDiagnostics] =
+    React.useState<PansDiscoveryDiagnostics>();
   const [selectedDiscoveryIds, setSelectedDiscoveryIds] = React.useState(
     () => new Set<string>(),
   );
@@ -240,6 +249,7 @@ export function PansManagerProvider({
         setDevices(savedDevices);
         setManagerSettings(savedSettings);
         setPermission(created.discovery.getPermissionStatus());
+        setDiscoveryDiagnostics(created.discovery.getDiagnostics());
         setInitialization("ready");
       })
       .catch((error) => {
@@ -267,7 +277,21 @@ export function PansManagerProvider({
       setDiscoveries(next);
       setIsScanning(runtime.discovery.isScanning);
     });
-    return () => subscription.remove();
+    const errorSubscription = runtime.discovery.subscribeErrors((error) => {
+      setDiscoveryError(displayError(error));
+      setIsScanning(runtime.discovery.isScanning);
+    });
+    const diagnosticsSubscription = runtime.discovery.subscribeDiagnostics(
+      (diagnostics) => {
+        setDiscoveryDiagnostics(diagnostics);
+        setIsScanning(runtime.discovery.isScanning);
+      },
+    );
+    return () => {
+      subscription.remove();
+      errorSubscription.remove();
+      diagnosticsSubscription.remove();
+    };
   }, [runtime]);
 
   const startDiscovery = React.useCallback(async () => {
@@ -280,9 +304,7 @@ export function PansManagerProvider({
       }
       setPermission(status);
       if (!permissionsGranted(status)) {
-        throw new Error(
-          "Bluetooth permission is required to discover devices.",
-        );
+        throw new Error(permissionFailureMessage(status));
       }
       await runtime.discovery.start();
       setIsScanning(true);
@@ -609,6 +631,7 @@ export function PansManagerProvider({
       discoveries,
       isScanning,
       discoveryError,
+      discoveryDiagnostics,
       selectedDiscoveryIds,
       toggleDiscoverySelection: (id) =>
         setSelectedDiscoveryIds((current) => {
@@ -660,6 +683,7 @@ export function PansManagerProvider({
       discoveries,
       isScanning,
       discoveryError,
+      discoveryDiagnostics,
       selectedDiscoveryIds,
       startDiscovery,
       stopDiscovery,
@@ -724,6 +748,7 @@ export function usePansDiscovery() {
     discoveries: manager.discoveries,
     isScanning: manager.isScanning,
     error: manager.discoveryError,
+    diagnostics: manager.discoveryDiagnostics,
     selectedIds: manager.selectedDiscoveryIds,
     toggleSelection: manager.toggleDiscoverySelection,
     clearSelection: manager.clearDiscoverySelection,
@@ -828,6 +853,21 @@ async function createDefaultRuntime(
 function permissionsGranted(status: ManagerPermissionStatus): boolean {
   return (
     status.bluetooth === "granted" &&
-    (!status.location || status.location === "granted")
+    (!status.location || status.location === "granted") &&
+    (!status.bluetoothState || status.bluetoothState === "enabled") &&
+    (!status.locationServices || status.locationServices === "enabled")
   );
+}
+
+function permissionFailureMessage(status: ManagerPermissionStatus): string {
+  if (status.bluetoothState === "disabled") {
+    return "Enable Bluetooth before starting discovery.";
+  }
+  if (status.locationServices === "disabled") {
+    return "Enable Location services before starting discovery.";
+  }
+  if (status.location && status.location !== "granted") {
+    return "Precise location permission is required to receive DWM1001 scan results.";
+  }
+  return "Nearby Devices permission is required to discover DWM1001 devices.";
 }

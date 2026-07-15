@@ -170,6 +170,12 @@ function makeRuntime(overrides: Record<string, jest.Mock> = {}) {
         listener([]);
         return { remove: jest.fn() };
       }),
+      subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
+      subscribeDiagnostics: jest.fn((listener) => {
+        listener(scanDiagnostics());
+        return { remove: jest.fn() };
+      }),
+      getDiagnostics: jest.fn(() => scanDiagnostics()),
       get isScanning() {
         return false;
       },
@@ -200,6 +206,12 @@ function createRuntimeValue(
         listener([]);
         return { remove: jest.fn() };
       }),
+      subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
+      subscribeDiagnostics: jest.fn((listener) => {
+        listener(scanDiagnostics());
+        return { remove: jest.fn() };
+      }),
+      getDiagnostics: jest.fn(() => scanDiagnostics()),
     },
     sessions: {
       closeDevice: jest.fn().mockResolvedValue(undefined),
@@ -231,4 +243,17 @@ function createRuntimeValue(
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function scanDiagnostics() {
+  return {
+    state: "idle" as const,
+    buildId: "test-build",
+    scanSessionId: 0,
+    rawResultCount: 0,
+    pansResultCount: 0,
+    parsedServiceDataHitCount: 0,
+    rawAdvertisementHitCount: 0,
+    rejectedResultCount: 0,
+  };
 }

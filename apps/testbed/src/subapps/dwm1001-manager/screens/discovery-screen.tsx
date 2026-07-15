@@ -112,6 +112,16 @@ export function DiscoveryScreen() {
             onPress={discovery.clear}
           />
         </HStack>
+        {discovery.diagnostics ? (
+          <Text selectable size="xs" style={{ color: theme.textMuted }}>
+            Native build {discovery.diagnostics.buildId} ·{" "}
+            {discovery.diagnostics.state}
+            {` · raw ${discovery.diagnostics.rawResultCount} · PANS ${discovery.diagnostics.pansResultCount} · rejected ${discovery.diagnostics.rejectedResultCount}`}
+          </Text>
+        ) : null}
+        {discovery.diagnostics?.warning ? (
+          <StatePanel state="info" message={discovery.diagnostics.warning} />
+        ) : null}
         {discovery.error ? (
           <StatePanel state="error" message={discovery.error} />
         ) : null}

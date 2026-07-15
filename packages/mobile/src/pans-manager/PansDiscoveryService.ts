@@ -1,14 +1,23 @@
 import {
   addDeviceDiscoveredListener,
+  addErrorListener,
   clearDevices,
   getPermissionStatus,
+  getScanDiagnostics,
   requestPermissions,
   startScanning,
   stopScanning,
 } from "expo-pans-ble-api";
-import type { PansBleDevice, PansBlePermissionStatus } from "expo-pans-ble-api";
+import type {
+  PansApiError,
+  PansBleDevice,
+  PansBlePermissionStatus,
+  PansBleScanDiagnostics,
+} from "expo-pans-ble-api";
 import { ManagerError, normalizeManagerError } from "./errors";
 import type { DiscoveredDeviceSnapshot } from "./types";
+
+export type PansDiscoveryDiagnostics = PansBleScanDiagnostics;
 
 export interface RemovableSubscription {
   remove(): void;
@@ -20,8 +29,12 @@ export interface PansDiscoveryGateway {
   startScanning(): Promise<void>;
   stopScanning(): void;
   clearDevices(): void;
+  getScanDiagnostics(): PansBleScanDiagnostics;
   addDeviceDiscoveredListener(
     listener: (event: { devices: PansBleDevice[] }) => void,
+  ): RemovableSubscription;
+  addErrorListener(
+    listener: (event: PansApiError) => void,
   ): RemovableSubscription;
 }
 
@@ -31,11 +44,15 @@ export const defaultPansDiscoveryGateway: PansDiscoveryGateway = {
   startScanning,
   stopScanning,
   clearDevices,
+  getScanDiagnostics,
   addDeviceDiscoveredListener,
+  addErrorListener,
 };
 
 export interface PansDiscoveryServiceOptions {
   staleAfterMs?: number;
+  diagnosticsPollIntervalMs?: number;
+  noResultWatchdogMs?: number;
   now?: () => number;
 }
 
@@ -44,17 +61,30 @@ export class PansDiscoveryService {
   private readonly listeners = new Set<
     (snapshots: DiscoveredDeviceSnapshot[]) => void
   >();
+  private readonly errorListeners = new Set<(error: ManagerError) => void>();
+  private readonly diagnosticsListeners = new Set<
+    (diagnostics: PansBleScanDiagnostics) => void
+  >();
   private subscription?: RemovableSubscription;
+  private errorSubscription?: RemovableSubscription;
+  private diagnosticsTimer?: ReturnType<typeof setInterval>;
+  private diagnostics: PansBleScanDiagnostics;
   private scanning = false;
   private readonly staleAfterMs: number;
+  private readonly diagnosticsPollIntervalMs: number;
+  private readonly noResultWatchdogMs: number;
   private readonly now: () => number;
+  private pendingAsyncError?: ManagerError;
 
   constructor(
     private readonly gateway: PansDiscoveryGateway = defaultPansDiscoveryGateway,
     options: PansDiscoveryServiceOptions = {},
   ) {
     this.staleAfterMs = options.staleAfterMs ?? 10_000;
+    this.diagnosticsPollIntervalMs = options.diagnosticsPollIntervalMs ?? 1_000;
+    this.noResultWatchdogMs = options.noResultWatchdogMs ?? 5_000;
     this.now = options.now ?? Date.now;
+    this.diagnostics = this.gateway.getScanDiagnostics();
   }
 
   get isScanning(): boolean {
@@ -80,12 +110,18 @@ export class PansDiscoveryService {
     this.subscription = this.gateway.addDeviceDiscoveredListener((event) => {
       this.receiveDevices(event.devices);
     });
+    this.errorSubscription = this.gateway.addErrorListener((error) => {
+      this.handleNativeError(error);
+    });
+    this.pendingAsyncError = undefined;
     try {
       await this.gateway.startScanning();
+      if (this.pendingAsyncError) throw this.pendingAsyncError;
       this.scanning = true;
+      this.refreshDiagnostics();
+      this.startDiagnosticsPolling();
     } catch (error) {
-      this.subscription.remove();
-      this.subscription = undefined;
+      this.cleanupScanSubscriptions();
       throw normalizeManagerError(error);
     }
   }
@@ -93,8 +129,9 @@ export class PansDiscoveryService {
   stop(): void {
     if (this.scanning) this.gateway.stopScanning();
     this.scanning = false;
-    this.subscription?.remove();
-    this.subscription = undefined;
+    this.stopDiagnosticsPolling();
+    this.cleanupScanSubscriptions();
+    this.refreshDiagnostics();
   }
 
   clear(): void {
@@ -109,6 +146,25 @@ export class PansDiscoveryService {
     this.listeners.add(listener);
     listener(this.getSnapshots());
     return { remove: () => this.listeners.delete(listener) };
+  }
+
+  subscribeErrors(
+    listener: (error: ManagerError) => void,
+  ): RemovableSubscription {
+    this.errorListeners.add(listener);
+    return { remove: () => this.errorListeners.delete(listener) };
+  }
+
+  subscribeDiagnostics(
+    listener: (diagnostics: PansBleScanDiagnostics) => void,
+  ): RemovableSubscription {
+    this.diagnosticsListeners.add(listener);
+    listener(this.getDiagnostics());
+    return { remove: () => this.diagnosticsListeners.delete(listener) };
+  }
+
+  getDiagnostics(): PansBleScanDiagnostics {
+    return clone(this.diagnostics);
   }
 
   getSnapshots(atMs = this.now()): DiscoveredDeviceSnapshot[] {
@@ -162,11 +218,61 @@ export class PansDiscoveryService {
       }
     }
     if (changed) this.emit();
+    this.refreshDiagnostics();
   }
 
   private emit(): void {
     const snapshots = this.getSnapshots();
     this.listeners.forEach((listener) => listener(snapshots));
+  }
+
+  private handleNativeError(error: PansApiError): void {
+    const normalized = normalizeManagerError(error, { operation: "discovery" });
+    this.pendingAsyncError = normalized;
+    this.scanning = false;
+    this.stopDiagnosticsPolling();
+    this.cleanupScanSubscriptions();
+    this.refreshDiagnostics();
+    this.errorListeners.forEach((listener) => listener(normalized));
+  }
+
+  private startDiagnosticsPolling(): void {
+    this.stopDiagnosticsPolling();
+    this.diagnosticsTimer = setInterval(() => {
+      this.refreshDiagnostics();
+    }, this.diagnosticsPollIntervalMs);
+  }
+
+  private stopDiagnosticsPolling(): void {
+    if (this.diagnosticsTimer) clearInterval(this.diagnosticsTimer);
+    this.diagnosticsTimer = undefined;
+  }
+
+  private refreshDiagnostics(): void {
+    const native = this.gateway.getScanDiagnostics();
+    const elapsed = native.startedAtMs
+      ? Math.max(0, this.now() - native.startedAtMs)
+      : 0;
+    const warning =
+      this.scanning && elapsed >= this.noResultWatchdogMs
+        ? native.rawResultCount === 0
+          ? "The scan started, but Android has not delivered any BLE results. Check precise location, Location services, and Bluetooth state."
+          : native.pansResultCount === 0
+            ? "Android is delivering BLE results, but none match a DWM1001 PANS advertisement. Press SW2 and verify the PANS service-data record."
+            : undefined
+        : undefined;
+    const next = { ...native, ...(warning ? { warning } : {}) };
+    if (JSON.stringify(next) === JSON.stringify(this.diagnostics)) return;
+    this.diagnostics = next;
+    const snapshot = this.getDiagnostics();
+    this.diagnosticsListeners.forEach((listener) => listener(snapshot));
+  }
+
+  private cleanupScanSubscriptions(): void {
+    this.subscription?.remove();
+    this.subscription = undefined;
+    this.errorSubscription?.remove();
+    this.errorSubscription = undefined;
   }
 }
 
@@ -203,7 +309,9 @@ export function classifyDevice(
 function permissionsGranted(status: PansBlePermissionStatus): boolean {
   return (
     status.bluetooth === "granted" &&
-    (!status.location || status.location === "granted")
+    (!status.location || status.location === "granted") &&
+    (!status.bluetoothState || status.bluetoothState === "enabled") &&
+    (!status.locationServices || status.locationServices === "enabled")
   );
 }
 

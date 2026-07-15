@@ -57,6 +57,8 @@ jobs:
     runs-on: ${{ inputs.platform == 'android' && 'ubuntu-24.04' || 'macos-26' }}
     env:
       NODE_OPTIONS: --openssl-legacy-provider
+      E2F_ANDROID_VERSION_CODE: ${{ github.run_number }}
+      E2F_BUILD_ID: ${{ github.sha }}
     steps:
       - name: Show requested build options
         shell: bash
@@ -250,6 +252,18 @@ jobs:
           set -euo pipefail
           test -f "${{ steps.resolve.outputs.output_path }}"
           ls -lh "${{ steps.resolve.outputs.output_path }}"
+
+      - name: Verify merged Android BLE manifest
+        if: ${{ inputs.platform == 'android' && steps.resolve.outputs.profile != 'production' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST_PATH="$RUNNER_TEMP/merged-AndroidManifest.xml"
+          apkanalyzer manifest print "${{ steps.resolve.outputs.output_path }}" > "$MANIFEST_PATH"
+          node scripts/verify-pans-android-manifest.mjs \
+            "$MANIFEST_PATH" \
+            "$E2F_BUILD_ID" \
+            "$E2F_ANDROID_VERSION_CODE"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

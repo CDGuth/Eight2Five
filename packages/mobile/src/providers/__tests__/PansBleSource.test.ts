@@ -10,6 +10,7 @@ let locationListener:
       payload: number[];
     }>
   | undefined;
+let errorListener: Listener<unknown> | undefined;
 
 interface PansDevice {
   deviceId: string;
@@ -61,6 +62,10 @@ jest.mock("expo-pans-ble-api", () => ({
     return { remove: jest.fn() };
   }),
   addConnectionStateChangedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addErrorListener: jest.fn((listener) => {
+    errorListener = listener;
+    return { remove: jest.fn() };
+  }),
   addLocationDataListener: jest.fn((listener) => {
     locationListener = listener;
     return { remove: jest.fn() };
@@ -84,6 +89,7 @@ describe("PansBleSource", () => {
     jest.clearAllMocks();
     discoveryListener = undefined;
     locationListener = undefined;
+    errorListener = undefined;
     pans.startScanning.mockResolvedValue(undefined);
     pans.connect.mockResolvedValue(true);
     pans.readLocationData.mockResolvedValue({
@@ -303,6 +309,18 @@ describe("PansBleSource", () => {
     );
 
     expect(onError).toHaveBeenCalledWith(error);
+  });
+
+  test("forwards asynchronous native scan failures to onError", async () => {
+    const onError = jest.fn();
+    const source = createPansBleSource({ onError });
+    await source.start();
+
+    const error = { code: "OPERATION_FAILED", message: "scan failed" };
+    errorListener?.(error);
+
+    expect(onError).toHaveBeenCalledWith(error);
+    source.stop();
   });
 
   test("cleanup can preserve connection and errors are surfaced", async () => {

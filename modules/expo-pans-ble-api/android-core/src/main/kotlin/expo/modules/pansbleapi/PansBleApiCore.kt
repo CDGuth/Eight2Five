@@ -162,6 +162,8 @@ object PansBleApiCore {
       listOf(
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
       )
     } else {
       listOf("android.permission.ACCESS_FINE_LOCATION")

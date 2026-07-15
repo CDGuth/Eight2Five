@@ -69,6 +69,30 @@ function dashboardRuntime(): PansManagerRuntime {
         listener([]);
         return { remove: jest.fn() };
       }),
+      subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
+      subscribeDiagnostics: jest.fn((listener) => {
+        listener({
+          state: "idle",
+          buildId: "test-build",
+          scanSessionId: 0,
+          rawResultCount: 0,
+          pansResultCount: 0,
+          parsedServiceDataHitCount: 0,
+          rawAdvertisementHitCount: 0,
+          rejectedResultCount: 0,
+        });
+        return { remove: jest.fn() };
+      }),
+      getDiagnostics: jest.fn(() => ({
+        state: "idle",
+        buildId: "test-build",
+        scanSessionId: 0,
+        rawResultCount: 0,
+        pansResultCount: 0,
+        parsedServiceDataHitCount: 0,
+        rawAdvertisementHitCount: 0,
+        rejectedResultCount: 0,
+      })),
     },
     sessions: { closeDevice: jest.fn(), closeAll: jest.fn() },
     configuration: {

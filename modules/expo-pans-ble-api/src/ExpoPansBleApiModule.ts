@@ -12,6 +12,7 @@ import {
   PansBleCapabilities,
   PansBleDevice,
   PansBlePermissionStatus,
+  PansBleScanDiagnostics,
   PansCharacteristicNotificationEvent,
   PansClusterInfo,
   PansDeviceInfo,
@@ -40,6 +41,7 @@ interface ExpoPansBleApiNativeModule {
   getCapabilities(): PansBleCapabilities;
   getPermissionStatus(): PansBlePermissionStatus;
   requestPermissions(): Promise<PansBlePermissionStatus>;
+  getScanDiagnostics?(): PansBleScanDiagnostics;
 
   connect(deviceId: string, timeoutMs?: number): Promise<boolean>;
   disconnect(deviceId: string): Promise<boolean>;
@@ -180,6 +182,21 @@ export function getPermissionStatus(): PansBlePermissionStatus {
 
 export async function requestPermissions(): Promise<PansBlePermissionStatus> {
   return await nativeModule.requestPermissions();
+}
+
+export function getScanDiagnostics(): PansBleScanDiagnostics {
+  return (
+    nativeModule.getScanDiagnostics?.() ?? {
+      state: "unsupported",
+      buildId: "unavailable",
+      scanSessionId: 0,
+      rawResultCount: 0,
+      pansResultCount: 0,
+      parsedServiceDataHitCount: 0,
+      rawAdvertisementHitCount: 0,
+      rejectedResultCount: 0,
+    }
+  );
 }
 
 export async function connect(

@@ -1,5 +1,18 @@
 import type { ExpoConfig } from "expo/config";
 
+const buildId =
+  process.env.E2F_BUILD_ID ??
+  process.env.EAS_BUILD_GIT_COMMIT_HASH ??
+  process.env.GITHUB_SHA ??
+  "local";
+const requestedVersionCode = Number(
+  process.env.E2F_ANDROID_VERSION_CODE ?? process.env.GITHUB_RUN_NUMBER ?? 1,
+);
+const androidVersionCode =
+  Number.isSafeInteger(requestedVersionCode) && requestedVersionCode > 0
+    ? requestedVersionCode
+    : 1;
+
 const config: ExpoConfig = {
   owner: "cdguth",
   name: "Eight2Five Testbed",
@@ -20,6 +33,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.eight2five.app.testbed",
+    versionCode: androidVersionCode,
     icon: "./assets/app-icons/testbed-android-legacy-icon.png",
     adaptiveIcon: {
       foregroundImage:
@@ -65,6 +79,7 @@ const config: ExpoConfig = {
           "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
         locationWhenInUseUsageDescription:
           "Our app uses your location to scan for nearby DWM1001 PANS BLE devices.",
+        buildId,
       },
     ],
   ],
@@ -73,6 +88,7 @@ const config: ExpoConfig = {
     typedRoutes: true,
   },
   extra: {
+    buildId,
     eas: {
       projectId: "f70dc79f-a836-4355-bd39-828d2aeac71e",
     },

@@ -178,7 +178,12 @@ class PansBleApiCoreTest {
       PansBleApiCore.requiredPermissionsForSdk(30),
     )
     assertEquals(
-      listOf("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT"),
+      listOf(
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+      ),
       PansBleApiCore.requiredPermissionsForSdk(31),
     )
   }

@@ -2,6 +2,7 @@ import type { PansApiError, PansApiErrorCode } from "expo-pans-ble-api";
 
 export type ManagerErrorCode =
   | "PERMISSION_DENIED"
+  | "LOCATION_SERVICES_DISABLED"
   | "BLUETOOTH_DISABLED"
   | "DEVICE_NOT_FOUND"
   | "DEVICE_OFFLINE"
@@ -52,6 +53,7 @@ export class ManagerError extends Error {
 const NATIVE_CODE_MAP: Record<PansApiErrorCode, ManagerErrorCode> = {
   UNSUPPORTED: "UNSUPPORTED_FEATURE",
   PERMISSION_DENIED: "PERMISSION_DENIED",
+  LOCATION_SERVICES_DISABLED: "LOCATION_SERVICES_DISABLED",
   BLUETOOTH_UNAVAILABLE: "BLUETOOTH_DISABLED",
   DEVICE_NOT_FOUND: "DEVICE_NOT_FOUND",
   NOT_CONNECTED: "DEVICE_OFFLINE",
@@ -122,6 +124,8 @@ function safeNativeMessage(
       return "Bluetooth permission is required.";
     case "BLUETOOTH_DISABLED":
       return "Bluetooth is disabled or unavailable.";
+    case "LOCATION_SERVICES_DISABLED":
+      return "Location services must be enabled for Bluetooth discovery.";
     case "DEVICE_NOT_FOUND":
       return "The device could not be found.";
     case "CONNECTION_TIMEOUT":
@@ -145,6 +149,8 @@ function recoveryForCode(code: ManagerErrorCode): string | undefined {
   if (code === "PERMISSION_DENIED")
     return "Grant Bluetooth permission and retry.";
   if (code === "BLUETOOTH_DISABLED") return "Enable Bluetooth and retry.";
+  if (code === "LOCATION_SERVICES_DISABLED")
+    return "Enable Location services and retry.";
   if (retryableByCode(code)) return "Move closer to the device and retry.";
   return undefined;
 }

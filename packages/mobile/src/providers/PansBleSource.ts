@@ -1,6 +1,7 @@
 import {
   addConnectionStateChangedListener,
   addDeviceDiscoveredListener,
+  addErrorListener,
   addLocationDataListener,
   connect,
   disconnect,
@@ -40,18 +41,27 @@ export function createPansBleSource(
   let connectingDeviceId: string | undefined;
   const configuredDevices = new Set<string>();
   const subscribedDevices = new Set<string>();
+  let scanErrorSubscription: { remove(): void } | undefined;
 
   return {
     async start() {
+      scanErrorSubscription?.remove();
+      scanErrorSubscription = addErrorListener((error) => {
+        options.onError?.(error);
+      });
       try {
         await startScanning();
       } catch (error) {
+        scanErrorSubscription.remove();
+        scanErrorSubscription = undefined;
         options.onError?.(error);
         throw error;
       }
     },
     stop() {
       stopScanning();
+      scanErrorSubscription?.remove();
+      scanErrorSubscription = undefined;
     },
     subscribe(listener) {
       let isRemoved = false;

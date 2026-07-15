@@ -16,6 +16,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -37,6 +38,18 @@ class ExpoPansBleApiModule : Module() {
   private var hasRequestedPermissions = false
   private var pendingPermissionPromise: Promise? = null
   private var nextOperationId = 1L
+  private val scanDiagnosticsLock = Any()
+  private var scanState = "idle"
+  private var scanSessionId = 0L
+  private var scanStartedAtMs: Long? = null
+  private var rawResultCount = 0L
+  private var pansResultCount = 0L
+  private var parsedServiceDataHitCount = 0L
+  private var rawAdvertisementHitCount = 0L
+  private var rejectedResultCount = 0L
+  private var lastResultAtMs: Long? = null
+  private var lastPansResultAtMs: Long? = null
+  private var lastScanError: Map<String, Any?>? = null
 
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -49,7 +62,13 @@ class ExpoPansBleApiModule : Module() {
 
     override fun onScanFailed(errorCode: Int) {
       isScanning = false
-      emitError("OPERATION_FAILED", "BLE scan failed with code $errorCode")
+      recordScanFailure("BLE scan failed with code $errorCode", errorCode)
+      emitError(
+        "OPERATION_FAILED",
+        "BLE scan failed with code $errorCode",
+        nativeCode = errorCode,
+        operation = "scan"
+      )
     }
   }
 
@@ -77,23 +96,39 @@ class ExpoPansBleApiModule : Module() {
     }
 
     AsyncFunction("startScanning") { promise: Promise ->
+      if (isScanning) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      beginScanSession()
       try {
         val adapter = bluetoothAdapter()
         if (adapter == null || !adapter.isEnabled) {
+          recordScanFailure("Bluetooth is unavailable or disabled.")
           promise.reject("BLUETOOTH_UNAVAILABLE", "Bluetooth is unavailable or disabled.", null)
           return@AsyncFunction
         }
         if (!hasRequiredPermissions()) {
-          promise.reject("PERMISSION_DENIED", "Bluetooth scan/connect permissions are not granted.", null)
+          recordScanFailure("Bluetooth and precise location permissions are not granted.")
+          promise.reject(
+            "PERMISSION_DENIED",
+            "Bluetooth and precise location permissions are not granted.",
+            null
+          )
           return@AsyncFunction
         }
-        if (isScanning) {
-          promise.resolve(null)
+        if (!locationServicesEnabled()) {
+          recordScanFailure("Location services are disabled.")
+          promise.reject(
+            "LOCATION_SERVICES_DISABLED",
+            "Location services must be enabled for Bluetooth discovery.",
+            null
+          )
           return@AsyncFunction
         }
-
         val scan = adapter.bluetoothLeScanner
         if (scan == null) {
+          recordScanFailure("Bluetooth LE scanner is unavailable.")
           promise.reject("BLUETOOTH_UNAVAILABLE", "Bluetooth LE scanner is unavailable.", null)
           return@AsyncFunction
         }
@@ -104,10 +139,13 @@ class ExpoPansBleApiModule : Module() {
           .build()
         scan.startScan(null, settings, scanCallback)
         isScanning = true
+        markScanStarted()
         promise.resolve(null)
       } catch (error: SecurityException) {
+        recordScanFailure(error.message ?: "Bluetooth permission denied.")
         promise.reject("PERMISSION_DENIED", error.message ?: "Bluetooth permission denied.", error)
       } catch (error: Throwable) {
+        recordScanFailure(error.message ?: "Unable to start BLE scan.")
         promise.reject("OPERATION_FAILED", error.message ?: "Unable to start BLE scan.", error)
       }
     }
@@ -127,6 +165,10 @@ class ExpoPansBleApiModule : Module() {
 
     Function("getPermissionStatus") {
       permissionStatusMap()
+    }
+
+    Function("getScanDiagnostics") {
+      scanDiagnosticsMap()
     }
 
     AsyncFunction("requestPermissions") { promise: Promise ->
@@ -431,7 +473,14 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun handleScanResult(result: ScanResult) {
-    val serviceData = extractPansServiceData(result) ?: return
+    recordRawScanResult()
+    val extracted = extractPansServiceData(result)
+    if (extracted == null) {
+      recordRejectedScanResult()
+      return
+    }
+    recordPansScanResult(extracted.source)
+    val serviceData = extracted.data
     val device = result.device ?: return
     val deviceId = normalizeDeviceId(device.address)
     val record = result.scanRecord
@@ -449,13 +498,17 @@ class ExpoPansBleApiModule : Module() {
     sendEvent("onDeviceDiscovered", mapOf("devices" to discoveredMetadata.values.toList()))
   }
 
-  private fun extractPansServiceData(result: ScanResult): ByteArray? {
+  private fun extractPansServiceData(result: ScanResult): ExtractedServiceData? {
     val scanRecord = result.scanRecord ?: return null
     val parsedServiceData = scanRecord.getServiceData(
       ParcelUuid(PansBleApiConstants.pansServiceUuid),
     )
-    return PansBleApiCodec.validPansServiceData(parsedServiceData)
-      ?: PansBleApiCodec.extractPansServiceDataFromScanRecord(scanRecord.bytes)
+    PansBleApiCodec.validPansServiceData(parsedServiceData)?.let {
+      return ExtractedServiceData(it, ServiceDataSource.PARSED)
+    }
+    return PansBleApiCodec.extractPansServiceDataFromScanRecord(scanRecord.bytes)?.let {
+      ExtractedServiceData(it, ServiceDataSource.RAW_ADVERTISEMENT)
+    }
   }
 
   private fun enqueue(deviceId: String, operation: GattOperation) {
@@ -700,12 +753,16 @@ class ExpoPansBleApiModule : Module() {
   }
 
   private fun stopScanSafely() {
-    if (!isScanning) return
+    if (!isScanning) {
+      markScanStopped()
+      return
+    }
     try {
       scanner?.stopScan(scanCallback)
     } catch (_: SecurityException) {
     }
     isScanning = false
+    markScanStopped()
   }
 
   private fun bluetoothAdapter(): BluetoothAdapter? {
@@ -725,17 +782,31 @@ class ExpoPansBleApiModule : Module() {
 
   private fun permissionStatusMap(): Map<String, Any?> {
     val adapter = bluetoothAdapter()
-    if (adapter == null) return mapOf("bluetooth" to "unavailable", "location" to "unavailable", "canAskAgain" to false)
-    val context = appContext.reactContext ?: return mapOf("bluetooth" to "unavailable", "canAskAgain" to false)
+    val context = appContext.reactContext ?: return mapOf(
+      "bluetooth" to "unavailable",
+      "location" to "unavailable",
+      "bluetoothState" to "unavailable",
+      "locationServices" to "unavailable",
+      "canAskAgain" to false
+    )
     val activity = appContext.currentActivity
     val denied = requiredPermissions().filter { context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
     val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
         context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     } else true
-    val locationGranted = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+    val locationGranted =
       context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    } else true
+    val bluetoothState = when {
+      adapter == null -> "unavailable"
+      try {
+        adapter.isEnabled
+      } catch (_: SecurityException) {
+        false
+      } -> "enabled"
+      else -> "disabled"
+    }
+    val locationServices = if (locationServicesEnabled()) "enabled" else "disabled"
     val canAskAgain = denied.isNotEmpty() &&
       (!hasRequestedPermissions || denied.any { permission ->
         activity?.shouldShowRequestPermissionRationale(permission) == true
@@ -743,8 +814,117 @@ class ExpoPansBleApiModule : Module() {
     return mapOf(
       "bluetooth" to if (bluetoothGranted) "granted" else "denied",
       "location" to if (locationGranted) "granted" else "denied",
+      "bluetoothState" to bluetoothState,
+      "locationServices" to locationServices,
       "canAskAgain" to canAskAgain
     )
+  }
+
+  private fun locationServicesEnabled(): Boolean {
+    val context = appContext.reactContext ?: return false
+    val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      manager.isLocationEnabled
+    } else {
+      @Suppress("DEPRECATION")
+      manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+        manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+  }
+
+  private fun beginScanSession() {
+    synchronized(scanDiagnosticsLock) {
+      scanSessionId += 1
+      scanState = "starting"
+      scanStartedAtMs = System.currentTimeMillis()
+      rawResultCount = 0
+      pansResultCount = 0
+      parsedServiceDataHitCount = 0
+      rawAdvertisementHitCount = 0
+      rejectedResultCount = 0
+      lastResultAtMs = null
+      lastPansResultAtMs = null
+      lastScanError = null
+    }
+  }
+
+  private fun markScanStarted() {
+    synchronized(scanDiagnosticsLock) {
+      scanState = "scanning"
+    }
+  }
+
+  private fun markScanStopped() {
+    synchronized(scanDiagnosticsLock) {
+      if (scanState != "failed") scanState = "stopped"
+    }
+  }
+
+  private fun recordRawScanResult() {
+    synchronized(scanDiagnosticsLock) {
+      rawResultCount += 1
+      lastResultAtMs = System.currentTimeMillis()
+    }
+  }
+
+  private fun recordRejectedScanResult() {
+    synchronized(scanDiagnosticsLock) {
+      rejectedResultCount += 1
+    }
+  }
+
+  private fun recordPansScanResult(source: ServiceDataSource) {
+    synchronized(scanDiagnosticsLock) {
+      pansResultCount += 1
+      if (source == ServiceDataSource.PARSED) parsedServiceDataHitCount += 1
+      else rawAdvertisementHitCount += 1
+      lastPansResultAtMs = System.currentTimeMillis()
+    }
+  }
+
+  private fun recordScanFailure(message: String, nativeCode: Int? = null) {
+    synchronized(scanDiagnosticsLock) {
+      scanState = "failed"
+      lastScanError = mapOf(
+        "code" to "OPERATION_FAILED",
+        "message" to message,
+        "nativeCode" to nativeCode,
+        "operation" to "scan"
+      )
+    }
+  }
+
+  private fun scanDiagnosticsMap(): Map<String, Any?> {
+    return synchronized(scanDiagnosticsLock) {
+      mapOf(
+        "state" to scanState,
+        "buildId" to nativeBuildId(),
+        "scanSessionId" to scanSessionId.toDouble(),
+        "rawResultCount" to rawResultCount.toDouble(),
+        "pansResultCount" to pansResultCount.toDouble(),
+        "parsedServiceDataHitCount" to parsedServiceDataHitCount.toDouble(),
+        "rawAdvertisementHitCount" to rawAdvertisementHitCount.toDouble(),
+        "rejectedResultCount" to rejectedResultCount.toDouble(),
+        "startedAtMs" to scanStartedAtMs?.toDouble(),
+        "lastResultAtMs" to lastResultAtMs?.toDouble(),
+        "lastPansResultAtMs" to lastPansResultAtMs?.toDouble(),
+        "lastError" to lastScanError
+      )
+    }
+  }
+
+  @Suppress("DEPRECATION")
+  private fun nativeBuildId(): String {
+    val context = appContext.reactContext ?: return "unavailable"
+    return try {
+      context.packageManager
+        .getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+        .metaData
+        ?.getString(BUILD_ID_METADATA_NAME)
+        ?: "unavailable"
+    } catch (_: PackageManager.NameNotFoundException) {
+      "unavailable"
+    }
   }
 
   private fun sendConnectionState(deviceId: String, state: String, reason: String?) {
@@ -756,8 +936,18 @@ class ExpoPansBleApiModule : Module() {
     ))
   }
 
-  private fun emitError(code: String, message: String) {
-    sendEvent("onError", mapOf("code" to code, "message" to message))
+  private fun emitError(
+    code: String,
+    message: String,
+    nativeCode: Int? = null,
+    operation: String? = null
+  ) {
+    sendEvent("onError", mapOf(
+      "code" to code,
+      "message" to message,
+      "nativeCode" to nativeCode,
+      "operation" to operation
+    ))
   }
 
   private fun normalizeDeviceId(deviceId: String): String {
@@ -806,5 +996,19 @@ class ExpoPansBleApiModule : Module() {
   private sealed class StartResult {
     object Started : StartResult()
     class Failed(val code: String, val message: String) : StartResult()
+  }
+
+  private data class ExtractedServiceData(
+    val data: ByteArray,
+    val source: ServiceDataSource
+  )
+
+  private enum class ServiceDataSource {
+    PARSED,
+    RAW_ADVERTISEMENT
+  }
+
+  private companion object {
+    const val BUILD_ID_METADATA_NAME = "expo.modules.pansbleapi.BUILD_ID"
   }
 }

@@ -20,6 +20,7 @@ import {
   encodeOperationMode,
   encodePersistedPosition,
   getCapabilities,
+  getScanDiagnostics,
   patchOperationMode,
   prepareFirmwareUpdateTransport,
   readAnchorList,
@@ -58,6 +59,7 @@ type NativeModuleMock = {
   clearDevices: jest.Mock;
   getCapabilities: jest.Mock;
   getPermissionStatus: jest.Mock;
+  getScanDiagnostics: jest.Mock;
   requestPermissions: jest.Mock;
   connect: jest.Mock;
   disconnect: jest.Mock;
@@ -86,6 +88,16 @@ jest.mock("expo-modules-core", () => {
     clearDevices: jest.fn(),
     getCapabilities: jest.fn(() => mockCapabilities),
     getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
+    getScanDiagnostics: jest.fn(() => ({
+      state: "scanning",
+      buildId: "test-build",
+      scanSessionId: 1,
+      rawResultCount: 2,
+      pansResultCount: 1,
+      parsedServiceDataHitCount: 0,
+      rawAdvertisementHitCount: 1,
+      rejectedResultCount: 1,
+    })),
     requestPermissions: jest.fn(async () => ({ bluetooth: "granted" })),
     connect: jest.fn(async () => true),
     disconnect: jest.fn(async () => true),
@@ -574,6 +586,11 @@ describe("ExpoPansBleApiModule wrapper", () => {
     expect(mockNativeModule.connect).toHaveBeenCalledWith("device-1", 5000);
     expect(mockNativeModule.disconnect).toHaveBeenCalledWith("device-1");
     expect(getCapabilities().transport).toBe("ble");
+    expect(getScanDiagnostics()).toMatchObject({
+      state: "scanning",
+      buildId: "test-build",
+      rawAdvertisementHitCount: 1,
+    });
   });
 
   test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
