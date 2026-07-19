@@ -34,6 +34,15 @@
       ],
       "enabled": true,
       "timeout": 180000
+    },
+    "mobile-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@mobilenext/mobile-mcp@latest"
+      ],
+      "enabled": true
     }
   },
   "agent": {

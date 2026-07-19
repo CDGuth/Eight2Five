@@ -74,3 +74,4 @@ docs/local-only
 
 # OpenCode
 .opencode/index
+.opencode/opencode.json.openchamber.backup
