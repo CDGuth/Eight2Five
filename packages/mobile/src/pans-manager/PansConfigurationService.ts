@@ -33,6 +33,27 @@ export class PansConfigurationService {
     );
   }
 
+  /** Reads hardware and explicitly replaces the persisted inspection cache. */
+  async inspectAndCache(deviceId: string): Promise<PansInspectionResult> {
+    const device = await this.requireDevice(deviceId);
+    const inspection = await this.sessions.withConnectedDevice(
+      device.transportDeviceId,
+      async (session) => await inspectConnected(session, device.id, this.now),
+    );
+    const config = configFromInspection(inspection);
+    if (
+      config.role === "anchor" &&
+      device.lastKnownConfig?.role === "anchor" &&
+      device.lastKnownConfig.position
+    ) {
+      // PANS exposes position as a write-only characteristic. A fresh read must
+      // not discard the last position the app successfully wrote.
+      config.position = device.lastKnownConfig.position;
+    }
+    await this.persistInspection(device, config, inspection);
+    return inspection;
+  }
+
   async inspectDevice(deviceId: string): Promise<PansInspectionResult> {
     return await this.inspect(deviceId);
   }
@@ -304,13 +325,21 @@ export class PansConfigurationService {
     config: ManagedDeviceConfig,
     inspection: PansInspectionResult,
   ): Promise<void> {
-    const updatedAt = this.now();
     const requestedCache = mergePersistedConfig(device.lastKnownConfig, config);
     const persistedConfig = configFromInspection(inspection, requestedCache);
+    await this.persistInspection(device, persistedConfig, inspection);
+  }
+
+  private async persistInspection(
+    device: ManagedDevice,
+    persistedConfig: ManagedDeviceConfig,
+    inspection: PansInspectionResult,
+  ): Promise<void> {
+    const updatedAt = this.now();
     try {
       await this.repository.saveDevice({
         ...device,
-        label: inspection.label ?? config.label ?? device.label,
+        label: inspection.label ?? persistedConfig.label ?? device.label,
         role: inspection.operationMode.role,
         nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? device.nodeIdHex,
         lastKnownConfig: persistedConfig,
@@ -325,7 +354,7 @@ export class PansConfigurationService {
     } catch (cause) {
       throw new ManagerError(
         "STORAGE_FAILURE",
-        "The verified device configuration could not be saved.",
+        "The device configuration cache could not be saved.",
         { deviceId: device.id, operation: "persist configuration", cause },
       );
     }
@@ -560,9 +589,11 @@ function configFromInspection(
     locationEngineEnabled: mode.locationEngineEnabled,
     lowPowerModeEnabled: mode.lowPowerModeEnabled,
     stationaryDetectionEnabled: mode.accelerometerEnabled,
-    locationDataMode:
-      inspection.locationDataMode ??
-      (fallback?.role === "tag" ? fallback.locationDataMode : 0),
+    ...(inspection.locationDataMode !== undefined
+      ? { locationDataMode: inspection.locationDataMode }
+      : fallback?.role === "tag"
+        ? { locationDataMode: fallback.locationDataMode }
+        : {}),
     ...(inspection.updateRate
       ? {
           movingUpdateRateMs: inspection.updateRate.movingUpdateRateMs,
@@ -578,5 +609,5 @@ function configFromInspection(
               : {}),
           }
         : {}),
-  };
+  } as ManagedDeviceConfig;
 }

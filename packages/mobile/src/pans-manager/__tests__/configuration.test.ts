@@ -19,6 +19,137 @@ const mode = {
 };
 
 describe("PansConfigurationService", () => {
+  test("inspectAndCache persists hardware reads while plain inspection remains read-only", async () => {
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      requestExplicitDisconnect: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      readLabel: jest.fn(async () => {
+        throw { code: "CHARACTERISTIC_NOT_FOUND", message: "unavailable" };
+      }),
+      readNetworkId: jest.fn(async () => {
+        throw { code: "UNSUPPORTED", message: "unavailable" };
+      }),
+      readDeviceInfo: jest.fn(async () => ({
+        nodeIdHex: "00AB",
+        lowNodeId: 0xab,
+        hardwareVersion: 1,
+        firmware1Version: 2,
+        firmware2Version: 3,
+        firmware1Checksum: 4,
+        firmware2Checksum: 5,
+        operationFlags: 0,
+        raw: [],
+      })),
+      readLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    const savedPosition = {
+      xMeters: 1,
+      yMeters: 2,
+      zMeters: 3,
+      quality: 90,
+    };
+    await repository.saveDevice({
+      id: "anchor",
+      transportDeviceId: "transport-anchor",
+      label: "previous label",
+      lastKnownConfig: {
+        role: "anchor",
+        label: "stale cached label",
+        panId: 99,
+        uwbMode: "passive",
+        ledEnabled: false,
+        firmwareUpdateEnabled: true,
+        initiatorEnabled: true,
+        position: savedPosition,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+      () => 500,
+    );
+
+    await service.inspect("anchor");
+    expect((await repository.getDevice("anchor"))?.updatedAt).toBe(1);
+    expect(await repository.getLatestDeviceSnapshot("anchor")).toBeUndefined();
+
+    const inspection = await service.inspectAndCache("anchor");
+
+    expect(inspection).toMatchObject({
+      deviceId: "anchor",
+      inspectedAt: 500,
+      deviceInfo: { nodeIdHex: "00AB" },
+    });
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      label: "previous label",
+      nodeIdHex: "00AB",
+      role: "anchor",
+      updatedAt: 500,
+      lastKnownConfig: {
+        role: "anchor",
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+        position: savedPosition,
+      },
+    });
+    const persisted = await repository.getDevice("anchor");
+    expect(persisted?.lastKnownConfig).not.toHaveProperty("label");
+    expect(persisted?.lastKnownConfig).not.toHaveProperty("panId");
+    expect(await repository.getLatestDeviceSnapshot("anchor")).toMatchObject({
+      capturedAt: 500,
+      inspection: { deviceId: "anchor", inspectedAt: 500 },
+      config: { position: savedPosition },
+    });
+  });
+
+  test("inspectAndCache does not invent an unavailable tag location mode", async () => {
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      requestExplicitDisconnect: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => ({
+        ...mode,
+        role: "tag" as const,
+        locationEngineEnabled: true,
+      })),
+      readLabel: jest.fn(async () => "tag"),
+      readNetworkId: jest.fn(async () => 7),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(async () => {
+        throw { code: "UNSUPPORTED", message: "unavailable" };
+      }),
+      readTagUpdateRate: jest.fn(async () => {
+        throw { code: "UNSUPPORTED", message: "unavailable" };
+      }),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "tag",
+      transportDeviceId: "transport-tag",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await service.inspectAndCache("tag");
+
+    const persisted = await repository.getDevice("tag");
+    const snapshot = await repository.getLatestDeviceSnapshot("tag");
+    expect(persisted?.lastKnownConfig).not.toHaveProperty("locationDataMode");
+    expect(snapshot?.config).not.toHaveProperty("locationDataMode");
+  });
+
   test("inspection tolerates unavailable optional characteristics", async () => {
     const native = {
       connect: jest.fn(async () => true),

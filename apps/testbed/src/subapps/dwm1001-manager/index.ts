@@ -1,5 +1,6 @@
 export { PansManagerProvider } from "./manager-context";
 export { DashboardScreen } from "./screens/dashboard-screen";
+export { NetworksDevicesScreen } from "./screens/networks-devices-screen";
 export { DiscoveryScreen } from "./screens/discovery-screen";
 export { CreateNetworkScreen } from "./screens/create-network-screen";
 export { NetworkDashboardScreen } from "./screens/network-dashboard-screen";

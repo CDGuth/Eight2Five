@@ -128,6 +128,67 @@ describe("PansManagerProvider", () => {
     await act(async () => tree.unmount());
   });
 
+  it("uses inspectAndCache and refreshes devices and snapshots after success", async () => {
+    const inspectAndCache = jest.fn().mockResolvedValue({
+      deviceId: "managed-1",
+      transportDeviceId: "transport-1",
+      inspectedAt: 10,
+      operationMode: { role: "anchor" },
+      warnings: [],
+    });
+    const repository = {
+      listNetworks: jest.fn().mockResolvedValue([]),
+      listDevices: jest.fn().mockResolvedValue([
+        {
+          id: "managed-1",
+          transportDeviceId: "transport-1",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]),
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue({
+        deviceId: "managed-1",
+        capturedAt: 10,
+        config: {
+          role: "anchor",
+          uwbMode: "active",
+          ledEnabled: true,
+          firmwareUpdateEnabled: false,
+          initiatorEnabled: false,
+        },
+      }),
+    } as unknown as PansManagerRepository;
+    const runtime = createRuntimeValue({
+      repository,
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache,
+        configureDevice: jest.fn(),
+        assignPanId: jest.fn(),
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <InspectionHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    await act(async () => {
+      await tree.root.findByProps({ testID: "inspect-device" }).props.onPress();
+    });
+
+    expect(inspectAndCache).toHaveBeenCalledWith("managed-1");
+    expect(runtime.configuration.inspect).not.toHaveBeenCalled();
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(2);
+    expect(runtime.repository.getLatestDeviceSnapshot).toHaveBeenCalledTimes(2);
+    await act(async () => tree.unmount());
+  });
+
   it("exposes commissioning operations and refreshes persisted state", async () => {
     const assignDeviceToNetworkProfile = jest.fn().mockResolvedValue({
       deviceId: "device",
@@ -206,6 +267,18 @@ function DiagnosticsHarness() {
       onPress={() => manager.inspectDiagnostics("managed-1")}
     >
       <ButtonText>Inspect diagnostics</ButtonText>
+    </Button>
+  );
+}
+
+function InspectionHarness() {
+  const manager = usePansManager();
+  return (
+    <Button
+      testID="inspect-device"
+      onPress={() => manager.inspectDevice("managed-1")}
+    >
+      <ButtonText>Inspect device</ButtonText>
     </Button>
   );
 }
@@ -303,6 +376,7 @@ function createRuntimeValue(
     },
     configuration: {
       inspect: jest.fn(),
+      inspectAndCache: jest.fn(),
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
     },

@@ -98,6 +98,7 @@ function dashboardRuntime(): PansManagerRuntime {
     sessions: { closeDevice: jest.fn(), closeAll: jest.fn() },
     configuration: {
       inspect: jest.fn(),
+      inspectAndCache: jest.fn(),
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
     },

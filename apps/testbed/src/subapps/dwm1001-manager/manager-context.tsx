@@ -70,7 +70,7 @@ export interface PansManagerRuntime {
   sessions: Pick<PansDeviceSessionManager, "closeDevice" | "closeAll">;
   configuration: Pick<
     PansConfigurationService,
-    "inspect" | "configureDevice" | "assignPanId"
+    "inspect" | "inspectAndCache" | "configureDevice" | "assignPanId"
   >;
   commissioning: Pick<
     PansCommissioningService,
@@ -478,9 +478,11 @@ export function PansManagerProvider({
   const inspectDevice = React.useCallback(
     async (deviceId: string) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      return await runtime.configuration.inspect(deviceId);
+      const inspection = await runtime.configuration.inspectAndCache(deviceId);
+      await refreshPersisted();
+      return inspection;
     },
-    [runtime],
+    [refreshPersisted, runtime],
   );
 
   const inspectDiagnostics = React.useCallback(
