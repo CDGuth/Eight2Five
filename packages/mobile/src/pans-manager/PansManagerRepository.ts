@@ -25,7 +25,11 @@ export interface PansManagerRepository {
 
   listNetworkDevices(networkId: string): Promise<ManagedDevice[]>;
   associateDevice(association: NetworkDeviceAssociation): Promise<void>;
-  dissociateDevice(networkId: string, deviceId: string): Promise<void>;
+  dissociateDevice(
+    networkId: string,
+    deviceId: string,
+    dissociatedAt?: number,
+  ): Promise<void>;
 
   getSettings(): Promise<PansManagerSettings | undefined>;
   saveSettings(settings: PansManagerSettings): Promise<void>;

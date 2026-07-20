@@ -104,6 +104,7 @@ describe("PansManagerProvider", () => {
           },
         ]),
         getSettings: jest.fn().mockResolvedValue(undefined),
+        getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
       } as unknown as PansManagerRepository,
       diagnostics: { inspect },
     });
@@ -124,6 +125,57 @@ describe("PansManagerProvider", () => {
     });
 
     expect(inspect).toHaveBeenCalledWith("managed-1", "transport-1");
+    await act(async () => tree.unmount());
+  });
+
+  it("exposes commissioning operations and refreshes persisted state", async () => {
+    const assignDeviceToNetworkProfile = jest.fn().mockResolvedValue({
+      deviceId: "device",
+      targetNetworkId: "profile",
+      stage: "complete",
+      outcome: "assigned",
+    });
+    const migrateNetworkProfilePan = jest.fn().mockResolvedValue({
+      operationId: "migration",
+      networkId: "profile",
+      targetPanId: 2,
+      outcome: "migrated",
+      profileUpdated: true,
+      membershipChanged: false,
+      deviceResults: [],
+    });
+    const runtime = createRuntimeValue({
+      commissioning: {
+        assignDeviceToNetworkProfile,
+        migrateNetworkProfilePan,
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <CommissioningHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root.findByProps({ testID: "assign-profile" }).props.onPress();
+      await tree.root.findByProps({ testID: "migrate-pan" }).props.onPress();
+    });
+
+    expect(assignDeviceToNetworkProfile).toHaveBeenCalledWith({
+      deviceId: "device",
+      targetNetworkId: "profile",
+    });
+    expect(migrateNetworkProfilePan).toHaveBeenCalledWith({
+      networkId: "profile",
+      targetPanId: 2,
+      operationId: "migration",
+    });
+    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(3);
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(3);
     await act(async () => tree.unmount());
   });
 });
@@ -155,6 +207,37 @@ function DiagnosticsHarness() {
     >
       <ButtonText>Inspect diagnostics</ButtonText>
     </Button>
+  );
+}
+
+function CommissioningHarness() {
+  const manager = usePansManager();
+  return (
+    <>
+      <Button
+        testID="assign-profile"
+        onPress={() =>
+          manager.assignDeviceToNetworkProfile({
+            deviceId: "device",
+            targetNetworkId: "profile",
+          })
+        }
+      >
+        <ButtonText>Assign</ButtonText>
+      </Button>
+      <Button
+        testID="migrate-pan"
+        onPress={() =>
+          manager.migrateNetworkProfilePan({
+            networkId: "profile",
+            targetPanId: 2,
+            operationId: "migration",
+          })
+        }
+      >
+        <ButtonText>Migrate</ButtonText>
+      </Button>
+    </>
   );
 }
 
@@ -191,6 +274,7 @@ function createRuntimeValue(
     listNetworks: jest.fn().mockResolvedValue([]),
     listDevices: jest.fn().mockResolvedValue([]),
     getSettings: jest.fn().mockResolvedValue(undefined),
+    getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
     saveSettings: jest.fn().mockResolvedValue(undefined),
   } as unknown as PansManagerRepository;
   return {
@@ -221,6 +305,10 @@ function createRuntimeValue(
       inspect: jest.fn(),
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
+    },
+    commissioning: {
+      assignDeviceToNetworkProfile: jest.fn(),
+      migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },
     batch: {} as PansManagerRuntime["batch"],

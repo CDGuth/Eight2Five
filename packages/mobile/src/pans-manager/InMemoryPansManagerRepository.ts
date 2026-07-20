@@ -1,3 +1,4 @@
+import { ManagerError } from "./errors";
 import type { PansManagerRepository } from "./PansManagerRepository";
 import type {
   DeviceConfigurationSnapshot,
@@ -71,21 +72,49 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
 
   async associateDevice(association: NetworkDeviceAssociation): Promise<void> {
     const device = this.devices.get(association.deviceId);
-    if (device) {
-      this.devices.set(association.deviceId, {
-        ...device,
-        networkId: association.networkId,
-        updatedAt: association.associatedAt,
-      });
+    if (!device) {
+      throw new ManagerError(
+        "DEVICE_NOT_FOUND",
+        "The managed device does not exist.",
+        { deviceId: association.deviceId, operation: "associate device" },
+      );
     }
+    if (!this.networks.has(association.networkId)) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "The target network profile does not exist.",
+        { deviceId: association.deviceId, operation: "associate device" },
+      );
+    }
+    this.devices.set(association.deviceId, {
+      ...device,
+      networkId: association.networkId,
+      updatedAt: association.associatedAt,
+    });
   }
 
-  async dissociateDevice(networkId: string, deviceId: string): Promise<void> {
+  async dissociateDevice(
+    networkId: string,
+    deviceId: string,
+    dissociatedAt = Date.now(),
+  ): Promise<void> {
     const device = this.devices.get(deviceId);
-    if (device?.networkId === networkId) {
-      const { networkId: _networkId, ...unassigned } = device;
-      this.devices.set(deviceId, unassigned);
+    if (!device) {
+      throw new ManagerError(
+        "DEVICE_NOT_FOUND",
+        "The managed device does not exist.",
+        { deviceId, operation: "dissociate device" },
+      );
     }
+    if (!this.networks.has(networkId) || device.networkId !== networkId) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "The device is not associated with that network profile.",
+        { deviceId, operation: "dissociate device" },
+      );
+    }
+    const { networkId: _networkId, ...unassigned } = device;
+    this.devices.set(deviceId, { ...unassigned, updatedAt: dissociatedAt });
   }
 
   async getSettings(): Promise<PansManagerSettings | undefined> {

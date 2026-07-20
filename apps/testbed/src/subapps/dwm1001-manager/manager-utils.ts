@@ -3,6 +3,7 @@ import type {
   ManagedDevice,
   ManagedDeviceConfig,
 } from "@eight2five/mobile/pans-manager";
+import { deviceFromDiscovery as mergeDeviceFromDiscovery } from "@eight2five/mobile/pans-manager/device-discovery";
 
 export function createManagerId(prefix: string): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
@@ -16,22 +17,10 @@ export function deviceFromDiscovery(
   existing?: ManagedDevice,
 ): ManagedDevice {
   const now = Date.now();
-  return {
+  return mergeDeviceFromDiscovery(discovery, existing, {
     id: existing?.id ?? createManagerId("device"),
-    transportDeviceId: discovery.transportDeviceId,
-    ...(discovery.macAddress ? { macAddress: discovery.macAddress } : {}),
-    ...(existing?.networkId ? { networkId: existing.networkId } : {}),
-    ...(existing?.nickname ? { nickname: existing.nickname } : {}),
-    ...(existing?.label ? { label: existing.label } : {}),
-    ...(discovery.presence?.role ? { role: discovery.presence.role } : {}),
-    ...(existing?.lastKnownConfig
-      ? { lastKnownConfig: existing.lastKnownConfig }
-      : {}),
-    lastSeenAt: discovery.lastSeenAt,
-    ...(existing?.notes ? { notes: existing.notes } : {}),
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
+    now,
+  });
 }
 
 export function defaultConfigForDevice(

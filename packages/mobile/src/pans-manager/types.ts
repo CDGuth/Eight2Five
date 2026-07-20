@@ -70,6 +70,11 @@ export const DEFAULT_MANAGED_NETWORK_SETTINGS: ManagedNetworkSettings = {
   positionLogMaxSamples: 100_000,
 };
 
+/**
+ * A saved app-side network profile. Its PAN ID describes the hardware state
+ * that profile members are expected to use; the record is not a live view of
+ * the physical PANS network.
+ */
 export interface ManagedNetwork {
   id: string;
   name: string;
@@ -80,6 +85,9 @@ export interface ManagedNetwork {
   updatedAt: number;
   lastOpenedAt?: number;
 }
+
+/** More explicit alias for new call sites without changing the stored schema. */
+export type ManagedNetworkProfile = ManagedNetwork;
 
 export interface ManagedDeviceConfigBase {
   label?: string;
@@ -110,13 +118,17 @@ export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
 
 export interface ManagedDevice {
   id: string;
+  /** Local association with a saved app-side network profile. */
   networkId?: string;
   transportDeviceId: string;
   macAddress?: string;
   nodeIdHex?: string;
+  /** App-only display name; this value is never written to PANS hardware. */
   nickname?: string;
+  /** Hardware PANS label read from or written to the device. */
   label?: string;
   role?: PansNodeRole;
+  /** Cached configuration from the last hardware read or write attempt. */
   lastKnownConfig?: ManagedDeviceConfig;
   lastSeenAt?: number;
   notes?: string;

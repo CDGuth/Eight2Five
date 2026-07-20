@@ -271,17 +271,64 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
   }
 
   async associateDevice(association: NetworkDeviceAssociation): Promise<void> {
+    await this.requireAssociationRecords(
+      association.networkId,
+      association.deviceId,
+      "associate device",
+    );
     await this.db.runAsync(
       "UPDATE pans_devices SET network_id = ?, updated_at = ? WHERE id = ?",
       [association.networkId, association.associatedAt, association.deviceId],
     );
   }
 
-  async dissociateDevice(networkId: string, deviceId: string): Promise<void> {
-    await this.db.runAsync(
-      "UPDATE pans_devices SET network_id = NULL WHERE id = ? AND network_id = ?",
-      [deviceId, networkId],
+  async dissociateDevice(
+    networkId: string,
+    deviceId: string,
+    dissociatedAt = Date.now(),
+  ): Promise<void> {
+    const device = await this.requireAssociationRecords(
+      networkId,
+      deviceId,
+      "dissociate device",
     );
+    if (device.networkId !== networkId) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "The device is not associated with that network profile.",
+        { deviceId, operation: "dissociate device" },
+      );
+    }
+    await this.db.runAsync(
+      "UPDATE pans_devices SET network_id = NULL, updated_at = ? WHERE id = ? AND network_id = ?",
+      [dissociatedAt, deviceId, networkId],
+    );
+  }
+
+  private async requireAssociationRecords(
+    networkId: string,
+    deviceId: string,
+    operation: string,
+  ): Promise<ManagedDevice> {
+    const [device, network] = await Promise.all([
+      this.getDevice(deviceId),
+      this.getNetwork(networkId),
+    ]);
+    if (!device) {
+      throw new ManagerError(
+        "DEVICE_NOT_FOUND",
+        "The managed device does not exist.",
+        { deviceId, operation },
+      );
+    }
+    if (!network) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "The target network profile does not exist.",
+        { deviceId, operation },
+      );
+    }
+    return device;
   }
 
   async getSettings(): Promise<PansManagerSettings | undefined> {

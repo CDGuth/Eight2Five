@@ -134,7 +134,8 @@ describe("PansConfigurationService", () => {
     ]);
     expect(await repository.getLatestDeviceSnapshot("device")).toBeDefined();
     expect(await repository.getDevice("device")).toMatchObject({
-      lastKnownConfig: { role: "anchor" },
+      label: "wrong",
+      lastKnownConfig: { role: "anchor", label: "wrong", panId: 7 },
     });
   });
 
@@ -247,6 +248,60 @@ describe("PansConfigurationService", () => {
     expect(await repository.getDevice("anchor")).toMatchObject({
       lastKnownConfig: {
         panId: 2,
+        position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
+      },
+    });
+  });
+
+  test("persists final PAN readback instead of the mismatched requested PAN", async () => {
+    const panReads = [1, 3, 3];
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "hardware"),
+      writeLabel: jest.fn(),
+      readNetworkId: jest.fn(async () => panReads.shift() ?? 3),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      patchOperationMode: jest.fn(),
+      readLocationDataMode: jest.fn(),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 1,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+        position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    const result = await service.assignPanId("anchor", 2);
+    expect(result).toMatchObject({
+      outcome: "partial",
+      error: { code: "VERIFY_MISMATCH" },
+      inspected: { panId: 3 },
+    });
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      label: "hardware",
+      lastKnownConfig: {
+        panId: 3,
+        label: "hardware",
         position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
       },
     });

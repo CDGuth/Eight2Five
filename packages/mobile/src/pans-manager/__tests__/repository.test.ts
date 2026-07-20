@@ -70,5 +70,35 @@ describe("InMemoryPansManagerRepository", () => {
         (sample) => sample.sequence,
       ),
     ).toEqual([0, 1]);
+
+    await repository.dissociateDevice("n", "device", now + 1);
+    expect(await repository.getDevice("device")).toMatchObject({
+      updatedAt: now + 1,
+    });
+    expect((await repository.getDevice("device"))?.networkId).toBeUndefined();
+  });
+
+  test("rejects associations to missing records instead of silently doing nothing", async () => {
+    const repository = new InMemoryPansManagerRepository();
+    await expect(
+      repository.associateDevice({
+        networkId: "missing",
+        deviceId: "device",
+        associatedAt: 1,
+      }),
+    ).rejects.toMatchObject({ code: "DEVICE_NOT_FOUND" });
+    await repository.saveDevice({
+      id: "device",
+      transportDeviceId: "transport",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await expect(
+      repository.associateDevice({
+        networkId: "missing",
+        deviceId: "device",
+        associatedAt: 2,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
   });
 });

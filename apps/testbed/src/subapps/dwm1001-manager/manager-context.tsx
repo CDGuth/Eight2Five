@@ -1,14 +1,20 @@
 import React from "react";
 import type {
+  AssignDeviceToNetworkProfileInput,
+  AssignDeviceToNetworkProfileResult,
+  DeviceConfigurationSnapshot,
   DiscoveredDeviceSnapshot,
   ManagedDevice,
   ManagedDeviceConfig,
   ManagedNetwork,
+  MigrateNetworkProfilePanInput,
+  MigrateNetworkProfilePanResult,
   PansBatchOperationService,
   PansBatchRunOptions,
   PansBatchRunResult,
   PansConfigurationResult,
   PansConfigurationService,
+  PansCommissioningService,
   PansDeviceSessionManager,
   PansDiagnosticsResult,
   PansDiagnosticsService,
@@ -66,6 +72,10 @@ export interface PansManagerRuntime {
     PansConfigurationService,
     "inspect" | "configureDevice" | "assignPanId"
   >;
+  commissioning: Pick<
+    PansCommissioningService,
+    "assignDeviceToNetworkProfile" | "migrateNetworkProfilePan"
+  >;
   diagnostics: Pick<PansDiagnosticsService, "inspect">;
   batch: PansBatchOperationService;
   logs: Pick<
@@ -119,6 +129,7 @@ interface PansManagerContextValue {
   retryInitialization(): void;
   networks: ManagedNetwork[];
   devices: ManagedDevice[];
+  deviceSnapshots: Record<string, DeviceConfigurationSnapshot>;
   refreshPersisted(): Promise<void>;
   discoveries: DiscoveredDeviceSnapshot[];
   isScanning: boolean;
@@ -146,6 +157,12 @@ interface PansManagerContextValue {
     deviceId: string,
     panId: number,
   ): Promise<PansConfigurationResult>;
+  assignDeviceToNetworkProfile(
+    input: AssignDeviceToNetworkProfileInput,
+  ): Promise<AssignDeviceToNetworkProfileResult>;
+  migrateNetworkProfilePan(
+    input: MigrateNetworkProfilePanInput,
+  ): Promise<MigrateNetworkProfilePanResult>;
   disconnectDevice(deviceId: string): Promise<void>;
   exportNetworkJson(networkId: string): Promise<string>;
   exportNetwork(networkId: string, format: "csv" | "json"): Promise<string>;
@@ -195,6 +212,9 @@ export function PansManagerProvider({
   const [permission, setPermission] = React.useState<ManagerPermissionStatus>();
   const [networks, setNetworks] = React.useState<ManagedNetwork[]>([]);
   const [devices, setDevices] = React.useState<ManagedDevice[]>([]);
+  const [deviceSnapshots, setDeviceSnapshots] = React.useState<
+    Record<string, DeviceConfigurationSnapshot>
+  >({});
   const [managerSettings, setManagerSettings] =
     React.useState<PansManagerSettings>();
   const [discoveries, setDiscoveries] = React.useState<
@@ -225,6 +245,9 @@ export function PansManagerProvider({
     ]);
     setNetworks(nextNetworks);
     setDevices(nextDevices);
+    setDeviceSnapshots(
+      await loadLatestDeviceSnapshots(runtime.repository, nextDevices),
+    );
     setManagerSettings(managerSettingsWithDefaults(savedSettings));
   }, [runtime]);
 
@@ -246,9 +269,15 @@ export function PansManagerProvider({
           ],
         );
         if (!active) return;
+        const savedSnapshots = await loadLatestDeviceSnapshots(
+          created.repository,
+          savedDevices,
+        );
+        if (!active) return;
         setRuntime(created);
         setNetworks(savedNetworks);
         setDevices(savedDevices);
+        setDeviceSnapshots(savedSnapshots);
         setManagerSettings(managerSettingsWithDefaults(storedSettings));
         setPermission(created.discovery.getPermissionStatus());
         setDiscoveryDiagnostics(created.discovery.getDiagnostics());
@@ -490,6 +519,28 @@ export function PansManagerProvider({
     [refreshPersisted, runtime],
   );
 
+  const assignDeviceToNetworkProfile = React.useCallback(
+    async (input: AssignDeviceToNetworkProfileInput) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const result =
+        await runtime.commissioning.assignDeviceToNetworkProfile(input);
+      await refreshPersisted();
+      return result;
+    },
+    [refreshPersisted, runtime],
+  );
+
+  const migrateNetworkProfilePan = React.useCallback(
+    async (input: MigrateNetworkProfilePanInput) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const result =
+        await runtime.commissioning.migrateNetworkProfilePan(input);
+      await refreshPersisted();
+      return result;
+    },
+    [refreshPersisted, runtime],
+  );
+
   const disconnectDevice = React.useCallback(
     async (deviceId: string) => {
       if (!runtime) return;
@@ -629,6 +680,7 @@ export function PansManagerProvider({
       retryInitialization,
       networks,
       devices,
+      deviceSnapshots,
       refreshPersisted,
       discoveries,
       isScanning,
@@ -656,6 +708,8 @@ export function PansManagerProvider({
       inspectDiagnostics,
       configureDevice,
       assignDevicePan,
+      assignDeviceToNetworkProfile,
+      migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,
       exportNetwork,
@@ -681,6 +735,7 @@ export function PansManagerProvider({
       retryInitialization,
       networks,
       devices,
+      deviceSnapshots,
       refreshPersisted,
       discoveries,
       isScanning,
@@ -700,6 +755,8 @@ export function PansManagerProvider({
       inspectDiagnostics,
       configureDevice,
       assignDevicePan,
+      assignDeviceToNetworkProfile,
+      migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,
       exportNetwork,
@@ -829,16 +886,24 @@ async function createDefaultRuntime(
       memoryCap: settings.positionLogMemoryCap,
       flushSize: settings.positionLogFlushSize,
     });
+    const configuration = new manager.PansConfigurationService(
+      sessions,
+      storage.repository,
+    );
+    const batch = new manager.PansBatchOperationService(storage.repository);
     return {
       repository: storage.repository,
       discovery,
       sessions,
-      configuration: new manager.PansConfigurationService(
-        sessions,
+      configuration,
+      commissioning: new manager.PansCommissioningService(
         storage.repository,
+        configuration,
+        Date.now,
+        batch,
       ),
       diagnostics: new manager.PansDiagnosticsService(sessions),
-      batch: new manager.PansBatchOperationService(storage.repository),
+      batch,
       logs,
       topology: new manager.PansTopologyService(sessions),
       createPositionStream: () =>
@@ -886,4 +951,25 @@ function managerSettingsWithDefaults(
     positionLogFlushSize: 100,
     ...settings,
   };
+}
+
+async function loadLatestDeviceSnapshots(
+  repository: PansManagerRepository,
+  devices: ManagedDevice[],
+): Promise<Record<string, DeviceConfigurationSnapshot>> {
+  const snapshots = await Promise.all(
+    devices.map(
+      async (device) =>
+        [
+          device.id,
+          await repository.getLatestDeviceSnapshot(device.id),
+        ] as const,
+    ),
+  );
+  return Object.fromEntries(
+    snapshots.filter(
+      (entry): entry is readonly [string, DeviceConfigurationSnapshot] =>
+        entry[1] !== undefined,
+    ),
+  );
 }

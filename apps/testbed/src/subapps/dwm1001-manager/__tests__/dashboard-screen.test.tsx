@@ -55,6 +55,7 @@ function dashboardRuntime(): PansManagerRuntime {
     listNetworks: jest.fn().mockResolvedValue([]),
     listDevices: jest.fn().mockResolvedValue([]),
     getSettings: jest.fn().mockResolvedValue(undefined),
+    getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
   } as unknown as PansManagerRepository;
   return {
     repository,
@@ -99,6 +100,10 @@ function dashboardRuntime(): PansManagerRuntime {
       inspect: jest.fn(),
       configureDevice: jest.fn(),
       assignPanId: jest.fn(),
+    },
+    commissioning: {
+      assignDeviceToNetworkProfile: jest.fn(),
+      migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },
     batch: {} as PansManagerRuntime["batch"],

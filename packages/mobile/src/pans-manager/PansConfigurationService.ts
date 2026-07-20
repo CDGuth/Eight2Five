@@ -305,24 +305,30 @@ export class PansConfigurationService {
     inspection: PansInspectionResult,
   ): Promise<void> {
     const updatedAt = this.now();
-    const persistedConfig = mergePersistedConfig(
-      device.lastKnownConfig,
-      config,
-    );
-    await this.repository.saveDevice({
-      ...device,
-      label: inspection.label ?? config.label ?? device.label,
-      role: inspection.operationMode.role,
-      nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? device.nodeIdHex,
-      lastKnownConfig: persistedConfig,
-      updatedAt,
-    });
-    await this.repository.saveDeviceSnapshot({
-      deviceId: device.id,
-      capturedAt: updatedAt,
-      config: persistedConfig,
-      inspection,
-    });
+    const requestedCache = mergePersistedConfig(device.lastKnownConfig, config);
+    const persistedConfig = configFromInspection(inspection, requestedCache);
+    try {
+      await this.repository.saveDevice({
+        ...device,
+        label: inspection.label ?? config.label ?? device.label,
+        role: inspection.operationMode.role,
+        nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? device.nodeIdHex,
+        lastKnownConfig: persistedConfig,
+        updatedAt,
+      });
+      await this.repository.saveDeviceSnapshot({
+        deviceId: device.id,
+        capturedAt: updatedAt,
+        config: persistedConfig,
+        inspection,
+      });
+    } catch (cause) {
+      throw new ManagerError(
+        "STORAGE_FAILURE",
+        "The verified device configuration could not be saved.",
+        { deviceId: device.id, operation: "persist configuration", cause },
+      );
+    }
   }
 }
 
@@ -520,11 +526,20 @@ function requireWrite(ok: boolean, field: string, deviceId: string): void {
 
 function configFromInspection(
   inspection: PansInspectionResult,
+  fallback?: ManagedDeviceConfig,
 ): ManagedDeviceConfig {
   const mode = inspection.operationMode;
   const common = {
-    ...(inspection.label !== undefined ? { label: inspection.label } : {}),
-    ...(inspection.panId !== undefined ? { panId: inspection.panId } : {}),
+    ...(inspection.label !== undefined
+      ? { label: inspection.label }
+      : fallback?.label !== undefined
+        ? { label: fallback.label }
+        : {}),
+    ...(inspection.panId !== undefined
+      ? { panId: inspection.panId }
+      : fallback?.panId !== undefined
+        ? { panId: fallback.panId }
+        : {}),
     uwbMode: mode.uwbMode,
     ledEnabled: mode.ledEnabled,
     firmwareUpdateEnabled: mode.firmwareUpdateEnabled,
@@ -534,6 +549,9 @@ function configFromInspection(
       ...common,
       role: "anchor",
       initiatorEnabled: mode.initiatorEnabled,
+      ...(fallback?.role === "anchor" && fallback.position
+        ? { position: fallback.position }
+        : {}),
     };
   }
   return {
@@ -542,12 +560,23 @@ function configFromInspection(
     locationEngineEnabled: mode.locationEngineEnabled,
     lowPowerModeEnabled: mode.lowPowerModeEnabled,
     stationaryDetectionEnabled: mode.accelerometerEnabled,
-    locationDataMode: inspection.locationDataMode ?? 0,
+    locationDataMode:
+      inspection.locationDataMode ??
+      (fallback?.role === "tag" ? fallback.locationDataMode : 0),
     ...(inspection.updateRate
       ? {
           movingUpdateRateMs: inspection.updateRate.movingUpdateRateMs,
           stationaryUpdateRateMs: inspection.updateRate.stationaryUpdateRateMs,
         }
-      : {}),
+      : fallback?.role === "tag"
+        ? {
+            ...(fallback.movingUpdateRateMs !== undefined
+              ? { movingUpdateRateMs: fallback.movingUpdateRateMs }
+              : {}),
+            ...(fallback.stationaryUpdateRateMs !== undefined
+              ? { stationaryUpdateRateMs: fallback.stationaryUpdateRateMs }
+              : {}),
+          }
+        : {}),
   };
 }
