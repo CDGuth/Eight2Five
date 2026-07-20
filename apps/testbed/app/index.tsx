@@ -13,10 +13,7 @@ export default function TestbedHomeRoute() {
   };
 
   return (
-    <TestbedLayout
-      title="Eight2Five Testbed"
-      subtitle="Pick a testing subapp to explore"
-    >
+    <TestbedLayout>
       <TestbedHome subapps={SUBAPPS} onSelect={handleSelect} />
     </TestbedLayout>
   );

@@ -17,9 +17,15 @@ describe("SubappCard", () => {
 
     const badge = tree.root.findByProps({ children: "New" });
     expect(badge).toBeTruthy();
+    expect(
+      tree.root.findByProps({ children: "Inspect beacon data" }),
+    ).toBeTruthy();
+    expect(
+      tree.root.findByProps({ testID: "subapp-divider-Diagnostics" }),
+    ).toBeTruthy();
 
-    const card = tree.root.findByProps({ testID: "subapp-card-Diagnostics" });
-    act(() => card.props.onPress());
+    const row = tree.root.findByProps({ testID: "subapp-card-Diagnostics" });
+    act(() => row.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 });

@@ -25,7 +25,8 @@ describe("testbed subapp registry", () => {
       expect.objectContaining({
         title: "DWM1001-DEV Network Manager",
         badge: "Hardware",
-        href: "/(subapps)/dwm1001-manager",
+        routeName: "(subapps)/dwm1001-manager/(tabs)/networks-devices",
+        href: "/(subapps)/dwm1001-manager/(tabs)/networks-devices",
       }),
     );
   });

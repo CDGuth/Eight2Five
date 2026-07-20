@@ -1,14 +1,13 @@
 import React from "react";
 import { ChevronRight } from "lucide-react-native";
 import { Badge, BadgeText } from "@eight2five/ui/components/badge";
-import { Card } from "@eight2five/ui/components/card";
+import { Divider } from "@eight2five/ui/components/divider";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
-  eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
@@ -17,7 +16,6 @@ import { VStack } from "@eight2five/ui/components/vstack";
 interface SubappCardProps {
   title: string;
   description: string;
-  cta?: string;
   badge?: string;
   onPress: () => void;
 }
@@ -25,65 +23,56 @@ interface SubappCardProps {
 export function SubappCard({
   title,
   description,
-  cta = "Open",
   badge,
   onPress,
 }: SubappCardProps) {
   const theme = useEight2FiveTheme();
 
   return (
-    <Pressable
-      onPress={onPress}
-      testID={`subapp-card-${title}`}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${title}`}
-      style={{ marginBottom: eight2FiveSpacing.md }}
-    >
-      <Card
-        className="p-0"
+    <VStack className="w-full">
+      <Pressable
+        className="w-full"
+        onPress={onPress}
+        testID={`subapp-card-${title}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${title}`}
         style={{
-          borderWidth: 0,
-          borderRadius: eight2FiveRadii.md,
-          backgroundColor: theme.surfaceRaised,
-          padding: eight2FiveSpacing.lg,
-          boxShadow: `0 10px 28px ${theme.shadowStrong}`,
+          backgroundColor: theme.background,
+          paddingVertical: eight2FiveSpacing.md,
         }}
       >
-        <VStack style={{ gap: eight2FiveSpacing.md }}>
-          <HStack className="items-center justify-between" style={{ gap: 12 }}>
-            <Text
-              size="lg"
-              className="flex-1"
-              style={{
-                color: theme.text,
-                fontFamily: eight2FiveFonts.styleBold,
-              }}
+        <HStack className="items-center" style={{ gap: eight2FiveSpacing.md }}>
+          <VStack className="flex-1" style={{ gap: eight2FiveSpacing.xs }}>
+            <HStack
+              className="flex-wrap items-center"
+              style={{ gap: eight2FiveSpacing.sm }}
             >
-              {title}
+              <Text
+                size="lg"
+                style={{
+                  color: theme.text,
+                  fontFamily: eight2FiveFonts.styleBold,
+                }}
+              >
+                {title}
+              </Text>
+              {badge ? (
+                <Badge variant="secondary">
+                  <BadgeText>{badge}</BadgeText>
+                </Badge>
+              ) : null}
+            </HStack>
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
+              {description}
             </Text>
-            {badge ? (
-              <Badge variant="secondary">
-                <BadgeText>{badge}</BadgeText>
-              </Badge>
-            ) : null}
-          </HStack>
-          <Text selectable size="sm" style={{ color: theme.textMuted }}>
-            {description}
-          </Text>
-          <HStack className="items-center" style={{ gap: 6 }}>
-            <Text
-              size="sm"
-              style={{
-                color: theme.accent,
-                fontFamily: eight2FiveFonts.styleSemibold,
-              }}
-            >
-              {cta}
-            </Text>
-            <Icon as={ChevronRight} size="sm" style={{ color: theme.accent }} />
-          </HStack>
-        </VStack>
-      </Card>
-    </Pressable>
+          </VStack>
+          <Icon as={ChevronRight} size="lg" style={{ color: theme.icon }} />
+        </HStack>
+      </Pressable>
+      <Divider
+        testID={`subapp-divider-${title}`}
+        style={{ backgroundColor: theme.border }}
+      />
+    </VStack>
   );
 }

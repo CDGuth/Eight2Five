@@ -16,8 +16,8 @@ export const SUBAPPS = [
     description:
       "Set up anchors and tags, position the network, and track devices.",
     badge: "Hardware",
-    routeName: "(subapps)/dwm1001-manager",
-    href: "/(subapps)/dwm1001-manager" as Href,
+    routeName: "(subapps)/dwm1001-manager/(tabs)/networks-devices",
+    href: "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as Href,
   },
 ] as const satisfies readonly SubappConfig[];
 
