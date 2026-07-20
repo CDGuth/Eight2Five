@@ -146,13 +146,13 @@ Covers:
 // Button with compound components
 <Button variant="outline" size="lg">
   <ButtonText>Click Me</ButtonText>
-  <ButtonIcon as={ChevronRightIcon} />
+  <ButtonIcon as={ChevronRight} />
 </Button>
 
 // Input with icon (InputIcon MUST be in InputSlot)
 <Input>
   <InputSlot>
-    <InputIcon as={MailIcon} className="text-muted-foreground" />
+    <InputIcon as={Mail} className="text-muted-foreground" />
   </InputSlot>
   <InputField placeholder="Enter email" />
 </Input>

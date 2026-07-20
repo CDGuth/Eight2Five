@@ -9,7 +9,7 @@ import React, {
 import { Platform } from 'react-native';
 import { ScrollView } from 'react-native';
 import { Box } from '@/components/ui/box';
-import { Button } from '@/components/ui/button';
+import { Button, ButtonIcon } from '@/components/ui/button';
 import { Image } from '@/components/ui/image';
 import { Tooltip, TooltipContent, TooltipText } from '@/components/ui/tooltip';
 import type { FileUIPart, SourceDocumentUIPart } from 'ai';
@@ -22,6 +22,7 @@ import {
   Video,
   X,
 } from 'lucide-react-native';
+import { Icon } from '../icon';
 
 
 
@@ -203,11 +204,17 @@ export const AttachmentPreview = ({
       video: Video,
     };
 
-    const Icon = iconMap[mediaCategory];
+    const MediaIcon = iconMap[mediaCategory];
     const size = variant === 'inline' ? 12 : variant === 'list' ? 24 : 20;
 
     return (
-      fallbackIcon ?? <Icon size={size} className="text-muted-foreground" />
+      fallbackIcon ?? (
+        <Icon
+          as={MediaIcon}
+          size={size}
+          className="text-muted-foreground"
+        />
+      )
     );
   };
 
@@ -264,7 +271,8 @@ export const AttachmentRemove = ({
       {...props}
     >
       {children ?? (
-        <X
+        <ButtonIcon
+          as={X}
           className="text-destructive"
           color={'white'}
           size={variant === 'grid' ? 12 : 12}

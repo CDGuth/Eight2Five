@@ -30,17 +30,6 @@ jest.mock("@eight2five/ui/components/toast", () => {
   };
 });
 
-jest.mock("@expo/vector-icons", () => {
-  const React = require("react");
-  const { View } = require("react-native");
-
-  const MockIcon = (props: any) => React.createElement(View, props);
-
-  return {
-    MaterialIcons: MockIcon,
-  };
-});
-
 jest.mock("@shopify/react-native-skia", () => {
   const React = require("react");
   const { View } = require("react-native");

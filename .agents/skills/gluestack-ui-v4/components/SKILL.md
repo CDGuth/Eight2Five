@@ -209,7 +209,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 // ✅ CORRECT: Left icon wrapped in InputSlot
 <Input>
   <InputSlot>
-    <InputIcon as={MailIcon} className="text-muted-foreground" />
+    <InputIcon as={Mail} className="text-muted-foreground" />
   </InputSlot>
   <InputField placeholder="Enter email" />
 </Input>
@@ -218,18 +218,18 @@ Use Gluestack's composable compound component pattern for complex components. Th
 <Input>
   <InputField placeholder="Enter password" secureTextEntry={!showPassword} />
   <InputSlot onPress={() => setShowPassword(!showPassword)}>
-    <InputIcon as={showPassword ? EyeOffIcon : EyeIcon} className="text-muted-foreground" />
+    <InputIcon as={showPassword ? EyeOff : Eye} className="text-muted-foreground" />
   </InputSlot>
 </Input>
 
 // ✅ CORRECT: Both left and right icons wrapped in InputSlot
 <Input>
   <InputSlot>
-    <InputIcon as={SearchIcon} className="text-muted-foreground" />
+    <InputIcon as={Search} className="text-muted-foreground" />
   </InputSlot>
   <InputField placeholder="Search..." />
   <InputSlot onPress={handleClear}>
-    <InputIcon as={XIcon} className="text-muted-foreground" />
+    <InputIcon as={X} className="text-muted-foreground" />
   </InputSlot>
 </Input>
 ```
@@ -239,12 +239,12 @@ Use Gluestack's composable compound component pattern for complex components. Th
 ```tsx
 // ❌ INCORRECT: InputIcon used directly without InputSlot
 <Input>
-  <InputIcon as={MailIcon} />  {/* ❌ Missing InputSlot wrapper */}
+  <InputIcon as={Mail} />  {/* ❌ Missing InputSlot wrapper */}
   <InputField placeholder="Enter email" />
 </Input>
 
 // ❌ INCORRECT: InputIcon outside Input structure
-<InputIcon as={MailIcon} />  {/* ❌ Must be inside Input > InputSlot */}
+<InputIcon as={Mail} />  {/* ❌ Must be inside Input > InputSlot */}
 <Input>
   <InputField placeholder="Enter email" />
 </Input>
@@ -258,7 +258,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 // ✅ CORRECT: Button with text and icon
 <Button variant="default" size="md">
   <ButtonText>Click Me</ButtonText>
-  <ButtonIcon as={ChevronRightIcon} />
+  <ButtonIcon as={ChevronRight} />
 </Button>
 
 // ✅ CORRECT: Button with only text
@@ -268,7 +268,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 
 // ✅ CORRECT: Button with only icon
 <Button size="icon">
-  <ButtonIcon as={SearchIcon} />
+  <ButtonIcon as={Search} />
 </Button>
 
 // ✅ CORRECT: Button with loading state
@@ -298,7 +298,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 // ❌ INCORRECT: Icon not wrapped in ButtonIcon
 <Button>
   <ButtonText>Next</ButtonText>
-  <ChevronRightIcon />  {/* ❌ Must use ButtonIcon */}
+  {/* ❌ Do not render ChevronRight directly; use ButtonIcon */}
 </Button>
 ```
 
@@ -314,7 +314,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
   </FormControlLabel>
   <Input>
     <InputSlot>
-      <InputIcon as={MailIcon} />
+      <InputIcon as={Mail} />
     </InputSlot>
     <InputField
       placeholder="Enter email"
@@ -324,7 +324,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
   </Input>
   {errors.email && (
     <FormControlError>
-      <FormControlErrorIcon as={AlertCircleIcon} />
+      <FormControlErrorIcon as={CircleAlert} />
       <FormControlErrorText>{errors.email}</FormControlErrorText>
     </FormControlError>
   )}
@@ -399,7 +399,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
   onChange={(isChecked) => setAccepted(isChecked)}
 >
   <CheckboxIndicator>
-    <CheckboxIcon as={CheckIcon} />
+    <CheckboxIcon as={Check} />
   </CheckboxIndicator>
   <CheckboxLabel>I accept the terms and conditions</CheckboxLabel>
 </Checkbox>
@@ -415,7 +415,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 
 // ❌ INCORRECT: Icon not wrapped properly
 <Checkbox>
-  <CheckIcon />  {/* ❌ Must use CheckboxIndicator > CheckboxIcon */}
+  {/* ❌ Do not render Check directly; use CheckboxIndicator > CheckboxIcon */}
   <CheckboxLabel>Accept</CheckboxLabel>
 </Checkbox>
 ```
@@ -429,7 +429,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 <Select>
   <SelectTrigger>
     <SelectInput placeholder="Select option" />
-    <SelectIcon as={ChevronDownIcon} />
+    <SelectIcon as={ChevronDown} />
   </SelectTrigger>
   <SelectPortal>
     <SelectBackdrop />
@@ -474,7 +474,7 @@ Use Gluestack's composable compound component pattern for complex components. Th
 ```tsx
 // ❌ MISTAKE: InputIcon without InputSlot
 <Input>
-  <InputIcon as={MailIcon} />
+  <InputIcon as={Mail} />
   <InputField />
 </Input>
 
@@ -539,36 +539,34 @@ export default function App() {
 
 ## Rule 11: Icon Usage
 
-Use icons from `@/components/ui/icon` following this priority:
+Render Lucide components through `@/components/ui/icon` or a component-specific icon wrapper following this priority:
 
-1. **Pre-built icons** - Use icons already exported from `components/ui/icon/index.tsx` (e.g., `ChevronRightIcon`, `SearchIcon`, `CheckIcon`)
-2. **Lucide Icons (Recommended)** - If the icon is not available in `components/ui/icon/index.tsx`, use Lucide Icons if available
-3. **Custom icons with createIcon** - If neither is available, create custom icons using the `createIcon` function
+1. **Lucide Icons (Recommended)** - Pass Lucide components to `Icon` or the relevant wrapper's `as` prop
+2. **Custom icons with createIcon** - If Lucide does not provide the icon, create it with the local `createIcon` function
 
 ### Icon Resolution Hierarchy
 
-1. Check if icon exists in `@/components/ui/icon` (e.g., `ChevronRightIcon`, `SearchIcon`)
-2. Use Lucide Icons if available (recommended for missing icons)
-3. Create custom icon using `createIcon` function
+1. Use a Lucide icon through `Icon`, `ButtonIcon`, `InputIcon`, or another component-specific wrapper
+2. Create a custom icon using the local `createIcon` function only when Lucide does not provide it
 
-### Using Pre-built Icons
+### Using Lucide Icons
 
 ```tsx
-import { ChevronRightIcon, SearchIcon } from '@/components/ui/icon';
 import { Icon } from '@/components/ui/icon';
 import { Button, ButtonIcon } from '@/components/ui/button';
+import { ChevronRight, Search } from 'lucide-react-native';
 
 <Button>
   <ButtonText>Next</ButtonText>
-  <ButtonIcon as={ChevronRightIcon} />
+  <ButtonIcon as={ChevronRight} />
 </Button>
 
-<Icon as={SearchIcon} size="md" className="text-foreground" />
+<Icon as={Search} size="md" className="text-foreground" />
 ```
 
 ### Using Lucide Icons (Recommended)
 
-When an icon is not available in `components/ui/icon/index.tsx`, use Lucide Icons:
+Use Lucide Icons through the local Gluestack `Icon` primitive:
 
 ```tsx
 import { Icon } from "@/components/ui/icon";
@@ -579,7 +577,7 @@ import { Heart } from "lucide-react-native";
 
 ### Creating Custom Icons with createIcon
 
-If an icon is not available in `components/ui/icon/index.tsx` and not available in Lucide Icons, create a custom icon using the `createIcon` function:
+If an icon is not available in Lucide Icons, create a custom icon using the local `createIcon` function:
 
 ```tsx
 import { Icon, createIcon } from "@/components/ui/icon";
@@ -609,16 +607,16 @@ function App() {
 ### Correct Pattern
 
 ```tsx
-// Using pre-built icon
-import { ChevronRightIcon } from "@/components/ui/icon";
+// Using a Lucide icon with a component-specific wrapper
 import { Button, ButtonIcon } from "@/components/ui/button";
+import { ChevronRight } from "lucide-react-native";
 
 <Button>
   <ButtonText>Continue</ButtonText>
-  <ButtonIcon as={ChevronRightIcon} />
+  <ButtonIcon as={ChevronRight} />
 </Button>;
 
-// Using Lucide icon (when not in components/ui/icon)
+// Using a Lucide icon with the generic Icon primitive
 import { Icon } from "@/components/ui/icon";
 import { Heart } from "lucide-react-native";
 
@@ -646,8 +644,9 @@ const CustomIcon = createIcon({
 ### Incorrect Pattern
 
 ```tsx
-// ❌ Don't import icons from external packages directly
-import { Heart } from "@some-icon-package";
+// ❌ Don't render a Lucide component directly; pass it to a Gluestack wrapper
+import { Heart } from "lucide-react-native";
+// Use <Icon as={Heart} /> instead of rendering Heart as a direct child.
 
 // ❌ Don't use raw SVG components without createIcon
 import Svg, { Path } from "react-native-svg";
@@ -716,7 +715,7 @@ import Svg, { Path } from "react-native-svg";
   </FormControlLabel>
   <Input>
     <InputSlot>
-      <InputIcon as={MailIcon} className="text-muted-foreground" />
+      <InputIcon as={Mail} className="text-muted-foreground" />
     </InputSlot>
     <InputField
       placeholder="Enter email"
@@ -726,7 +725,7 @@ import Svg, { Path } from "react-native-svg";
   </Input>
   {hasError && (
     <FormControlError>
-      <FormControlErrorIcon as={AlertCircleIcon} />
+      <FormControlErrorIcon as={CircleAlert} />
       <FormControlErrorText>Invalid email</FormControlErrorText>
     </FormControlError>
   )}
@@ -735,7 +734,7 @@ import Svg, { Path } from "react-native-svg";
 // Password input with show/hide toggle
 <Input>
   <InputSlot>
-    <InputIcon as={LockIcon} className="text-muted-foreground" />
+    <InputIcon as={Lock} className="text-muted-foreground" />
   </InputSlot>
   <InputField
     placeholder="Enter password"
@@ -745,7 +744,7 @@ import Svg, { Path } from "react-native-svg";
   />
   <InputSlot onPress={() => setShowPassword(!showPassword)}>
     <InputIcon
-      as={showPassword ? EyeOffIcon : EyeIcon}
+      as={showPassword ? EyeOff : Eye}
       className="text-muted-foreground"
     />
   </InputSlot>

@@ -185,7 +185,7 @@ import { Button, ButtonText } from "@/components/ui/button";
 
 // ❌ INCORRECT: InputIcon not wrapped in InputSlot
 <Input>
-  <InputIcon as={MailIcon} />
+  <InputIcon as={Mail} />
   <InputField />
 </Input>
 
@@ -208,7 +208,7 @@ import { Button, ButtonText } from "@/components/ui/button";
 // ✅ CORRECT: InputIcon wrapped in InputSlot
 <Input>
   <InputSlot>
-    <InputIcon as={MailIcon} />
+    <InputIcon as={Mail} />
   </InputSlot>
   <InputField />
 </Input>
@@ -397,14 +397,14 @@ animValue.value = withTiming(100, { duration: 300 });
 ```tsx
 // ❌ CRITICAL ERROR: Will break rendering
 <Input>
-  <InputIcon as={MailIcon} />
+  <InputIcon as={Mail} />
   <InputField />
 </Input>
 
 // ✅ MUST FIX: Wrap InputIcon in InputSlot
 <Input>
   <InputSlot>
-    <InputIcon as={MailIcon} />
+    <InputIcon as={Mail} />
   </InputSlot>
   <InputField />
 </Input>

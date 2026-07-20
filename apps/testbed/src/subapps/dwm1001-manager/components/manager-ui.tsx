@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronDown } from "lucide-react-native";
 import { Alert, AlertText } from "@eight2five/ui/components/alert";
 import {
   Button,
@@ -17,7 +18,6 @@ import {
 } from "@eight2five/ui/components/form-control";
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
-import { ChevronDownIcon } from "@eight2five/ui/components/icon";
 import { Input, InputField } from "@eight2five/ui/components/input";
 import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import {
@@ -415,7 +415,7 @@ export function SelectField({
             }}
           />
           <SelectIcon
-            as={ChevronDownIcon}
+            as={ChevronDown}
             className="mr-3"
             style={{ color: theme.icon }}
           />

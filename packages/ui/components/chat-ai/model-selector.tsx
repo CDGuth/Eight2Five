@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/modal';
 import { X } from 'lucide-react-native';
 import { Pressable, Text, View, TextInput, ScrollView } from 'react-native';
+import { Icon } from '../icon';
 
 // Context
 const ModelSelectorContext = React.createContext<{
@@ -131,7 +132,7 @@ export const ModelSelectorContent = ({
     <ModalHeader>
       <Text className="sr-only">{title}</Text>
       <ModalCloseButton>
-        <X size={20} className="text-muted-foreground" />
+        <Icon as={X} size={20} className="text-muted-foreground" />
       </ModalCloseButton>
     </ModalHeader>
     <ScrollView className="max-h-[500px]">

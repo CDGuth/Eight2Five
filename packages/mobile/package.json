@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@expo/html-elements": "^0.12.5",
-    "@expo/vector-icons": "^15.0.3",
     "@gluestack-ui/core": "^5.0.15",
     "@gluestack-ui/utils": "^5.0.6",
     "@gorhom/bottom-sheet": "^5.2.14",
@@ -62,7 +61,7 @@
     "expo-notifications": "~56.0.18",
     "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-print": "~56.0.4",
-    "expo-router": "~56.2.14",
+    "expo-router": "~56.2.15",
     "expo-screen-capture": "~56.0.4",
     "expo-screen-orientation": "~56.0.5",
     "expo-secure-store": "~56.0.4",

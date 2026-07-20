@@ -18,6 +18,7 @@ import Animated, {
   withTiming,
   useSharedValue,
 } from 'react-native-reanimated';
+import { Icon } from '../icon';
 
 // ====================== Custom Collapsible ======================
 
@@ -164,7 +165,8 @@ export const FileTreeFolder = ({
             className="p-1"
             activeOpacity={0.7}
           >
-            <ChevronRight
+            <Icon
+              as={ChevronRight}
               size={18}
               className="text-muted-foreground"
               style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
@@ -177,9 +179,9 @@ export const FileTreeFolder = ({
             activeOpacity={0.7}
           >
             {isExpanded ? (
-              <FolderOpen size={18} className="text-primary" />
+              <Icon as={FolderOpen} size={18} className="text-primary" />
             ) : (
-              <Folder size={18} className="text-primary" />
+              <Icon as={Folder} size={18} className="text-primary" />
             )}
             <Text className="text-sm text-foreground flex-1" numberOfLines={1}>
               {name}
@@ -223,7 +225,9 @@ export const FileTreeFile = ({
     >
       <View className="w-6.5" />
       <View className="flex-row items-center gap-2 flex-1">
-        {icon ?? <FileIcon size={18} className="text-muted-foreground" />}
+        {icon ?? (
+          <Icon as={FileIcon} size={18} className="text-muted-foreground" />
+        )}
         <Text className="text-sm text-foreground flex-1" numberOfLines={1}>
           {name}
         </Text>

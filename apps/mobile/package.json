@@ -20,9 +20,9 @@
   "dependencies": {
     "@eight2five/mobile": "*",
     "@eight2five/ui": "*",
-    "expo": "~56.0.15",
-    "expo-dev-client": "~56.0.22",
-    "expo-router": "~56.2.14",
+    "expo": "~56.0.16",
+    "expo-dev-client": "~56.0.23",
+    "expo-router": "~56.2.15",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0"

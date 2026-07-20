@@ -16,6 +16,7 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import type { UIMessage } from 'ai';
 import Animated from 'react-native-reanimated';
+import { Icon } from '../icon';
 import { useUserMessageAnimation } from './userAnimation';
 import { useBlankSize } from './useBlank';
 import Markdown from 'react-native-markdown-display';
@@ -422,7 +423,7 @@ export const MessageBranchPrevious = () => (
     onPress={() => {}}
     className="h-8 w-8 items-center justify-center"
   >
-    <ChevronLeft size={18} className="text-muted-foreground" />
+    <Icon as={ChevronLeft} size={18} className="text-muted-foreground" />
   </TouchableOpacity>
 );
 
@@ -431,7 +432,7 @@ export const MessageBranchNext = () => (
     onPress={() => {}}
     className="h-8 w-8 items-center justify-center"
   >
-    <ChevronRight size={18} className="text-muted-foreground" />
+    <Icon as={ChevronRight} size={18} className="text-muted-foreground" />
   </TouchableOpacity>
 );
 

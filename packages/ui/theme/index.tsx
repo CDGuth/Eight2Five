@@ -2,11 +2,10 @@ import { Montserrat_400Regular } from '@expo-google-fonts/montserrat/400Regular'
 import { Montserrat_500Medium } from '@expo-google-fonts/montserrat/500Medium';
 import { Montserrat_600SemiBold } from '@expo-google-fonts/montserrat/600SemiBold';
 import { Montserrat_700Bold } from '@expo-google-fonts/montserrat/700Bold';
+import { SourceSans3_400Regular } from '@expo-google-fonts/source-sans-3/400Regular';
+import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
+import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
 import { useFonts } from 'expo-font';
-
-const SourceSansPro_400Regular = require('@expo-google-fonts/source-sans-pro/SourceSansPro_400Regular.ttf');
-const SourceSansPro_600SemiBold = require('@expo-google-fonts/source-sans-pro/SourceSansPro_600SemiBold.ttf');
-const SourceSansPro_700Bold = require('@expo-google-fonts/source-sans-pro/SourceSansPro_700Bold.ttf');
 import { useColorScheme } from 'react-native';
 
 export const eight2FiveBaseColors = {
@@ -73,14 +72,14 @@ export const eight2FiveSpacing = {
 
 export const eight2FiveFonts = {
   style: 'Montserrat',
-  utility: 'Source Sans Pro',
+  utility: 'Source Sans 3',
   styleRegular: 'Montserrat_400Regular',
   styleMedium: 'Montserrat_500Medium',
   styleSemibold: 'Montserrat_600SemiBold',
   styleBold: 'Montserrat_700Bold',
-  utilityRegular: 'SourceSansPro_400Regular',
-  utilitySemibold: 'SourceSansPro_600SemiBold',
-  utilityBold: 'SourceSansPro_700Bold',
+  utilityRegular: 'SourceSans3_400Regular',
+  utilitySemibold: 'SourceSans3_600SemiBold',
+  utilityBold: 'SourceSans3_700Bold',
 } as const;
 
 export const eight2FiveThemes = {
@@ -145,8 +144,8 @@ export function useEight2FiveFonts(): [boolean, Error | null] {
     Montserrat_500Medium,
     Montserrat_600SemiBold,
     Montserrat_700Bold,
-    SourceSansPro_400Regular,
-    SourceSansPro_600SemiBold,
-    SourceSansPro_700Bold,
+    SourceSans3_400Regular,
+    SourceSans3_600SemiBold,
+    SourceSans3_700Bold,
   });
 }

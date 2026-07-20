@@ -19,6 +19,7 @@ import {
 
 import { ArrowDown, Download } from 'lucide-react-native';
 import type { UIMessage } from 'ai';
+import { Icon } from '../icon';
 import { Message, MessageContent, MessageResponse } from './message';
 import { BlankProvider, useBlankContext } from './blank-context';
 import type { LegendListRef } from '@legendapp/list';
@@ -141,7 +142,7 @@ export const ConversationScrollButton = () => (
     onPress={() => {}}
     className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-primary h-11 w-11 items-center justify-center rounded-full shadow-lg"
   >
-    <ArrowDown size={22} className="text-primary-foreground" />
+    <Icon as={ArrowDown} size={22} className="text-primary-foreground" />
   </TouchableOpacity>
 );
 
@@ -169,7 +170,7 @@ export const ConversationDownload = ({
       onPress={handleDownload}
       className="absolute top-4 right-4 bg-card p-3 rounded-2xl shadow-sm"
     >
-      <Download size={20} className="text-muted-foreground" />
+      <Icon as={Download} size={20} className="text-muted-foreground" />
     </TouchableOpacity>
   );
 };

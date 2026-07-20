@@ -1,9 +1,10 @@
 import React from "react";
 import { ViewStyle, ScrollViewProps, LayoutAnimation } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { ArrowLeft, Home } from "lucide-react-native";
 import { Box } from "@eight2five/ui/components/box";
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
+import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { SafeAreaView } from "@eight2five/ui/components/safe-area-view";
 import { ScrollView } from "@eight2five/ui/components/scroll-view";
@@ -71,7 +72,7 @@ export function TestbedLayout({
                       className="h-11 w-11 items-center justify-center"
                       testID="testbed-home-button"
                     >
-                      <MaterialIcons name="home" size={28} color={iconColor} />
+                      <Icon as={Home} size={28} color={iconColor} />
                     </Pressable>
                   )}
                   {onSubBack && (
@@ -82,11 +83,7 @@ export function TestbedLayout({
                       className="h-11 w-11 items-center justify-center"
                       testID="testbed-sub-back-button"
                     >
-                      <MaterialIcons
-                        name="arrow-back"
-                        size={28}
-                        color={iconColor}
-                      />
+                      <Icon as={ArrowLeft} size={28} color={iconColor} />
                     </Pressable>
                   )}
                 </Box>

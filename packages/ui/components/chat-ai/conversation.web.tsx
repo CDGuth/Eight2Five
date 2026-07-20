@@ -17,6 +17,7 @@ import {
 
 import { ArrowDown, Download, MessageSquare } from 'lucide-react-native';
 import type { UIMessage } from 'ai';
+import { Icon } from '../icon';
 import { Message, MessageContent, MessageResponse } from './message';
 import { BlankProvider, useBlankContext } from './blank-context';
 
@@ -46,7 +47,9 @@ export const ConversationEmptyState = ({
   <View
     className={`flex-1 items-center justify-center px-10 py-12 ${className || ''}`}
   >
-    {icon ?? <MessageSquare size={48} className="text-muted-foreground" />}
+    {icon ?? (
+      <Icon as={MessageSquare} size={48} className="text-muted-foreground" />
+    )}
     <Text className="mt-4 text-xl font-semibold text-foreground">{title}</Text>
     <Text className="mt-2 text-center text-base text-muted-foreground">
       {description}
@@ -134,7 +137,7 @@ export const ConversationScrollButton = () => (
     onPress={() => {}}
     className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-primary h-11 w-11 items-center justify-center rounded-full shadow-lg"
   >
-    <ArrowDown size={22} className="text-primary-foreground" />
+    <Icon as={ArrowDown} size={22} className="text-primary-foreground" />
   </TouchableOpacity>
 );
 
@@ -162,7 +165,7 @@ export const ConversationDownload = ({
       onPress={handleDownload}
       className="absolute top-4 right-4 bg-card p-3 rounded-2xl shadow-sm"
     >
-      <Download size={20} className="text-muted-foreground" />
+      <Icon as={Download} size={20} className="text-muted-foreground" />
     </TouchableOpacity>
   );
 };

@@ -276,7 +276,7 @@ import { FormControl, FormControlLabel, FormControlLabelText } from '@/component
 import { FormControlError, FormControlErrorIcon, FormControlErrorText } from '@/components/ui/form-control';
 import { FormControlHelper, FormControlHelperText } from '@/components/ui/form-control';
 import { Input, InputField, InputSlot, InputIcon } from '@/components/ui/input';
-import { MailIcon, AlertCircleIcon } from '@/components/ui/icon';
+import { CircleAlert, Mail } from 'lucide-react-native';
 
 interface EmailInputProps {
   readonly label?: string;
@@ -308,7 +308,7 @@ export const EmailInput = ({
       <Input>
         <InputSlot>
           <InputIcon
-            as={MailIcon}
+            as={Mail}
             className={isFocused ? 'text-primary' : 'text-muted-foreground'}
           />
         </InputSlot>
@@ -325,7 +325,7 @@ export const EmailInput = ({
 
       {error && (
         <FormControlError>
-          <FormControlErrorIcon as={AlertCircleIcon} />
+          <FormControlErrorIcon as={CircleAlert} />
           <FormControlErrorText>{error}</FormControlErrorText>
         </FormControlError>
       )}
@@ -356,8 +356,8 @@ import React, { useState } from 'react';
 import { Box } from '@/components/ui/box';
 import { Text } from '@/components/ui/text';
 import { Pressable } from '@/components/ui/pressable';
-import { ChevronDownIcon, ChevronUpIcon } from '@/components/ui/icon';
 import { Icon } from '@/components/ui/icon';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { VStack } from '@/components/ui/vstack';
 import { HStack } from '@/components/ui/hstack';
 
@@ -387,7 +387,7 @@ export const Accordion = ({
             {title}
           </Text>
           <Icon
-            as={isExpanded ? ChevronUpIcon : ChevronDownIcon}
+            as={isExpanded ? ChevronUp : ChevronDown}
             size="md"
             className="text-muted-foreground"
           />
@@ -418,7 +418,7 @@ Use for components that fetch data or perform async operations.
 ```tsx
 import React from 'react';
 import { Button, ButtonText, ButtonSpinner, ButtonIcon } from '@/components/ui/button';
-import { CheckIcon } from '@/components/ui/icon';
+import { Check } from 'lucide-react-native';
 
 interface SubmitButtonProps {
   readonly isLoading?: boolean;
@@ -442,7 +442,7 @@ export const SubmitButton = ({
       className={className}
     >
       {isLoading && <ButtonSpinner />}
-      {isSuccess && <ButtonIcon as={CheckIcon} />}
+      {isSuccess && <ButtonIcon as={Check} />}
       <ButtonText>
         {isLoading ? 'Submitting...' : isSuccess ? 'Success!' : 'Submit'}
       </ButtonText>
@@ -572,8 +572,8 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
 ```tsx
 import React from 'react';
 import { Input, InputField, InputSlot, InputIcon } from '@/components/ui/input';
-import { SearchIcon, XIcon } from '@/components/ui/icon';
 import { Pressable } from '@/components/ui/pressable';
+import { Search, X } from 'lucide-react-native';
 
 interface SearchInputProps {
   readonly value: string;
@@ -598,7 +598,7 @@ export const SearchInput = ({
   return (
     <Input className={className}>
       <InputSlot>
-        <InputIcon as={SearchIcon} className="text-muted-foreground" />
+        <InputIcon as={Search} className="text-muted-foreground" />
       </InputSlot>
       <InputField
         placeholder={placeholder}
@@ -608,7 +608,7 @@ export const SearchInput = ({
       />
       {value.length > 0 && (
         <InputSlot onPress={handleClear}>
-          <InputIcon as={XIcon} className="text-muted-foreground" />
+          <InputIcon as={X} className="text-muted-foreground" />
         </InputSlot>
       )}
     </Input>
@@ -626,7 +626,7 @@ import { VStack } from '@/components/ui/vstack';
 import { Box } from '@/components/ui/box';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { ChevronRightIcon } from '@/components/ui/icon';
+import { ChevronRight } from 'lucide-react-native';
 
 interface ListItemProps {
   readonly title: string;
@@ -665,7 +665,7 @@ export const ListItem = ({
           </VStack>
           {showChevron && (
             <Icon
-              as={ChevronRightIcon}
+              as={ChevronRight}
               size="md"
               className="text-muted-foreground"
             />
@@ -847,14 +847,14 @@ export const Component = () => (
 ```tsx
 // ❌ INCORRECT: InputIcon not wrapped
 <Input>
-  <InputIcon as={MailIcon} />
+  <InputIcon as={Mail} />
   <InputField />
 </Input>
 
 // ✅ CORRECT
 <Input>
   <InputSlot>
-    <InputIcon as={MailIcon} />
+    <InputIcon as={Mail} />
   </InputSlot>
   <InputField />
 </Input>

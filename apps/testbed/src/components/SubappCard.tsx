@@ -1,8 +1,9 @@
 import React from "react";
+import { ChevronRight } from "lucide-react-native";
 import { Badge, BadgeText } from "@eight2five/ui/components/badge";
 import { Card } from "@eight2five/ui/components/card";
 import { HStack } from "@eight2five/ui/components/hstack";
-import { ArrowRightIcon, Icon } from "@eight2five/ui/components/icon";
+import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import {
@@ -79,11 +80,7 @@ export function SubappCard({
             >
               {cta}
             </Text>
-            <Icon
-              as={ArrowRightIcon}
-              size="sm"
-              style={{ color: theme.accent }}
-            />
+            <Icon as={ChevronRight} size="sm" style={{ color: theme.accent }} />
           </HStack>
         </VStack>
       </Card>
