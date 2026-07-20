@@ -4,7 +4,7 @@ import {
   ToastDescription,
   ToastTitle,
   useToast,
-} from "@eight2five/ui/toast";
+} from "@eight2five/ui/components/toast";
 
 type TestbedToastAction = "success" | "error" | "info" | "warning" | "muted";
 

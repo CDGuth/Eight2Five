@@ -1,12 +1,12 @@
 import React from "react";
 import { useRouter } from "expo-router";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import { usePansManager } from "../manager-context";
 import { displayError } from "../manager-utils";

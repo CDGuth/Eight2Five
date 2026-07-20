@@ -1,14 +1,14 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import type { ObservedPansTopology } from "@eight2five/mobile/pans-manager";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
   eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import {
   KeyValue,

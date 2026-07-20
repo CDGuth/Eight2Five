@@ -1,7 +1,7 @@
 import React from "react";
-import { HStack } from "@eight2five/ui/hstack";
-import { Switch } from "@eight2five/ui/switch";
-import { Text } from "@eight2five/ui/text";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Switch } from "@eight2five/ui/components/switch";
+import { Text } from "@eight2five/ui/components/text";
 
 interface ToggleRowProps {
   label: string;

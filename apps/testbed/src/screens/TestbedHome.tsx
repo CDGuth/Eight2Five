@@ -1,5 +1,5 @@
 import React from "react";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 import { SubappCard } from "../components/SubappCard";
 import { SUBAPPS, SubappId, TestbedSubapp } from "../subapps";
 

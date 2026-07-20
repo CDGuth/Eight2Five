@@ -2,7 +2,7 @@ import React from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { GluestackUIProvider } from "@eight2five/ui/gluestack-ui-provider";
+import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
 import {
   eight2FiveFonts,
   useEight2FiveFonts,

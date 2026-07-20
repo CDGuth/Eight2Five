@@ -1,13 +1,13 @@
 import React from "react";
 import { useRouter } from "expo-router";
-import { HStack } from "@eight2five/ui/hstack";
-import { Text } from "@eight2five/ui/text";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import {
   useManagedNetworks,

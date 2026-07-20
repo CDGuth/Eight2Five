@@ -15,7 +15,7 @@ jest.mock("react-native-view-shot", () => ({
 const mockToastShow = jest.fn();
 (globalThis as any).__TESTBED_TOAST_SHOW__ = mockToastShow;
 
-jest.mock("@eight2five/ui/toast", () => {
+jest.mock("@eight2five/ui/components/toast", () => {
   const React = require("react");
   const { View, Text } = require("react-native");
 

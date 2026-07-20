@@ -1,7 +1,11 @@
 import React from "react";
-import { Alert, AlertText } from "@eight2five/ui/alert";
-import { Button, ButtonSpinner, ButtonText } from "@eight2five/ui/button";
-import { Card } from "@eight2five/ui/card";
+import { Alert, AlertText } from "@eight2five/ui/components/alert";
+import {
+  Button,
+  ButtonSpinner,
+  ButtonText,
+} from "@eight2five/ui/components/button";
+import { Card } from "@eight2five/ui/components/card";
 import {
   FormControl,
   FormControlError,
@@ -10,12 +14,12 @@ import {
   FormControlHelperText,
   FormControlLabel,
   FormControlLabelText,
-} from "@eight2five/ui/form-control";
-import { Heading } from "@eight2five/ui/heading";
-import { HStack } from "@eight2five/ui/hstack";
-import { ChevronDownIcon } from "@eight2five/ui/icon";
-import { Input, InputField } from "@eight2five/ui/input";
-import { ScrollView } from "@eight2five/ui/scroll-view";
+} from "@eight2five/ui/components/form-control";
+import { Heading } from "@eight2five/ui/components/heading";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { ChevronDownIcon } from "@eight2five/ui/components/icon";
+import { Input, InputField } from "@eight2five/ui/components/input";
+import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import {
   Select,
   SelectBackdrop,
@@ -27,18 +31,18 @@ import {
   SelectItem,
   SelectPortal,
   SelectTrigger,
-} from "@eight2five/ui/select";
-import { Spinner } from "@eight2five/ui/spinner";
-import { Switch } from "@eight2five/ui/switch";
-import { Text } from "@eight2five/ui/text";
-import { Textarea, TextareaInput } from "@eight2five/ui/textarea";
+} from "@eight2five/ui/components/select";
+import { Spinner } from "@eight2five/ui/components/spinner";
+import { Switch } from "@eight2five/ui/components/switch";
+import { Text } from "@eight2five/ui/components/text";
+import { Textarea, TextareaInput } from "@eight2five/ui/components/textarea";
 import {
   eight2FiveFonts,
   eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 export function ManagerScreen({ children }: { children: React.ReactNode }) {
   const theme = useEight2FiveTheme();

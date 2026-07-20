@@ -1,7 +1,7 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useManagedNetwork, usePansManager } from "../manager-context";

@@ -10,7 +10,7 @@ import {
 import { headingStyle } from './styles';
 import type { VariantProps } from '@gluestack-ui/utils/nativewind-utils';
 import { withUniwind } from 'uniwind';
-import { eight2FiveFonts } from '../theme';
+import { eight2FiveFonts } from '../../theme';
 
 type IHeadingProps = VariantProps<typeof headingStyle> &
   React.ComponentPropsWithoutRef<typeof H1Base> & {

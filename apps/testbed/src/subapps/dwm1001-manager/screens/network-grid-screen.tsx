@@ -14,8 +14,8 @@ import type {
   GridViewport,
 } from "@eight2five/mobile/pans-manager/pans-network-grid-math";
 import type { PansPositionStreamService } from "@eight2five/mobile/pans-manager/PansPositionStreamService";
-import { HStack } from "@eight2five/ui/hstack";
-import { Text } from "@eight2five/ui/text";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import {

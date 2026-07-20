@@ -1,17 +1,17 @@
 import React from "react";
 import { useRouter } from "expo-router";
-import { Badge, BadgeText } from "@eight2five/ui/badge";
-import { Card } from "@eight2five/ui/card";
-import { HStack } from "@eight2five/ui/hstack";
-import { Pressable } from "@eight2five/ui/pressable";
-import { Text } from "@eight2five/ui/text";
+import { Badge, BadgeText } from "@eight2five/ui/components/badge";
+import { Card } from "@eight2five/ui/components/card";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Pressable } from "@eight2five/ui/components/pressable";
+import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
   eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import { useManagedNetworks, useManagerReadiness } from "../manager-context";
 import { formatRelativeTime } from "../manager-utils";

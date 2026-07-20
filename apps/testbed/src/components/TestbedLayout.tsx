@@ -1,15 +1,15 @@
 import React from "react";
 import { ViewStyle, ScrollViewProps, LayoutAnimation } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Box } from "@eight2five/ui/box";
-import { Heading } from "@eight2five/ui/heading";
-import { HStack } from "@eight2five/ui/hstack";
-import { Pressable } from "@eight2five/ui/pressable";
-import { SafeAreaView } from "@eight2five/ui/safe-area-view";
-import { ScrollView } from "@eight2five/ui/scroll-view";
-import { Text } from "@eight2five/ui/text";
+import { Box } from "@eight2five/ui/components/box";
+import { Heading } from "@eight2five/ui/components/heading";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Pressable } from "@eight2five/ui/components/pressable";
+import { SafeAreaView } from "@eight2five/ui/components/safe-area-view";
+import { ScrollView } from "@eight2five/ui/components/scroll-view";
+import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 export interface TestbedLayoutProps {
   title?: string;

@@ -1,8 +1,8 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import {
   ManagerScreen,

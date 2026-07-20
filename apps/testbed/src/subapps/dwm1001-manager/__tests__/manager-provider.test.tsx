@@ -1,7 +1,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { Button, ButtonText } from "@eight2five/ui/button";
-import { Text } from "@eight2five/ui/text";
+import { Button, ButtonText } from "@eight2five/ui/components/button";
+import { Text } from "@eight2five/ui/components/text";
 import type { PansManagerRepository } from "@eight2five/mobile/pans-manager";
 
 import {

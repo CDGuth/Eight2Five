@@ -6,9 +6,9 @@ import type {
   PansBatchOperationItem,
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import { BatchResults } from "../components/batch-results";
 import {

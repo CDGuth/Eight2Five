@@ -3,7 +3,73 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    "./*": "./*/index.tsx"
+    "./components/box": {
+      "browser": "./components/box/index.web.tsx",
+      "react-native": "./components/box/index.tsx",
+      "default": "./components/box/index.tsx"
+    },
+    "./components/card": {
+      "browser": "./components/card/index.web.tsx",
+      "react-native": "./components/card/index.tsx",
+      "default": "./components/card/index.tsx"
+    },
+    "./components/center": {
+      "browser": "./components/center/index.web.tsx",
+      "react-native": "./components/center/index.tsx",
+      "default": "./components/center/index.tsx"
+    },
+    "./components/date-time-picker": {
+      "browser": "./components/date-time-picker/index.web.tsx",
+      "react-native": "./components/date-time-picker/index.tsx",
+      "default": "./components/date-time-picker/index.tsx"
+    },
+    "./components/gluestack-ui-provider": {
+      "browser": "./components/gluestack-ui-provider/index.web.tsx",
+      "react-native": "./components/gluestack-ui-provider/index.tsx",
+      "default": "./components/gluestack-ui-provider/index.tsx"
+    },
+    "./components/grid": {
+      "browser": "./components/grid/index.web.tsx",
+      "react-native": "./components/grid/index.tsx",
+      "default": "./components/grid/index.tsx"
+    },
+    "./components/heading": {
+      "browser": "./components/heading/index.web.tsx",
+      "react-native": "./components/heading/index.tsx",
+      "default": "./components/heading/index.tsx"
+    },
+    "./components/hstack": {
+      "browser": "./components/hstack/index.web.tsx",
+      "react-native": "./components/hstack/index.tsx",
+      "default": "./components/hstack/index.tsx"
+    },
+    "./components/icon": {
+      "browser": "./components/icon/index.web.tsx",
+      "react-native": "./components/icon/index.tsx",
+      "default": "./components/icon/index.tsx"
+    },
+    "./components/image-viewer": {
+      "browser": "./components/image-viewer/index.web.tsx",
+      "react-native": "./components/image-viewer/index.tsx",
+      "default": "./components/image-viewer/index.tsx"
+    },
+    "./components/table": {
+      "browser": "./components/table/index.web.tsx",
+      "react-native": "./components/table/index.tsx",
+      "default": "./components/table/index.tsx"
+    },
+    "./components/text": {
+      "browser": "./components/text/index.web.tsx",
+      "react-native": "./components/text/index.tsx",
+      "default": "./components/text/index.tsx"
+    },
+    "./components/vstack": {
+      "browser": "./components/vstack/index.web.tsx",
+      "react-native": "./components/vstack/index.tsx",
+      "default": "./components/vstack/index.tsx"
+    },
+    "./components/*": "./components/*/index.tsx",
+    "./theme": "./theme/index.tsx"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",

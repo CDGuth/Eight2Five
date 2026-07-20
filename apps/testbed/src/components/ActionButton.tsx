@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, ButtonText } from "@eight2five/ui/button";
+import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 interface ActionButtonProps {

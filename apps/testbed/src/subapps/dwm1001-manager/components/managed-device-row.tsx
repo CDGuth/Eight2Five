@@ -1,16 +1,16 @@
 import React from "react";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
-import { Badge, BadgeText } from "@eight2five/ui/badge";
-import { Card } from "@eight2five/ui/card";
-import { HStack } from "@eight2five/ui/hstack";
-import { Pressable } from "@eight2five/ui/pressable";
-import { Text } from "@eight2five/ui/text";
+import { Badge, BadgeText } from "@eight2five/ui/components/badge";
+import { Card } from "@eight2five/ui/components/card";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Pressable } from "@eight2five/ui/components/pressable";
+import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
   eight2FiveRadii,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import { formatRelativeTime } from "../manager-utils";
 

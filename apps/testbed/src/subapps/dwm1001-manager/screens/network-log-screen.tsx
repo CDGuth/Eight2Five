@@ -5,9 +5,9 @@ import type {
   PositionLogSample,
   PositionLogSession,
 } from "@eight2five/mobile/pans-manager";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import {
   ManagerButton,

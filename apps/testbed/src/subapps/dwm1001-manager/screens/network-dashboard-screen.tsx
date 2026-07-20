@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
-import { HStack } from "@eight2five/ui/hstack";
-import { Text } from "@eight2five/ui/text";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/vstack";
+import { VStack } from "@eight2five/ui/components/vstack";
 
 import { useManagedNetwork, usePansManager } from "../manager-context";
 import { ManagedDeviceRow } from "../components/managed-device-row";

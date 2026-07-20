@@ -3,7 +3,7 @@ import React from 'react';
 import type { VariantProps } from '@gluestack-ui/utils/nativewind-utils';
 import { Text as RNText } from 'react-native';
 import { textStyle } from './styles';
-import { eight2FiveFonts } from '../theme';
+import { eight2FiveFonts } from '../../theme';
 
 type ITextProps = React.ComponentProps<typeof RNText> &
   VariantProps<typeof textStyle>;

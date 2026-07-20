@@ -6,7 +6,7 @@ import type {
   ManagedTagConfig,
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
-import { Text } from "@eight2five/ui/text";
+import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useManagedDevice, usePansManager } from "../manager-context";

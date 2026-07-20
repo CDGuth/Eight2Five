@@ -10,7 +10,7 @@ import {
 import { withUniwind } from 'uniwind';
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { eight2FiveFonts } from '../theme';
+import { eight2FiveFonts } from '../../theme';
 const SCOPE = 'BUTTON';
 const Root = withStyleContext(Pressable, SCOPE);
 const StyledUIIcon = withUniwind(UIIcon);
