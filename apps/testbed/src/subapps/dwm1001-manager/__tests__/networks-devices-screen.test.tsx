@@ -20,9 +20,18 @@ jest.mock("expo-pans-ble-api", () => ({}));
 jest.mock("react-native-reanimated", () => {
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
+  const animation: Record<string, jest.Mock> = {};
+  for (const method of ["delay", "duration", "easing", "withInitialValues"])
+    animation[method] = jest.fn(() => animation);
+  const createAnimatedComponent = (component: React.ElementType) => component;
   return {
     __esModule: true,
-    default: { View },
+    default: { View, createAnimatedComponent },
+    createAnimatedComponent,
+    Easing: { linear: jest.fn() },
+    FadeIn: animation,
+    FadeOut: animation,
+    ZoomIn: animation,
     useSharedValue: (value: unknown) => ({ value }),
     useAnimatedStyle: (factory: () => unknown) => factory(),
     withTiming: (value: unknown) => value,
@@ -144,9 +153,10 @@ describe("NetworksDevicesScreen", () => {
     await act(async () => {
       pressTestId(tree, `edit-network-${network.id}`);
     });
-    expect(mockPush).toHaveBeenCalledWith(
-      `/(subapps)/dwm1001-manager/networks/${network.id}/settings`,
-    );
+    expect(
+      tree.root.findByProps({ testID: "network-edit-modal-root" }),
+    ).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
     expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
       false,
     );
@@ -161,6 +171,15 @@ describe("NetworksDevicesScreen", () => {
     expect(expansionState(tree, `device-toggle-device:${device.id}`)).toBe(
       true,
     );
+    expect(harness.inspectAndCache).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pressTestId(tree, `device-settings-device:${device.id}`);
+      await flushPromises();
+    });
+    expect(
+      tree.root.findByProps({ testID: "device-settings-modal-root" }),
+    ).toBeTruthy();
     expect(harness.inspectAndCache).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -212,10 +231,11 @@ describe("NetworksDevicesScreen", () => {
     const persisted = harness.repository.saveDevice.mock
       .calls[0][0] as ManagedDevice;
     expect(persisted.transportDeviceId).toBe("transport-new");
-    expect(mockPush).toHaveBeenCalledWith(
-      `/(subapps)/dwm1001-manager/devices/${persisted.id}/edit`,
-    );
-    expect(harness.inspectAndCache).not.toHaveBeenCalled();
+    expect(
+      tree.root.findByProps({ testID: "device-settings-modal-root" }),
+    ).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(harness.inspectAndCache).toHaveBeenCalledWith(persisted.id);
     await act(async () => tree.unmount());
   });
 
@@ -297,10 +317,12 @@ function createRuntime(
       inspect: jest.fn(),
       inspectAndCache,
       configureDevice: jest.fn(),
+      applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),
+      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },

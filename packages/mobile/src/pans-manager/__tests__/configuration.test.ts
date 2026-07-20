@@ -94,6 +94,7 @@ describe("PansConfigurationService", () => {
       lastKnownConfig: {
         role: "anchor",
         uwbMode: "active",
+        selectedFirmware: 1,
         ledEnabled: true,
         firmwareUpdateEnabled: false,
         initiatorEnabled: false,
@@ -243,13 +244,14 @@ describe("PansConfigurationService", () => {
     const result = await service.configureDevice("device", {
       role: "anchor",
       label: "new",
-      panId: 7,
+      panId: 8,
       uwbMode: "active",
       ledEnabled: true,
       firmwareUpdateEnabled: false,
       initiatorEnabled: false,
     });
     expect(result.outcome).toBe("partial");
+    expect(native.writeNetworkId).not.toHaveBeenCalled();
     expect(result.writes[0]).toMatchObject({
       field: "label",
       status: "mismatch",
@@ -434,6 +436,185 @@ describe("PansConfigurationService", () => {
         panId: 3,
         label: "hardware",
         position: { xMeters: 1, yMeters: 2, zMeters: 3, quality: 100 },
+      },
+    });
+  });
+
+  test("applies sparse dirty fields, preserves reserved mode bytes and independently saved local details", async () => {
+    let actualMode: Awaited<
+      ReturnType<PansNativeGateway["readOperationMode"]>
+    > = {
+      ...mode,
+      raw: [0xa5, 0xc3] as [number, number],
+    };
+    let label = "hardware";
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      transportDeviceId: "transport-anchor",
+      nickname: "Old app name",
+      notes: "User notes",
+      lastKnownConfig: {
+        role: "anchor",
+        label,
+        panId: 9,
+        uwbMode: "active",
+        selectedFirmware: 1,
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      requestExplicitDisconnect: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => actualMode),
+      patchOperationMode: jest.fn(
+        async (
+          _id: string,
+          patch: Parameters<PansNativeGateway["patchOperationMode"]>[1],
+        ) => {
+          actualMode = { ...actualMode, ...patch };
+          return actualMode;
+        },
+      ),
+      readLabel: jest.fn(async () => label),
+      writeLabel: jest.fn(async () => {
+        label = "";
+        const latest = (await repository.getDevice("anchor"))!;
+        await repository.saveDevice({
+          ...latest,
+          nickname: "New app name",
+          notes: "Updated user notes",
+          updatedAt: 10,
+        });
+        return true;
+      }),
+      readNetworkId: jest.fn(async () => 9),
+      writeNetworkId: jest.fn(),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(),
+      writeLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+      writePersistedPosition: jest.fn(async () => true),
+    } as unknown as PansNativeGateway;
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+      () => 100,
+    );
+    const position = { xMeters: 1, yMeters: 2, zMeters: 3, quality: 99 };
+
+    const result = await service.applyConfigurationDiff("anchor", {
+      label: "",
+      selectedFirmware: 2,
+      ledEnabled: false,
+      position,
+    });
+
+    expect(native.writeLabel).toHaveBeenCalledWith("transport-anchor", "");
+    expect(native.patchOperationMode).toHaveBeenCalledWith("transport-anchor", {
+      selectedFirmware: 2,
+      ledEnabled: false,
+    });
+    expect(native.writeNetworkId).not.toHaveBeenCalled();
+    expect(actualMode.raw).toEqual([0xa5, 0xc3]);
+    expect(result.writes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "label", status: "verified" }),
+        expect.objectContaining({
+          field: "selectedFirmware",
+          status: "verified",
+        }),
+        expect.objectContaining({ field: "ledEnabled", status: "verified" }),
+        expect.objectContaining({
+          field: "position",
+          status: "written-unverified",
+        }),
+      ]),
+    );
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      nickname: "New app name",
+      notes: "Updated user notes",
+      label: "",
+      lastKnownConfig: {
+        label: "",
+        panId: 9,
+        selectedFirmware: 2,
+        ledEnabled: false,
+        position,
+      },
+    });
+  });
+
+  test("writes only a dirty tag location mode and never invents other values", async () => {
+    let locationDataMode: 0 | 1 = 0;
+    const tagMode = {
+      ...mode,
+      role: "tag" as const,
+      accelerometerEnabled: true,
+      locationEngineEnabled: true,
+    };
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      requestExplicitDisconnect: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => tagMode),
+      patchOperationMode: jest.fn(),
+      readLabel: jest.fn(async () => "tag"),
+      writeLabel: jest.fn(),
+      readNetworkId: jest.fn(async () => 4),
+      writeNetworkId: jest.fn(),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(async () => locationDataMode),
+      writeLocationDataMode: jest.fn(async () => {
+        locationDataMode = 1;
+        return true;
+      }),
+      readTagUpdateRate: jest.fn(async () => ({
+        movingUpdateRateMs: 100,
+        stationaryUpdateRateMs: 1000,
+        raw: [],
+      })),
+      writePersistedPosition: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "tag",
+      transportDeviceId: "transport-tag",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    const result = await service.applyConfigurationDiff("tag", {
+      locationDataMode: 1,
+    });
+
+    expect(native.writeLocationDataMode).toHaveBeenCalledTimes(1);
+    expect(native.patchOperationMode).not.toHaveBeenCalled();
+    expect(native.writeLabel).not.toHaveBeenCalled();
+    expect(native.writeNetworkId).not.toHaveBeenCalled();
+    expect(result.writes).toEqual([
+      expect.objectContaining({
+        field: "locationDataMode",
+        status: "verified",
+        actual: 1,
+      }),
+    ]);
+    expect(await repository.getDevice("tag")).toMatchObject({
+      lastKnownConfig: {
+        role: "tag",
+        selectedFirmware: 1,
+        locationDataMode: 1,
+        movingUpdateRateMs: 100,
+        stationaryUpdateRateMs: 1000,
       },
     });
   });

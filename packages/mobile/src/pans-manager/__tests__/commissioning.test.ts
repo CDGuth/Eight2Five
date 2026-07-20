@@ -109,6 +109,59 @@ describe("PansCommissioningService profile assignment", () => {
   });
 });
 
+describe("PansCommissioningService profile unassignment", () => {
+  test("removes only the expected local association without hardware configuration", async () => {
+    const repository = await assignmentRepository("old");
+    const configuration = configurationService(async (deviceId, panId) =>
+      configurationResult(deviceId, panId),
+    );
+    const service = new PansCommissioningService(
+      repository,
+      configuration,
+      () => 75,
+    );
+
+    const result = await service.unassignDeviceFromNetworkProfile({
+      deviceId: "device",
+      expectedNetworkId: "old",
+    });
+
+    expect(result).toMatchObject({
+      outcome: "unassigned",
+      stage: "complete",
+      previousNetworkId: "old",
+      device: { id: "device", updatedAt: 75 },
+    });
+    expect((await repository.getDevice("device"))?.networkId).toBeUndefined();
+    expect(configuration.assignPanId).not.toHaveBeenCalled();
+    expect(configuration.configureDevice).not.toHaveBeenCalled();
+  });
+
+  test.each([undefined, "target"])(
+    "rejects missing or stale association %s without changing it",
+    async (networkId) => {
+      const repository = await assignmentRepository(networkId);
+      const configuration = configurationService(async (deviceId, panId) =>
+        configurationResult(deviceId, panId),
+      );
+      const service = new PansCommissioningService(repository, configuration);
+
+      const result = await service.unassignDeviceFromNetworkProfile({
+        deviceId: "device",
+        expectedNetworkId: "old",
+      });
+
+      expect(result).toMatchObject({
+        outcome: "failed",
+        stage: "loading",
+        error: { code: "INVALID_CONFIGURATION" },
+      });
+      expect((await repository.getDevice("device"))?.networkId).toBe(networkId);
+      expect(configuration.assignPanId).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe("PansCommissioningService PAN migration", () => {
   test("migrates all members sequentially before updating the profile", async () => {
     const repository = await migrationRepository(["b", "a"]);

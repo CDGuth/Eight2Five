@@ -1,5 +1,4 @@
 import React from "react";
-import { useRouter } from "expo-router";
 import {
   selectNetworkDeviceSections,
   type DisplayDevice,
@@ -19,12 +18,15 @@ import { VStack } from "@eight2five/ui/components/vstack";
 import { RadioTower, Square } from "lucide-react-native";
 
 import { NetworkDeviceSection } from "../components/network-device-section";
+import { DeviceSettingsModal } from "../device-settings-modal";
 import { usePansManager } from "../manager-context";
+import { NetworkEditModal } from "../network-edit-modal";
 
 export function NetworksDevicesScreen() {
-  const router = useRouter();
   const theme = useEight2FiveTheme();
   const manager = usePansManager();
+  const [selectedNetworkId, setSelectedNetworkId] = React.useState<string>();
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState<string>();
   const sections = React.useMemo(
     () =>
       selectNetworkDeviceSections(
@@ -73,12 +75,21 @@ export function NetworksDevicesScreen() {
           ? await manager.persistDiscovery(device.discovery)
           : undefined);
       if (!saved) throw new Error("Device discovery is unavailable.");
-      router.push(
-        `/(subapps)/dwm1001-manager/devices/${saved.id}/edit` as never,
-      );
+      setSelectedNetworkId(undefined);
+      setSelectedDeviceId(saved.id);
     },
-    [manager, router],
+    [manager],
   );
+
+  const selectedDevice = manager.devices.find(
+    (device) => device.id === selectedDeviceId,
+  );
+  const selectedDiscovery = selectedDevice
+    ? manager.discoveries.find(
+        (discovery) =>
+          discovery.transportDeviceId === selectedDevice.transportDeviceId,
+      )
+    : undefined;
 
   return (
     <SafeAreaView
@@ -165,15 +176,28 @@ export function NetworksDevicesScreen() {
               emptyMessage={
                 item.type === "unassigned" ? emptyMessage : undefined
               }
-              onEditNetwork={(networkId) =>
-                router.push(
-                  `/(subapps)/dwm1001-manager/networks/${networkId}/settings` as never,
-                )
-              }
+              onEditNetwork={(networkId) => {
+                setSelectedDeviceId(undefined);
+                setSelectedNetworkId(networkId);
+              }}
               onOpenDeviceSettings={openDeviceSettings}
               onRefreshDevice={manager.inspectDevice}
             />
           )}
+        />
+        <NetworkEditModal
+          network={manager.networks.find(
+            (network) => network.id === selectedNetworkId,
+          )}
+          isOpen={selectedNetworkId !== undefined}
+          onClose={() => setSelectedNetworkId(undefined)}
+        />
+        <DeviceSettingsModal
+          device={selectedDevice}
+          discovery={selectedDiscovery}
+          available={Boolean(selectedDiscovery && !selectedDiscovery.stale)}
+          isOpen={selectedDeviceId !== undefined}
+          onClose={() => setSelectedDeviceId(undefined)}
         />
       </VStack>
     </SafeAreaView>

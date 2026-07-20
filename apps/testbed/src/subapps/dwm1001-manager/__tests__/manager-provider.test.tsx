@@ -165,6 +165,7 @@ describe("PansManagerProvider", () => {
         inspect: jest.fn(),
         inspectAndCache,
         configureDevice: jest.fn(),
+        applyConfigurationDiff: jest.fn(),
         assignPanId: jest.fn(),
       },
     });
@@ -205,9 +206,17 @@ describe("PansManagerProvider", () => {
       membershipChanged: false,
       deviceResults: [],
     });
+    const unassignDeviceFromNetworkProfile = jest.fn().mockResolvedValue({
+      deviceId: "device",
+      expectedNetworkId: "profile",
+      previousNetworkId: "profile",
+      stage: "complete",
+      outcome: "unassigned",
+    });
     const runtime = createRuntimeValue({
       commissioning: {
         assignDeviceToNetworkProfile,
+        unassignDeviceFromNetworkProfile,
         migrateNetworkProfilePan,
       },
     });
@@ -223,6 +232,9 @@ describe("PansManagerProvider", () => {
 
     await act(async () => {
       await tree.root.findByProps({ testID: "assign-profile" }).props.onPress();
+      await tree.root
+        .findByProps({ testID: "unassign-profile" })
+        .props.onPress();
       await tree.root.findByProps({ testID: "migrate-pan" }).props.onPress();
     });
 
@@ -235,8 +247,148 @@ describe("PansManagerProvider", () => {
       targetPanId: 2,
       operationId: "migration",
     });
-    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(3);
-    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(3);
+    expect(unassignDeviceFromNetworkProfile).toHaveBeenCalledWith({
+      deviceId: "device",
+      expectedNetworkId: "profile",
+    });
+    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(4);
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(4);
+    await act(async () => tree.unmount());
+  });
+
+  it("saves trimmed network-local details with no BLE or commissioning call", async () => {
+    let savedNetwork = {
+      id: "profile",
+      name: "Old name",
+      panId: 7,
+      settings: {
+        coordinateBounds: {
+          minXMeters: -1,
+          maxXMeters: 1,
+          minYMeters: -1,
+          maxYMeters: 1,
+          minZMeters: -1,
+          maxZMeters: 1,
+        },
+        defaultAnchorHeightMeters: 1,
+        staleDeviceTimeoutMs: 1000,
+        defaultTagMode: {
+          locationEngineEnabled: true,
+          lowPowerModeEnabled: false,
+          stationaryDetectionEnabled: true,
+          locationDataMode: 0 as const,
+          movingUpdateRateMs: 100,
+          stationaryUpdateRateMs: 1000,
+        },
+        scanDurationMs: 1000,
+        autoConnect: false,
+        positionLogRetentionDays: 1,
+        positionLogMaxSamples: 100,
+      },
+      notes: "Old notes",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const repository = {
+      listNetworks: jest.fn(async () => [savedNetwork]),
+      getNetwork: jest.fn(async () => savedNetwork),
+      saveNetwork: jest.fn(async (network) => {
+        savedNetwork = network;
+      }),
+      listDevices: jest.fn().mockResolvedValue([]),
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRepository;
+    const runtime = createRuntimeValue({ repository });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <NetworkLocalDetailsHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root
+        .findByProps({ testID: "save-network-local" })
+        .props.onPress();
+    });
+
+    expect(savedNetwork).toMatchObject({
+      name: "New name",
+      notes: "User notes",
+      panId: 7,
+    });
+    expect(runtime.configuration.inspectAndCache).not.toHaveBeenCalled();
+    expect(runtime.configuration.applyConfigurationDiff).not.toHaveBeenCalled();
+    expect(
+      runtime.commissioning.migrateNetworkProfilePan,
+    ).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it("keeps a successful local device save when hardware application fails", async () => {
+    let savedDevice = {
+      id: "device",
+      transportDeviceId: "transport-device",
+      nickname: "Old app name",
+      notes: "User notes",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const repository = {
+      listNetworks: jest.fn().mockResolvedValue([]),
+      listDevices: jest.fn(async () => [savedDevice]),
+      getDevice: jest.fn(async () => savedDevice),
+      saveDevice: jest.fn(async (device) => {
+        savedDevice = device;
+      }),
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRepository;
+    const applyConfigurationDiff = jest.fn().mockResolvedValue({
+      deviceId: "device",
+      transportDeviceId: "transport-device",
+      outcome: "failure",
+      writes: [],
+      warnings: [],
+      error: { code: "DEVICE_OFFLINE", message: "Offline" },
+    });
+    const runtime = createRuntimeValue({
+      repository,
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache: jest.fn(),
+        configureDevice: jest.fn(),
+        applyConfigurationDiff,
+        assignPanId: jest.fn(),
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <DeviceIndependentSaveHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root
+        .findByProps({ testID: "save-device-independent" })
+        .props.onPress();
+    });
+
+    expect(savedDevice).toMatchObject({
+      nickname: "New app name",
+      notes: "User notes",
+    });
+    expect(applyConfigurationDiff).toHaveBeenCalledWith("device", {
+      ledEnabled: false,
+    });
     await act(async () => tree.unmount());
   });
 });
@@ -299,6 +451,17 @@ function CommissioningHarness() {
         <ButtonText>Assign</ButtonText>
       </Button>
       <Button
+        testID="unassign-profile"
+        onPress={() =>
+          manager.unassignDeviceFromNetworkProfile({
+            deviceId: "device",
+            expectedNetworkId: "profile",
+          })
+        }
+      >
+        <ButtonText>Unassign</ButtonText>
+      </Button>
+      <Button
         testID="migrate-pan"
         onPress={() =>
           manager.migrateNetworkProfilePan({
@@ -311,6 +474,43 @@ function CommissioningHarness() {
         <ButtonText>Migrate</ButtonText>
       </Button>
     </>
+  );
+}
+
+function NetworkLocalDetailsHarness() {
+  const manager = usePansManager();
+  return (
+    <Button
+      testID="save-network-local"
+      onPress={() =>
+        manager.saveNetworkLocalDetails({
+          networkId: "profile",
+          name: "  New name  ",
+          notes: "  User notes  ",
+        })
+      }
+    >
+      <ButtonText>Save local network details</ButtonText>
+    </Button>
+  );
+}
+
+function DeviceIndependentSaveHarness() {
+  const manager = usePansManager();
+  return (
+    <Button
+      testID="save-device-independent"
+      onPress={async () => {
+        await manager.saveDeviceLocalDetails("device", {
+          nickname: "  New app name  ",
+        });
+        await manager.applyDeviceConfiguration("device", {
+          ledEnabled: false,
+        });
+      }}
+    >
+      <ButtonText>Save independently</ButtonText>
+    </Button>
   );
 }
 
@@ -378,10 +578,12 @@ function createRuntimeValue(
       inspect: jest.fn(),
       inspectAndCache: jest.fn(),
       configureDevice: jest.fn(),
+      applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),
+      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },

@@ -120,6 +120,9 @@ export function normalizeDeviceConfig(
   }
   if (
     !["off", "passive", "active"].includes(config.uwbMode) ||
+    (config.selectedFirmware !== undefined &&
+      config.selectedFirmware !== 1 &&
+      config.selectedFirmware !== 2) ||
     typeof config.ledEnabled !== "boolean" ||
     typeof config.firmwareUpdateEnabled !== "boolean"
   ) {
@@ -166,6 +169,7 @@ export function normalizeDeviceConfig(
       typeof config.locationEngineEnabled !== "boolean" ||
       typeof config.lowPowerModeEnabled !== "boolean" ||
       typeof config.stationaryDetectionEnabled !== "boolean" ||
+      config.locationDataMode === undefined ||
       ![0, 1, 2].includes(config.locationDataMode)
     ) {
       throw new ManagerError(

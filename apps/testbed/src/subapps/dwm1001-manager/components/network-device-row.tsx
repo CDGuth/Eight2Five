@@ -288,9 +288,13 @@ function DeviceDetails({
         <DetailRow
           label="Firmware selection"
           value={
-            inspection?.operationMode.selectedFirmware === undefined
+            (inspection?.operationMode.selectedFirmware ??
+              config?.selectedFirmware) === undefined
               ? undefined
-              : `Slot ${inspection.operationMode.selectedFirmware}`
+              : `Slot ${
+                  inspection?.operationMode.selectedFirmware ??
+                  config?.selectedFirmware
+                }`
           }
         />
         <DetailRow

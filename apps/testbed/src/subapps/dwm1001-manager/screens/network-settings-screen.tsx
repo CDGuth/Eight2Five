@@ -1,6 +1,9 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
+import {
+  DEFAULT_MANAGED_NETWORK_SETTINGS,
+  formatPanId,
+} from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
@@ -9,6 +12,7 @@ import { displayError } from "../manager-utils";
 import {
   ManagerButton,
   ManagerScreen,
+  KeyValue,
   SectionCard,
   StatePanel,
   SwitchField,
@@ -27,7 +31,6 @@ export function NetworkSettingsScreen() {
   const manager = usePansManager();
   const { network } = useManagedNetwork(networkId);
   const [name, setName] = React.useState(network?.name ?? "");
-  const [pan, setPan] = React.useState(network ? String(network.panId) : "");
   const [notes, setNotes] = React.useState(network?.notes ?? "");
   const [settingsForm, setSettingsForm] = React.useState(() =>
     networkSettingsToForm(
@@ -47,7 +50,6 @@ export function NetworkSettingsScreen() {
     if (!network || loadedNetworkId.current === network.id) return;
     loadedNetworkId.current = network.id;
     setName(network.name);
-    setPan(String(network.panId));
     setNotes(network.notes ?? "");
     setSettingsForm(networkSettingsToForm(network.settings));
   }, [network]);
@@ -62,7 +64,6 @@ export function NetworkSettingsScreen() {
 
   const save = async () => {
     setError(undefined);
-    const panId = parsePanInput(pan);
     if (!name.trim()) return setError("Name is required.");
     if (
       manager.networks.some(
@@ -72,16 +73,13 @@ export function NetworkSettingsScreen() {
       )
     )
       return setError("A network with this name already exists.");
-    if (!Number.isInteger(panId) || panId < 0 || panId > 0xffff) {
-      return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
-    }
     const parsedSettings = parseNetworkSettingsForm(settingsForm);
     if ("error" in parsedSettings) return setError(parsedSettings.error);
     try {
       await manager.saveNetwork({
         ...network,
         name: name.trim(),
-        panId,
+        panId: network.panId,
         notes: notes.trim() || undefined,
         settings: parsedSettings.settings,
         updatedAt: Date.now(),
@@ -100,33 +98,6 @@ export function NetworkSettingsScreen() {
     }
   };
 
-  const reviewHardwareMigration = () => {
-    const panId = parsePanInput(pan);
-    if (!name.trim()) return setError("Name is required.");
-    if (
-      manager.networks.some(
-        (item) =>
-          item.id !== network.id &&
-          item.name.trim().toLowerCase() === name.trim().toLowerCase(),
-      )
-    )
-      return setError("A network with this name already exists.");
-    if (!Number.isInteger(panId) || panId < 0 || panId > 0xffff)
-      return setError("PAN ID must be 0–65535, in decimal or hexadecimal.");
-    if (panId === network.panId)
-      return setError("Choose a different PAN ID for hardware migration.");
-    router.push({
-      pathname: `/(subapps)/dwm1001-manager/networks/${network.id}/batch-configure`,
-      params: {
-        migration: "1",
-        oldPanId: String(network.panId),
-        newPanId: String(panId),
-        name: name.trim(),
-        notes: notes.trim(),
-      },
-    } as never);
-  };
-
   const deleteProfile = async () => {
     try {
       await manager.deleteNetwork(network.id);
@@ -140,15 +111,10 @@ export function NetworkSettingsScreen() {
     <ManagerScreen>
       <SectionCard
         title="Network details"
-        description="Save app settings or review a verified PAN change for every saved device."
+        description="Advanced app-only defaults. Network ID changes use the inline network editor."
       >
         <TextField label="Name" value={name} onChangeText={setName} />
-        <TextField
-          label="PAN ID"
-          value={pan}
-          onChangeText={setPan}
-          helper="Saving here does not write the PAN ID to devices."
-        />
+        <KeyValue label="PANS Network ID" value={formatPanId(network.panId)} />
         <TextField
           label="Notes"
           value={notes}
@@ -158,11 +124,6 @@ export function NetworkSettingsScreen() {
         <ManagerButton
           label="Save network settings"
           onPress={() => void save()}
-        />
-        <ManagerButton
-          label="Review PAN change"
-          variant="outline"
-          onPress={reviewHardwareMigration}
         />
         {message ? <StatePanel state="success" message={message} /> : null}
         {error ? <StatePanel state="error" message={error} /> : null}
@@ -430,12 +391,4 @@ export function NetworkSettingsScreen() {
       </SectionCard>
     </ManagerScreen>
   );
-}
-
-function parsePanInput(value: string): number {
-  const text = value.trim();
-  if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text.slice(2), 16);
-  if (/^[0-9a-f]*[a-f][0-9a-f]*$/i.test(text)) return Number.parseInt(text, 16);
-  if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10);
-  return Number.NaN;
 }

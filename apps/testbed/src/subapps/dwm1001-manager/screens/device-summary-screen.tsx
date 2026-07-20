@@ -176,14 +176,6 @@ export function DeviceSummaryScreen() {
       <SectionCard title="Actions">
         <VStack space="sm">
           <ManagerButton
-            label="Edit configuration"
-            onPress={() =>
-              router.push(
-                `/(subapps)/dwm1001-manager/devices/${device.id}/edit` as never,
-              )
-            }
-          />
-          <ManagerButton
             label="Diagnostics"
             variant="outline"
             onPress={() =>

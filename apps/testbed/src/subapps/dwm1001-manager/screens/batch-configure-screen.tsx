@@ -115,9 +115,34 @@ export function BatchConfigureScreen() {
       })),
     );
     try {
+      if (migration) {
+        await manager.saveNetworkLocalDetails({
+          networkId: network.id,
+          name: intendedName,
+          notes: params.notes,
+        });
+        const migrationResult = await manager.migrateNetworkProfilePan({
+          networkId: network.id,
+          targetPanId,
+          operationId: batchId.current,
+          signal: controller.current.signal,
+          onItemChange: (changed) =>
+            setItems((current) => {
+              const next = current.filter(
+                (item) => item.deviceId !== changed.deviceId,
+              );
+              next.push(changed);
+              return next.sort((left, right) => left.index - right.index);
+            }),
+        });
+        setItems(migrationResult.items ?? []);
+        if (migrationResult.error) setError(migrationResult.error.message);
+        setMessage(`PAN migration ${migrationResult.outcome}.`);
+        return;
+      }
       const result = await manager.runBatch<PansConfigurationResult>({
         id: batchId.current,
-        type: migration ? "pan-migration" : "batch-configure",
+        type: "batch-configure",
         deviceIds: selectedDevices.map((device) => device.id),
         signal: controller.current.signal,
         onItemChange: (changed) =>
@@ -131,41 +156,27 @@ export function BatchConfigureScreen() {
         metadata: {
           networkId: network.id,
           ...(assignPan ? { panId: targetPanId } : {}),
-          ...(migration
-            ? {
-                oldPanId: network.panId,
-                intendedPanId: targetPanId,
-              }
-            : {}),
           roleAction,
           uwbMode,
           led,
           initiatorId,
         },
         operation: async (deviceId) => {
-          if (migration) {
-            const assigned = await manager.assignDevicePan(
+          if (assignPan) {
+            const assignment = await manager.assignDeviceToNetworkProfile({
               deviceId,
-              targetPanId,
-            );
-            const panWrite = assigned.writes.find(
-              (write) => write.field === "panId",
-            );
-            if (
-              assigned.outcome === "failure" ||
-              panWrite?.status === "mismatch" ||
-              assigned.inspected?.panId !== targetPanId
-            ) {
+              targetNetworkId: network.id,
+            });
+            if (assignment.outcome !== "assigned") {
               throw new Error(
-                assigned.error?.message ??
-                  "PAN ID readback did not verify the intended value.",
+                assignment.error?.message ??
+                  "Network profile assignment did not verify the PAN ID.",
               );
             }
-            return assigned;
           }
           const device = devices.find((item) => item.id === deviceId)!;
           const config = buildBatchConfiguration(device, {
-            assignPan,
+            assignPan: false,
             panId: targetPanId,
             roleAction,
             uwbMode,
@@ -188,18 +199,7 @@ export function BatchConfigureScreen() {
       const allSucceeded =
         result.items.length > 0 &&
         result.items.every((item) => item.status === "succeeded");
-      if (migration && allSucceeded) {
-        await manager.saveNetwork({
-          ...network,
-          panId: targetPanId,
-          name: intendedName,
-          notes: params.notes?.trim() || undefined,
-          updatedAt: currentTimestamp(),
-        });
-        setMessage(
-          "Every targeted device verified. The local network PAN is now updated.",
-        );
-      } else if (allSucceeded) {
+      if (allSucceeded) {
         setMessage(
           "Batch completed. Successful devices were retained and verified.",
         );
@@ -366,10 +366,6 @@ export function BatchConfigureScreen() {
       {error ? <StatePanel state="error" message={error} /> : null}
     </ManagerScreen>
   );
-}
-
-function currentTimestamp(): number {
-  return Date.now();
 }
 
 export function buildBatchConfiguration(

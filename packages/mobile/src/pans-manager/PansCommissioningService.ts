@@ -55,6 +55,27 @@ export interface AssignDeviceToNetworkProfileResult {
   error?: CommissioningOperationError;
 }
 
+export interface UnassignDeviceFromNetworkProfileInput {
+  deviceId: string;
+  /** Guards against removing an association changed by another screen. */
+  expectedNetworkId: string;
+}
+
+export type UnassignDeviceFromNetworkProfileStage =
+  | "loading"
+  | "association"
+  | "complete";
+
+export interface UnassignDeviceFromNetworkProfileResult {
+  deviceId: string;
+  expectedNetworkId: string;
+  previousNetworkId?: string;
+  stage: UnassignDeviceFromNetworkProfileStage;
+  outcome: "unassigned" | "failed";
+  device?: ManagedDevice;
+  error?: CommissioningOperationError;
+}
+
 export interface MigrateNetworkProfilePanInput {
   networkId: string;
   targetPanId: number;
@@ -209,6 +230,86 @@ export class PansCommissioningService {
           error,
         ),
         configuration,
+      };
+    }
+  }
+
+  async unassignDeviceFromNetworkProfile({
+    deviceId,
+    expectedNetworkId,
+  }: UnassignDeviceFromNetworkProfileInput): Promise<UnassignDeviceFromNetworkProfileResult> {
+    const base = { deviceId, expectedNetworkId };
+    let device: ManagedDevice | undefined;
+    try {
+      if (!expectedNetworkId.trim()) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "The expected network profile ID is required.",
+          { deviceId, operation: "unassign network profile" },
+        );
+      }
+      device = await this.repository.getDevice(deviceId);
+      if (!device) {
+        throw new ManagerError(
+          "DEVICE_NOT_FOUND",
+          "The managed device does not exist.",
+          { deviceId, operation: "unassign network profile" },
+        );
+      }
+      if (!device.networkId) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "The device is not assigned to a saved network profile.",
+          { deviceId, operation: "unassign network profile" },
+        );
+      }
+      if (device.networkId !== expectedNetworkId) {
+        throw new ManagerError(
+          "INVALID_CONFIGURATION",
+          "The saved network association changed before it could be removed.",
+          { deviceId, operation: "unassign network profile" },
+        );
+      }
+    } catch (error) {
+      return {
+        ...base,
+        ...(device?.networkId ? { previousNetworkId: device.networkId } : {}),
+        stage: "loading",
+        outcome: "failed",
+        ...(device ? { device } : {}),
+        error: operationError(error, "unassign network profile"),
+      };
+    }
+
+    try {
+      await this.repository.dissociateDevice(
+        expectedNetworkId,
+        device.id,
+        this.now(),
+      );
+      const refreshed = await this.repository.getDevice(device.id);
+      if (!refreshed || refreshed.networkId !== undefined) {
+        throw new ManagerError(
+          "STORAGE_FAILURE",
+          "The unassigned device could not be reloaded.",
+          { deviceId, operation: "unassign network profile" },
+        );
+      }
+      return {
+        ...base,
+        previousNetworkId: expectedNetworkId,
+        stage: "complete",
+        outcome: "unassigned",
+        device: refreshed,
+      };
+    } catch (error) {
+      return {
+        ...base,
+        previousNetworkId: expectedNetworkId,
+        stage: "association",
+        outcome: "failed",
+        device,
+        error: operationError(error, "unassign network profile"),
       };
     }
   }

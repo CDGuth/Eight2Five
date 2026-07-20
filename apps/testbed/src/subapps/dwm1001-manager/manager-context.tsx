@@ -2,6 +2,7 @@ import React from "react";
 import type {
   AssignDeviceToNetworkProfileInput,
   AssignDeviceToNetworkProfileResult,
+  DeviceConfigurationDiff,
   DeviceConfigurationSnapshot,
   DiscoveredDeviceSnapshot,
   ManagedDevice,
@@ -9,6 +10,8 @@ import type {
   ManagedNetwork,
   MigrateNetworkProfilePanInput,
   MigrateNetworkProfilePanResult,
+  UnassignDeviceFromNetworkProfileInput,
+  UnassignDeviceFromNetworkProfileResult,
   PansBatchOperationService,
   PansBatchRunOptions,
   PansBatchRunResult,
@@ -35,6 +38,7 @@ import type {
   PositionLogSession,
   PansPosition,
 } from "@eight2five/mobile/pans-manager";
+import { assertUniqueName } from "@eight2five/mobile/pans-manager/validation";
 
 import {
   createManagerId,
@@ -70,11 +74,17 @@ export interface PansManagerRuntime {
   sessions: Pick<PansDeviceSessionManager, "closeDevice" | "closeAll">;
   configuration: Pick<
     PansConfigurationService,
-    "inspect" | "inspectAndCache" | "configureDevice" | "assignPanId"
+    | "inspect"
+    | "inspectAndCache"
+    | "configureDevice"
+    | "applyConfigurationDiff"
+    | "assignPanId"
   >;
   commissioning: Pick<
     PansCommissioningService,
-    "assignDeviceToNetworkProfile" | "migrateNetworkProfilePan"
+    | "assignDeviceToNetworkProfile"
+    | "unassignDeviceFromNetworkProfile"
+    | "migrateNetworkProfilePan"
   >;
   diagnostics: Pick<PansDiagnosticsService, "inspect">;
   batch: PansBatchOperationService;
@@ -145,21 +155,32 @@ interface PansManagerContextValue {
   assignDiscoveries(networkId: string, ids: string[]): Promise<void>;
   createNetwork(input: NetworkCreationInput): Promise<NetworkCreationResult>;
   saveNetwork(network: ManagedNetwork): Promise<void>;
+  saveNetworkLocalDetails(input: {
+    networkId: string;
+    name: string;
+    notes?: string;
+  }): Promise<ManagedNetwork>;
   deleteNetwork(networkId: string): Promise<void>;
-  saveDevice(device: ManagedDevice): Promise<void>;
+  saveDeviceLocalDetails(
+    deviceId: string,
+    localChanges: DeviceConfigurationDiff["localChanges"],
+  ): Promise<ManagedDevice>;
   inspectDevice(deviceId: string): Promise<PansInspectionResult>;
   inspectDiagnostics(deviceId: string): Promise<PansDiagnosticsResult>;
   configureDevice(
     deviceId: string,
     config: ManagedDeviceConfig,
   ): Promise<PansConfigurationResult>;
-  assignDevicePan(
+  applyDeviceConfiguration(
     deviceId: string,
-    panId: number,
+    hardwareChanges: DeviceConfigurationDiff["hardwareChanges"],
   ): Promise<PansConfigurationResult>;
   assignDeviceToNetworkProfile(
     input: AssignDeviceToNetworkProfileInput,
   ): Promise<AssignDeviceToNetworkProfileResult>;
+  unassignDeviceFromNetworkProfile(
+    input: UnassignDeviceFromNetworkProfileInput,
+  ): Promise<UnassignDeviceFromNetworkProfileResult>;
   migrateNetworkProfilePan(
     input: MigrateNetworkProfilePanInput,
   ): Promise<MigrateNetworkProfilePanResult>;
@@ -379,11 +400,16 @@ export function PansManagerProvider({
         );
         if (!discovery) continue;
         const device = await persistDiscovery(discovery);
-        await runtime.repository.associateDevice({
-          networkId,
-          deviceId: device.id,
-          associatedAt: Date.now(),
-        });
+        const assignment =
+          await runtime.commissioning.assignDeviceToNetworkProfile({
+            deviceId: device.id,
+            targetNetworkId: networkId,
+          });
+        if (assignment.outcome !== "assigned") {
+          throw new Error(
+            assignment.error?.message ?? "Network profile assignment failed.",
+          );
+        }
       }
       setSelectedDiscoveryIds(new Set());
       await refreshPersisted();
@@ -415,31 +441,25 @@ export function PansManagerProvider({
       await runtime.repository.saveNetwork(network);
       const configurations: PansConfigurationResult[] = [];
       for (const discovery of input.discoveries) {
-        let device = await persistDiscovery(discovery);
-        await runtime.repository.associateDevice({
-          networkId: network.id,
-          deviceId: device.id,
-          associatedAt: Date.now(),
-        });
-        const result = await runtime.configuration.assignPanId(
-          device.id,
-          network.panId,
+        const device = await persistDiscovery(discovery);
+        const assignment =
+          await runtime.commissioning.assignDeviceToNetworkProfile({
+            deviceId: device.id,
+            targetNetworkId: network.id,
+          });
+        configurations.push(
+          assignment.configuration ?? {
+            deviceId: device.id,
+            transportDeviceId: device.transportDeviceId,
+            outcome: "failure",
+            writes: [],
+            warnings: [],
+            error: assignment.error ?? {
+              code: "UNKNOWN",
+              message: "Network profile assignment failed.",
+            },
+          },
         );
-        configurations.push(result);
-        if (result.outcome === "failure") {
-          device = {
-            ...device,
-            networkId: network.id,
-            notes: [
-              device.notes,
-              `PAN assignment failed: ${result.error?.message}`,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-            updatedAt: Date.now(),
-          };
-          await runtime.repository.saveDevice(device);
-        }
       }
       setSelectedDiscoveryIds(new Set());
       await refreshPersisted();
@@ -451,8 +471,57 @@ export function PansManagerProvider({
   const saveNetwork = React.useCallback(
     async (network: ManagedNetwork) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      await runtime.repository.saveNetwork(network);
+      const [latest, existing] = await Promise.all([
+        runtime.repository.getNetwork(network.id),
+        runtime.repository.listNetworks(),
+      ]);
+      if (!latest) throw new Error("Network profile not found.");
+      if (network.panId !== latest.panId) {
+        throw new Error(
+          "PANS Network ID changes must use the network PAN migration workflow.",
+        );
+      }
+      assertUniqueName(
+        network.name.trim(),
+        existing.map((item) => item.name),
+        latest.name,
+      );
+      await runtime.repository.saveNetwork({
+        ...latest,
+        ...network,
+        name: network.name.trim(),
+        panId: latest.panId,
+      });
       await refreshPersisted();
+    },
+    [refreshPersisted, runtime],
+  );
+
+  const saveNetworkLocalDetails = React.useCallback(
+    async (input: { networkId: string; name: string; notes?: string }) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const [latest, existing] = await Promise.all([
+        runtime.repository.getNetwork(input.networkId),
+        runtime.repository.listNetworks(),
+      ]);
+      if (!latest) throw new Error("Network profile not found.");
+      const name = input.name.trim();
+      assertUniqueName(
+        name,
+        existing.map((item) => item.name),
+        latest.name,
+      );
+      const saved: ManagedNetwork = {
+        ...latest,
+        name,
+        ...(Object.prototype.hasOwnProperty.call(input, "notes")
+          ? { notes: input.notes?.trim() || undefined }
+          : {}),
+        updatedAt: Date.now(),
+      };
+      await runtime.repository.saveNetwork(saved);
+      await refreshPersisted();
+      return saved;
     },
     [refreshPersisted, runtime],
   );
@@ -466,11 +535,27 @@ export function PansManagerProvider({
     [refreshPersisted, runtime],
   );
 
-  const saveDevice = React.useCallback(
-    async (device: ManagedDevice) => {
+  const saveDeviceLocalDetails = React.useCallback(
+    async (
+      deviceId: string,
+      localChanges: DeviceConfigurationDiff["localChanges"],
+    ) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      await runtime.repository.saveDevice(device);
+      const latest = await runtime.repository.getDevice(deviceId);
+      if (!latest) throw new Error("Managed device not found.");
+      const saved: ManagedDevice = {
+        ...latest,
+        ...(Object.prototype.hasOwnProperty.call(localChanges, "nickname")
+          ? { nickname: localChanges.nickname?.trim() || undefined }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(localChanges, "notes")
+          ? { notes: localChanges.notes?.trim() || undefined }
+          : {}),
+        updatedAt: Date.now(),
+      };
+      await runtime.repository.saveDevice(saved);
       await refreshPersisted();
+      return saved;
     },
     [refreshPersisted, runtime],
   );
@@ -511,10 +596,16 @@ export function PansManagerProvider({
     [refreshPersisted, runtime],
   );
 
-  const assignDevicePan = React.useCallback(
-    async (deviceId: string, panId: number) => {
+  const applyDeviceConfiguration = React.useCallback(
+    async (
+      deviceId: string,
+      hardwareChanges: DeviceConfigurationDiff["hardwareChanges"],
+    ) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      const result = await runtime.configuration.assignPanId(deviceId, panId);
+      const result = await runtime.configuration.applyConfigurationDiff(
+        deviceId,
+        hardwareChanges,
+      );
       await refreshPersisted();
       return result;
     },
@@ -526,6 +617,17 @@ export function PansManagerProvider({
       if (!runtime) throw new Error("Manager is not ready.");
       const result =
         await runtime.commissioning.assignDeviceToNetworkProfile(input);
+      await refreshPersisted();
+      return result;
+    },
+    [refreshPersisted, runtime],
+  );
+
+  const unassignDeviceFromNetworkProfile = React.useCallback(
+    async (input: UnassignDeviceFromNetworkProfileInput) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const result =
+        await runtime.commissioning.unassignDeviceFromNetworkProfile(input);
       await refreshPersisted();
       return result;
     },
@@ -704,13 +806,15 @@ export function PansManagerProvider({
       assignDiscoveries,
       createNetwork,
       saveNetwork,
+      saveNetworkLocalDetails,
       deleteNetwork,
-      saveDevice,
+      saveDeviceLocalDetails,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,
-      assignDevicePan,
+      applyDeviceConfiguration,
       assignDeviceToNetworkProfile,
+      unassignDeviceFromNetworkProfile,
       migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,
@@ -751,13 +855,15 @@ export function PansManagerProvider({
       assignDiscoveries,
       createNetwork,
       saveNetwork,
+      saveNetworkLocalDetails,
       deleteNetwork,
-      saveDevice,
+      saveDeviceLocalDetails,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,
-      assignDevicePan,
+      applyDeviceConfiguration,
       assignDeviceToNetworkProfile,
+      unassignDeviceFromNetworkProfile,
       migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,

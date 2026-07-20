@@ -100,10 +100,12 @@ function dashboardRuntime(): PansManagerRuntime {
       inspect: jest.fn(),
       inspectAndCache: jest.fn(),
       configureDevice: jest.fn(),
+      applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),
+      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },

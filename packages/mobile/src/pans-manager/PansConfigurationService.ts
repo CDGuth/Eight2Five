@@ -8,6 +8,7 @@ import type {
   ManagedDevice,
   ManagedDeviceConfig,
   ManagedTagConfig,
+  HardwareDeviceChanges,
   PansConfigurationResult,
   PansInspectionResult,
   VerifiedWrite,
@@ -15,6 +16,7 @@ import type {
 import {
   assertPanId,
   assertValidLabel,
+  assertValidPosition,
   normalizeDeviceConfig,
 } from "./validation";
 
@@ -147,6 +149,227 @@ export class PansConfigurationService {
     }
   }
 
+  /** Applies only caller-declared dirty hardware fields. PAN and update rates are not accepted. */
+  async applyConfigurationDiff(
+    deviceId: string,
+    hardwareChanges: HardwareDeviceChanges,
+  ): Promise<PansConfigurationResult> {
+    const device = await this.requireDevice(deviceId);
+    const writes: VerifiedWrite[] = [];
+    const warnings: string[] = [];
+    let inspected: PansInspectionResult | undefined;
+    let successfulPosition: ManagedAnchorConfig["position"];
+    let didWrite = false;
+
+    try {
+      const finalInspection = await this.sessions.withConnectedDevice(
+        device.transportDeviceId,
+        async (session) => {
+          inspected = await inspectConnected(session, device.id, this.now);
+          warnings.push(...inspected.warnings);
+          validateHardwareChanges(
+            hardwareChanges,
+            inspected.operationMode.role,
+          );
+
+          if (hasOwn(hardwareChanges, "label")) {
+            const requested = hardwareChanges.label!;
+            if (requested === inspected.label) {
+              writes.push(verified("label", requested, inspected.label));
+            } else {
+              try {
+                requireWrite(
+                  await session.writeLabel(requested),
+                  "label",
+                  deviceId,
+                );
+                didWrite = true;
+                const actual = await optionalRead(
+                  () => session.readLabel(),
+                  "label readback",
+                  warnings,
+                );
+                writes.push(verifiableWrite("label", requested, actual));
+                if (actual !== undefined)
+                  inspected = { ...inspected, label: actual };
+              } catch (error) {
+                writes.push(failedWrite("label", requested, error));
+                throw error;
+              }
+            }
+          }
+
+          const modePatch = buildSparseModePatch(
+            hardwareChanges,
+            inspected.operationMode,
+          );
+          const requestedModeFields = sparseModeFields(hardwareChanges);
+          if (Object.keys(modePatch).length) {
+            try {
+              await session.patchOperationMode(modePatch);
+              didWrite = true;
+              const actual = await session.readOperationMode();
+              inspected = { ...inspected, operationMode: actual };
+              for (const field of requestedModeFields) {
+                writes.push(
+                  verified(
+                    field.changeKey,
+                    field.requested,
+                    actual[field.modeKey],
+                  ),
+                );
+              }
+            } catch (error) {
+              for (const field of requestedModeFields) {
+                if (hasOwn(modePatch, field.modeKey)) {
+                  writes.push(
+                    failedWrite(field.changeKey, field.requested, error),
+                  );
+                }
+              }
+              throw error;
+            }
+          } else {
+            for (const field of requestedModeFields) {
+              writes.push(
+                verified(
+                  field.changeKey,
+                  field.requested,
+                  inspected.operationMode[field.modeKey],
+                ),
+              );
+            }
+          }
+
+          if (hasOwn(hardwareChanges, "locationDataMode")) {
+            const requested = hardwareChanges.locationDataMode!;
+            if (requested === inspected.locationDataMode) {
+              writes.push(
+                verified(
+                  "locationDataMode",
+                  requested,
+                  inspected.locationDataMode,
+                ),
+              );
+            } else {
+              try {
+                requireWrite(
+                  await session.writeLocationDataMode(requested),
+                  "location data mode",
+                  deviceId,
+                );
+                didWrite = true;
+                const actual = await optionalRead(
+                  () => session.readLocationDataMode(),
+                  "location data mode readback",
+                  warnings,
+                );
+                writes.push(
+                  verifiableWrite("locationDataMode", requested, actual),
+                );
+                if (actual !== undefined)
+                  inspected = { ...inspected, locationDataMode: actual };
+              } catch (error) {
+                writes.push(failedWrite("locationDataMode", requested, error));
+                throw error;
+              }
+            }
+          }
+
+          if (hasOwn(hardwareChanges, "position")) {
+            const requested = hardwareChanges.position!;
+            try {
+              requireWrite(
+                await session.writePersistedPosition(requested),
+                "persisted position",
+                deviceId,
+              );
+              didWrite = true;
+              successfulPosition = requested;
+              const warning =
+                "Persisted position is write-only and cannot be read back.";
+              writes.push({
+                field: "position",
+                status: "written-unverified",
+                requested,
+                warning,
+              });
+              warnings.push(warning);
+            } catch (error) {
+              writes.push(failedWrite("position", requested, error));
+              throw error;
+            }
+          }
+
+          const actual = await inspectConnected(session, device.id, this.now);
+          inspected = mergeInspectionObservations(actual, inspected);
+          warnings.push(
+            ...actual.warnings.filter((warning) => !warnings.includes(warning)),
+          );
+          return inspected;
+        },
+      );
+
+      const persistedConfig = configFromInspection(finalInspection);
+      preserveKnownAnchorPosition(
+        persistedConfig,
+        successfulPosition,
+        device.lastKnownConfig,
+      );
+      await this.persistInspection(device, persistedConfig, finalInspection);
+      const partial =
+        warnings.length > 0 ||
+        writes.some((write) => write.status !== "verified");
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: partial ? "partial" : "verified",
+        inspected: finalInspection,
+        writes,
+        warnings,
+      };
+    } catch (error) {
+      const normalized = normalizeManagerError(error, {
+        deviceId,
+        operation: "apply configuration diff",
+      });
+      if (inspected && didWrite) {
+        const persistedConfig = configFromInspection(inspected);
+        preserveKnownAnchorPosition(
+          persistedConfig,
+          successfulPosition,
+          device.lastKnownConfig,
+        );
+        try {
+          await this.persistInspection(device, persistedConfig, inspected);
+        } catch (persistenceError) {
+          const storage = normalizeManagerError(persistenceError, {
+            deviceId,
+            operation: "persist partial configuration",
+          });
+          return {
+            deviceId,
+            transportDeviceId: device.transportDeviceId,
+            outcome: "partial",
+            inspected,
+            writes,
+            warnings,
+            error: { code: storage.code, message: storage.message },
+          };
+        }
+      }
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: didWrite ? "partial" : "failure",
+        ...(inspected ? { inspected } : {}),
+        writes,
+        warnings,
+        error: { code: normalized.code, message: normalized.message },
+      };
+    }
+  }
+
   async writeLabel(
     deviceId: string,
     label: string,
@@ -201,20 +424,6 @@ export class PansConfigurationService {
             writes.push(verified("label", config.label, actual));
           }
 
-          if (config.panId !== undefined && config.panId !== inspected.panId) {
-            requireWrite(
-              await session.writeNetworkId(config.panId),
-              "PAN ID",
-              deviceId,
-            );
-            const actual = await optionalRead(
-              () => session.readNetworkId(),
-              "PAN ID readback",
-              warnings,
-            );
-            writes.push(verified("panId", config.panId, actual));
-          }
-
           const modePatch = buildModePatch(config, inspected.operationMode);
           if (Object.keys(modePatch).length) {
             await session.patchOperationMode(modePatch);
@@ -224,6 +433,7 @@ export class PansConfigurationService {
 
           if (
             config.role === "tag" &&
+            config.locationDataMode !== undefined &&
             config.locationDataMode !== inspected.locationDataMode
           ) {
             requireWrite(
@@ -337,11 +547,19 @@ export class PansConfigurationService {
   ): Promise<void> {
     const updatedAt = this.now();
     try {
+      const latestDevice = await this.repository.getDevice(device.id);
+      if (!latestDevice) {
+        throw new ManagerError(
+          "DEVICE_NOT_FOUND",
+          "The managed device disappeared before its configuration could be saved.",
+          { deviceId: device.id, operation: "persist configuration" },
+        );
+      }
       await this.repository.saveDevice({
-        ...device,
-        label: inspection.label ?? persistedConfig.label ?? device.label,
+        ...latestDevice,
+        label: inspection.label ?? persistedConfig.label ?? latestDevice.label,
         role: inspection.operationMode.role,
-        nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? device.nodeIdHex,
+        nodeIdHex: inspection.deviceInfo?.nodeIdHex ?? latestDevice.nodeIdHex,
         lastKnownConfig: persistedConfig,
         updatedAt,
       });
@@ -379,6 +597,240 @@ function positionsEqual(
     left?.zMeters === right?.zMeters &&
     left?.quality === right?.quality
   );
+}
+
+type EditableModeKey =
+  | "role"
+  | "uwbMode"
+  | "selectedFirmware"
+  | "ledEnabled"
+  | "firmwareUpdateEnabled"
+  | "initiatorEnabled"
+  | "locationEngineEnabled"
+  | "lowPowerModeEnabled"
+  | "accelerometerEnabled";
+
+interface SparseModeField {
+  changeKey: keyof HardwareDeviceChanges;
+  modeKey: EditableModeKey;
+  requested: unknown;
+}
+
+function sparseModeFields(changes: HardwareDeviceChanges): SparseModeField[] {
+  const mapping: [keyof HardwareDeviceChanges, EditableModeKey][] = [
+    ["role", "role"],
+    ["uwbMode", "uwbMode"],
+    ["selectedFirmware", "selectedFirmware"],
+    ["ledEnabled", "ledEnabled"],
+    ["firmwareUpdateEnabled", "firmwareUpdateEnabled"],
+    ["initiatorEnabled", "initiatorEnabled"],
+    ["locationEngineEnabled", "locationEngineEnabled"],
+    ["lowPowerModeEnabled", "lowPowerModeEnabled"],
+    ["stationaryDetectionEnabled", "accelerometerEnabled"],
+  ];
+  return mapping
+    .filter(([changeKey]) => hasOwn(changes, changeKey))
+    .map(([changeKey, modeKey]) => ({
+      changeKey,
+      modeKey,
+      requested: changes[changeKey],
+    }));
+}
+
+function buildSparseModePatch(
+  changes: HardwareDeviceChanges,
+  current: PansInspectionResult["operationMode"],
+): PansOperationModePatch {
+  return Object.fromEntries(
+    sparseModeFields(changes)
+      .filter((field) => !Object.is(current[field.modeKey], field.requested))
+      .map((field) => [field.modeKey, field.requested]),
+  ) as PansOperationModePatch;
+}
+
+function validateHardwareChanges(
+  changes: HardwareDeviceChanges,
+  currentRole: PansInspectionResult["operationMode"]["role"],
+): void {
+  const record = changes as Record<string, unknown>;
+  if (
+    hasOwn(record, "panId") ||
+    hasOwn(record, "movingUpdateRateMs") ||
+    hasOwn(record, "stationaryUpdateRateMs")
+  ) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "PAN ID and tag update rates cannot be changed through a device configuration diff.",
+    );
+  }
+  const supportedFields = new Set<keyof HardwareDeviceChanges>([
+    "label",
+    "role",
+    "uwbMode",
+    "selectedFirmware",
+    "ledEnabled",
+    "firmwareUpdateEnabled",
+    "initiatorEnabled",
+    "position",
+    "locationEngineEnabled",
+    "lowPowerModeEnabled",
+    "stationaryDetectionEnabled",
+    "locationDataMode",
+  ]);
+  const unknownField = Object.keys(record).find(
+    (key) => !supportedFields.has(key as keyof HardwareDeviceChanges),
+  );
+  if (unknownField) invalidHardwareField(unknownField);
+  if (hasOwn(changes, "label")) {
+    if (typeof changes.label !== "string") invalidHardwareField("label");
+    assertValidLabel(changes.label);
+  }
+  if (
+    hasOwn(changes, "role") &&
+    changes.role !== "tag" &&
+    changes.role !== "anchor"
+  )
+    invalidHardwareField("role");
+  if (
+    hasOwn(changes, "uwbMode") &&
+    changes.uwbMode !== "off" &&
+    changes.uwbMode !== "passive" &&
+    changes.uwbMode !== "active"
+  )
+    invalidHardwareField("UWB mode");
+  if (
+    hasOwn(changes, "selectedFirmware") &&
+    changes.selectedFirmware !== 1 &&
+    changes.selectedFirmware !== 2
+  )
+    invalidHardwareField("selected firmware");
+  for (const key of [
+    "ledEnabled",
+    "firmwareUpdateEnabled",
+    "initiatorEnabled",
+    "locationEngineEnabled",
+    "lowPowerModeEnabled",
+    "stationaryDetectionEnabled",
+  ] as const) {
+    if (hasOwn(changes, key) && typeof changes[key] !== "boolean")
+      invalidHardwareField(key);
+  }
+  if (
+    hasOwn(changes, "locationDataMode") &&
+    changes.locationDataMode !== 0 &&
+    changes.locationDataMode !== 1 &&
+    changes.locationDataMode !== 2
+  )
+    invalidHardwareField("location data mode");
+  if (hasOwn(changes, "position")) {
+    if (!changes.position || typeof changes.position !== "object")
+      invalidHardwareField("position");
+    assertValidPosition(changes.position);
+  }
+
+  const targetRole = changes.role ?? currentRole;
+  const hasAnchorField =
+    hasOwn(changes, "initiatorEnabled") || hasOwn(changes, "position");
+  const hasTagField =
+    hasOwn(changes, "locationEngineEnabled") ||
+    hasOwn(changes, "lowPowerModeEnabled") ||
+    hasOwn(changes, "stationaryDetectionEnabled") ||
+    hasOwn(changes, "locationDataMode");
+  if (targetRole === "tag" && hasAnchorField) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "Anchor-only fields cannot be applied to a tag.",
+    );
+  }
+  if (targetRole === "anchor" && hasTagField) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "Tag-only fields cannot be applied to an anchor.",
+    );
+  }
+}
+
+function invalidHardwareField(field: string): never {
+  throw new ManagerError(
+    "INVALID_CONFIGURATION",
+    `The provided ${field} value is invalid.`,
+  );
+}
+
+function hasOwn(value: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function failedWrite(
+  field: string,
+  requested: unknown,
+  error: unknown,
+): VerifiedWrite {
+  const normalized = normalizeManagerError(error, {
+    operation: `write ${field}`,
+  });
+  return {
+    field,
+    status: "failed",
+    requested,
+    warning: normalized.message,
+    errorCode: normalized.code,
+  };
+}
+
+function verifiableWrite(
+  field: string,
+  requested: unknown,
+  actual: unknown,
+): VerifiedWrite {
+  if (actual !== undefined) return verified(field, requested, actual);
+  return {
+    field,
+    status: "written-unverified",
+    requested,
+    warning: `${field} was written but readback is unavailable.`,
+  };
+}
+
+function preserveKnownAnchorPosition(
+  config: ManagedDeviceConfig,
+  newlyWritten: ManagedAnchorConfig["position"],
+  previous: ManagedDeviceConfig | undefined,
+): void {
+  if (config.role !== "anchor") return;
+  const position =
+    newlyWritten ??
+    (previous?.role === "anchor" ? previous.position : undefined);
+  if (position) config.position = position;
+}
+
+function mergeInspectionObservations(
+  finalInspection: PansInspectionResult,
+  priorInspection: PansInspectionResult,
+): PansInspectionResult {
+  return {
+    ...finalInspection,
+    ...(finalInspection.label === undefined &&
+    priorInspection.label !== undefined
+      ? { label: priorInspection.label }
+      : {}),
+    ...(finalInspection.panId === undefined &&
+    priorInspection.panId !== undefined
+      ? { panId: priorInspection.panId }
+      : {}),
+    ...(finalInspection.locationDataMode === undefined &&
+    priorInspection.locationDataMode !== undefined
+      ? { locationDataMode: priorInspection.locationDataMode }
+      : {}),
+    ...(finalInspection.updateRate === undefined &&
+    priorInspection.updateRate !== undefined
+      ? { updateRate: priorInspection.updateRate }
+      : {}),
+    ...(finalInspection.deviceInfo === undefined &&
+    priorInspection.deviceInfo !== undefined
+      ? { deviceInfo: priorInspection.deviceInfo }
+      : {}),
+  };
 }
 
 async function inspectConnected(
@@ -469,6 +921,9 @@ function buildModePatch(
   const desired: PansOperationModePatch = {
     role: config.role,
     uwbMode: config.uwbMode,
+    ...(config.selectedFirmware !== undefined
+      ? { selectedFirmware: config.selectedFirmware }
+      : {}),
     ledEnabled: config.ledEnabled,
     firmwareUpdateEnabled: config.firmwareUpdateEnabled,
     ...(config.role === "tag"
@@ -570,6 +1025,7 @@ function configFromInspection(
         ? { panId: fallback.panId }
         : {}),
     uwbMode: mode.uwbMode,
+    selectedFirmware: mode.selectedFirmware,
     ledEnabled: mode.ledEnabled,
     firmwareUpdateEnabled: mode.firmwareUpdateEnabled,
   };

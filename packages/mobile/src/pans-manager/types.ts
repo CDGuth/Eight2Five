@@ -94,6 +94,8 @@ export interface ManagedDeviceConfigBase {
   panId?: number;
   role: PansNodeRole;
   uwbMode: PansUwbMode;
+  /** Absent on caches created before this field was read from hardware. */
+  selectedFirmware?: 1 | 2;
   ledEnabled: boolean;
   firmwareUpdateEnabled: boolean;
 }
@@ -103,7 +105,8 @@ export interface ManagedTagConfig extends ManagedDeviceConfigBase {
   locationEngineEnabled: boolean;
   lowPowerModeEnabled: boolean;
   stationaryDetectionEnabled: boolean;
-  locationDataMode: PansLocationDataMode;
+  /** Optional because some firmware does not expose this readable characteristic. */
+  locationDataMode?: PansLocationDataMode;
   movingUpdateRateMs?: number;
   stationaryUpdateRateMs?: number;
 }
@@ -115,6 +118,37 @@ export interface ManagedAnchorConfig extends ManagedDeviceConfigBase {
 }
 
 export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
+
+/** App-only fields which may be independently saved without a BLE session. */
+export interface LocalDeviceChanges {
+  nickname?: string | undefined;
+  notes?: string | undefined;
+}
+
+/**
+ * Sparse, explicitly dirty hardware fields. PAN and tag update rates are
+ * intentionally excluded: profile assignment/migration own PAN writes and the
+ * current native API exposes update rates as read-only.
+ */
+export interface HardwareDeviceChanges {
+  label?: string;
+  role?: PansNodeRole;
+  uwbMode?: PansUwbMode;
+  selectedFirmware?: 1 | 2;
+  ledEnabled?: boolean;
+  firmwareUpdateEnabled?: boolean;
+  initiatorEnabled?: boolean;
+  position?: PansPosition;
+  locationEngineEnabled?: boolean;
+  lowPowerModeEnabled?: boolean;
+  stationaryDetectionEnabled?: boolean;
+  locationDataMode?: PansLocationDataMode;
+}
+
+export interface DeviceConfigurationDiff {
+  localChanges: LocalDeviceChanges;
+  hardwareChanges: HardwareDeviceChanges;
+}
 
 export interface ManagedDevice {
   id: string;
