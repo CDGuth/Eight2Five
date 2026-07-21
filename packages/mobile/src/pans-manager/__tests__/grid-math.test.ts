@@ -1,7 +1,12 @@
 import {
+  applyGridCameraTransform,
+  buildConsolidatedEdgePath,
+  buildConsolidatedGridPath,
   boundsForPoints,
   chooseGridInterval,
   fitGridBounds,
+  gridCameraTransform,
+  normalizeGridViewport,
   panGridViewport,
   screenToWorld,
   worldToScreen,
@@ -65,5 +70,68 @@ describe("PansNetworkGrid math", () => {
     const zoomed = zoomGridViewport(viewport, size, focal, 2);
     expect(zoomed.metersPerPixel).toBe(0.5);
     expect(screenToWorld(focal, zoomed, size)).toEqual(before);
+  });
+
+  test("keeps the affine Skia camera transform in parity with worldToScreen", () => {
+    const viewport = {
+      centerXMeters: 4,
+      centerYMeters: -3,
+      metersPerPixel: 0.25,
+    };
+    const size = { width: 320, height: 180 };
+    const point = { xMeters: 12, yMeters: 2 };
+    expect(
+      applyGridCameraTransform(point, gridCameraTransform(viewport, size)),
+    ).toEqual(worldToScreen(point, viewport, size));
+  });
+
+  test("normalizes invalid camera values and clamps scale", () => {
+    expect(
+      normalizeGridViewport({
+        centerXMeters: Number.NaN,
+        centerYMeters: Number.POSITIVE_INFINITY,
+        metersPerPixel: 0,
+      }),
+    ).toEqual({ centerXMeters: 0, centerYMeters: 0, metersPerPixel: 0.0001 });
+    expect(
+      normalizeGridViewport({
+        centerXMeters: 1,
+        centerYMeters: 2,
+        metersPerPixel: Number.MAX_VALUE,
+      }).metersPerPixel,
+    ).toBe(10_000);
+  });
+
+  test("consolidates grid, origin, and resolved edges into path strings", () => {
+    const viewport = {
+      centerXMeters: 0,
+      centerYMeters: 0,
+      metersPerPixel: 1,
+    };
+    const grid = buildConsolidatedGridPath(
+      viewport,
+      { width: 4, height: 4 },
+      2,
+      { overscanScreens: 0, showOrigin: true },
+    );
+    expect(grid).toContain("M -2 -2 L -2 2");
+    expect(grid).toContain("M -2 0 L 2 0");
+    expect(
+      buildConsolidatedGridPath(viewport, { width: 4, height: 4 }, 2, {
+        showGrid: false,
+        showOrigin: false,
+      }),
+    ).toBe("");
+
+    const points = new Map([
+      ["tag", { xMeters: 1, yMeters: 2 }],
+      ["anchor", { xMeters: 3, yMeters: 4 }],
+    ]);
+    expect(
+      buildConsolidatedEdgePath(points, [
+        { sourceId: "tag", targetId: "anchor" },
+        { sourceId: "tag", targetId: "missing" },
+      ]),
+    ).toBe("M 1 2 L 3 4");
   });
 });

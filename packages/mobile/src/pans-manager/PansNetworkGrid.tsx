@@ -1,14 +1,25 @@
 import React from "react";
-import { PanResponder, Text, View, type LayoutChangeEvent } from "react-native";
-import { Canvas, Circle, Line, Rect, vec } from "@shopify/react-native-skia";
-import type { PansPosition } from "expo-pans-ble-api";
 import {
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { Canvas, Circle, Fill, Group, Path } from "@shopify/react-native-skia";
+import type { PansPosition } from "expo-pans-ble-api";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
+import {
+  buildConsolidatedGridPath,
   chooseGridInterval,
   DEFAULT_GRID_VIEWPORT,
-  panGridViewport,
-  screenToWorld,
-  worldToScreen,
-  zoomGridViewport,
+  normalizeGridViewport,
   type GridPoint,
   type GridSize,
   type GridViewport,
@@ -16,12 +27,36 @@ import {
 
 export type PansGridNodeStatus = "normal" | "warning" | "error" | "offline";
 
+export interface PansGridPalette {
+  background: string;
+  grid: string;
+  anchor: string;
+  tag: string;
+  initiator: string;
+  selected: string;
+  offline: string;
+  warning: string;
+  error: string;
+  label: string;
+  edge: string;
+}
+
+export interface PansGridCameraSharedValues {
+  centerX: SharedValue<number>;
+  centerY: SharedValue<number>;
+  metersPerPixel: SharedValue<number>;
+}
+
 export interface PansGridNode {
   id: string;
+  /** Optional hardware node ID metadata used to resolve actual ranging frames. */
+  nodeIdHex?: string;
   label?: string;
   role: "anchor" | "tag";
   position: Pick<PansPosition, "xMeters" | "yMeters">;
+  livePosition?: SharedValue<GridPoint>;
   initiator?: boolean;
+  panMismatch?: boolean;
   status?: PansGridNodeStatus;
 }
 
@@ -32,352 +67,503 @@ export interface PansGridObservedEdge {
 
 export interface PansNetworkGridProps {
   nodes: PansGridNode[];
+  palette: PansGridPalette;
   observedEdges?: PansGridObservedEdge[];
   viewport?: GridViewport;
   defaultViewport?: GridViewport;
+  camera?: PansGridCameraSharedValues;
   onViewportChange?(viewport: GridViewport): void;
+  onSizeChange?(size: GridSize): void;
   selectedNodeId?: string;
   onSelectNode?(nodeId: string | undefined): void;
   showLabels?: boolean;
+  showGrid?: boolean;
+  gridIntervalMeters?: number;
+  showOrigin?: boolean;
   editMode?: boolean;
   onLongPressCoordinate?(point: GridPoint): void;
+  /** Legacy fixed-height compatibility. Omit to fill the available flex space. */
   height?: number;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
 export function PansNetworkGrid({
   nodes,
+  palette,
   observedEdges = [],
   viewport: controlledViewport,
   defaultViewport = DEFAULT_GRID_VIEWPORT,
+  camera: externalCamera,
   onViewportChange,
+  onSizeChange,
   selectedNodeId,
   onSelectNode,
   showLabels = true,
+  showGrid = true,
+  gridIntervalMeters,
+  showOrigin = false,
   editMode = false,
   onLongPressCoordinate,
-  height = 420,
+  height,
+  style,
   testID = "pans-network-grid",
 }: PansNetworkGridProps) {
-  const [size, setSize] = React.useState<GridSize>({ width: 0, height });
-  const [internalViewport, setInternalViewport] =
-    React.useState(defaultViewport);
-  const viewport = controlledViewport ?? internalViewport;
-
-  const updateViewport = React.useCallback(
-    (next: GridViewport) => {
-      const clamped = {
-        ...next,
-        metersPerPixel: Math.min(10_000, Math.max(0.0001, next.metersPerPixel)),
-      };
-      if (!controlledViewport) setInternalViewport(clamped);
-      onViewportChange?.(clamped);
-    },
-    [controlledViewport, onViewportChange],
+  const [initialViewport] = React.useState(() =>
+    normalizeGridViewport(controlledViewport ?? defaultViewport),
   );
+  const [size, setSize] = React.useState<GridSize>({
+    width: 0,
+    height: height ?? 0,
+  });
+  const layoutSizeRef = React.useRef<GridSize>({
+    width: 0,
+    height: height ?? 0,
+  });
+  const [internalCommittedViewport, setInternalCommittedViewport] =
+    React.useState(initialViewport);
+  const internalCenterX = useSharedValue(initialViewport.centerXMeters);
+  const internalCenterY = useSharedValue(initialViewport.centerYMeters);
+  const internalMetersPerPixel = useSharedValue(initialViewport.metersPerPixel);
+  const canvasSize = useSharedValue<GridSize>({ width: 0, height: 0 });
+  const gestureActive = useSharedValue(false);
+  const camera = externalCamera ?? {
+    centerX: internalCenterX,
+    centerY: internalCenterY,
+    metersPerPixel: internalMetersPerPixel,
+  };
 
-  const responder = React.useMemo(
+  const controlledCenterX = controlledViewport?.centerXMeters;
+  const controlledCenterY = controlledViewport?.centerYMeters;
+  const controlledScale = controlledViewport?.metersPerPixel;
+  const normalizedControlledViewport = React.useMemo(
     () =>
-      createGridPanResponder({
-        viewport,
-        size,
-        nodes,
-        editMode,
-        onLongPressCoordinate,
-        onSelectNode,
-        updateViewport,
-      }),
-    [
-      editMode,
-      nodes,
-      onLongPressCoordinate,
-      onSelectNode,
-      size,
-      updateViewport,
-      viewport,
-    ],
+      controlledCenterX === undefined ||
+      controlledCenterY === undefined ||
+      controlledScale === undefined
+        ? undefined
+        : normalizeGridViewport({
+            centerXMeters: controlledCenterX,
+            centerYMeters: controlledCenterY,
+            metersPerPixel: controlledScale,
+          }),
+    [controlledCenterX, controlledCenterY, controlledScale],
+  );
+  const committedViewport =
+    normalizedControlledViewport ?? internalCommittedViewport;
+
+  React.useEffect(() => {
+    if (!normalizedControlledViewport) return;
+    const next = normalizedControlledViewport;
+    camera.centerX.value = next.centerXMeters;
+    camera.centerY.value = next.centerYMeters;
+    camera.metersPerPixel.value = next.metersPerPixel;
+  }, [
+    camera.centerX,
+    camera.centerY,
+    camera.metersPerPixel,
+    normalizedControlledViewport,
+  ]);
+
+  const commitViewport = React.useCallback(
+    (centerXMeters: number, centerYMeters: number, metersPerPixel: number) => {
+      const next = normalizeGridViewport({
+        centerXMeters,
+        centerYMeters,
+        metersPerPixel,
+      });
+      if (!normalizedControlledViewport) setInternalCommittedViewport(next);
+      onViewportChange?.(next);
+    },
+    [normalizedControlledViewport, onViewportChange],
   );
 
-  const drawing = React.useMemo(() => {
-    if (!size.width) return { vertical: [], horizontal: [], screenNodes: [] };
-    const interval = chooseGridInterval(viewport.metersPerPixel);
-    const topLeft = screenToWorld({ x: 0, y: 0 }, viewport, size);
-    const bottomRight = screenToWorld(
-      { x: size.width, y: size.height },
-      viewport,
-      size,
-    );
-    const vertical: number[] = [];
-    for (
-      let x = Math.floor(topLeft.xMeters / interval) * interval;
-      x <= bottomRight.xMeters;
-      x += interval
-    )
-      vertical.push(
-        worldToScreen({ xMeters: x, yMeters: 0 }, viewport, size).x,
+  const panStartX = useSharedValue(initialViewport.centerXMeters);
+  const panStartY = useSharedValue(initialViewport.centerYMeters);
+  const panStartScale = useSharedValue(initialViewport.metersPerPixel);
+  const pinchStartScale = useSharedValue(initialViewport.metersPerPixel);
+  const pinchWorldX = useSharedValue(0);
+  const pinchWorldY = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .withTestId(`${testID}-pan-gesture`)
+    .maxPointers(1)
+    .minDistance(2)
+    .onStart(() => {
+      gestureActive.value = true;
+      panStartX.value = camera.centerX.value;
+      panStartY.value = camera.centerY.value;
+      panStartScale.value = camera.metersPerPixel.value;
+    })
+    .onUpdate((event) => {
+      camera.centerX.value =
+        panStartX.value - event.translationX * panStartScale.value;
+      camera.centerY.value =
+        panStartY.value + event.translationY * panStartScale.value;
+    })
+    .onEnd(() => {
+      runOnJS(commitViewport)(
+        camera.centerX.value,
+        camera.centerY.value,
+        camera.metersPerPixel.value,
       );
-    const horizontal: number[] = [];
-    for (
-      let y = Math.floor(bottomRight.yMeters / interval) * interval;
-      y <= topLeft.yMeters;
-      y += interval
-    )
-      horizontal.push(
-        worldToScreen({ xMeters: 0, yMeters: y }, viewport, size).y,
+    })
+    .onFinalize(() => {
+      gestureActive.value = false;
+    });
+
+  const pinch = Gesture.Pinch()
+    .withTestId(`${testID}-pinch-gesture`)
+    .onStart((event) => {
+      gestureActive.value = true;
+      pinchStartScale.value = camera.metersPerPixel.value;
+      pinchWorldX.value =
+        camera.centerX.value +
+        (event.focalX - canvasSize.value.width / 2) *
+          camera.metersPerPixel.value;
+      pinchWorldY.value =
+        camera.centerY.value -
+        (event.focalY - canvasSize.value.height / 2) *
+          camera.metersPerPixel.value;
+    })
+    .onUpdate((event) => {
+      const nextScale = Math.min(
+        10_000,
+        Math.max(
+          0.0001,
+          pinchStartScale.value / Math.max(event.scale, 0.000001),
+        ),
       );
-    return {
-      vertical,
-      horizontal,
-      screenNodes: nodes.map((node) => ({
-        ...node,
-        screen: worldToScreen(node.position, viewport, size),
+      camera.metersPerPixel.value = nextScale;
+      camera.centerX.value =
+        pinchWorldX.value -
+        (event.focalX - canvasSize.value.width / 2) * nextScale;
+      camera.centerY.value =
+        pinchWorldY.value +
+        (event.focalY - canvasSize.value.height / 2) * nextScale;
+    })
+    .onEnd(() => {
+      runOnJS(commitViewport)(
+        camera.centerX.value,
+        camera.centerY.value,
+        camera.metersPerPixel.value,
+      );
+    })
+    .onFinalize(() => {
+      gestureActive.value = false;
+    });
+
+  const selectOnJS = React.useCallback(
+    (nodeId: string | undefined) => onSelectNode?.(nodeId),
+    [onSelectNode],
+  );
+  const hitTargets = React.useMemo(
+    () =>
+      nodes.map((node) => ({
+        id: node.id,
+        xMeters: node.position.xMeters,
+        yMeters: node.position.yMeters,
+        livePosition: node.livePosition,
       })),
-    };
-  }, [nodes, size, viewport]);
-  const screenNodeById = new Map(
-    drawing.screenNodes.map((node) => [node.id, node]),
+    [nodes],
+  );
+  const tap = Gesture.Tap()
+    .withTestId(`${testID}-tap-gesture`)
+    .maxDuration(300)
+    .maxDistance(10)
+    .onEnd((event, success) => {
+      if (!success) return;
+      let selected: string | undefined;
+      let closestDistance = 24;
+      for (const target of hitTargets) {
+        const position = target.livePosition?.value ?? target;
+        const x =
+          canvasSize.value.width / 2 +
+          (position.xMeters - camera.centerX.value) /
+            camera.metersPerPixel.value;
+        const y =
+          canvasSize.value.height / 2 -
+          (position.yMeters - camera.centerY.value) /
+            camera.metersPerPixel.value;
+        const distance = Math.hypot(x - event.x, y - event.y);
+        if (distance <= closestDistance) {
+          closestDistance = distance;
+          selected = target.id;
+        }
+      }
+      runOnJS(selectOnJS)(selected);
+    });
+
+  const longPressOnJS = React.useCallback(
+    (point: GridPoint) => onLongPressCoordinate?.(point),
+    [onLongPressCoordinate],
+  );
+  const longPress = Gesture.LongPress()
+    .withTestId(`${testID}-long-press-gesture`)
+    .enabled(editMode && Boolean(onLongPressCoordinate))
+    .minDuration(550)
+    .maxDistance(12)
+    .onStart((event) => {
+      const point = {
+        xMeters:
+          camera.centerX.value +
+          (event.x - canvasSize.value.width / 2) * camera.metersPerPixel.value,
+        yMeters:
+          camera.centerY.value -
+          (event.y - canvasSize.value.height / 2) * camera.metersPerPixel.value,
+      };
+      runOnJS(longPressOnJS)(point);
+    });
+  const gesture = Gesture.Race(
+    Gesture.Simultaneous(pan, pinch),
+    Gesture.Exclusive(longPress, tap),
   );
 
-  const onLayout = (event: LayoutChangeEvent) =>
-    setSize({ width: event.nativeEvent.layout.width, height });
+  const cameraTransform = useDerivedValue(() => [
+    { translateX: canvasSize.value.width / 2 },
+    { translateY: canvasSize.value.height / 2 },
+    { scaleX: 1 / camera.metersPerPixel.value },
+    { scaleY: -1 / camera.metersPerPixel.value },
+    { translateX: -camera.centerX.value },
+    { translateY: -camera.centerY.value },
+  ]);
+  const gridStrokeWidth = useDerivedValue(() => camera.metersPerPixel.value);
+  const edgeStrokeWidth = useDerivedValue(
+    () => camera.metersPerPixel.value * 2,
+  );
+  const interval =
+    gridIntervalMeters &&
+    Number.isFinite(gridIntervalMeters) &&
+    gridIntervalMeters > 0
+      ? gridIntervalMeters
+      : chooseGridInterval(committedViewport.metersPerPixel);
+  const gridPath = React.useMemo(
+    () =>
+      buildConsolidatedGridPath(committedViewport, size, interval, {
+        showGrid,
+        showOrigin,
+      }),
+    [committedViewport, interval, showGrid, showOrigin, size],
+  );
+  const edgeTargets = React.useMemo(() => {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    return observedEdges
+      .map((edge) => ({
+        source: byId.get(edge.sourceId),
+        target: byId.get(edge.targetId),
+      }))
+      .filter((edge): edge is { source: PansGridNode; target: PansGridNode } =>
+        Boolean(edge.source && edge.target),
+      );
+  }, [nodes, observedEdges]);
+  const edgePath = useDerivedValue(() => {
+    return edgeTargets
+      .map((edge) => {
+        const source = edge.source.livePosition?.value ?? edge.source.position;
+        const target = edge.target.livePosition?.value ?? edge.target.position;
+        return `M ${source.xMeters} ${source.yMeters} L ${target.xMeters} ${target.yMeters}`;
+      })
+      .join(" ");
+  });
+
+  const onLayout = React.useCallback(
+    (event: LayoutChangeEvent) => {
+      const next = {
+        width: event.nativeEvent.layout.width,
+        height: event.nativeEvent.layout.height,
+      };
+      if (
+        layoutSizeRef.current.width === next.width &&
+        layoutSizeRef.current.height === next.height
+      )
+        return;
+      layoutSizeRef.current = next;
+      setSize(next);
+      onSizeChange?.(next);
+    },
+    [onSizeChange],
+  );
 
   return (
-    <View
-      testID={testID}
-      style={{ height, overflow: "hidden", backgroundColor: "#f8fafc" }}
-      onLayout={onLayout}
-      {...responder.panHandlers}
-    >
-      <Canvas style={{ width: size.width, height }} testID={`${testID}-canvas`}>
-        <Rect x={0} y={0} width={size.width} height={height} color="#f8fafc" />
-        {drawing.vertical.map((x) => (
-          <Line
-            key={`x-${x}`}
-            p1={vec(x, 0)}
-            p2={vec(x, height)}
-            color="#e2e8f0"
-            strokeWidth={1}
-          />
-        ))}
-        {drawing.horizontal.map((y) => (
-          <Line
-            key={`y-${y}`}
-            p1={vec(0, y)}
-            p2={vec(size.width, y)}
-            color="#e2e8f0"
-            strokeWidth={1}
-          />
-        ))}
-        {observedEdges.map((edge) => {
-          const source = screenNodeById.get(edge.sourceId)?.screen;
-          const target = screenNodeById.get(edge.targetId)?.screen;
-          return source && target ? (
-            <Line
-              key={`${edge.sourceId}-${edge.targetId}`}
-              p1={vec(source.x, source.y)}
-              p2={vec(target.x, target.y)}
-              color="#94a3b8"
-              strokeWidth={2}
-            />
-          ) : null;
-        })}
-        {drawing.screenNodes.map((node) => {
-          const { x, y } = node.screen;
-          const color = statusColor(node.status);
-          return node.role === "anchor" ? (
-            <React.Fragment key={node.id}>
-              <Line
-                p1={vec(x, y - 10)}
-                p2={vec(x - 10, y + 9)}
-                color={color}
-                strokeWidth={3}
+    <GestureDetector gesture={gesture}>
+      <View
+        testID={testID}
+        style={[
+          height === undefined ? { flex: 1 } : { height },
+          { overflow: "hidden", backgroundColor: palette.background },
+          style,
+        ]}
+        onLayout={onLayout}
+      >
+        <Canvas
+          style={{ flex: 1 }}
+          onSize={canvasSize}
+          testID={`${testID}-canvas`}
+        >
+          <Fill color={palette.background} />
+          <Group transform={cameraTransform}>
+            {gridPath ? (
+              <Path
+                path={gridPath}
+                color={palette.grid}
+                style="stroke"
+                strokeWidth={gridStrokeWidth}
               />
-              <Line
-                p1={vec(x - 10, y + 9)}
-                p2={vec(x + 10, y + 9)}
-                color={color}
-                strokeWidth={3}
+            ) : null}
+            {edgeTargets.length ? (
+              <Path
+                path={edgePath}
+                color={palette.edge}
+                style="stroke"
+                strokeWidth={edgeStrokeWidth}
               />
-              <Line
-                p1={vec(x + 10, y + 9)}
-                p2={vec(x, y - 10)}
-                color={color}
-                strokeWidth={3}
+            ) : null}
+            {nodes.map((node) => (
+              <GridNodeSymbol
+                key={node.id}
+                node={node}
+                cameraScale={camera.metersPerPixel}
+                palette={palette}
+                selected={selectedNodeId === node.id}
               />
-              {node.initiator ? (
-                <Circle cx={x} cy={y + 2} r={3} color="#7c3aed" />
-              ) : null}
-              {selectedNodeId === node.id ? (
-                <Circle
-                  cx={x}
-                  cy={y}
-                  r={16}
-                  color="#2563eb"
-                  style="stroke"
-                  strokeWidth={2}
-                />
-              ) : null}
-            </React.Fragment>
-          ) : (
-            <React.Fragment key={node.id}>
-              <Circle cx={x} cy={y} r={8} color={color} />
-              {selectedNodeId === node.id ? (
-                <Circle
-                  cx={x}
-                  cy={y}
-                  r={14}
-                  color="#2563eb"
-                  style="stroke"
-                  strokeWidth={2}
-                />
-              ) : null}
-            </React.Fragment>
-          );
-        })}
-      </Canvas>
-      {showLabels
-        ? drawing.screenNodes.map((node) => (
-            <Text
-              key={`label-${node.id}`}
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: node.screen.x + 12,
-                top: node.screen.y - 10,
-                color: "#0f172a",
-                fontSize: 12,
-              }}
-            >
-              {node.label ?? node.id}
-            </Text>
-          ))
-        : null}
-    </View>
+            ))}
+          </Group>
+        </Canvas>
+        {showLabels
+          ? nodes.map((node) => (
+              <GridNodeLabel
+                key={`label-${node.id}`}
+                node={node}
+                camera={camera}
+                canvasSize={canvasSize}
+                gestureActive={gestureActive}
+                color={palette.label}
+              />
+            ))
+          : null}
+      </View>
+    </GestureDetector>
   );
 }
 
-function statusColor(status: PansGridNodeStatus | undefined): string {
-  if (status === "error") return "#dc2626";
-  if (status === "warning") return "#d97706";
-  if (status === "offline") return "#94a3b8";
-  return "#2563eb";
-}
-
-function createGridPanResponder(options: {
-  viewport: GridViewport;
-  size: GridSize;
-  nodes: PansGridNode[];
-  editMode: boolean;
-  onLongPressCoordinate?: (point: GridPoint) => void;
-  onSelectNode?: (nodeId: string | undefined) => void;
-  updateViewport(viewport: GridViewport): void;
+const GridNodeSymbol = React.memo(function GridNodeSymbol({
+  node,
+  cameraScale,
+  palette,
+  selected,
+}: {
+  node: PansGridNode;
+  cameraScale: SharedValue<number>;
+  palette: PansGridPalette;
+  selected: boolean;
 }) {
-  let moved = false;
-  let startedAt = 0;
-  let pinchDistance = 0;
-  let gestureViewport = options.viewport;
-  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-  const cancelLongPress = () => {
-    if (longPressTimer) clearTimeout(longPressTimer);
-    longPressTimer = undefined;
-  };
-  return PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (event) => {
-      const { locationX, locationY, touches } = event.nativeEvent;
-      moved = false;
-      startedAt = Date.now();
-      gestureViewport = options.viewport;
-      pinchDistance = touches.length >= 2 ? touchDistance(touches) : 0;
-      if (options.editMode && options.onLongPressCoordinate) {
-        longPressTimer = setTimeout(() => {
-          options.onLongPressCoordinate?.(
-            screenToWorld(
-              { x: locationX, y: locationY },
-              options.viewport,
-              options.size,
-            ),
-          );
-        }, 550);
-      }
-    },
-    onPanResponderMove: (event, state) => {
-      const touches = event.nativeEvent.touches;
-      if (Math.hypot(state.dx, state.dy) > 6) {
-        moved = true;
-        cancelLongPress();
-      }
-      if (touches.length >= 2 && pinchDistance > 0) {
-        const ratio = touchDistance(touches) / pinchDistance;
-        options.updateViewport(
-          zoomGridViewport(
-            gestureViewport,
-            options.size,
-            touchFocalPoint(touches, options.size),
-            ratio,
-          ),
-        );
-      } else {
-        options.updateViewport(
-          panGridViewport(gestureViewport, { x: state.dx, y: state.dy }),
-        );
-      }
-    },
-    onPanResponderRelease: (event) => {
-      cancelLongPress();
-      if (!moved && Date.now() - startedAt < 550) {
-        const point = {
-          x: event.nativeEvent.locationX,
-          y: event.nativeEvent.locationY,
-        };
-        const selected = options.nodes
-          .map((node) => ({
-            id: node.id,
-            point: worldToScreen(node.position, options.viewport, options.size),
-          }))
-          .find(
-            (node) =>
-              Math.hypot(node.point.x - point.x, node.point.y - point.y) <= 24,
-          );
-        options.onSelectNode?.(selected?.id);
-      }
-    },
-    onPanResponderTerminate: cancelLongPress,
+  const transform = useDerivedValue(() => {
+    const position = node.livePosition?.value ?? node.position;
+    return [
+      { translateX: position.xMeters },
+      { translateY: position.yMeters },
+      { scaleX: cameraScale.value },
+      { scaleY: -cameraScale.value },
+    ];
   });
-}
+  const color = nodeColor(node, palette);
 
-function touchDistance(touches: readonly GridTouch[]): number {
-  if (touches.length < 2) return 0;
-  return Math.hypot(
-    touches[0].pageX - touches[1].pageX,
-    touches[0].pageY - touches[1].pageY,
+  return (
+    <Group transform={transform}>
+      {node.role === "anchor" ? (
+        <Path
+          path="M 0 -10 L -10 9 L 10 9 Z"
+          color={color}
+          style="stroke"
+          strokeWidth={3}
+        />
+      ) : (
+        <Circle cx={0} cy={0} r={8} color={color} />
+      )}
+      {node.initiator ? (
+        <Circle cx={0} cy={2} r={3} color={palette.initiator} />
+      ) : null}
+      {node.panMismatch ? (
+        <Circle
+          cx={0}
+          cy={0}
+          r={node.role === "anchor" ? 13 : 11}
+          color={palette.warning}
+          style="stroke"
+          strokeWidth={2}
+        />
+      ) : null}
+      {selected ? (
+        <Circle
+          cx={0}
+          cy={0}
+          r={node.role === "anchor" ? 16 : 14}
+          color={palette.selected}
+          style="stroke"
+          strokeWidth={2}
+        />
+      ) : null}
+    </Group>
   );
-}
+});
 
-interface GridTouch {
-  pageX: number;
-  pageY: number;
-  locationX?: number;
-  locationY?: number;
-}
+const GridNodeLabel = React.memo(function GridNodeLabel({
+  node,
+  camera,
+  canvasSize,
+  gestureActive,
+  color,
+}: {
+  node: PansGridNode;
+  camera: PansGridCameraSharedValues;
+  canvasSize: SharedValue<GridSize>;
+  gestureActive: SharedValue<boolean>;
+  color: string;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const position = node.livePosition?.value ?? node.position;
+    return {
+      opacity: gestureActive.value ? 0 : 1,
+      transform: [
+        {
+          translateX:
+            canvasSize.value.width / 2 +
+            (position.xMeters - camera.centerX.value) /
+              camera.metersPerPixel.value +
+            12,
+        },
+        {
+          translateY:
+            canvasSize.value.height / 2 -
+            (position.yMeters - camera.centerY.value) /
+              camera.metersPerPixel.value -
+            10,
+        },
+      ],
+    };
+  });
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          color,
+          fontSize: 12,
+        },
+        animatedStyle,
+      ]}
+    >
+      {node.label ?? node.id}
+    </Animated.Text>
+  );
+});
 
-function touchFocalPoint(
-  touches: readonly GridTouch[],
-  size: GridSize,
-): { x: number; y: number } {
-  if (touches.length < 2) return { x: size.width / 2, y: size.height / 2 };
-  const firstX = touches[0].locationX;
-  const firstY = touches[0].locationY;
-  const secondX = touches[1].locationX;
-  const secondY = touches[1].locationY;
-  if (
-    firstX === undefined ||
-    firstY === undefined ||
-    secondX === undefined ||
-    secondY === undefined
-  ) {
-    return { x: size.width / 2, y: size.height / 2 };
-  }
-  return { x: (firstX + secondX) / 2, y: (firstY + secondY) / 2 };
+function nodeColor(node: PansGridNode, palette: PansGridPalette): string {
+  if (node.status === "error") return palette.error;
+  if (node.status === "warning") return palette.warning;
+  if (node.status === "offline") return palette.offline;
+  return node.role === "anchor" ? palette.anchor : palette.tag;
 }

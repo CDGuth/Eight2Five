@@ -12,6 +12,12 @@ export { ManagerSettingsScreen } from "./screens/manager-settings-screen";
 export { ImportNetworkScreen } from "./screens/import-network-screen";
 export { BatchConfigureScreen } from "./screens/batch-configure-screen";
 export { NetworkGridScreen } from "./screens/network-grid-screen";
+export { ManagerMapScreen } from "./screens/manager-map-screen";
+export { ManagerMapSettingsModal } from "./components/manager-map-settings-modal";
+export {
+  usePansMapDataController,
+  type PansMapDataController,
+} from "./manager-map-controller";
 export { NetworkTopologyScreen } from "./screens/network-topology-screen";
 export { NetworkLogScreen } from "./screens/network-log-screen";
 export { DeviceFirmwareScreen } from "./screens/device-firmware-screen";

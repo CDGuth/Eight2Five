@@ -27,6 +27,33 @@ export const DEFAULT_GRID_VIEWPORT: GridViewport = {
   metersPerPixel: 0.1,
 };
 
+export const MIN_GRID_METERS_PER_PIXEL = 0.0001;
+export const MAX_GRID_METERS_PER_PIXEL = 10_000;
+
+export function normalizeGridViewport(
+  viewport: GridViewport,
+  minimumMetersPerPixel = MIN_GRID_METERS_PER_PIXEL,
+  maximumMetersPerPixel = MAX_GRID_METERS_PER_PIXEL,
+): GridViewport {
+  return {
+    centerXMeters: Number.isFinite(viewport.centerXMeters)
+      ? viewport.centerXMeters
+      : DEFAULT_GRID_VIEWPORT.centerXMeters,
+    centerYMeters: Number.isFinite(viewport.centerYMeters)
+      ? viewport.centerYMeters
+      : DEFAULT_GRID_VIEWPORT.centerYMeters,
+    metersPerPixel: Math.min(
+      maximumMetersPerPixel,
+      Math.max(
+        minimumMetersPerPixel,
+        Number.isFinite(viewport.metersPerPixel)
+          ? viewport.metersPerPixel
+          : DEFAULT_GRID_VIEWPORT.metersPerPixel,
+      ),
+    ),
+  };
+}
+
 export function worldToScreen(
   point: GridPoint,
   viewport: GridViewport,
@@ -96,6 +123,38 @@ export function zoomGridViewport(
   };
 }
 
+export interface GridCameraTransform {
+  scaleX: number;
+  scaleY: number;
+  translateX: number;
+  translateY: number;
+}
+
+/** Affine world-to-screen transform used by the Skia camera group. */
+export function gridCameraTransform(
+  viewport: GridViewport,
+  size: GridSize,
+): GridCameraTransform {
+  const normalized = normalizeGridViewport(viewport);
+  const scale = 1 / normalized.metersPerPixel;
+  return {
+    scaleX: scale,
+    scaleY: -scale,
+    translateX: size.width / 2 - normalized.centerXMeters * scale,
+    translateY: size.height / 2 + normalized.centerYMeters * scale,
+  };
+}
+
+export function applyGridCameraTransform(
+  point: GridPoint,
+  transform: GridCameraTransform,
+): { x: number; y: number } {
+  return {
+    x: point.xMeters * transform.scaleX + transform.translateX,
+    y: point.yMeters * transform.scaleY + transform.translateY,
+  };
+}
+
 /** Selects a 1/2/5 × 10ⁿ interval near the requested on-screen spacing. */
 export function chooseGridInterval(
   metersPerPixel: number,
@@ -107,6 +166,104 @@ export function chooseGridInterval(
   const step =
     normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
   return step * magnitude;
+}
+
+export interface ConsolidatedGridPathOptions {
+  showGrid?: boolean;
+  showOrigin?: boolean;
+  overscanScreens?: number;
+  maximumLines?: number;
+}
+
+/** Builds one world-space SVG path for every visible grid and origin line. */
+export function buildConsolidatedGridPath(
+  viewport: GridViewport,
+  size: GridSize,
+  intervalMeters: number,
+  options: ConsolidatedGridPathOptions = {},
+): string {
+  const {
+    showGrid = true,
+    showOrigin = false,
+    overscanScreens = 1,
+    maximumLines = 2_000,
+  } = options;
+  if (
+    size.width <= 0 ||
+    size.height <= 0 ||
+    !Number.isFinite(intervalMeters) ||
+    intervalMeters <= 0 ||
+    (!showGrid && !showOrigin)
+  )
+    return "";
+
+  const normalized = normalizeGridViewport(viewport);
+  const halfWidthMeters =
+    (size.width * normalized.metersPerPixel * (1 + overscanScreens * 2)) / 2;
+  const halfHeightMeters =
+    (size.height * normalized.metersPerPixel * (1 + overscanScreens * 2)) / 2;
+  const minX = normalized.centerXMeters - halfWidthMeters;
+  const maxX = normalized.centerXMeters + halfWidthMeters;
+  const minY = normalized.centerYMeters - halfHeightMeters;
+  const maxY = normalized.centerYMeters + halfHeightMeters;
+  const segments: string[] = [];
+
+  if (showGrid) {
+    let lineCount = 0;
+    const firstX = Math.ceil(minX / intervalMeters) * intervalMeters;
+    for (
+      let x = firstX;
+      x <= maxX && lineCount < maximumLines;
+      x += intervalMeters, lineCount += 1
+    ) {
+      segments.push(
+        `M ${cleanGridNumber(x)} ${cleanGridNumber(minY)} L ${cleanGridNumber(x)} ${cleanGridNumber(maxY)}`,
+      );
+    }
+    const firstY = Math.ceil(minY / intervalMeters) * intervalMeters;
+    for (
+      let y = firstY;
+      y <= maxY && lineCount < maximumLines;
+      y += intervalMeters, lineCount += 1
+    ) {
+      segments.push(
+        `M ${cleanGridNumber(minX)} ${cleanGridNumber(y)} L ${cleanGridNumber(maxX)} ${cleanGridNumber(y)}`,
+      );
+    }
+  }
+
+  if (showOrigin) {
+    if (minX <= 0 && maxX >= 0)
+      segments.push(
+        `M 0 ${cleanGridNumber(minY)} L 0 ${cleanGridNumber(maxY)}`,
+      );
+    if (minY <= 0 && maxY >= 0)
+      segments.push(
+        `M ${cleanGridNumber(minX)} 0 L ${cleanGridNumber(maxX)} 0`,
+      );
+  }
+
+  return segments.join(" ");
+}
+
+export function buildConsolidatedEdgePath(
+  pointsById: ReadonlyMap<string, GridPoint>,
+  edges: readonly { sourceId: string; targetId: string }[],
+): string {
+  return edges
+    .map((edge) => {
+      const source = pointsById.get(edge.sourceId);
+      const target = pointsById.get(edge.targetId);
+      if (!source || !target) return "";
+      return `M ${cleanGridNumber(source.xMeters)} ${cleanGridNumber(source.yMeters)} L ${cleanGridNumber(target.xMeters)} ${cleanGridNumber(target.yMeters)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+function cleanGridNumber(value: number): number {
+  const rounded = Math.round(value * 1_000_000) / 1_000_000;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 export function boundsForPoints(points: GridPoint[]): GridBounds | undefined {

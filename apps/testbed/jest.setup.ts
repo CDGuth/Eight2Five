@@ -1,5 +1,15 @@
 import { Alert } from "react-native";
 
+jest.mock("react-native-worklets", () => ({
+  ...jest.requireActual("react-native-worklets/lib/module/mock"),
+  scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    callback(...args),
+}));
+
+jest.mock("react-native-reanimated", () =>
+  jest.requireActual("react-native-reanimated/mock"),
+);
+
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Basic mocks for native/Expo helpers used in tests
@@ -46,6 +56,9 @@ jest.mock("@shopify/react-native-skia", () => {
       ),
     Rect: (props: any) =>
       React.createElement(View, { testID: "skia-rect", ...props }),
+    Fill: (props: any) =>
+      React.createElement(View, { testID: "skia-fill", ...props }),
+    Group: MockSkiaNode,
     Line: MockSkiaNode,
     Path: MockSkiaNode,
     Circle: MockSkiaNode,

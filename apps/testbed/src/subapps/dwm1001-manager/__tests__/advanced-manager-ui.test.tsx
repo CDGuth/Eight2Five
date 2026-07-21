@@ -1,5 +1,10 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
+import { State } from "react-native-gesture-handler";
+import {
+  fireGestureHandler,
+  getByGestureTestId,
+} from "react-native-gesture-handler/jest-utils";
 import { PansNetworkGrid } from "@eight2five/mobile/pans-manager/PansNetworkGrid";
 
 import { BatchResults } from "../components/batch-results";
@@ -57,6 +62,19 @@ describe("advanced DWM1001 manager UI", () => {
     await act(async () => {
       tree = TestRenderer.create(
         <PansNetworkGrid
+          palette={{
+            background: "background",
+            grid: "grid",
+            anchor: "anchor",
+            tag: "tag",
+            initiator: "initiator",
+            selected: "selected",
+            offline: "offline",
+            warning: "warning",
+            error: "error",
+            label: "label",
+            edge: "edge",
+          }}
           nodes={[
             {
               id: "anchor",
@@ -78,6 +96,44 @@ describe("advanced DWM1001 manager UI", () => {
     expect(
       tree.root.findByProps({ testID: "pans-network-grid-canvas" }),
     ).toBeTruthy();
+    await act(async () => tree.unmount());
+  });
+
+  test("commits a pan viewport once at gesture end instead of every frame", async () => {
+    const onViewportChange = jest.fn();
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansNetworkGrid
+          testID="gesture-grid"
+          palette={{
+            background: "background",
+            grid: "grid",
+            anchor: "anchor",
+            tag: "tag",
+            initiator: "initiator",
+            selected: "selected",
+            offline: "offline",
+            warning: "warning",
+            error: "error",
+            label: "label",
+            edge: "edge",
+          }}
+          nodes={[]}
+          onViewportChange={onViewportChange}
+        />,
+      );
+    });
+
+    act(() => {
+      fireGestureHandler(getByGestureTestId("gesture-grid-pan-gesture"), [
+        { state: State.BEGAN, translationX: 0, translationY: 0 },
+        { state: State.ACTIVE, translationX: 10, translationY: 5 },
+        { state: State.ACTIVE, translationX: 20, translationY: 10 },
+        { state: State.END, translationX: 20, translationY: 10 },
+      ]);
+    });
+    expect(onViewportChange).toHaveBeenCalledTimes(1);
     await act(async () => tree.unmount());
   });
 

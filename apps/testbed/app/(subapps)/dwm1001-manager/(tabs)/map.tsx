@@ -1,10 +1,5 @@
-import { Box } from "@eight2five/ui/components/box";
-import { useEight2FiveTheme } from "@eight2five/ui/theme";
+import { ManagerMapScreen } from "../../../../src/subapps/dwm1001-manager";
 
 export default function ManagerMapRoute() {
-  const theme = useEight2FiveTheme();
-
-  return (
-    <Box className="flex-1" style={{ backgroundColor: theme.background }} />
-  );
+  return <ManagerMapScreen />;
 }

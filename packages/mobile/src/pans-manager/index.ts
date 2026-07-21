@@ -20,3 +20,4 @@ export * from "./PansPositionStreamService";
 export * from "./PansDiagnosticsService";
 export * from "./pans-network-grid-math";
 export * from "./PansNetworkGrid";
+export type { PansDistance } from "expo-pans-ble-api";
