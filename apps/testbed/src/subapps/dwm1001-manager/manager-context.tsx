@@ -927,11 +927,6 @@ export function usePansDiscovery() {
   };
 }
 
-export function useManagedNetworks() {
-  const manager = usePansManager();
-  return { networks: manager.networks, devices: manager.devices };
-}
-
 export function useManagedNetwork(networkId: string) {
   const manager = usePansManager();
   return {

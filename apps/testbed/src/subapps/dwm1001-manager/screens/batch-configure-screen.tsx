@@ -238,7 +238,6 @@ export function BatchConfigureScreen() {
             ? "Review hardware PAN migration"
             : "Batch configuration plan"
         }
-        description="Writes run one device at a time and verify the result."
       >
         {devices.map((device) => (
           <SwitchField

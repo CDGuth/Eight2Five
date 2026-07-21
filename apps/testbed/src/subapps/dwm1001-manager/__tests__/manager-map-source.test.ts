@@ -15,10 +15,6 @@ describe("manager map source architecture", () => {
     resolve(root, "manager-map-controller.ts"),
     "utf8",
   );
-  const legacy = readFileSync(
-    resolve(root, "screens/network-grid-screen.tsx"),
-    "utf8",
-  );
 
   test("keeps the map full-flex and free from the legacy card layout", () => {
     expect(screen).toContain('testID="manager-map-screen"');
@@ -27,9 +23,6 @@ describe("manager map source architecture", () => {
     expect(screen).not.toContain("SectionCard");
     expect(screen).not.toContain("ManagerScreen");
     expect(screen).not.toContain("420");
-    expect(legacy).toContain(
-      "<ManagerMapScreen initialNetworkId={networkId} />",
-    );
   });
 
   test("uses sparse position writes and has no automatic tracking effect", () => {

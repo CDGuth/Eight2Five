@@ -38,10 +38,6 @@ export function ActionButton({
       style={{
         backgroundColor: visual.background,
         borderWidth: 0,
-        boxShadow:
-          variant === "default" || variant === "destructive"
-            ? `0 5px 14px ${theme.shadowStrong}`
-            : undefined,
       }}
     >
       <ButtonText style={{ color: visual.foreground }}>{children}</ButtonText>

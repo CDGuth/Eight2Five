@@ -60,7 +60,6 @@ export function TestbedLayout({
                   style={{
                     borderRadius: isMultiNav ? 24 : 25,
                     backgroundColor: theme.accentSoft,
-                    boxShadow: `0 4px 12px ${theme.shadow}`,
                   }}
                   className="p-0.5"
                 >

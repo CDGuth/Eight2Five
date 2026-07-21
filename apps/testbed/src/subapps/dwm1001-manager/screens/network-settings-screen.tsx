@@ -101,7 +101,9 @@ export function NetworkSettingsScreen() {
   const deleteProfile = async () => {
     try {
       await manager.deleteNetwork(network.id);
-      router.replace("/(subapps)/dwm1001-manager" as never);
+      router.replace(
+        "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as never,
+      );
     } catch (deleteError) {
       setError(displayError(deleteError));
     }
@@ -109,10 +111,7 @@ export function NetworkSettingsScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Network details"
-        description="Advanced app-only defaults. Network ID changes use the inline network editor."
-      >
+      <SectionCard title="Network details">
         <TextField label="Name" value={name} onChangeText={setName} />
         <KeyValue label="PANS Network ID" value={formatPanId(network.panId)} />
         <TextField
@@ -129,10 +128,7 @@ export function NetworkSettingsScreen() {
         {error ? <StatePanel state="error" message={error} /> : null}
       </SectionCard>
 
-      <SectionCard
-        title="Coordinate bounds"
-        description="Coordinates and heights use meters."
-      >
+      <SectionCard title="Coordinate bounds">
         <TextField
           label="Minimum X (meters)"
           value={settingsForm.minXMeters}
@@ -194,10 +190,7 @@ export function NetworkSettingsScreen() {
         />
       </SectionCard>
 
-      <SectionCard
-        title="Discovery and connection"
-        description="Defaults for this network."
-      >
+      <SectionCard title="Discovery and connection">
         <TextField
           label="Stale device timeout (seconds)"
           value={settingsForm.staleDeviceTimeoutSeconds}
@@ -222,7 +215,6 @@ export function NetworkSettingsScreen() {
         />
         <SwitchField
           label="Auto-connect"
-          description="Discovery alone never connects to a device."
           value={settingsForm.autoConnect}
           onChange={(value) =>
             setSettingsForm((current) => ({ ...current, autoConnect: value }))
@@ -355,9 +347,6 @@ export function NetworkSettingsScreen() {
             {exportJson}
           </Text>
         ) : null}
-        <Text selectable size="sm" style={{ color: theme.textMuted }}>
-          Select the generated text to copy it manually.
-        </Text>
       </SectionCard>
 
       <SectionCard

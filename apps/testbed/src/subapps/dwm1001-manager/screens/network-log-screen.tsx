@@ -201,10 +201,7 @@ export function NetworkLogScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Live position log"
-        description="Select a tag and start recording positions."
-      >
+      <SectionCard title="Live position log">
         <SelectField
           label="Tag"
           value={tagId}
@@ -247,10 +244,7 @@ export function NetworkLogScreen() {
         {error ? <StatePanel state="error" message={error} /> : null}
       </SectionCard>
 
-      <SectionCard
-        title="Saved sessions"
-        description="Interrupted sessions remain available."
-      >
+      <SectionCard title="Saved sessions">
         <SelectField
           label="Session"
           value={selectedSessionId}

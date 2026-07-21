@@ -50,10 +50,7 @@ export function DeviceDiagnosticsScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Advertisement"
-        description="Most recent nearby-device data."
-      >
+      <SectionCard title="Advertisement">
         <KeyValue
           label="BLE name"
           value={advertisement?.name ?? "Unavailable"}
@@ -107,10 +104,7 @@ export function DeviceDiagnosticsScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard
-        title="Connected diagnostics"
-        description="Refresh to connect and read the device."
-      >
+      <SectionCard title="Connected diagnostics">
         <ManagerButton
           label="Refresh diagnostics"
           loading={loading}

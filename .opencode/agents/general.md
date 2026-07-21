@@ -1,5 +1,7 @@
 ---
-description: General-purpose subagent for parallel implementation and well-scoped multi-step tasks that can be fully described and executed autonomously.
+description: General-purpose subagent for parallel implementation and
+  well-scoped multi-step tasks that can be fully described and executed
+  autonomously.
 mode: subagent
 permission:
   "*": allow
@@ -8,8 +10,8 @@ permission:
   todowrite: deny
   external_directory:
     "*": ask
-    "~/.local/share/opencode/tool-output/*": allow
-    "/tmp/opencode/*": allow
+    ~/.local/share/opencode/tool-output/*: allow
+    /tmp/opencode/*: allow
   read:
     "*": allow
     "*.env": ask
@@ -17,35 +19,37 @@ permission:
     "*.env.example": allow
   bash:
     "*": allow
-    "git add*": ask
-    "git rm*": ask
-    "git mv*": ask
-    "git commit*": ask
-    "git merge*": ask
-    "git rebase*": ask
-    "git reset*": ask
-    "git revert*": ask
-    "git cherry-pick*": ask
-    "git push*": ask
-    "git pull*": ask
-    "git stash*": ask
-    "git checkout*": ask
-    "git switch*": ask
-    "git restore*": ask
-    "git clean*": ask
-    "git tag*": ask
-    "git update-index*": ask
-    "git apply*": ask
-    "git am*": ask
-    "git filter-branch*": ask
-    "git submodule*": ask
-    "git branch -d*": ask
-    "git branch -D*": ask
-    "git branch -m*": ask
-    "gh pr merge*": ask
-    "gh pr close*": ask
-    "gh pr edit*": ask
-    "gh release*": ask
+    git add*: ask
+    git rm*: ask
+    git mv*: ask
+    git commit*: ask
+    git merge*: ask
+    git rebase*: ask
+    git reset*: ask
+    git revert*: ask
+    git cherry-pick*: ask
+    git push*: ask
+    git pull*: ask
+    git stash*: ask
+    git checkout*: ask
+    git switch*: ask
+    git restore*: ask
+    git clean*: ask
+    git tag*: ask
+    git update-index*: ask
+    git apply*: ask
+    git am*: ask
+    git filter-branch*: ask
+    git submodule*: ask
+    git branch -d*: ask
+    git branch -D*: ask
+    git branch -m*: ask
+    gh pr merge*: ask
+    gh pr close*: ask
+    gh pr edit*: ask
+    gh release*: ask
+model: openai/gpt-5.6-sol
+variant: medium
 ---
 
 You are a general-purpose subagent assisting the primary engineer agent with well-scoped implementation tasks.

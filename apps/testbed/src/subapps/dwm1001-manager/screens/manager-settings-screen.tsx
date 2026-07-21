@@ -71,10 +71,7 @@ export function ManagerSettingsScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Manager behavior"
-        description="These values are local to this testbed manager."
-      >
+      <SectionCard title="Manager behavior">
         <TextField
           label="Discovery stale after (ms)"
           value={stale}

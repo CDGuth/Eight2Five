@@ -1,9 +1,6 @@
 export { PansManagerProvider } from "./manager-context";
-export { DashboardScreen } from "./screens/dashboard-screen";
 export { NetworksDevicesScreen } from "./screens/networks-devices-screen";
-export { DiscoveryScreen } from "./screens/discovery-screen";
 export { CreateNetworkScreen } from "./screens/create-network-screen";
-export { NetworkDashboardScreen } from "./screens/network-dashboard-screen";
 export { NetworkDevicesScreen } from "./screens/network-devices-screen";
 export { NetworkSettingsScreen } from "./screens/network-settings-screen";
 export { DeviceSummaryScreen } from "./screens/device-summary-screen";
@@ -11,8 +8,8 @@ export { DeviceDiagnosticsScreen } from "./screens/device-diagnostics-screen";
 export { ManagerSettingsScreen } from "./screens/manager-settings-screen";
 export { ImportNetworkScreen } from "./screens/import-network-screen";
 export { BatchConfigureScreen } from "./screens/batch-configure-screen";
-export { NetworkGridScreen } from "./screens/network-grid-screen";
 export { ManagerMapScreen } from "./screens/manager-map-screen";
+export { ManagerInfoScreen } from "./screens/manager-info-screen";
 export { ManagerMapSettingsModal } from "./components/manager-map-settings-modal";
 export {
   usePansMapDataController,

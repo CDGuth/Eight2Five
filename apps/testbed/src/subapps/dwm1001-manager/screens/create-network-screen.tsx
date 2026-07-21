@@ -1,11 +1,7 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import { Text } from "@eight2five/ui/components/text";
-import {
-  eight2FiveFonts,
-  eight2FiveSpacing,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
 
 import { usePansManager } from "../manager-context";
@@ -28,7 +24,7 @@ export function CreateNetworkScreen() {
   );
   const [error, setError] = React.useState<string>();
   const [result, setResult] = React.useState<string>();
-  const [createdNetworkId, setCreatedNetworkId] = React.useState<string>();
+  const [createdWithFailures, setCreatedWithFailures] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
   const parsedPan = parsePanInput(panText);
@@ -63,14 +59,14 @@ export function CreateNetworkScreen() {
         (configuration) => configuration.outcome === "failure",
       );
       if (failures.length) {
-        setCreatedNetworkId(created.network.id);
+        setCreatedWithFailures(true);
         setResult(
           `Network created. ${failures.length} device${failures.length === 1 ? "" : "s"} could not be assigned.`,
         );
         return;
       }
       router.replace(
-        `/(subapps)/dwm1001-manager/networks/${created.network.id}` as never,
+        "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as never,
       );
     } catch (saveError) {
       setError(displayError(saveError));
@@ -81,11 +77,7 @@ export function CreateNetworkScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Name the network"
-        description="The selected devices will be added to this network."
-        tone="accent"
-      >
+      <SectionCard title="Name the network" tone="accent">
         <TextField
           label="Network name"
           value={name}
@@ -109,11 +101,7 @@ export function CreateNetworkScreen() {
         </VStack>
       </SectionCard>
 
-      <SectionCard
-        title="Network ID"
-        description="A unique PAN ID was generated automatically."
-        tone="quiet"
-      >
+      <SectionCard title="Network ID" tone="quiet">
         <TextField
           label="PAN ID"
           value={panText}
@@ -133,12 +121,12 @@ export function CreateNetworkScreen() {
 
       {error ? <StatePanel state="error" message={error} /> : null}
       {result ? <StatePanel state="info" message={result} /> : null}
-      {createdNetworkId ? (
+      {createdWithFailures ? (
         <ManagerButton
-          label="Open network"
+          label="Back to networks"
           onPress={() =>
             router.replace(
-              `/(subapps)/dwm1001-manager/networks/${createdNetworkId}` as never,
+              "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as never,
             )
           }
         />
@@ -151,18 +139,6 @@ export function CreateNetworkScreen() {
           onPress={() => void save()}
         />
       )}
-      {!selected.length ? (
-        <Text
-          selectable
-          size="sm"
-          style={{
-            color: theme.textMuted,
-            paddingHorizontal: eight2FiveSpacing.sm,
-          }}
-        >
-          You can add devices after the network is created.
-        </Text>
-      ) : null}
     </ManagerScreen>
   );
 }

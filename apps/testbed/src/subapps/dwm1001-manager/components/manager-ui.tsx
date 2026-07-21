@@ -93,10 +93,6 @@ export function SectionCard({
         borderWidth: 0,
         borderRadius: eight2FiveRadii.md,
         padding: eight2FiveSpacing.md,
-        boxShadow:
-          tone === "default"
-            ? `0 8px 24px ${theme.shadow}`
-            : `0 2px 8px ${theme.shadow}`,
       }}
     >
       <VStack style={{ gap: eight2FiveSpacing.md }}>
@@ -117,53 +113,6 @@ export function SectionCard({
 }
 
 const four = 4;
-
-export function SetupStep({
-  number,
-  title,
-  detail,
-  complete = false,
-}: {
-  number: number;
-  title: string;
-  detail?: string;
-  complete?: boolean;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <HStack className="items-start" style={{ gap: eight2FiveSpacing.sm }}>
-      <Text
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          textAlign: "center",
-          lineHeight: 28,
-          color: complete ? theme.background : theme.accent,
-          backgroundColor: complete ? theme.success : theme.accentSoft,
-          fontFamily: eight2FiveFonts.styleBold,
-        }}
-      >
-        {complete ? "✓" : number}
-      </Text>
-      <VStack className="flex-1" style={{ gap: 2 }}>
-        <Text
-          style={{
-            color: theme.text,
-            fontFamily: eight2FiveFonts.styleSemibold,
-          }}
-        >
-          {title}
-        </Text>
-        {detail ? (
-          <Text selectable size="sm" style={{ color: theme.textMuted }}>
-            {detail}
-          </Text>
-        ) : null}
-      </VStack>
-    </HStack>
-  );
-}
 
 export function StatePanel({
   state,
@@ -260,10 +209,6 @@ export function ManagerButton({
       style={{
         backgroundColor: visual.background,
         borderWidth: 0,
-        boxShadow:
-          variant === "default" || variant === "destructive"
-            ? `0 5px 14px ${theme.shadowStrong}`
-            : undefined,
       }}
     >
       {loading ? <ButtonSpinner color={visual.foreground} /> : null}

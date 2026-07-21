@@ -60,10 +60,7 @@ export function NetworkTopologyScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Observed topology"
-        description="Refresh to read anchor and cluster relationships."
-      >
+      <SectionCard title="Observed topology">
         <KeyValue
           label="Local anchor membership"
           value={`${anchors.length} saved anchor(s)`}

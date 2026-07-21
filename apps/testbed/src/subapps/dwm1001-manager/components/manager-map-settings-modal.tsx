@@ -308,7 +308,6 @@ export function ManagerMapSettingsModal({
           <SettingsSection title="Editing">
             <SwitchRow
               label="Edit anchor position"
-              description="Select a saved anchor, close settings, then long-press its measured coordinate."
               value={controller.editingEnabled}
               disabled={trackingActive}
               onChange={controller.setEditingEnabled}

@@ -22,9 +22,9 @@ export function ImportNetworkScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      const imported = await manager.importNetwork(json);
+      await manager.importNetwork(json);
       router.replace(
-        `/(subapps)/dwm1001-manager/networks/${imported.network.id}` as never,
+        "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as never,
       );
     } catch (importError) {
       setError(displayError(importError));
@@ -35,10 +35,7 @@ export function ImportNetworkScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title="Import network JSON"
-        description="Paste an Eight2Five PANS network export. Schema, version, settings, devices, duplicate IDs, and secret-like fields are validated before storage."
-      >
+      <SectionCard title="Import network JSON">
         <TextField
           label="Export JSON"
           value={json}

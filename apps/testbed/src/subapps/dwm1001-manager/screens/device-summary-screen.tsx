@@ -50,10 +50,7 @@ export function DeviceSummaryScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard
-        title={device.nickname || device.label || "DWM1001 device"}
-        description="Refresh to read the current device configuration."
-      >
+      <SectionCard title={device.nickname || device.label || "DWM1001 device"}>
         <KeyValue label="Transport ID" value={device.transportDeviceId} />
         <KeyValue
           label="MAC"
