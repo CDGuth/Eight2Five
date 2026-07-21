@@ -854,7 +854,15 @@ function SelectField({
         onValueChange={onChange}
         isDisabled={disabled || value === undefined}
       >
-        <SelectTrigger testID={testID} style={fieldStyle(theme)}>
+        <SelectTrigger
+          testID={testID}
+          style={fieldStyle(theme)}
+          accessibilityLabel={label}
+          accessibilityHint="Opens the available choices"
+          accessibilityState={{
+            disabled: disabled || value === undefined,
+          }}
+        >
           <SelectInput
             value={
               value === undefined

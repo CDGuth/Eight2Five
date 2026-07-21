@@ -38,6 +38,16 @@ import { ChevronDown, RefreshCw, Settings } from "lucide-react-native";
 
 import { displayError } from "../manager-utils";
 import { getRssiSignalIcon } from "../rssi-signal";
+import {
+  NetworkDeviceDrag,
+  type NetworkDeviceDragEvent,
+} from "./network-device-drag";
+
+export interface NetworkDeviceRowDragCallbacks {
+  onDragStart(event: NetworkDeviceDragEvent): void;
+  onDragMove(event: NetworkDeviceDragEvent): void;
+  onDragEnd(event: NetworkDeviceDragEvent): void;
+}
 
 interface NetworkDeviceRowProps {
   device: DisplayDevice;
@@ -47,6 +57,8 @@ interface NetworkDeviceRowProps {
   onExpandedChange(expanded: boolean): void;
   onOpenSettings(): Promise<void>;
   onRefresh?(): Promise<PansInspectionResult>;
+  dragCallbacks?: NetworkDeviceRowDragCallbacks;
+  interactionsDisabled?: boolean;
 }
 
 export function NetworkDeviceRow({
@@ -57,6 +69,8 @@ export function NetworkDeviceRow({
   onExpandedChange,
   onOpenSettings,
   onRefresh,
+  dragCallbacks,
+  interactionsDisabled = false,
 }: NetworkDeviceRowProps) {
   const theme = useEight2FiveTheme();
   const [settingsLoading, setSettingsLoading] = React.useState(false);
@@ -74,6 +88,7 @@ export function NetworkDeviceRow({
     : "RSSI unavailable";
 
   const openSettings = async () => {
+    if (interactionsDisabled) return;
     setSettingsLoading(true);
     setSettingsError(undefined);
     try {
@@ -99,11 +114,59 @@ export function NetworkDeviceRow({
     }
   };
 
+  const trigger = (
+    <AccordionTrigger
+      testID={`device-toggle-${device.key}`}
+      className="min-h-11 flex-1"
+      disabled={interactionsDisabled}
+      accessibilityLabel={`${device.displayName} details, ${rssiLabel}`}
+      accessibilityHint={
+        expanded ? "Collapse device details" : "Expand device details"
+      }
+      accessibilityState={{ expanded, disabled: interactionsDisabled }}
+    >
+      <VStack className="flex-1" style={{ gap: eight2FiveSpacing.xs }}>
+        <Text
+          size="lg"
+          style={{
+            color: theme.text,
+            fontFamily: eight2FiveFonts.styleSemibold,
+          }}
+        >
+          {device.displayName}
+        </Text>
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          {device.canonicalIdentifier}
+        </Text>
+      </VStack>
+      <HStack
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={rssiLabel}
+      >
+        <Icon
+          as={RssiIcon}
+          size="lg"
+          style={{ color: rssiMuted ? theme.textSubtle : theme.icon }}
+        />
+      </HStack>
+      <AccordionIcon
+        as={ChevronDown}
+        style={{ color: theme.icon }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+    </AccordionTrigger>
+  );
+
   return (
     <Accordion
       type="multiple"
       value={expanded ? [device.key] : []}
-      onValueChange={(values) => onExpandedChange(values.includes(device.key))}
+      onValueChange={(values) => {
+        if (!interactionsDisabled)
+          onExpandedChange(values.includes(device.key));
+      }}
       isCollapsible
     >
       <AccordionItem value={device.key}>
@@ -112,54 +175,28 @@ export function NetworkDeviceRow({
             className="w-full items-center"
             style={{ paddingVertical: eight2FiveSpacing.sm }}
           >
-            <AccordionTrigger
-              testID={`device-toggle-${device.key}`}
-              className="min-h-11 flex-1"
-              accessibilityLabel={`${device.displayName} details, ${rssiLabel}`}
-              accessibilityHint={
-                expanded ? "Collapse device details" : "Expand device details"
-              }
-              accessibilityState={{ expanded }}
-            >
-              <VStack className="flex-1" style={{ gap: eight2FiveSpacing.xs }}>
-                <Text
-                  size="lg"
-                  style={{
-                    color: theme.text,
-                    fontFamily: eight2FiveFonts.styleSemibold,
-                  }}
-                >
-                  {device.displayName}
-                </Text>
-                <Text selectable size="sm" style={{ color: theme.textMuted }}>
-                  {device.canonicalIdentifier}
-                </Text>
-              </VStack>
-              <HStack
-                accessible
-                accessibilityRole="image"
-                accessibilityLabel={rssiLabel}
+            {dragCallbacks ? (
+              <NetworkDeviceDrag
+                deviceKey={device.key}
+                displayName={device.displayName}
+                identifier={device.canonicalIdentifier}
+                {...dragCallbacks}
               >
-                <Icon
-                  as={RssiIcon}
-                  size="lg"
-                  style={{ color: rssiMuted ? theme.textSubtle : theme.icon }}
-                />
-              </HStack>
-              <AccordionIcon
-                as={ChevronDown}
-                style={{ color: theme.icon }}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-              />
-            </AccordionTrigger>
+                {trigger}
+              </NetworkDeviceDrag>
+            ) : (
+              trigger
+            )}
             <Button
               testID={`device-settings-${device.key}`}
               size="icon"
               variant="ghost"
-              isDisabled={settingsLoading}
+              isDisabled={settingsLoading || interactionsDisabled}
               accessibilityLabel={`Settings for ${device.displayName}`}
-              accessibilityState={{ disabled: settingsLoading }}
+              accessibilityHint="Opens device settings, including saved network association"
+              accessibilityState={{
+                disabled: settingsLoading || interactionsDisabled,
+              }}
               onPress={() => void openSettings()}
             >
               <ButtonIcon as={Settings} style={{ color: theme.icon }} />

@@ -62,6 +62,9 @@
       "../../packages/mobile/src/**/*.{ts,tsx}",
       "../../modules/expo-pans-ble-api/src/**/*.{ts,tsx}"
     ],
+    "setupFiles": [
+      "react-native-gesture-handler/jestSetup.js"
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ]

@@ -1,6 +1,12 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
+import { State } from "react-native-gesture-handler";
 import {
+  fireGestureHandler,
+  getByGestureTestId,
+} from "react-native-gesture-handler/jest-utils";
+import {
+  type AssignDeviceToNetworkProfileResult,
   DEFAULT_MANAGED_NETWORK_SETTINGS,
   ManagerError,
   type DiscoveredDeviceSnapshot,
@@ -14,31 +20,25 @@ import {
   PansManagerProvider,
   type PansManagerRuntime,
 } from "../manager-context";
-import { NetworksDevicesScreen } from "../screens/networks-devices-screen";
+import {
+  NETWORK_DROP_AUTO_EXPAND_MS,
+  NetworksDevicesScreen,
+} from "../screens/networks-devices-screen";
+import {
+  NETWORK_DEVICE_DRAG_LONG_PRESS_MS,
+  NetworkDeviceDrag,
+} from "../components/network-device-drag";
+import { NetworkDeviceSection } from "../components/network-device-section";
 
 jest.mock("expo-pans-ble-api", () => ({}));
-jest.mock("react-native-reanimated", () => {
-  const { View } =
-    jest.requireActual<typeof import("react-native")>("react-native");
-  const animation: Record<string, jest.Mock> = {};
-  for (const method of ["delay", "duration", "easing", "withInitialValues"])
-    animation[method] = jest.fn(() => animation);
-  const createAnimatedComponent = (component: React.ElementType) => component;
-  return {
-    __esModule: true,
-    default: { View, createAnimatedComponent },
-    createAnimatedComponent,
-    Easing: { linear: jest.fn() },
-    FadeIn: animation,
-    FadeOut: animation,
-    ZoomIn: animation,
-    useSharedValue: (value: unknown) => ({ value }),
-    useAnimatedStyle: (factory: () => unknown) => factory(),
-    withTiming: (value: unknown) => value,
-    interpolate: (value: number, input: number[], output: number[]) =>
-      value === input[0] ? output[0] : output[output.length - 1],
-  };
-});
+jest.mock("react-native-worklets", () => ({
+  ...jest.requireActual("react-native-worklets/lib/module/mock"),
+  scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    callback(...args),
+}));
+jest.mock("react-native-reanimated", () =>
+  jest.requireActual("react-native-reanimated/mock"),
+);
 
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
@@ -265,6 +265,237 @@ describe("NetworksDevicesScreen", () => {
     expect(findText(tree, "Bluetooth scan failed")).toBeTruthy();
     await act(async () => tree.unmount());
   });
+
+  test("only wraps available non-malformed Unassigned rows in a long-press pan gesture", async () => {
+    const network = savedNetwork();
+    const assigned = savedDevice(network.id);
+    const harness = createRuntime({
+      networks: [network],
+      devices: [assigned],
+      discoveries: [
+        discovery(assigned.transportDeviceId),
+        discovery("eligible"),
+        discovery("malformed", { compatibility: "malformed" }),
+        discovery("stale", { stale: true }),
+      ],
+    });
+    const tree = await renderNetworkScreen(harness);
+
+    expect(
+      tree.root
+        .findAllByType(NetworkDeviceDrag)
+        .map((node) => node.props.deviceKey),
+    ).toEqual(["discovery:eligible"]);
+    const gesture = getByGestureTestId(
+      "network-device-drag-discovery:eligible",
+    );
+    expect(gesture.config).toMatchObject({
+      activateAfterLongPress: NETWORK_DEVICE_DRAG_LONG_PRESS_MS,
+      minPointers: 1,
+      maxPointers: 1,
+      shouldCancelWhenOutside: false,
+    });
+    expect(() =>
+      getByGestureTestId(`network-device-drag-device:${assigned.id}`),
+    ).toThrow();
+    expect(() =>
+      getByGestureTestId("network-device-drag-discovery:malformed"),
+    ).toThrow();
+
+    act(() => {
+      fireGestureHandler(gesture, [
+        { state: State.BEGAN, absoluteX: 10, absoluteY: 10 },
+        { state: State.ACTIVE, absoluteX: 20, absoluteY: 20 },
+        { state: State.CANCELLED, absoluteX: 20, absoluteY: 20 },
+      ]);
+    });
+    await act(async () => tree.unmount());
+  });
+
+  test("freezes displayed rows during a drag and ignores incoming scan ordering", async () => {
+    const harness = createRuntime({ discoveries: [discovery("transport-z")] });
+    const tree = await renderNetworkScreen(harness);
+    const callbacks = dragCallbacksFor(tree, "discovery:transport-z");
+
+    act(() =>
+      callbacks.onDragStart(dragEvent("discovery:transport-z", 20, 40)),
+    );
+    await act(async () => {
+      harness.emitDiscoveries([
+        discovery("transport-a", { name: "Alpha", rssi: -40 }),
+        discovery("transport-z", { rssi: -30 }),
+      ]);
+      await flushPromises();
+    });
+
+    expect(
+      tree.root.findAllByProps({
+        testID: "device-settings-discovery:transport-a",
+      }),
+    ).toHaveLength(0);
+    expect(
+      accessibilityLabel(tree, "device-toggle-discovery:transport-z"),
+    ).toContain("RSSI -75 dBm");
+
+    act(() =>
+      callbacks.onDragEnd({
+        ...dragEvent("discovery:transport-z", 20, 40),
+        cancelled: true,
+      }),
+    );
+    expect(
+      tree.root.findAllByProps({
+        testID: "device-settings-discovery:transport-a",
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      accessibilityLabel(tree, "device-toggle-discovery:transport-z"),
+    ).toContain("RSSI -30 dBm");
+    await act(async () => tree.unmount());
+  });
+
+  test("auto-expands a hovered saved-network header after the dwell delay and cancels on leave", async () => {
+    jest.useFakeTimers();
+    const network = savedNetwork();
+    const harness = createRuntime({
+      networks: [network],
+      discoveries: [discovery("transport-new")],
+    });
+    const tree = await renderNetworkScreen(harness, {
+      [network.id]: [0, 100, 300, 60],
+    });
+    const callbacks = dragCallbacksFor(tree, "discovery:transport-new");
+    act(() => {
+      callbacks.onDragStart(dragEvent("discovery:transport-new", 20, 40));
+      callbacks.onDragMove(dragEvent("discovery:transport-new", 40, 120));
+      jest.advanceTimersByTime(NETWORK_DROP_AUTO_EXPAND_MS - 1);
+    });
+    expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
+      false,
+    );
+
+    act(() => {
+      callbacks.onDragMove(dragEvent("discovery:transport-new", 400, 400));
+      jest.advanceTimersByTime(NETWORK_DROP_AUTO_EXPAND_MS);
+    });
+    expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
+      false,
+    );
+
+    act(() => {
+      callbacks.onDragMove(dragEvent("discovery:transport-new", 40, 120));
+      jest.advanceTimersByTime(NETWORK_DROP_AUTO_EXPAND_MS);
+    });
+    expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
+      true,
+    );
+    act(() =>
+      callbacks.onDragEnd({
+        ...dragEvent("discovery:transport-new", 400, 400),
+        cancelled: true,
+      }),
+    );
+    await act(async () => tree.unmount());
+  });
+
+  test("persists a discovery before assigning it through the profile operation", async () => {
+    const network = savedNetwork();
+    const harness = createRuntime({
+      networks: [network],
+      discoveries: [discovery("transport-new")],
+    });
+    const tree = await renderNetworkScreen(harness, {
+      [network.id]: [0, 100, 300, 60],
+    });
+    const callbacks = dragCallbacksFor(tree, "discovery:transport-new");
+    act(() =>
+      callbacks.onDragStart(dragEvent("discovery:transport-new", 20, 40)),
+    );
+    act(() =>
+      callbacks.onDragEnd(dragEvent("discovery:transport-new", 40, 120)),
+    );
+    expect(findText(tree, "Persisting…")).toBeTruthy();
+
+    await act(async () => await flushPromises());
+    expect(harness.repository.saveDevice).toHaveBeenCalledTimes(1);
+    expect(harness.assignDeviceToNetworkProfile).toHaveBeenCalledTimes(1);
+    expect(
+      harness.repository.saveDevice.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      harness.assignDeviceToNetworkProfile.mock.invocationCallOrder[0],
+    );
+    const persisted = harness.repository.saveDevice.mock
+      .calls[0][0] as ManagedDevice;
+    expect(harness.assignDeviceToNetworkProfile).toHaveBeenCalledWith({
+      deviceId: persisted.id,
+      targetNetworkId: network.id,
+    });
+    expect(harness.repository.associateDevice).not.toHaveBeenCalled();
+    expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
+      true,
+    );
+    expect(
+      tree.root.findAllByProps({
+        testID: `device-settings-device:${persisted.id}`,
+      }),
+    ).not.toHaveLength(0);
+    expect(findText(tree, "Persisting…")).toBeUndefined();
+    await act(async () => tree.unmount());
+  });
+
+  test("keeps a failed assignment unassociated, warns about association-stage hardware state, and retries without persisting twice", async () => {
+    const network = savedNetwork();
+    const harness = createRuntime({
+      networks: [network],
+      discoveries: [discovery("transport-new")],
+      assignmentResults: [
+        {
+          outcome: "failed",
+          stage: "association",
+          error: { code: "STORAGE_FAILURE", message: "Association failed." },
+        },
+        { outcome: "assigned", stage: "complete" },
+      ],
+    });
+    const tree = await renderNetworkScreen(harness, {
+      [network.id]: [0, 100, 300, 60],
+    });
+    const callbacks = dragCallbacksFor(tree, "discovery:transport-new");
+    act(() =>
+      callbacks.onDragStart(dragEvent("discovery:transport-new", 20, 40)),
+    );
+    act(() =>
+      callbacks.onDragEnd(dragEvent("discovery:transport-new", 40, 120)),
+    );
+    await act(async () => await flushPromises());
+
+    const persisted = harness.repository.saveDevice.mock
+      .calls[0][0] as ManagedDevice;
+    expect(
+      harness.getDevices().find((device) => device.id === persisted.id)
+        ?.networkId,
+    ).toBeUndefined();
+    expect(harness.repository.associateDevice).not.toHaveBeenCalled();
+    expect(
+      findTextContaining(tree, "Hardware PAN may have changed"),
+    ).toBeTruthy();
+    expect(findText(tree, "Retry")).toBeTruthy();
+
+    await act(async () => {
+      pressTestId(tree, "retry-drop-assignment");
+      await flushPromises();
+    });
+    expect(harness.repository.saveDevice).toHaveBeenCalledTimes(1);
+    expect(harness.assignDeviceToNetworkProfile).toHaveBeenCalledTimes(2);
+    expect(
+      harness.getDevices().find((device) => device.id === persisted.id)
+        ?.networkId,
+    ).toBe(network.id);
+    expect(
+      findTextContaining(tree, "Hardware PAN may have changed"),
+    ).toBeUndefined();
+    await act(async () => tree.unmount());
+  });
 });
 
 function createRuntime(
@@ -272,9 +503,14 @@ function createRuntime(
     networks?: ManagedNetwork[];
     devices?: ManagedDevice[];
     discoveries?: DiscoveredDeviceSnapshot[];
+    assignmentResults?: Pick<
+      AssignDeviceToNetworkProfileResult,
+      "outcome" | "stage" | "error"
+    >[];
   } = {},
 ) {
   let devices = [...(options.devices ?? [])];
+  const assignmentResults = [...(options.assignmentResults ?? [])];
   let discoveryListener: (items: DiscoveredDeviceSnapshot[]) => void = () => {};
   let errorListener: (error: ManagerError) => void = () => {};
   const repository = {
@@ -285,9 +521,30 @@ function createRuntime(
     saveDevice: jest.fn(async (device: ManagedDevice) => {
       devices = [...devices.filter((item) => item.id !== device.id), device];
     }),
+    associateDevice: jest.fn(),
   } as unknown as jest.Mocked<PansManagerRepository>;
   const inspection = inspectionResult();
   const inspectAndCache = jest.fn().mockResolvedValue(inspection);
+  const assignDeviceToNetworkProfile = jest.fn(
+    async (input: { deviceId: string; targetNetworkId: string }) => {
+      const configured = assignmentResults.shift() ?? {
+        outcome: "assigned" as const,
+        stage: "complete" as const,
+      };
+      if (configured.outcome === "assigned") {
+        devices = devices.map((device) =>
+          device.id === input.deviceId
+            ? { ...device, networkId: input.targetNetworkId }
+            : device,
+        );
+      }
+      return {
+        deviceId: input.deviceId,
+        targetNetworkId: input.targetNetworkId,
+        ...configured,
+      } as AssignDeviceToNetworkProfileResult;
+    },
+  );
   const runtime: PansManagerRuntime = {
     repository,
     discovery: {
@@ -321,7 +578,7 @@ function createRuntime(
       assignPanId: jest.fn(),
     },
     commissioning: {
-      assignDeviceToNetworkProfile: jest.fn(),
+      assignDeviceToNetworkProfile,
       unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
@@ -344,6 +601,8 @@ function createRuntime(
     runtime,
     repository,
     inspectAndCache,
+    assignDeviceToNetworkProfile,
+    getDevices: () => [...devices],
     emitDiscoveries(items: DiscoveredDeviceSnapshot[]) {
       discoveryListener(items);
     },
@@ -399,13 +658,17 @@ function savedDevice(networkId: string): ManagedDevice {
   };
 }
 
-function discovery(transportDeviceId: string): DiscoveredDeviceSnapshot {
+function discovery(
+  transportDeviceId: string,
+  overrides: Partial<DiscoveredDeviceSnapshot> = {},
+): DiscoveredDeviceSnapshot {
   return {
     transportDeviceId,
     name: "hardware-advertisement",
     rssi: -75,
     lastSeenAt: 10,
     compatibility: "compatible",
+    ...overrides,
   };
 }
 
@@ -429,6 +692,75 @@ function inspectionResult(): PansInspectionResult {
     },
     warnings: [],
   };
+}
+
+async function renderNetworkScreen(
+  harness: ReturnType<typeof createRuntime>,
+  zones: Record<string, [number, number, number, number]> = {},
+) {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = TestRenderer.create(
+      <PansManagerProvider createRuntime={async () => harness.runtime}>
+        <NetworksDevicesScreen />
+      </PansManagerProvider>,
+      {
+        createNodeMock: (element) => {
+          const testID = (element.props as { testID?: string }).testID;
+          const networkId = testID?.startsWith("network-drop-zone-")
+            ? testID.slice("network-drop-zone-".length)
+            : undefined;
+          const rectangle = networkId ? zones[networkId] : undefined;
+          if (!rectangle) return null;
+          return {
+            measureInWindow: (
+              callback: (
+                x: number,
+                y: number,
+                width: number,
+                height: number,
+              ) => void,
+            ) => callback(...rectangle),
+          };
+        },
+      },
+    );
+    await flushPromises();
+  });
+  act(() => {
+    for (const [networkId, [x, y, width, height]] of Object.entries(zones)) {
+      const section = tree.root
+        .findAllByType(NetworkDeviceSection)
+        .find((node) => node.props.section.network?.id === networkId);
+      section?.props.onDropZoneChange?.({
+        networkId,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+      });
+    }
+  });
+  return tree;
+}
+
+function dragCallbacksFor(
+  tree: TestRenderer.ReactTestRenderer,
+  deviceKey: string,
+) {
+  const drag = tree.root
+    .findAllByType(NetworkDeviceDrag)
+    .find((node) => node.props.deviceKey === deviceKey);
+  if (!drag) throw new Error(`No drag wrapper found for ${deviceKey}`);
+  return {
+    onDragStart: drag.props.onDragStart,
+    onDragMove: drag.props.onDragMove,
+    onDragEnd: drag.props.onDragEnd,
+  };
+}
+
+function dragEvent(deviceKey: string, x: number, y: number) {
+  return { deviceKey, x, y };
 }
 
 function pressTestId(tree: TestRenderer.ReactTestRenderer, testID: string) {
@@ -463,6 +795,30 @@ function findTextPrefix(tree: TestRenderer.ReactTestRenderer, prefix: string) {
         typeof node.props.children === "string" &&
         node.props.children.startsWith(prefix),
     );
+}
+
+function findTextContaining(
+  tree: TestRenderer.ReactTestRenderer,
+  expected: string,
+) {
+  return tree.root
+    .findAllByType("Text" as never)
+    .find(
+      (node) =>
+        typeof node.props.children === "string" &&
+        node.props.children.includes(expected),
+    );
+}
+
+function accessibilityLabel(
+  tree: TestRenderer.ReactTestRenderer,
+  testID: string,
+): string {
+  const target = tree.root
+    .findAllByProps({ testID })
+    .find((node) => typeof node.props.accessibilityLabel === "string");
+  if (!target) throw new Error(`No accessibility label found for ${testID}`);
+  return target.props.accessibilityLabel;
 }
 
 function countScanStopLabels(tree: TestRenderer.ReactTestRenderer): number {
