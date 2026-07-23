@@ -29,18 +29,6 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
-import {
-  Select,
-  SelectBackdrop,
-  SelectContent,
-  SelectDragIndicator,
-  SelectDragIndicatorWrapper,
-  SelectIcon,
-  SelectInput,
-  SelectItem,
-  SelectPortal,
-  SelectTrigger,
-} from "@eight2five/ui/components/select";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
 import {
@@ -57,10 +45,12 @@ import {
   deviceSettingsFormFrom,
   mergeInspectionIntoDeviceSettingsForm,
   shouldAutoInspectDevice,
+  validateAnchorPositionFields,
   type DeviceSettingsFormValues,
 } from "./device-settings-form";
 import { usePansManager } from "./manager-context";
 import { displayError } from "./manager-utils";
+import { SelectField } from "./components/manager-ui";
 import { SettingHelp, SettingInfoCard } from "./components/setting-help";
 
 export interface DeviceSettingsModalProps {
@@ -165,8 +155,16 @@ export function DeviceSettingsModal({
       manager.networks.find((network) => network.id === networkId),
     )
     .filter((network) => network !== undefined);
+  const anchorPositionErrors =
+    form.role === "anchor" ? validateAnchorPositionFields(form) : {};
+  const hasAnchorPositionErrors =
+    Object.values(anchorPositionErrors).some(Boolean);
 
   const save = async () => {
+    if (hasAnchorPositionErrors) {
+      setError("Correct the highlighted anchor position fields before saving.");
+      return;
+    }
     setSaving(true);
     setError(undefined);
     setConfigurationResult(undefined);
@@ -441,7 +439,9 @@ export function DeviceSettingsModal({
                 <TextField
                   label="X"
                   value={form.positionX ?? ""}
-                  placeholder="Unavailable"
+                  placeholder="Required"
+                  helper="Meters from the network origin."
+                  error={anchorPositionErrors.positionX}
                   onChangeText={(positionX) =>
                     setForm((current) => ({ ...current!, positionX }))
                   }
@@ -451,7 +451,9 @@ export function DeviceSettingsModal({
                 <TextField
                   label="Y"
                   value={form.positionY ?? ""}
-                  placeholder="Unavailable"
+                  placeholder="Required"
+                  helper="Meters from the network origin."
+                  error={anchorPositionErrors.positionY}
                   onChangeText={(positionY) =>
                     setForm((current) => ({ ...current!, positionY }))
                   }
@@ -463,7 +465,9 @@ export function DeviceSettingsModal({
                 <TextField
                   label="Z"
                   value={form.positionZ ?? ""}
-                  placeholder="Unavailable"
+                  placeholder="Required"
+                  helper="Anchor height in meters."
+                  error={anchorPositionErrors.positionZ}
                   onChangeText={(positionZ) =>
                     setForm((current) => ({ ...current!, positionZ }))
                   }
@@ -473,7 +477,9 @@ export function DeviceSettingsModal({
                 <TextField
                   label="Quality"
                   value={form.positionQuality ?? ""}
-                  placeholder="Unavailable"
+                  placeholder="100"
+                  helper="Optional integer from 1 to 100; blank uses 100."
+                  error={anchorPositionErrors.positionQuality}
                   onChangeText={(positionQuality) =>
                     setForm((current) => ({
                       ...current!,
@@ -740,7 +746,7 @@ export function DeviceSettingsModal({
           </Button>
           <Button
             testID="save-device-settings"
-            isDisabled={saving}
+            isDisabled={saving || hasAnchorPositionErrors}
             onPress={() => void save()}
           >
             {saving ? <ButtonSpinner color={theme.raw.white} /> : null}
@@ -774,88 +780,45 @@ function TextField({
   label,
   compact,
   disabled,
+  helper,
+  error,
   ...props
 }: Omit<React.ComponentProps<typeof InputField>, "disabled"> & {
   label: string;
   compact?: boolean;
   disabled?: boolean;
+  helper?: string;
+  error?: string;
 }) {
   const theme = useEight2FiveTheme();
   return (
     <VStack className={compact ? "flex-1" : undefined} style={{ gap: four }}>
       <FieldLabel>{label}</FieldLabel>
-      <Input style={fieldStyle(theme)} isDisabled={disabled}>
+      <Input
+        style={fieldStyle(theme)}
+        isDisabled={disabled}
+        isInvalid={Boolean(error)}
+      >
         <InputField
           {...props}
           editable={!disabled && props.editable !== false}
           style={[{ color: theme.text }, props.style]}
         />
       </Input>
-    </VStack>
-  );
-}
-
-function SelectField({
-  label,
-  value,
-  choices,
-  onChange,
-  disabled,
-  testID,
-}: {
-  label: string;
-  value?: string;
-  choices: { label: string; value: string }[];
-  onChange(value: string): void;
-  disabled?: boolean;
-  testID?: string;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <VStack style={{ gap: four }}>
-      <FieldLabel>{label}</FieldLabel>
-      <Select
-        selectedValue={value}
-        onValueChange={onChange}
-        isDisabled={disabled || value === undefined}
-      >
-        <SelectTrigger
-          testID={testID}
-          style={fieldStyle(theme)}
-          accessibilityLabel={label}
-          accessibilityHint="Opens the available choices"
-          accessibilityState={{
-            disabled: disabled || value === undefined,
-          }}
+      {error ? (
+        <Text
+          selectable
+          size="sm"
+          accessibilityRole="alert"
+          style={{ color: theme.danger }}
         >
-          <SelectInput
-            value={
-              value === undefined
-                ? "Unavailable"
-                : (choices.find((choice) => choice.value === value)?.label ??
-                  value)
-            }
-            className="flex-1"
-            style={{ color: theme.text }}
-          />
-          <SelectIcon as={ChevronDown} style={{ color: theme.icon }} />
-        </SelectTrigger>
-        <SelectPortal>
-          <SelectBackdrop />
-          <SelectContent style={{ backgroundColor: theme.surfaceRaised }}>
-            <SelectDragIndicatorWrapper>
-              <SelectDragIndicator />
-            </SelectDragIndicatorWrapper>
-            {choices.map((choice) => (
-              <SelectItem
-                key={choice.value}
-                label={choice.label}
-                value={choice.value}
-              />
-            ))}
-          </SelectContent>
-        </SelectPortal>
-      </Select>
+          {error}
+        </Text>
+      ) : helper ? (
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          {helper}
+        </Text>
+      ) : null}
     </VStack>
   );
 }

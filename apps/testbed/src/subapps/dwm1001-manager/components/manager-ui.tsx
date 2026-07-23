@@ -1,8 +1,9 @@
 import React from "react";
-import { ChevronDown } from "lucide-react-native";
+import { Check, ChevronDown } from "lucide-react-native";
 import { Alert, AlertText } from "@eight2five/ui/components/alert";
 import {
   Button,
+  ButtonIcon,
   ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
@@ -19,19 +20,13 @@ import {
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Input, InputField } from "@eight2five/ui/components/input";
-import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import {
-  Select,
-  SelectBackdrop,
-  SelectContent,
-  SelectDragIndicator,
-  SelectDragIndicatorWrapper,
-  SelectIcon,
-  SelectInput,
-  SelectItem,
-  SelectPortal,
-  SelectTrigger,
-} from "@eight2five/ui/components/select";
+  Popover,
+  PopoverBackdrop,
+  PopoverBody,
+  PopoverContent,
+} from "@eight2five/ui/components/popover";
+import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import { Spinner } from "@eight2five/ui/components/spinner";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
@@ -316,21 +311,37 @@ export interface SelectChoice {
 }
 
 export function SelectField({
+  testID,
   label,
   value,
   choices,
   onChange,
+  placeholder = "Select an option",
   helper,
+  error,
+  disabled = false,
 }: {
+  testID?: string;
   label: string;
-  value: string;
+  value?: string;
   choices: SelectChoice[];
   onChange(value: string): void;
+  placeholder?: string;
   helper?: string;
+  error?: string;
+  disabled?: boolean;
 }) {
   const theme = useEight2FiveTheme();
+  const [open, setOpen] = React.useState(false);
+  const unavailable = value === undefined;
+  const isDisabled = disabled || unavailable;
+  const selected = choices.find((choice) => choice.value === value);
+  const displayValue = unavailable
+    ? "Unavailable"
+    : selected?.label || placeholder;
+
   return (
-    <FormControl>
+    <FormControl isInvalid={Boolean(error)}>
       <FormControlLabel>
         <FormControlLabelText
           style={{
@@ -341,54 +352,105 @@ export function SelectField({
           {label}
         </FormControlLabelText>
       </FormControlLabel>
-      <Select selectedValue={value} onValueChange={onChange}>
-        <SelectTrigger
-          size="lg"
-          className="min-h-12"
+      <Popover
+        isOpen={open && !isDisabled}
+        onOpen={() => {
+          if (!isDisabled) setOpen(true);
+        }}
+        onClose={() => setOpen(false)}
+        placement="bottom left"
+        trigger={(triggerProps) => (
+          <Button
+            {...triggerProps}
+            testID={testID}
+            variant="outline"
+            size="lg"
+            isDisabled={isDisabled}
+            accessibilityLabel={label}
+            accessibilityHint="Opens the available choices"
+            accessibilityState={{ disabled: isDisabled, expanded: open }}
+            className="min-h-12 w-full justify-between px-3"
+            style={{
+              borderWidth: 0,
+              borderRadius: eight2FiveRadii.sm,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <ButtonText
+              className="flex-1 text-left"
+              numberOfLines={1}
+              style={{
+                color: selected ? theme.text : theme.textMuted,
+                fontFamily: eight2FiveFonts.utilityRegular,
+              }}
+            >
+              {displayValue}
+            </ButtonText>
+            <ButtonIcon as={ChevronDown} style={{ color: theme.icon }} />
+          </Button>
+        )}
+      >
+        <PopoverBackdrop />
+        <PopoverContent
+          className="shadow-none p-2"
           style={{
-            borderWidth: 0,
-            borderRadius: eight2FiveRadii.sm,
-            backgroundColor: theme.surface,
+            width: 280,
+            maxHeight: 360,
+            backgroundColor: theme.surfaceRaised,
+            borderColor: theme.border,
           }}
         >
-          <SelectInput
-            value={
-              choices.find((choice) => choice.value === value)?.label ?? value
-            }
-            className="flex-1"
-            style={{
-              color: theme.text,
-              fontFamily: eight2FiveFonts.utilityRegular,
-            }}
-          />
-          <SelectIcon
-            as={ChevronDown}
-            className="mr-3"
-            style={{ color: theme.icon }}
-          />
-        </SelectTrigger>
-        <SelectPortal>
-          <SelectBackdrop />
-          <SelectContent style={{ backgroundColor: theme.surfaceRaised }}>
-            <SelectDragIndicatorWrapper>
-              <SelectDragIndicator />
-            </SelectDragIndicatorWrapper>
-            {choices.map((choice) => (
-              <SelectItem
-                key={choice.value}
-                label={choice.label}
-                value={choice.value}
-              />
-            ))}
-          </SelectContent>
-        </SelectPortal>
-      </Select>
+          <PopoverBody contentContainerStyle={{ gap: four }}>
+            {choices.map((choice) => {
+              const choiceSelected = choice.value === value;
+              return (
+                <Button
+                  key={choice.value}
+                  testID={
+                    testID ? `${testID}-option-${choice.value}` : undefined
+                  }
+                  variant="ghost"
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: choiceSelected }}
+                  className="min-h-11 w-full justify-between px-3"
+                  style={{
+                    backgroundColor: choiceSelected
+                      ? theme.accentSoft
+                      : "transparent",
+                  }}
+                  onPress={() => {
+                    onChange(choice.value);
+                    setOpen(false);
+                  }}
+                >
+                  <ButtonText
+                    className="flex-1 text-left"
+                    style={{ color: theme.text }}
+                  >
+                    {choice.label}
+                  </ButtonText>
+                  {choiceSelected ? (
+                    <ButtonIcon as={Check} style={{ color: theme.accent }} />
+                  ) : null}
+                </Button>
+              );
+            })}
+          </PopoverBody>
+        </PopoverContent>
+      </Popover>
       {helper ? (
         <FormControlHelper>
           <FormControlHelperText style={{ color: theme.textMuted }}>
             {helper}
           </FormControlHelperText>
         </FormControlHelper>
+      ) : null}
+      {error ? (
+        <FormControlError>
+          <FormControlErrorText selectable style={{ color: theme.danger }}>
+            {error}
+          </FormControlErrorText>
+        </FormControlError>
       ) : null}
     </FormControl>
   );

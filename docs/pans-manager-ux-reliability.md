@@ -11,7 +11,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 2 — Continuous discovery | Complete (device review pending) | Discovery now auto-starts after one permission flow, runs continuously, serializes rapid intent changes, and resumes after foregrounding. Obsolete duration settings were migrated out. |
 | 3 — Hardware-derived state | Complete (device review pending) | Device identity and cached profile membership now come from hardware label/PAN reads. Duplicate-PAN profiles surface as conflicts. Failed automatic inspections retry with bounded backoff. Device-local nickname, notes, and profile selection were removed from UI and v2 exports. |
 | 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertically constrained drag, swipe-to-delete with confirmation, and guarded unassignment using the PANS default PAN ID 0. |
-| 5 — Form controls | Not started | |
+| 5 — Form controls | Complete (device review pending) | Manager selects now use an anchored popover rather than an action sheet. Anchor quality is optional and defaults to 100, with field-level validation and help text. |
 | 6 — Map behavior | Not started | |
 | 7 — Packet and live updates | Not started | |
 | 8 — Integration | Not started | |
@@ -73,6 +73,15 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - RNGH reference: <https://docs.swmansion.com/react-native-gesture-handler/docs/components/reanimated_swipeable>.
 - Phase verification at the time of the phase-4 commit: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `93` tests, `24` shared-mobile suites / `115` tests, and `3` Expo PANS BLE API suites / `58` tests). Current repository-wide verification is recorded below.
 - Android UI smoke tests, screenshots, and hardware unassignment verification on real devices remain deferred until a compatible development environment and attached device are available.
+
+## Phase 5 implementation notes
+
+- All PANS manager select fields now use one `SelectField` implementation backed by the Gluestack popover primitive. The manager no longer imports the generated Select action-sheet components, so choices open next to their trigger instead of as bottom sheets.
+- The shared select exposes a consistent unavailable state, placeholder, helper/error text, selected-state check mark, radio semantics, and 44-point minimum choice targets. Device and map settings reuse it instead of maintaining separate select implementations.
+- Anchor position quality is optional in both device settings and map placement. A blank value resolves to quality 100; explicit values must be integers from 1 through 100.
+- Anchor coordinates and quality surface field-specific validation and explanatory help. Invalid fields disable the relevant save/write action rather than relying only on a generic submission error.
+- Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `96` tests, `24` shared-mobile suites / `116` tests, and `3` Expo PANS BLE API suites / `58` tests).
+- Popover placement, keyboard interaction, screen-reader focus, and nested-modal behavior still require physical Android/iOS review.
 
 ## Post-review verification — 2026-07-23
 

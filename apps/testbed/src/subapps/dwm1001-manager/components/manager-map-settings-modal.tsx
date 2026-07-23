@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { Check, X } from "lucide-react-native";
 import { Button, ButtonText } from "@eight2five/ui/components/button";
 import {
   Checkbox,
@@ -19,18 +19,6 @@ import {
   ModalContent,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
-import {
-  Select,
-  SelectBackdrop,
-  SelectContent,
-  SelectDragIndicator,
-  SelectDragIndicatorWrapper,
-  SelectIcon,
-  SelectInput,
-  SelectItem,
-  SelectPortal,
-  SelectTrigger,
-} from "@eight2five/ui/components/select";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
@@ -49,6 +37,7 @@ import type {
   PansMapDataController,
   PansMapVisibilityOptions,
 } from "../manager-map-controller";
+import { SelectField } from "./manager-ui";
 import { SettingHelp } from "./setting-help";
 
 const NETWORK_OVERLAY_NOTE =
@@ -380,7 +369,23 @@ function AnchorEditConfirmation({
 }) {
   const theme = useEight2FiveTheme();
   const [zMeters, setZMeters] = React.useState(String(pending.zMeters));
-  const [quality, setQuality] = React.useState(String(pending.quality));
+  const [quality, setQuality] = React.useState(
+    pending.quality === 100 ? "" : String(pending.quality),
+  );
+  const zText = zMeters.trim();
+  const qualityText = quality.trim();
+  const zError =
+    zText === ""
+      ? "Enter the anchor height."
+      : !Number.isFinite(Number(zText))
+        ? "Enter a finite number in meters."
+        : undefined;
+  const qualityValue = qualityText === "" ? undefined : Number(qualityText);
+  const qualityError =
+    qualityValue !== undefined &&
+    (!Number.isInteger(qualityValue) || qualityValue < 1 || qualityValue > 100)
+      ? "Enter an integer from 1 to 100, or leave blank for 100."
+      : undefined;
   return (
     <VStack
       testID="map-anchor-confirmation"
@@ -398,12 +403,17 @@ function AnchorEditConfirmation({
         label="Z (m)"
         value={zMeters}
         onChange={setZMeters}
+        helper="Anchor height in meters."
+        error={zError}
       />
       <NumericField
         testID="map-anchor-quality-input"
-        label="Quality (1–100)"
+        label="Quality (optional)"
         value={quality}
+        placeholder="100"
         onChange={setQuality}
+        helper="Integer from 1 to 100; blank uses 100."
+        error={qualityError}
       />
       <Text selectable size="sm" style={{ color: theme.warning }}>
         Position writes are write-only over this BLE interface and cannot be
@@ -413,12 +423,9 @@ function AnchorEditConfirmation({
         <MapButton
           label="Write position"
           testID="map-write-anchor-position"
-          isDisabled={trackingActive}
+          isDisabled={trackingActive || Boolean(zError || qualityError)}
           onPress={() =>
-            void controller.savePendingAnchorEdit(
-              Number(zMeters),
-              Number(quality),
-            )
+            void controller.savePendingAnchorEdit(Number(zText), qualityValue)
           }
         />
         <MapButton
@@ -512,105 +519,54 @@ function SwitchRow({
   );
 }
 
-function SelectField({
-  testID,
-  label,
-  value,
-  placeholder,
-  choices,
-  onChange,
-  disabled,
-}: {
-  testID: string;
-  label: string;
-  value: string;
-  placeholder: string;
-  choices: { label: string; value: string }[];
-  onChange(value: string): void;
-  disabled?: boolean;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <VStack style={{ gap: four }}>
-      <Text
-        style={{
-          color: theme.text,
-          fontFamily: eight2FiveFonts.styleSemibold,
-        }}
-      >
-        {label}
-      </Text>
-      <Select
-        selectedValue={value}
-        onValueChange={onChange}
-        isDisabled={disabled}
-      >
-        <SelectTrigger
-          testID={testID}
-          size="lg"
-          style={{
-            borderColor: theme.border,
-            backgroundColor: theme.surfaceRaised,
-          }}
-        >
-          <SelectInput
-            className="flex-1"
-            value={
-              choices.find((choice) => choice.value === value)?.label ?? ""
-            }
-            placeholder={placeholder}
-            style={{ color: theme.text }}
-          />
-          <SelectIcon
-            as={ChevronDown}
-            className="mr-3"
-            style={{ color: theme.icon }}
-          />
-        </SelectTrigger>
-        <SelectPortal>
-          <SelectBackdrop />
-          <SelectContent style={{ backgroundColor: theme.surfaceRaised }}>
-            <SelectDragIndicatorWrapper>
-              <SelectDragIndicator />
-            </SelectDragIndicatorWrapper>
-            {choices.map((choice) => (
-              <SelectItem
-                key={choice.value}
-                label={choice.label}
-                value={choice.value}
-              />
-            ))}
-          </SelectContent>
-        </SelectPortal>
-      </Select>
-    </VStack>
-  );
-}
-
 function NumericField({
   testID,
   label,
   value,
   onChange,
+  placeholder,
+  helper,
+  error,
 }: {
   testID: string;
   label: string;
   value: string;
   onChange(value: string): void;
+  placeholder?: string;
+  helper?: string;
+  error?: string;
 }) {
   const theme = useEight2FiveTheme();
   return (
     <VStack style={{ gap: four }}>
       <Text style={{ color: theme.text }}>{label}</Text>
-      <Input style={{ borderColor: theme.border }}>
+      <Input
+        isInvalid={Boolean(error)}
+        style={{ borderColor: error ? theme.danger : theme.border }}
+      >
         <InputField
           testID={testID}
           value={value}
+          placeholder={placeholder}
           onChangeText={onChange}
           keyboardType="numeric"
           style={{ color: theme.text }}
         />
       </Input>
+      {error ? (
+        <Text
+          selectable
+          size="sm"
+          accessibilityRole="alert"
+          style={{ color: theme.danger }}
+        >
+          {error}
+        </Text>
+      ) : helper ? (
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          {helper}
+        </Text>
+      ) : null}
     </VStack>
   );
 }

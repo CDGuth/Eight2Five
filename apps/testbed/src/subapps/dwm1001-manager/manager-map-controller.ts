@@ -94,7 +94,7 @@ export interface PansMapDataController {
   pendingAnchorEdit?: PendingAnchorEdit;
   setPendingAnchorCoordinate(point: GridPoint): void;
   cancelPendingAnchorEdit(): void;
-  savePendingAnchorEdit(zMeters: number, quality: number): Promise<void>;
+  savePendingAnchorEdit(zMeters: number, quality?: number): Promise<void>;
   editResult?: string;
   trackingStatus: PansMapTrackingStatus;
   trackingSource: "none" | "direct-ble";
@@ -493,7 +493,7 @@ export function usePansMapDataController(
   );
 
   const savePendingAnchorEdit = React.useCallback(
-    async (zMeters: number, quality: number) => {
+    async (zMeters: number, quality = 100) => {
       if (
         !pendingAnchorEdit ||
         trackingStatus === "running" ||
@@ -505,7 +505,7 @@ export function usePansMapDataController(
         quality > 100
       )
         return setEditResult(
-          "Enter a finite Z coordinate and an integer quality from 1 to 100.",
+          "Enter a finite Z coordinate and an optional integer quality from 1 to 100.",
         );
       try {
         const result = await manager.applyDeviceConfiguration(

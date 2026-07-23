@@ -136,6 +136,46 @@ export function mergeInspectionIntoDeviceSettingsForm(
   };
 }
 
+export interface DeviceSettingsFieldErrors {
+  positionX?: string;
+  positionY?: string;
+  positionZ?: string;
+  positionQuality?: string;
+}
+
+export function validateAnchorPositionFields(
+  current: DeviceSettingsFormValues,
+): DeviceSettingsFieldErrors {
+  const errors: DeviceSettingsFieldErrors = {};
+  const coordinates = [
+    ["positionX", current.positionX],
+    ["positionY", current.positionY],
+    ["positionZ", current.positionZ],
+  ] as const;
+  const coordinateText = coordinates.map(([, value]) => value?.trim() ?? "");
+  const qualityText = current.positionQuality?.trim() ?? "";
+
+  if (coordinateText.every((value) => value === "") && qualityText === "")
+    return errors;
+
+  for (const [field, value] of coordinates) {
+    const text = value?.trim() ?? "";
+    if (text === "") errors[field] = "Required when writing a position.";
+    else if (!Number.isFinite(Number(text)))
+      errors[field] = "Enter a finite number in meters.";
+  }
+
+  if (qualityText !== "") {
+    const quality = Number(qualityText);
+    if (!Number.isInteger(quality) || quality < 1 || quality > 100) {
+      errors.positionQuality =
+        "Enter an integer from 1 to 100, or leave blank for 100.";
+    }
+  }
+
+  return errors;
+}
+
 export function buildDeviceConfigurationDiff(
   baseline: DeviceSettingsFormValues,
   current: DeviceSettingsFormValues,
@@ -237,48 +277,59 @@ function parseChangedPosition(
   baseline: DeviceSettingsFormValues,
   current: DeviceSettingsFormValues,
 ): HardwareDeviceChanges["position"] | undefined {
-  const currentParts = [
-    current.positionX,
-    current.positionY,
-    current.positionZ,
-    current.positionQuality,
+  const currentCoordinateText = [
+    current.positionX?.trim() ?? "",
+    current.positionY?.trim() ?? "",
+    current.positionZ?.trim() ?? "",
   ];
-  if (currentParts.every((value) => value === undefined || value === ""))
-    return undefined;
+  const currentQualityText = current.positionQuality?.trim() ?? "";
   if (
-    currentParts.some((value) => value === undefined || value.trim() === "")
-  ) {
-    throw new Error("Enter X, Y, Z, and quality before writing a position.");
-  }
-  const baselineParts = [
-    baseline.positionX,
-    baseline.positionY,
-    baseline.positionZ,
-    baseline.positionQuality,
-  ];
-  if (currentParts.every((value, index) => value === baselineParts[index]))
+    currentCoordinateText.every((value) => value === "") &&
+    currentQualityText === ""
+  )
     return undefined;
+
+  const errors = validateAnchorPositionFields(current);
+  const firstError =
+    errors.positionX ??
+    errors.positionY ??
+    errors.positionZ ??
+    errors.positionQuality;
+  if (firstError) throw new Error(firstError);
+
   const position = {
-    xMeters: Number(current.positionX),
-    yMeters: Number(current.positionY),
-    zMeters: Number(current.positionZ),
-    quality: Number(current.positionQuality),
+    xMeters: Number(currentCoordinateText[0]),
+    yMeters: Number(currentCoordinateText[1]),
+    zMeters: Number(currentCoordinateText[2]),
+    quality: currentQualityText === "" ? 100 : Number(currentQualityText),
   };
-  if (
-    !Number.isFinite(position.xMeters) ||
-    !Number.isFinite(position.yMeters) ||
-    !Number.isFinite(position.zMeters)
-  ) {
-    throw new Error("Position coordinates must be finite numbers.");
-  }
-  if (
-    !Number.isInteger(position.quality) ||
-    position.quality < 1 ||
-    position.quality > 100
-  ) {
-    throw new Error("Position quality must be an integer from 1 to 100.");
-  }
+  const baselinePosition = parseComparablePosition(baseline);
+  if (baselinePosition && valuesEqual(position, baselinePosition))
+    return undefined;
   return position;
+}
+
+function parseComparablePosition(
+  form: DeviceSettingsFormValues,
+): HardwareDeviceChanges["position"] | undefined {
+  const coordinates = [form.positionX, form.positionY, form.positionZ];
+  if (coordinates.some((value) => value === undefined || value.trim() === ""))
+    return undefined;
+  const qualityText = form.positionQuality?.trim() ?? "";
+  const position = {
+    xMeters: Number(form.positionX),
+    yMeters: Number(form.positionY),
+    zMeters: Number(form.positionZ),
+    quality: qualityText === "" ? 100 : Number(qualityText),
+  };
+  return Number.isFinite(position.xMeters) &&
+    Number.isFinite(position.yMeters) &&
+    Number.isFinite(position.zMeters) &&
+    Number.isInteger(position.quality) &&
+    position.quality >= 1 &&
+    position.quality <= 100
+    ? position
+    : undefined;
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {

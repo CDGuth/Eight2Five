@@ -8,6 +8,7 @@ import {
   deviceSettingsFormFrom,
   mergeInspectionIntoDeviceSettingsForm,
   shouldAutoInspectDevice,
+  validateAnchorPositionFields,
 } from "../device-settings-form";
 
 describe("device settings form", () => {
@@ -46,6 +47,37 @@ describe("device settings form", () => {
     });
     expect(diff.hardwareChanges).not.toHaveProperty("panId");
     expect(diff.hardwareChanges).not.toHaveProperty("movingUpdateRateMs");
+  });
+
+  test("defaults optional anchor quality to 100", () => {
+    const baseline = deviceSettingsFormFrom(anchorDevice());
+    const diff = buildDeviceConfigurationDiff(baseline, {
+      ...baseline,
+      positionX: "4",
+      positionQuality: "",
+    });
+    expect(diff.hardwareChanges.position).toEqual({
+      xMeters: 4,
+      yMeters: 2,
+      zMeters: 3,
+      quality: 100,
+    });
+  });
+
+  test("returns field-specific anchor position errors", () => {
+    expect(
+      validateAnchorPositionFields({
+        ...deviceSettingsFormFrom(anchorDevice()),
+        positionX: "not-a-number",
+        positionY: "",
+        positionQuality: "101",
+      }),
+    ).toEqual({
+      positionX: "Enter a finite number in meters.",
+      positionY: "Required when writing a position.",
+      positionQuality:
+        "Enter an integer from 1 to 100, or leave blank for 100.",
+    });
   });
 
   test("does not initialize unavailable fields or include role-specific defaults", () => {
