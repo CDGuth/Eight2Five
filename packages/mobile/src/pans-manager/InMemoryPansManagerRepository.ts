@@ -44,6 +44,7 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
         this.devices.set(deviceId, unassigned);
       }
     }
+    this.deletePositionLogs((session) => session.networkId === id);
   }
 
   async listDevices(): Promise<ManagedDevice[]> {
@@ -61,6 +62,7 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
   async deleteDevice(deviceId: string): Promise<void> {
     this.devices.delete(deviceId);
     this.snapshots.delete(deviceId);
+    this.deletePositionLogs((session) => session.deviceId === deviceId);
   }
 
   async listNetworkDevices(networkId: string): Promise<ManagedDevice[]> {
@@ -207,6 +209,16 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
     sessionId: string,
   ): Promise<PositionLogSample[]> {
     return (this.logSamples.get(sessionId) ?? []).map(clone);
+  }
+
+  private deletePositionLogs(
+    shouldDelete: (session: PositionLogSession) => boolean,
+  ): void {
+    for (const [sessionId, session] of this.logSessions) {
+      if (!shouldDelete(session)) continue;
+      this.logSessions.delete(sessionId);
+      this.logSamples.delete(sessionId);
+    }
   }
 }
 

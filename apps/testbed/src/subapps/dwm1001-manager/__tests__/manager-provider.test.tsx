@@ -6,6 +6,7 @@ import type {
   ManagedDevice,
   PansManagerRepository,
 } from "@eight2five/mobile/pans-manager";
+import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager/types";
 
 import {
   PansManagerProvider,
@@ -314,6 +315,7 @@ describe("PansManagerProvider", () => {
         configureDevice: jest.fn(),
         applyConfigurationDiff: jest.fn(),
         assignPanId: jest.fn(),
+        unassignDeviceHardware: jest.fn(),
       },
     });
     let tree!: TestRenderer.ReactTestRenderer;
@@ -434,6 +436,7 @@ describe("PansManagerProvider", () => {
         configureDevice: jest.fn(),
         applyConfigurationDiff: jest.fn(),
         assignPanId: jest.fn(),
+        unassignDeviceHardware: jest.fn(),
       },
     });
     runtime.discovery.subscribe = jest.fn((listener) => {
@@ -589,6 +592,169 @@ describe("PansManagerProvider", () => {
     ).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
+
+  it("deletes an offline device record without a hardware call", async () => {
+    let storedDevice: ManagedDevice | undefined = {
+      id: "device",
+      transportDeviceId: "transport-device",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const deleteDevice = jest.fn(async () => {
+      storedDevice = undefined;
+    });
+    const unassignDeviceHardware = jest.fn();
+    const repository = {
+      listNetworks: jest.fn().mockResolvedValue([]),
+      listDevices: jest.fn(async () => (storedDevice ? [storedDevice] : [])),
+      getDevice: jest.fn(async () => storedDevice),
+      deleteDevice,
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRepository;
+    const runtime = createRuntimeValue({
+      repository,
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache: jest.fn(),
+        configureDevice: jest.fn(),
+        applyConfigurationDiff: jest.fn(),
+        assignPanId: jest.fn(),
+        unassignDeviceHardware,
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <DeviceDeletionHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root.findByProps({ testID: "delete-offline" }).props.onPress();
+    });
+
+    expect(deleteDevice).toHaveBeenCalledWith("device");
+    expect(unassignDeviceHardware).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it("runs verified hardware unassignment for an available device", async () => {
+    let storedDevice: ManagedDevice = {
+      id: "device",
+      networkId: "profile",
+      transportDeviceId: "transport-device",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const deleteDevice = jest.fn();
+    const repository = {
+      listNetworks: jest.fn().mockResolvedValue([
+        {
+          id: "profile",
+          name: "Profile",
+          panId: 7,
+          settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]),
+      listDevices: jest.fn(async () => [storedDevice]),
+      getDevice: jest.fn(async () => storedDevice),
+      deleteDevice,
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+      dissociateDevice: jest.fn(async () => {
+        const updated = { ...storedDevice };
+        delete updated.networkId;
+        storedDevice = updated;
+      }),
+    } as unknown as PansManagerRepository;
+    const unassignDeviceHardware = jest.fn(async () => {
+      storedDevice = {
+        ...storedDevice,
+        lastKnownConfig: {
+          ...storedDevice.lastKnownConfig!,
+          panId: 0,
+          uwbMode: "passive",
+        },
+      };
+      return {
+        deviceId: "device",
+        transportDeviceId: "transport-device",
+        outcome: "verified" as const,
+        writes: [
+          { field: "uwbMode", status: "verified" as const },
+          { field: "panId", status: "verified" as const },
+        ],
+        warnings: [],
+      };
+    });
+    const runtime = createRuntimeValue({
+      repository,
+      discovery: {
+        ...createRuntimeValue().discovery,
+        subscribe: jest.fn((listener) => {
+          listener([
+            {
+              transportDeviceId: "transport-device",
+              rssi: -50,
+              lastSeenAt: 1,
+              compatibility: "malformed",
+            },
+          ]);
+          return { remove: jest.fn() };
+        }),
+      },
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache: jest.fn(),
+        configureDevice: jest.fn(),
+        applyConfigurationDiff: jest.fn(),
+        assignPanId: jest.fn(),
+        unassignDeviceHardware,
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <DeviceDeletionHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root
+        .findByProps({ testID: "unassign-online" })
+        .props.onPress();
+    });
+
+    expect(unassignDeviceHardware).toHaveBeenCalledWith("device");
+    expect(storedDevice).toMatchObject({
+      lastKnownConfig: { panId: 0, uwbMode: "passive" },
+    });
+    expect(storedDevice.networkId).toBeUndefined();
+    expect(repository.dissociateDevice).toHaveBeenCalledWith(
+      "profile",
+      "device",
+      expect.any(Number),
+    );
+    expect(deleteDevice).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
 });
 
 function ProviderHarness() {
@@ -687,6 +853,26 @@ function NetworkLocalDetailsHarness() {
   );
 }
 
+function DeviceDeletionHarness() {
+  const manager = usePansManager();
+  return (
+    <>
+      <Button
+        testID="delete-offline"
+        onPress={() => manager.deleteOfflineDevice("device")}
+      >
+        <ButtonText>Delete offline</ButtonText>
+      </Button>
+      <Button
+        testID="unassign-online"
+        onPress={() => manager.unassignOnlineDevice("device")}
+      >
+        <ButtonText>Unassign online</ButtonText>
+      </Button>
+    </>
+  );
+}
+
 function makeRuntime(overrides: Record<string, jest.Mock> = {}) {
   return createRuntimeValue({
     discovery: {
@@ -765,6 +951,7 @@ function createRuntimeValue(
       configureDevice: jest.fn(),
       applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
+      unassignDeviceHardware: jest.fn(),
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),

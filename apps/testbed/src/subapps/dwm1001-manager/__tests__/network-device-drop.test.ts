@@ -13,7 +13,7 @@ describe("findNetworkDropTarget", () => {
     expect(findNetworkDropTarget(zones, { x: 10, y: 20 })).toBe("first");
     expect(findNetworkDropTarget(zones, { x: 109.99, y: 59.99 })).toBe("first");
     expect(findNetworkDropTarget(zones, { x: 10, y: 60 })).toBe("second");
-    expect(findNetworkDropTarget(zones, { x: 110, y: 60 })).toBeUndefined();
+    expect(findNetworkDropTarget(zones, { x: 110, y: 60 })).toBe("second");
     expect(findNetworkDropTarget(zones, { x: 10, y: 100 })).toBeUndefined();
   });
 

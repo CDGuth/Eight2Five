@@ -68,6 +68,7 @@ export interface DeviceSettingsModalProps {
   discovery?: DiscoveredDeviceSnapshot;
   isOpen: boolean;
   available: boolean;
+  destructiveActionRequested?: boolean;
   onClose(): void;
 }
 
@@ -76,6 +77,7 @@ export function DeviceSettingsModal({
   discovery,
   isOpen,
   available,
+  destructiveActionRequested = false,
   onClose,
 }: DeviceSettingsModalProps) {
   const theme = useEight2FiveTheme();
@@ -90,6 +92,9 @@ export function DeviceSettingsModal({
   const [configurationResult, setConfigurationResult] =
     React.useState<PansConfigurationResult>();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [confirmingDestructiveAction, setConfirmingDestructiveAction] =
+    React.useState(false);
+  const [destructiveBusy, setDestructiveBusy] = React.useState(false);
   const loadedDeviceId = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
@@ -103,7 +108,8 @@ export function DeviceSettingsModal({
     setError(undefined);
     setConfigurationResult(undefined);
     setAdvancedOpen(false);
-  }, [device, discovery?.name, isOpen]);
+    setConfirmingDestructiveAction(false);
+  }, [destructiveActionRequested, device, discovery?.name, isOpen]);
 
   React.useEffect(() => {
     if (!isOpen) loadedDeviceId.current = undefined;
@@ -152,6 +158,8 @@ export function DeviceSettingsModal({
   const roleFieldsEditable =
     hardwareEditable && baseline.role === form.role && form.role !== undefined;
   const profileMatch = resolveCachedProfileMatch(manager.networks, form.panId);
+  const destructiveConfirmationVisible =
+    confirmingDestructiveAction || destructiveActionRequested;
   const matchingProfiles = profileMatch.matchingNetworkIds
     .map((networkId) =>
       manager.networks.find((network) => network.id === networkId),
@@ -219,6 +227,30 @@ export function DeviceSettingsModal({
       setError(displayError(saveError));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runDestructiveAction = async () => {
+    setDestructiveBusy(true);
+    setError(undefined);
+    setConfigurationResult(undefined);
+    try {
+      if (!available) {
+        await manager.deleteOfflineDevice(device.id);
+        onClose();
+        return;
+      }
+      const result = await manager.unassignOnlineDevice(device.id);
+      setConfigurationResult(result);
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+      onClose();
+    } catch (destructiveError) {
+      setError(displayError(destructiveError));
+    } finally {
+      setDestructiveBusy(false);
     }
   };
 
@@ -617,6 +649,65 @@ export function DeviceSettingsModal({
               />
             </FormSection>
           ) : null}
+
+          <FormSection title="Destructive actions">
+            <SettingInfoCard tone="warning">
+              {available
+                ? "Unassigning writes passive UWB mode, verifies it, then writes and verifies reserved PAN 0. The saved device record is kept for retry and diagnostics."
+                : "Deleting an offline device removes its saved phone record, snapshots, and position logs without contacting hardware. Rediscovery creates a new unassigned record."}
+            </SettingInfoCard>
+            {destructiveConfirmationVisible ? (
+              <VStack style={{ gap: eight2FiveSpacing.sm }}>
+                <Text
+                  selectable
+                  accessibilityRole="alert"
+                  style={{ color: theme.danger }}
+                >
+                  {available
+                    ? "Confirm hardware unassignment? UWB will be made passive before PAN 0 is written."
+                    : "Confirm deletion of this saved phone record? This cannot be undone."}
+                </Text>
+                <HStack
+                  className="flex-wrap"
+                  style={{ gap: eight2FiveSpacing.sm }}
+                >
+                  <Button
+                    testID="confirm-device-destructive-action"
+                    variant="destructive"
+                    isDisabled={destructiveBusy}
+                    onPress={() => void runDestructiveAction()}
+                  >
+                    {destructiveBusy ? (
+                      <ButtonSpinner color={theme.raw.white} />
+                    ) : null}
+                    <ButtonText>
+                      {available ? "Unassign hardware" : "Delete saved device"}
+                    </ButtonText>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    isDisabled={destructiveBusy}
+                    onPress={() => {
+                      if (destructiveActionRequested) onClose();
+                      else setConfirmingDestructiveAction(false);
+                    }}
+                  >
+                    <ButtonText>Cancel</ButtonText>
+                  </Button>
+                </HStack>
+              </VStack>
+            ) : (
+              <Button
+                testID="request-device-destructive-action"
+                variant="destructive"
+                onPress={() => setConfirmingDestructiveAction(true)}
+              >
+                <ButtonText>
+                  {available ? "Unassign device" : "Delete saved device"}
+                </ButtonText>
+              </Button>
+            )}
+          </FormSection>
 
           {inspectionError ? (
             <ResultText

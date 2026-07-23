@@ -365,13 +365,13 @@ export function NetworkSettingsScreen() {
 
       <SectionCard
         title="Destructive actions"
-        description="Removes app data only; hardware is not reset."
+        description="Removes the saved profile, app settings, and position logs. Hardware is not reset."
       >
         {confirmingDelete ? (
           <>
             <StatePanel
               state="error"
-              message={`Delete “${network.name}” from this app? Hardware will not be reset.`}
+              message={`Delete “${network.name}” from this app? Hardware PAN IDs remain unchanged. Devices move to Unassigned when no remaining profile matches their cached PAN.`}
             />
             <ManagerButton
               label={`Confirm delete ${network.name}`}

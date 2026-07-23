@@ -21,6 +21,9 @@ export function resolveCachedProfileMatch(
   if (panId === undefined) {
     return { status: "unverified", matchingNetworkIds: [] };
   }
+  if (panId === 0) {
+    return { status: "unassigned", panId, matchingNetworkIds: [] };
+  }
   const matchingNetworkIds = networks
     .filter((network) => network.panId === panId)
     .map((network) => network.id)

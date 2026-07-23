@@ -107,6 +107,27 @@ describe("PansCommissioningService profile assignment", () => {
     expect(result.outcome).toBe("failed");
     expect((await repository.getDevice("device"))?.networkId).toBeUndefined();
   });
+
+  test("rejects assigning a device to a legacy PAN 0 profile", async () => {
+    const repository = await assignmentRepository(undefined);
+    await repository.saveNetwork(network("target", 0));
+    const configuration = configurationService(async (deviceId, panId) =>
+      configurationResult(deviceId, panId),
+    );
+    const service = new PansCommissioningService(repository, configuration);
+
+    await expect(
+      service.assignDeviceToNetworkProfile({
+        deviceId: "device",
+        targetNetworkId: "target",
+      }),
+    ).resolves.toMatchObject({
+      outcome: "failed",
+      stage: "loading",
+      error: { code: "INVALID_CONFIGURATION" },
+    });
+    expect(configuration.assignPanId).not.toHaveBeenCalled();
+  });
 });
 
 describe("PansCommissioningService profile unassignment", () => {

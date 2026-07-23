@@ -1,4 +1,5 @@
 import React from "react";
+import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
   selectNetworkDeviceSections,
   type DeviceConfigurationSnapshot,
@@ -6,7 +7,9 @@ import {
   type NetworkDeviceSection as NetworkDeviceSectionModel,
 } from "@eight2five/mobile/pans-manager";
 import { Button, ButtonText } from "@eight2five/ui/components/button";
+import { Divider } from "@eight2five/ui/components/divider";
 import { FlatList } from "@eight2five/ui/components/flat-list";
+import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { SafeAreaView } from "@eight2five/ui/components/safe-area-view";
 import { Spinner } from "@eight2five/ui/components/spinner";
@@ -20,6 +23,11 @@ import {
 } from "../components/network-device-drop";
 import type { NetworkDeviceDragEvent } from "../components/network-device-drag";
 import { NetworkDeviceSection } from "../components/network-device-section";
+import { MANAGER_CARD_CONTENT_INSET } from "../components/manager-layout";
+import {
+  ManagerSwipeToDelete,
+  type ManagerSwipeRegistryCallbacks,
+} from "../components/manager-swipe-to-delete";
 import { DeviceSettingsModal } from "../device-settings-modal";
 import { usePansManager } from "../manager-context";
 import { displayError } from "../manager-utils";
@@ -53,6 +61,14 @@ export function NetworksDevicesScreen() {
   const manager = usePansManager();
   const [selectedNetworkId, setSelectedNetworkId] = React.useState<string>();
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string>();
+  const [
+    deviceDestructiveActionRequested,
+    setDeviceDestructiveActionRequested,
+  ] = React.useState(false);
+  const [
+    networkDestructiveActionRequested,
+    setNetworkDestructiveActionRequested,
+  ] = React.useState(false);
   const liveSections = React.useMemo(
     () =>
       selectNetworkDeviceSections(
@@ -89,6 +105,9 @@ export function NetworksDevicesScreen() {
   const hoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const openSwipeableRef = React.useRef<
+    { key: string; methods: SwipeableMethods } | undefined
+  >(undefined);
   const hasDeviceRows = liveSections.some(
     (section) => section.devices.length > 0,
   );
@@ -110,6 +129,12 @@ export function NetworksDevicesScreen() {
   const displayedEmptyMessage = frozenDisplay
     ? frozenDisplay.emptyMessage
     : emptyMessage;
+  const unassignedSection = sections.find(
+    (section) => section.type === "unassigned",
+  );
+  const networkSections = sections.filter(
+    (section) => section.type === "network",
+  );
 
   const setSectionExpanded = React.useCallback(
     (key: string, expanded: boolean) => {
@@ -287,10 +312,10 @@ export function NetworksDevicesScreen() {
   const handleDragEnd = React.useCallback(
     (event: NetworkDeviceDragEvent) => {
       const activeDrag = activeDragRef.current;
-      if (!activeDrag || activeDrag.deviceKey !== event.deviceKey) return;
+      if (!activeDrag || activeDrag.deviceKey !== event.deviceKey) return false;
       if (event.cancelled) {
         finishDrag();
-        return;
+        return false;
       }
       const targetNetworkId = findNetworkDropTarget(
         [...dropZonesRef.current.values()],
@@ -305,7 +330,7 @@ export function NetworksDevicesScreen() {
           message: "No network was selected. Device remains unassigned.",
         });
         finishDrag();
-        return;
+        return false;
       }
       setSectionExpanded(`network:${targetNetworkId}`, true);
       clearHover();
@@ -313,6 +338,7 @@ export function NetworksDevicesScreen() {
         device: activeDrag.device,
         targetNetworkId,
       });
+      return true;
     },
     [clearHover, finishDrag, runDropAssignment, setSectionExpanded],
   );
@@ -344,6 +370,23 @@ export function NetworksDevicesScreen() {
     },
     [],
   );
+  const swipeRegistry = React.useMemo<ManagerSwipeRegistryCallbacks>(
+    () => ({
+      onWillOpen: (key, methods) => {
+        if (openSwipeableRef.current?.key !== key)
+          openSwipeableRef.current?.methods.close();
+        openSwipeableRef.current = { key, methods };
+      },
+      onClose: (key, methods) => {
+        if (
+          openSwipeableRef.current?.key === key &&
+          openSwipeableRef.current.methods === methods
+        )
+          openSwipeableRef.current = undefined;
+      },
+    }),
+    [],
+  );
 
   const openDeviceSettings = React.useCallback(
     async (device: DisplayDevice) => {
@@ -354,10 +397,22 @@ export function NetworksDevicesScreen() {
           : undefined);
       if (!saved) throw new Error("Device discovery is unavailable.");
       setSelectedNetworkId(undefined);
+      setDeviceDestructiveActionRequested(false);
       setSelectedDeviceId(saved.id);
     },
     [manager],
   );
+  const requestDeviceDelete = React.useCallback((device: DisplayDevice) => {
+    if (!device.savedDevice) return;
+    setSelectedNetworkId(undefined);
+    setDeviceDestructiveActionRequested(true);
+    setSelectedDeviceId(device.savedDevice.id);
+  }, []);
+  const requestNetworkDelete = React.useCallback((networkId: string) => {
+    setSelectedDeviceId(undefined);
+    setNetworkDestructiveActionRequested(true);
+    setSelectedNetworkId(networkId);
+  }, []);
 
   const selectedDevice = manager.devices.find(
     (device) => device.id === selectedDeviceId,
@@ -415,6 +470,39 @@ export function NetworksDevicesScreen() {
   }, [manager, theme.raw.white]);
   useTestbedToolbarAction("pans-discovery-scan", scanAction);
 
+  const renderSection = (
+    item: NetworkDeviceSectionModel,
+    sectionEmptyMessage?: string,
+  ) => (
+    <NetworkDeviceSection
+      section={item}
+      expanded={expandedSections.has(item.key)}
+      onExpandedChange={(expanded) => setSectionExpanded(item.key, expanded)}
+      expandedDeviceKeys={expandedDevices}
+      onDeviceExpandedChange={setDeviceExpanded}
+      snapshots={displayedSnapshots}
+      emptyMessage={sectionEmptyMessage}
+      onEditNetwork={(networkId) => {
+        setSelectedDeviceId(undefined);
+        setNetworkDestructiveActionRequested(false);
+        setSelectedNetworkId(networkId);
+      }}
+      onOpenDeviceSettings={openDeviceSettings}
+      onRefreshDevice={manager.inspectDevice}
+      onRequestDeviceDelete={requestDeviceDelete}
+      swipeRegistry={swipeRegistry}
+      dragEnabled={!assignmentInFlight}
+      activeDragDeviceKey={activeDragDeviceKey}
+      interactionsDisabled={
+        activeDragDeviceKey !== undefined || assignmentInFlight
+      }
+      dragCallbacks={dragCallbacks}
+      hoveredNetworkId={hoveredNetworkId}
+      onRegisterDropZone={registerDropZone}
+      onDropZoneChange={updateDropZone}
+    />
+  );
+
   return (
     <SafeAreaView
       edges={["left", "right"]}
@@ -447,7 +535,7 @@ export function NetworksDevicesScreen() {
 
         <FlatList
           testID="network-device-sections"
-          data={sections}
+          data={networkSections}
           keyExtractor={(section) => section.key}
           extraData={`${Array.from(expandedSections)
             .sort()
@@ -457,57 +545,74 @@ export function NetworksDevicesScreen() {
             assignmentStatus?.kind ?? ""
           }`}
           contentContainerStyle={{
-            paddingHorizontal: eight2FiveSpacing.md,
+            paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
             paddingBottom: eight2FiveSpacing.xxl,
           }}
           keyboardShouldPersistTaps="handled"
           scrollEnabled={!activeDragDeviceKey && !assignmentInFlight}
           scrollEventThrottle={32}
           onScroll={measureDropZones}
-          renderItem={({ item }) => (
-            <NetworkDeviceSection
-              section={item}
-              expanded={expandedSections.has(item.key)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded(item.key, expanded)
-              }
-              expandedDeviceKeys={expandedDevices}
-              onDeviceExpandedChange={setDeviceExpanded}
-              snapshots={displayedSnapshots}
-              emptyMessage={
-                item.type === "unassigned" ? displayedEmptyMessage : undefined
-              }
-              onEditNetwork={(networkId) => {
-                setSelectedDeviceId(undefined);
-                setSelectedNetworkId(networkId);
-              }}
-              onOpenDeviceSettings={openDeviceSettings}
-              onRefreshDevice={manager.inspectDevice}
-              dragEnabled={!assignmentInFlight}
-              activeDragDeviceKey={activeDragDeviceKey}
-              interactionsDisabled={
-                activeDragDeviceKey !== undefined || assignmentInFlight
-              }
-              dragCallbacks={dragCallbacks}
-              hoveredNetworkId={hoveredNetworkId}
-              onRegisterDropZone={registerDropZone}
-              onDropZoneChange={updateDropZone}
-            />
-          )}
+          ListHeaderComponent={
+            <VStack>
+              {unassignedSection
+                ? renderSection(unassignedSection, displayedEmptyMessage)
+                : null}
+              <Divider
+                testID="network-hierarchy-divider"
+                style={{
+                  backgroundColor: theme.border,
+                  marginVertical: eight2FiveSpacing.md,
+                }}
+              />
+              <Heading
+                testID="networks-heading"
+                size="lg"
+                style={{
+                  color: theme.text,
+                  paddingBottom: eight2FiveSpacing.md,
+                }}
+              >
+                Networks
+              </Heading>
+            </VStack>
+          }
+          renderItem={({ item }) =>
+            item.network ? (
+              <ManagerSwipeToDelete
+                rowKey={item.key}
+                label={item.network.name}
+                enabled={!assignmentInFlight && !activeDragDeviceKey}
+                registry={swipeRegistry}
+                onRequestDelete={() => requestNetworkDelete(item.network!.id)}
+              >
+                {renderSection(item)}
+              </ManagerSwipeToDelete>
+            ) : (
+              renderSection(item)
+            )
+          }
         />
         <NetworkEditModal
           network={manager.networks.find(
             (network) => network.id === selectedNetworkId,
           )}
           isOpen={selectedNetworkId !== undefined}
-          onClose={() => setSelectedNetworkId(undefined)}
+          destructiveActionRequested={networkDestructiveActionRequested}
+          onClose={() => {
+            setSelectedNetworkId(undefined);
+            setNetworkDestructiveActionRequested(false);
+          }}
         />
         <DeviceSettingsModal
           device={selectedDevice}
           discovery={selectedDiscovery}
           available={Boolean(selectedDiscovery && !selectedDiscovery.stale)}
           isOpen={selectedDeviceId !== undefined}
-          onClose={() => setSelectedDeviceId(undefined)}
+          destructiveActionRequested={deviceDestructiveActionRequested}
+          onClose={() => {
+            setSelectedDeviceId(undefined);
+            setDeviceDestructiveActionRequested(false);
+          }}
         />
       </VStack>
     </SafeAreaView>

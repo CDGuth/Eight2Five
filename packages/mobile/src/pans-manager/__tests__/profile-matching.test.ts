@@ -41,6 +41,14 @@ describe("cached PANS profile matching", () => {
     );
   });
 
+  test("treats PAN 0 as unassigned even when a legacy profile uses it", () => {
+    expect(resolveCachedProfileMatch([network("legacy", 0)], 0)).toEqual({
+      status: "unassigned",
+      panId: 0,
+      matchingNetworkIds: [],
+    });
+  });
+
   test("reconciles and clears only stale cached profile IDs", () => {
     const device = savedDevice("stale", 0x5678);
     expect(

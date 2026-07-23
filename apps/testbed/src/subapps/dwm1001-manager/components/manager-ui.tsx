@@ -44,6 +44,8 @@ import {
 } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
 
+import { MANAGER_CARD_CONTENT_INSET } from "./manager-layout";
+
 export function ManagerScreen({ children }: { children: React.ReactNode }) {
   const theme = useEight2FiveTheme();
   return (
@@ -52,7 +54,7 @@ export function ManagerScreen({ children }: { children: React.ReactNode }) {
       style={{ backgroundColor: theme.background }}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{
-        padding: eight2FiveSpacing.md,
+        padding: MANAGER_CARD_CONTENT_INSET,
         gap: eight2FiveSpacing.md,
         paddingBottom: eight2FiveSpacing.xxl,
       }}

@@ -159,6 +159,148 @@ export class PansConfigurationService {
     }
   }
 
+  /** Safely removes a device from UWB participation before assigning reserved PAN 0. */
+  async unassignDeviceHardware(
+    deviceId: string,
+  ): Promise<PansConfigurationResult> {
+    const device = await this.requireDevice(deviceId);
+    const writes: VerifiedWrite[] = [];
+    const warnings: string[] = [];
+    let inspected: PansInspectionResult | undefined;
+    let didWrite = false;
+    let operationFailure: unknown;
+
+    try {
+      const finalInspection = await this.sessions.withConnectedDevice(
+        device.transportDeviceId,
+        async (session) => {
+          inspected = await inspectConnected(session, device.id, this.now);
+          warnings.push(...inspected.warnings);
+
+          let passiveVerified = inspected.operationMode.uwbMode === "passive";
+          if (passiveVerified) {
+            writes.push(verified("uwbMode", "passive", "passive"));
+          } else {
+            try {
+              await session.patchOperationMode({ uwbMode: "passive" });
+              didWrite = true;
+              const actualMode = await session.readOperationMode();
+              inspected = { ...inspected, operationMode: actualMode };
+              const write = verified("uwbMode", "passive", actualMode.uwbMode);
+              writes.push(write);
+              passiveVerified = write.status === "verified";
+            } catch (error) {
+              operationFailure = error;
+              writes.push(failedWrite("uwbMode", "passive", error));
+            }
+          }
+
+          if (!passiveVerified) {
+            const warning =
+              "PAN ID 0 was not written because passive UWB mode did not verify.";
+            writes.push({
+              field: "panId",
+              status: "skipped",
+              requested: 0,
+              warning,
+            });
+            warnings.push(warning);
+          } else if (inspected.panId === 0) {
+            writes.push(verified("panId", 0, 0));
+          } else {
+            try {
+              requireWrite(await session.writeNetworkId(0), "PAN ID", deviceId);
+              didWrite = true;
+              const actualPanId = await session.readNetworkId();
+              inspected = { ...inspected, panId: actualPanId };
+              writes.push(verified("panId", 0, actualPanId));
+            } catch (error) {
+              operationFailure ??= error;
+              writes.push(failedWrite("panId", 0, error));
+            }
+          }
+
+          const actual = await inspectConnected(session, device.id, this.now);
+          inspected = mergeInspectionObservations(actual, inspected);
+          warnings.push(
+            ...actual.warnings.filter((warning) => !warnings.includes(warning)),
+          );
+          return inspected;
+        },
+      );
+
+      const persistedConfig = configFromInspection(
+        finalInspection,
+        device.lastKnownConfig,
+      );
+      preserveKnownAnchorPosition(
+        persistedConfig,
+        undefined,
+        device.lastKnownConfig,
+      );
+      await this.persistInspection(device, persistedConfig, finalInspection);
+
+      const exact =
+        finalInspection.panId === 0 &&
+        finalInspection.operationMode.uwbMode === "passive" &&
+        writes.every((write) => write.status === "verified");
+      const normalized = operationFailure
+        ? normalizeManagerError(operationFailure, {
+            deviceId,
+            operation: "unassign device hardware",
+          })
+        : undefined;
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: exact && warnings.length === 0 ? "verified" : "partial",
+        inspected: finalInspection,
+        writes,
+        warnings,
+        ...(!exact
+          ? {
+              error: {
+                code: normalized?.code ?? ("VERIFY_MISMATCH" as const),
+                message:
+                  normalized?.message ??
+                  "Passive UWB mode and reserved PAN ID 0 did not both verify.",
+              },
+            }
+          : {}),
+      };
+    } catch (error) {
+      if (inspected && didWrite) {
+        const persistedConfig = configFromInspection(
+          inspected,
+          device.lastKnownConfig,
+        );
+        preserveKnownAnchorPosition(
+          persistedConfig,
+          undefined,
+          device.lastKnownConfig,
+        );
+        try {
+          await this.persistInspection(device, persistedConfig, inspected);
+        } catch (persistenceError) {
+          operationFailure = persistenceError;
+        }
+      }
+      const normalized = normalizeManagerError(operationFailure ?? error, {
+        deviceId,
+        operation: "unassign device hardware",
+      });
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: didWrite ? "partial" : "failure",
+        ...(inspected ? { inspected } : {}),
+        writes,
+        warnings,
+        error: { code: normalized.code, message: normalized.message },
+      };
+    }
+  }
+
   /** Applies only caller-declared dirty hardware fields. PAN and update rates are not accepted. */
   async applyConfigurationDiff(
     deviceId: string,

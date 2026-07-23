@@ -30,6 +30,17 @@ export function assertPanId(panId: number): void {
   }
 }
 
+/** Validates a saved network profile PAN. PAN 0 is reserved for unassigned hardware. */
+export function assertNetworkProfilePanId(panId: number): void {
+  assertPanId(panId);
+  if (panId === 0) {
+    throw new ManagerError(
+      "INVALID_CONFIGURATION",
+      "Saved network PAN ID must be an integer from 1 to 65535; 0 is reserved for unassigned devices.",
+    );
+  }
+}
+
 export function formatPanId(panId: number): string {
   assertPanId(panId);
   return `0x${panId.toString(16).toUpperCase().padStart(4, "0")}`;

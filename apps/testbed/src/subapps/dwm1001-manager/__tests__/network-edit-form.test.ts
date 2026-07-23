@@ -33,6 +33,12 @@ describe("network edit review", () => {
     ).toThrow("already uses that PAN ID");
   });
 
+  test("reserves PAN 0 for unassigned hardware", () => {
+    expect(() =>
+      reviewNetworkEdit(network("one", 1), "0", [network("one", 1)], 1, 1),
+    ).toThrow("reserved");
+  });
+
   test("reuses one stable operation ID for partial/cancelled retries", () => {
     const createId = jest.fn(() => "stable-operation");
     const first = stablePanMigrationOperationId(undefined, createId);

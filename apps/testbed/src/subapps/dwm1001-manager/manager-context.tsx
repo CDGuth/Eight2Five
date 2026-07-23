@@ -38,7 +38,10 @@ import type {
   PositionLogSession,
   PansPosition,
 } from "@eight2five/mobile/pans-manager";
-import { assertUniqueName } from "@eight2five/mobile/pans-manager/validation";
+import {
+  assertNetworkProfilePanId,
+  assertUniqueName,
+} from "@eight2five/mobile/pans-manager/validation";
 import { reconcileDeviceCachedProfileMatch } from "@eight2five/mobile/pans-manager/profile-matching";
 
 import {
@@ -83,6 +86,7 @@ export interface PansManagerRuntime {
     | "configureDevice"
     | "applyConfigurationDiff"
     | "assignPanId"
+    | "unassignDeviceHardware"
   >;
   commissioning: Pick<
     PansCommissioningService,
@@ -165,6 +169,8 @@ interface PansManagerContextValue {
     notes?: string;
   }): Promise<ManagedNetwork>;
   deleteNetwork(networkId: string): Promise<void>;
+  deleteOfflineDevice(deviceId: string): Promise<void>;
+  unassignOnlineDevice(deviceId: string): Promise<PansConfigurationResult>;
   inspectDevice(deviceId: string): Promise<PansInspectionResult>;
   inspectDiagnostics(deviceId: string): Promise<PansDiagnosticsResult>;
   configureDevice(
@@ -557,7 +563,7 @@ export function PansManagerProvider({
     async (input: NetworkCreationInput): Promise<NetworkCreationResult> => {
       if (!runtime) throw new Error("Manager is not ready.");
       const manager = await import("@eight2five/mobile/pans-manager");
-      manager.assertPanId(input.panId);
+      manager.assertNetworkProfilePanId(input.panId);
       manager.assertUniqueName(
         input.name,
         networks.map((network) => network.name),
@@ -612,6 +618,7 @@ export function PansManagerProvider({
         runtime.repository.listNetworks(),
       ]);
       if (!latest) throw new Error("Network profile not found.");
+      assertNetworkProfilePanId(latest.panId);
       if (network.panId !== latest.panId) {
         throw new Error(
           "PANS Network ID changes must use the network PAN migration workflow.",
@@ -669,6 +676,50 @@ export function PansManagerProvider({
       await refreshPersisted();
     },
     [refreshPersisted, runtime],
+  );
+
+  const deleteOfflineDevice = React.useCallback(
+    async (deviceId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const device = await runtime.repository.getDevice(deviceId);
+      if (!device) throw new Error("Managed device not found.");
+      const available = discoveries.some(
+        (discovery) =>
+          discovery.transportDeviceId === device.transportDeviceId &&
+          discovery.stale !== true,
+      );
+      if (available) {
+        throw new Error(
+          "Available devices must verify passive UWB mode and PAN 0 before their saved match can be removed.",
+        );
+      }
+      await runtime.repository.deleteDevice(deviceId);
+      await refreshPersisted();
+    },
+    [discoveries, refreshPersisted, runtime],
+  );
+
+  const unassignOnlineDevice = React.useCallback(
+    async (deviceId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const device = await runtime.repository.getDevice(deviceId);
+      if (!device) throw new Error("Managed device not found.");
+      const available = discoveries.some(
+        (discovery) =>
+          discovery.transportDeviceId === device.transportDeviceId &&
+          discovery.stale !== true,
+      );
+      if (!available) {
+        throw new Error(
+          "The device is offline. Delete its saved phone record instead.",
+        );
+      }
+      const result =
+        await runtime.configuration.unassignDeviceHardware(deviceId);
+      await refreshPersisted();
+      return result;
+    },
+    [discoveries, refreshPersisted, runtime],
   );
 
   const inspectDevice = React.useCallback(
@@ -950,6 +1001,8 @@ export function PansManagerProvider({
       saveNetwork,
       saveNetworkLocalDetails,
       deleteNetwork,
+      deleteOfflineDevice,
+      unassignOnlineDevice,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,
@@ -999,6 +1052,8 @@ export function PansManagerProvider({
       saveNetwork,
       saveNetworkLocalDetails,
       deleteNetwork,
+      deleteOfflineDevice,
+      unassignOnlineDevice,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,

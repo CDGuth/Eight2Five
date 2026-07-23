@@ -34,7 +34,12 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
-import { ChevronDown, RefreshCw, Settings } from "lucide-react-native";
+import {
+  BluetoothOff,
+  ChevronDown,
+  RefreshCw,
+  Settings,
+} from "lucide-react-native";
 
 import { displayError } from "../manager-utils";
 import { getRssiSignalIcon } from "../rssi-signal";
@@ -47,7 +52,7 @@ import { SettingInfoCard } from "./setting-help";
 export interface NetworkDeviceRowDragCallbacks {
   onDragStart(event: NetworkDeviceDragEvent): void;
   onDragMove(event: NetworkDeviceDragEvent): void;
-  onDragEnd(event: NetworkDeviceDragEvent): void;
+  onDragEnd(event: NetworkDeviceDragEvent): boolean;
 }
 
 interface NetworkDeviceRowProps {
@@ -131,13 +136,19 @@ export function NetworkDeviceRow({
         <Text
           size="lg"
           style={{
-            color: theme.text,
+            color: device.available ? theme.text : theme.textMuted,
             fontFamily: eight2FiveFonts.styleSemibold,
           }}
         >
           {device.displayName}
         </Text>
-        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+        <Text
+          selectable
+          size="sm"
+          style={{
+            color: theme.textMuted,
+          }}
+        >
           {device.canonicalIdentifier}
         </Text>
         {device.status !== "assigned-matching" || !device.available ? (
@@ -157,19 +168,23 @@ export function NetworkDeviceRow({
         ) : null}
       </VStack>
       <HStack
+        testID={device.available ? undefined : `device-offline-${device.id}`}
         accessible
         accessibilityRole="image"
-        accessibilityLabel={rssiLabel}
+        accessibilityLabel={device.available ? rssiLabel : "Bluetooth offline"}
       >
         <Icon
-          as={RssiIcon}
+          as={device.available ? RssiIcon : BluetoothOff}
           size="lg"
-          style={{ color: rssiMuted ? theme.textSubtle : theme.icon }}
+          style={{
+            color:
+              !device.available || rssiMuted ? theme.textMuted : theme.icon,
+          }}
         />
       </HStack>
       <AccordionIcon
         as={ChevronDown}
-        style={{ color: theme.icon }}
+        style={{ color: device.available ? theme.icon : theme.textMuted }}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       />
@@ -186,7 +201,12 @@ export function NetworkDeviceRow({
       }}
       isCollapsible
     >
-      <AccordionItem value={device.key}>
+      <AccordionItem
+        value={device.key}
+        style={{
+          backgroundColor: device.available ? undefined : theme.surface,
+        }}
+      >
         <AccordionHeader className="m-0 py-0">
           <HStack
             className="w-full items-center"
@@ -216,7 +236,12 @@ export function NetworkDeviceRow({
               }}
               onPress={() => void openSettings()}
             >
-              <ButtonIcon as={Settings} style={{ color: theme.icon }} />
+              <ButtonIcon
+                as={Settings}
+                style={{
+                  color: device.available ? theme.icon : theme.textMuted,
+                }}
+              />
             </Button>
           </HStack>
         </AccordionHeader>

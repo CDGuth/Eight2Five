@@ -30,6 +30,8 @@ import {
   NetworkDeviceDrag,
 } from "../components/network-device-drag";
 import { NetworkDeviceSection } from "../components/network-device-section";
+import { DeviceSettingsModal } from "../device-settings-modal";
+import { NetworkEditModal } from "../network-edit-modal";
 import {
   TestbedToolbarActionProvider,
   TestbedToolbarActionSlot,
@@ -151,6 +153,17 @@ describe("NetworksDevicesScreen", () => {
     });
 
     expect(expansionState(tree, "section-toggle-unassigned")).toBe(true);
+    expect(findText(tree, "Unassigned Devices")).toBeTruthy();
+    expect(
+      tree.root.findByProps({ testID: "network-hierarchy-divider" }),
+    ).toBeTruthy();
+    expect(tree.root.findByProps({ testID: "networks-heading" })).toBeTruthy();
+    expect(
+      tree.root.findByProps({ testID: `network-card-${network.id}` }),
+    ).toBeTruthy();
+    expect(
+      tree.root.findByProps({ testID: `device-offline-${device.id}` }),
+    ).toBeTruthy();
     expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
       false,
     );
@@ -187,6 +200,9 @@ describe("NetworksDevicesScreen", () => {
     expect(expansionState(tree, `device-toggle-device:${device.id}`)).toBe(
       true,
     );
+    expect(
+      tree.root.findAllByProps({ testID: "network-device-child-rail" }).length,
+    ).toBeGreaterThan(0);
     expect(harness.inspectAndCache).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -291,6 +307,74 @@ describe("NetworksDevicesScreen", () => {
       }),
     ).toBeTruthy();
 
+    await act(async () => tree.unmount());
+  });
+
+  test("marks a legacy PAN 0 profile for repair and excludes it as a drop target", async () => {
+    const legacy = { ...savedNetwork(), panId: 0 };
+    const harness = createRuntime({ networks: [legacy] });
+    const tree = await renderNetworkScreen(harness);
+
+    expect(findTextContaining(tree, "PAN 0 is reserved")).toBeTruthy();
+    expect(
+      tree.root.findAllByProps({
+        testID: `network-drop-zone-${legacy.id}`,
+      }),
+    ).toHaveLength(0);
+    await act(async () => tree.unmount());
+  });
+
+  test("provides swipe delete confirmations and closes the previously open row", async () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const harness = createRuntime({ networks: [network], devices: [device] });
+    const tree = await renderNetworkScreen(harness);
+    const deviceSwipe = swipeHost(tree, `device:${device.id}`);
+    const networkSwipe = swipeHost(tree, `network:${network.id}`);
+
+    act(() => deviceSwipe.props.onSwipeableWillOpen());
+    act(() => networkSwipe.props.onSwipeableWillOpen());
+    expect(deviceSwipe.props.swipeableMethods.close).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await pressTestId(tree, `swipe-delete-action-network:${network.id}`);
+      await flushPromises();
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(
+      tree.root.findByProps({ testID: "network-edit-modal-root" }),
+    ).toBeTruthy();
+    expect(tree.root.findByType(NetworkEditModal).props).toMatchObject({
+      network: expect.objectContaining({ id: network.id }),
+      isOpen: true,
+      destructiveActionRequested: true,
+    });
+    await act(async () => tree.unmount());
+  });
+
+  test("opens device deletion confirmation from the swipe action", async () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const harness = createRuntime({ networks: [network], devices: [device] });
+    const tree = await renderNetworkScreen(harness);
+
+    await act(async () => {
+      await pressTestId(tree, `swipe-delete-action-device:${device.id}`);
+      await flushPromises();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(
+      tree.root.findByProps({ testID: "device-settings-modal-root" }),
+    ).toBeTruthy();
+    expect(tree.root.findByType(DeviceSettingsModal).props).toMatchObject({
+      device: expect.objectContaining({ id: device.id }),
+      isOpen: true,
+      destructiveActionRequested: true,
+      available: false,
+    });
     await act(async () => tree.unmount());
   });
 
@@ -572,17 +656,30 @@ function createRuntime(
     >[];
   } = {},
 ) {
+  let networks = [...(options.networks ?? [])];
   let devices = [...(options.devices ?? [])];
   const assignmentResults = [...(options.assignmentResults ?? [])];
   let discoveryListener: (items: DiscoveredDeviceSnapshot[]) => void = () => {};
   let errorListener: (error: ManagerError) => void = () => {};
   const repository = {
-    listNetworks: jest.fn(async () => [...(options.networks ?? [])]),
+    listNetworks: jest.fn(async () => [...networks]),
+    deleteNetwork: jest.fn(async (networkId: string) => {
+      networks = networks.filter((network) => network.id !== networkId);
+      devices = devices.map((device) => {
+        if (device.networkId !== networkId) return device;
+        const updated = { ...device };
+        delete updated.networkId;
+        return updated;
+      });
+    }),
     listDevices: jest.fn(async () => [...devices]),
     getSettings: jest.fn().mockResolvedValue(undefined),
     getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
     saveDevice: jest.fn(async (device: ManagedDevice) => {
       devices = [...devices.filter((item) => item.id !== device.id), device];
+    }),
+    deleteDevice: jest.fn(async (deviceId: string) => {
+      devices = devices.filter((device) => device.id !== deviceId);
     }),
     associateDevice: jest.fn(
       async (
@@ -613,6 +710,17 @@ function createRuntime(
   } as unknown as jest.Mocked<PansManagerRepository>;
   const inspection = inspectionResult();
   const inspectAndCache = jest.fn().mockResolvedValue(inspection);
+  const unassignDeviceHardware = jest.fn().mockResolvedValue({
+    deviceId: "device-1",
+    transportDeviceId: "transport-1",
+    outcome: "verified",
+    inspected: inspection,
+    writes: [
+      { field: "uwbMode", status: "verified" },
+      { field: "panId", status: "verified" },
+    ],
+    warnings: [],
+  });
   const assignDeviceToNetworkProfile = jest.fn(
     async (input: { deviceId: string; targetNetworkId: string }) => {
       const configured = assignmentResults.shift() ?? {
@@ -620,7 +728,7 @@ function createRuntime(
         stage: "complete" as const,
       };
       if (configured.outcome === "assigned") {
-        const targetPanId = options.networks?.find(
+        const targetPanId = networks.find(
           (network) => network.id === input.targetNetworkId,
         )?.panId;
         devices = devices.map((device) =>
@@ -690,6 +798,7 @@ function createRuntime(
       configureDevice: jest.fn(),
       applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
+      unassignDeviceHardware,
     },
     commissioning: {
       assignDeviceToNetworkProfile,
@@ -714,6 +823,7 @@ function createRuntime(
     runtime,
     repository,
     inspectAndCache,
+    unassignDeviceHardware,
     assignDeviceToNetworkProfile,
     getDevices: () => [...devices],
     emitDiscoveries(items: DiscoveredDeviceSnapshot[]) {
@@ -882,6 +992,14 @@ function pressTestId(tree: TestRenderer.ReactTestRenderer, testID: string) {
     .find((node) => typeof node.props.onPress === "function");
   if (!target) throw new Error(`No pressable found for ${testID}`);
   return target.props.onPress();
+}
+
+function swipeHost(tree: TestRenderer.ReactTestRenderer, rowKey: string) {
+  const swipe = tree.root
+    .findAllByProps({ testID: `swipe-delete-${rowKey}` })
+    .find((node) => node.props.swipeableMethods);
+  if (!swipe) throw new Error(`No swipeable host found for ${rowKey}`);
+  return swipe;
 }
 
 function toolbarHarness(children: React.ReactNode) {

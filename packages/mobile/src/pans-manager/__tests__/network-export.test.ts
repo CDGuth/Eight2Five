@@ -166,6 +166,12 @@ describe("PansNetworkExportService", () => {
         configurations: [],
       }),
     ).toThrow("secrets");
+    expect(() =>
+      service.validateImport({
+        ...exportFixture(2),
+        network: { ...exportFixture(2).network, panId: 0 },
+      }),
+    ).toThrow("reserved");
   });
 });
 

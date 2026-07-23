@@ -16,6 +16,7 @@ import {
 import { VStack } from "@eight2five/ui/components/vstack";
 
 import { formatRelativeTime } from "../manager-utils";
+import { MANAGER_CARD_CONTENT_INSET } from "./manager-layout";
 
 export function ManagedDeviceRow({
   device,
@@ -40,7 +41,7 @@ export function ManagedDeviceRow({
           borderWidth: 0,
           borderRadius: eight2FiveRadii.sm,
           backgroundColor: theme.surface,
-          padding: 14,
+          padding: MANAGER_CARD_CONTENT_INSET,
         }}
       >
         <VStack style={{ gap: 6 }}>

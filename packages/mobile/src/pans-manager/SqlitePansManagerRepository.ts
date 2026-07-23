@@ -228,7 +228,13 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
   }
 
   async deleteNetwork(id: string): Promise<void> {
-    await this.db.runAsync("DELETE FROM pans_networks WHERE id = ?", [id]);
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        "DELETE FROM pans_position_logs WHERE network_id = ?",
+        [id],
+      );
+      await this.db.runAsync("DELETE FROM pans_networks WHERE id = ?", [id]);
+    });
   }
 
   async listDevices(): Promise<ManagedDevice[]> {
@@ -277,7 +283,13 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
   }
 
   async deleteDevice(id: string): Promise<void> {
-    await this.db.runAsync("DELETE FROM pans_devices WHERE id = ?", [id]);
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        "DELETE FROM pans_position_logs WHERE device_id = ?",
+        [id],
+      );
+      await this.db.runAsync("DELETE FROM pans_devices WHERE id = ?", [id]);
+    });
   }
 
   async listNetworkDevices(networkId: string): Promise<ManagedDevice[]> {

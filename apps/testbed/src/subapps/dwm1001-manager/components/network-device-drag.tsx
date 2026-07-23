@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { Portal } from "@eight2five/ui/components/portal";
@@ -21,7 +22,36 @@ export interface NetworkDeviceDragEvent {
   deviceKey: string;
   x: number;
   y: number;
+  sourceLeft?: number;
+  sourceTop?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   cancelled?: boolean;
+}
+
+export interface NetworkDeviceDragBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export function createNetworkDeviceDragEvent(
+  deviceKey: string,
+  absoluteY: number,
+  bounds: NetworkDeviceDragBounds,
+  cancelled?: boolean,
+): NetworkDeviceDragEvent {
+  return {
+    deviceKey,
+    x: bounds.left + bounds.width / 2,
+    y: absoluteY,
+    sourceLeft: bounds.left,
+    sourceTop: bounds.top,
+    sourceWidth: bounds.width,
+    sourceHeight: bounds.height,
+    ...(cancelled !== undefined ? { cancelled } : {}),
+  };
 }
 
 export interface NetworkDeviceDragProps {
@@ -31,7 +61,7 @@ export interface NetworkDeviceDragProps {
   children: React.ReactNode;
   onDragStart(event: NetworkDeviceDragEvent): void;
   onDragMove(event: NetworkDeviceDragEvent): void;
-  onDragEnd(event: NetworkDeviceDragEvent): void;
+  onDragEnd(event: NetworkDeviceDragEvent): boolean;
 }
 
 /** A long-press-only gesture wrapper for the expandable part of a device row. */
@@ -47,7 +77,18 @@ export function NetworkDeviceDrag({
   const theme = useEight2FiveTheme();
   const x = useSharedValue(0);
   const y = useSharedValue(0);
+  const previewWidth = useSharedValue(0);
+  const previewHeight = useSharedValue(0);
+  const sourceCenterY = useSharedValue(0);
+  const previewOpacity = useSharedValue(0);
   const active = useSharedValue(0);
+  const sourceRef = React.useRef<React.ComponentRef<typeof View>>(null);
+  const sourceBoundsRef = React.useRef({
+    left: 0,
+    top: 0,
+    width: 180,
+    height: 64,
+  });
   const [previewVisible, setPreviewVisible] = React.useState(false);
   const detailsRef = React.useRef({ deviceKey, displayName, identifier });
   const callbacksRef = React.useRef({ onDragStart, onDragMove, onDragEnd });
@@ -56,39 +97,84 @@ export function NetworkDeviceDrag({
     callbacksRef.current = { onDragStart, onDragMove, onDragEnd };
   }, [deviceKey, displayName, identifier, onDragEnd, onDragMove, onDragStart]);
 
+  /* Shared values are intentionally mutated from stable JS callbacks after
+   * measuring the source row and when animating an invalid drop home. */
+  /* eslint-disable react-hooks/immutability */
   const notifyStart = React.useCallback(
-    (absoluteX: number, absoluteY: number) => {
-      setPreviewVisible(true);
-      callbacksRef.current.onDragStart({
-        deviceKey: detailsRef.current.deviceKey,
-        x: absoluteX,
-        y: absoluteY,
-      });
+    (_absoluteX: number, absoluteY: number) => {
+      const start = (
+        left: number,
+        top: number,
+        width: number,
+        height: number,
+      ) => {
+        const bounds = {
+          left: Number.isFinite(left) ? left : 0,
+          top: Number.isFinite(top) ? top : absoluteY - 32,
+          width: Number.isFinite(width) && width > 0 ? width : 180,
+          height: Number.isFinite(height) && height > 0 ? height : 64,
+        };
+        sourceBoundsRef.current = bounds;
+        x.value = bounds.left;
+        y.value = absoluteY;
+        previewWidth.value = bounds.width;
+        previewHeight.value = bounds.height;
+        sourceCenterY.value = bounds.top + bounds.height / 2;
+        previewOpacity.value = 1;
+        setPreviewVisible(true);
+        callbacksRef.current.onDragStart(
+          createNetworkDeviceDragEvent(
+            detailsRef.current.deviceKey,
+            absoluteY,
+            bounds,
+          ),
+        );
+      };
+      if (typeof sourceRef.current?.measureInWindow === "function")
+        sourceRef.current.measureInWindow(start);
+      else start(0, absoluteY - 32, 180, 64);
     },
-    [],
+    [previewHeight, previewOpacity, previewWidth, sourceCenterY, x, y],
   );
   const notifyMove = React.useCallback(
-    (absoluteX: number, absoluteY: number) => {
-      callbacksRef.current.onDragMove({
-        deviceKey: detailsRef.current.deviceKey,
-        x: absoluteX,
-        y: absoluteY,
-      });
+    (_absoluteX: number, absoluteY: number) => {
+      const bounds = sourceBoundsRef.current;
+      callbacksRef.current.onDragMove(
+        createNetworkDeviceDragEvent(
+          detailsRef.current.deviceKey,
+          absoluteY,
+          bounds,
+        ),
+      );
     },
     [],
   );
   const notifyEnd = React.useCallback(
-    (absoluteX: number, absoluteY: number, cancelled: boolean) => {
-      setPreviewVisible(false);
-      callbacksRef.current.onDragEnd({
-        deviceKey: detailsRef.current.deviceKey,
-        x: absoluteX,
-        y: absoluteY,
-        cancelled,
-      });
+    (_absoluteX: number, absoluteY: number, cancelled: boolean) => {
+      const bounds = sourceBoundsRef.current;
+      const accepted = callbacksRef.current.onDragEnd(
+        createNetworkDeviceDragEvent(
+          detailsRef.current.deviceKey,
+          absoluteY,
+          bounds,
+          cancelled,
+        ),
+      );
+      if (accepted) {
+        previewOpacity.value = 0;
+        setPreviewVisible(false);
+        return;
+      }
+      x.value = withTiming(bounds.left, { duration: 180 });
+      y.value = withTiming(sourceCenterY.value, { duration: 180 });
+      setTimeout(() => {
+        previewOpacity.value = 0;
+        setPreviewVisible(false);
+      }, 180);
     },
-    [],
+    [previewOpacity, sourceCenterY, x, y],
   );
+  /* eslint-enable react-hooks/immutability */
 
   /* RNGH worklets intentionally mutate Reanimated shared values and use stable
    * callback refs so this gesture is not rebuilt for scan-only prop updates. */
@@ -103,12 +189,10 @@ export function NetworkDeviceDrag({
         .shouldCancelWhenOutside(false)
         .onStart((event) => {
           active.value = 1;
-          x.value = event.absoluteX;
           y.value = event.absoluteY;
           scheduleOnRN(notifyStart, event.absoluteX, event.absoluteY);
         })
         .onUpdate((event) => {
-          x.value = event.absoluteX;
           y.value = event.absoluteY;
           scheduleOnRN(notifyMove, event.absoluteX, event.absoluteY);
         })
@@ -117,21 +201,22 @@ export function NetworkDeviceDrag({
           active.value = 0;
           scheduleOnRN(notifyEnd, event.absoluteX, event.absoluteY, !success);
         }),
-    [active, deviceKey, notifyEnd, notifyMove, notifyStart, x, y],
+    [active, deviceKey, notifyEnd, notifyMove, notifyStart, y],
   );
   /* eslint-enable react-hooks/immutability, react-hooks/refs */
   const previewStyle = useAnimatedStyle(() => ({
-    opacity: active.value,
+    opacity: previewOpacity.value,
     transform: [
-      { translateX: x.value + eight2FiveSpacing.sm },
-      { translateY: y.value + eight2FiveSpacing.sm },
+      { translateX: x.value },
+      { translateY: y.value - previewHeight.value / 2 },
     ],
+    width: previewWidth.value,
   }));
 
   return (
     <>
       <GestureDetector gesture={pan}>
-        <View collapsable={false} style={{ flex: 1 }}>
+        <View ref={sourceRef} collapsable={false} style={{ flex: 1 }}>
           {children}
         </View>
       </GestureDetector>
@@ -149,8 +234,7 @@ export function NetworkDeviceDrag({
                 left: 0,
                 top: 0,
                 zIndex: 1,
-                minWidth: 180,
-                maxWidth: "80%",
+                minWidth: 1,
                 gap: eight2FiveSpacing.xs,
                 padding: eight2FiveSpacing.sm,
                 borderWidth: 1,

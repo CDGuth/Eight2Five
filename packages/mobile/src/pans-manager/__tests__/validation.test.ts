@@ -1,4 +1,5 @@
 import {
+  assertNetworkProfilePanId,
   diffDeviceConfig,
   formatPanId,
   isUniqueName,
@@ -25,6 +26,8 @@ describe("PANS manager validation", () => {
     expect(formatPanId(0x2a)).toBe("0x002A");
     expect(() => parsePanId("0x10000")).toThrow("PAN ID");
     expect(() => parsePanId("12junk")).toThrow("PAN ID");
+    expect(() => assertNetworkProfilePanId(0)).toThrow("reserved");
+    expect(() => assertNetworkProfilePanId(1)).not.toThrow();
   });
 
   test("checks names case-insensitively and labels by UTF-8 bytes", () => {

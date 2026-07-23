@@ -12,22 +12,22 @@ export interface NetworkDropZone {
 }
 
 /**
- * Header rectangles use inclusive leading edges and exclusive trailing edges.
- * Adjacent rectangles therefore cannot both own a point on their shared edge.
+ * Resolve by preview midpoint Y first because previews are vertically constrained.
+ * X breaks ties when layouts overlap; vertically stacked cards remain targetable
+ * even when their horizontal measurements differ slightly.
  */
 export function findNetworkDropTarget(
   zones: readonly NetworkDropZone[],
   point: NetworkDropPoint,
 ): string | undefined {
-  return [...zones]
+  const verticalMatches = [...zones]
     .sort(compareDropZones)
-    .find(
-      (zone) =>
-        point.x >= zone.left &&
-        point.x < zone.right &&
-        point.y >= zone.top &&
-        point.y < zone.bottom,
-    )?.networkId;
+    .filter((zone) => point.y >= zone.top && point.y < zone.bottom);
+  return (
+    verticalMatches.find(
+      (zone) => point.x >= zone.left && point.x < zone.right,
+    ) ?? verticalMatches[0]
+  )?.networkId;
 }
 
 function compareDropZones(left: NetworkDropZone, right: NetworkDropZone) {

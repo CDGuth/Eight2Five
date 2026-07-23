@@ -42,6 +42,9 @@ export function DeviceSummaryScreen() {
   const [inspection, setInspection] = React.useState<PansInspectionResult>();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string>();
+  const [confirmingDestructiveAction, setConfirmingDestructiveAction] =
+    React.useState(false);
+  const [destructiveBusy, setDestructiveBusy] = React.useState(false);
 
   if (!device) {
     return (
@@ -60,6 +63,33 @@ export function DeviceSummaryScreen() {
       setError(displayError(inspectError));
     } finally {
       setLoading(false);
+    }
+  };
+  const runDestructiveAction = async () => {
+    setDestructiveBusy(true);
+    setError(undefined);
+    try {
+      if (available) {
+        const result = await manager.unassignOnlineDevice(device.id);
+        if (result.error) {
+          setError(
+            `${result.error.message} ${result.writes
+              .map((write) => `${write.field}: ${write.status}`)
+              .join(" · ")}`,
+          );
+          return;
+        }
+        setConfirmingDestructiveAction(false);
+      } else {
+        await manager.deleteOfflineDevice(device.id);
+        router.replace(
+          "/(subapps)/dwm1001-manager/(tabs)/networks-devices" as never,
+        );
+      }
+    } catch (destructiveError) {
+      setError(displayError(destructiveError));
+    } finally {
+      setDestructiveBusy(false);
     }
   };
 
@@ -220,6 +250,48 @@ export function DeviceSummaryScreen() {
             onPress={() => void manager.disconnectDevice(device.id)}
           />
         </VStack>
+      </SectionCard>
+
+      <SectionCard
+        title="Destructive actions"
+        description={
+          available
+            ? "Makes UWB passive, verifies it, then writes and verifies reserved PAN 0."
+            : "Removes this saved phone record, snapshots, and position logs without contacting hardware."
+        }
+      >
+        {confirmingDestructiveAction ? (
+          <VStack space="sm">
+            <StatePanel
+              state="error"
+              message={
+                available
+                  ? "Confirm hardware unassignment. The record is retained if verification is partial."
+                  : "Confirm deletion of this saved device record. Rediscovery creates a new unassigned device."
+              }
+            />
+            <ManagerButton
+              testID="confirm-device-destructive-action"
+              label={available ? "Unassign hardware" : "Delete saved device"}
+              variant="destructive"
+              loading={destructiveBusy}
+              onPress={() => void runDestructiveAction()}
+            />
+            <ManagerButton
+              label="Cancel"
+              variant="ghost"
+              isDisabled={destructiveBusy}
+              onPress={() => setConfirmingDestructiveAction(false)}
+            />
+          </VStack>
+        ) : (
+          <ManagerButton
+            testID="request-device-destructive-action"
+            label={available ? "Unassign device" : "Delete saved device"}
+            variant="destructive"
+            onPress={() => setConfirmingDestructiveAction(true)}
+          />
+        )}
       </SectionCard>
     </ManagerScreen>
   );

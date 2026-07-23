@@ -448,6 +448,181 @@ describe("PansConfigurationService", () => {
     });
   });
 
+  test("unassigns hardware by verifying passive UWB before reserved PAN 0", async () => {
+    const calls: string[] = [];
+    let currentPanId = 7;
+    let currentMode: Awaited<
+      ReturnType<PansNativeGateway["readOperationMode"]>
+    > = mode;
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "hardware"),
+      readNetworkId: jest.fn(async () => {
+        calls.push("read-pan");
+        return currentPanId;
+      }),
+      writeNetworkId: jest.fn(async (_transportId: string, panId: number) => {
+        calls.push("write-pan");
+        currentPanId = panId;
+        return true;
+      }),
+      readOperationMode: jest.fn(async () => {
+        calls.push("read-mode");
+        return currentMode;
+      }),
+      patchOperationMode: jest.fn(async () => {
+        calls.push("patch-mode");
+        currentMode = { ...currentMode, uwbMode: "passive" as const };
+      }),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      networkId: "network",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    const result = await service.unassignDeviceHardware("anchor");
+
+    expect(result).toMatchObject({
+      outcome: "verified",
+      inspected: { panId: 0, operationMode: { uwbMode: "passive" } },
+      writes: [
+        { field: "uwbMode", status: "verified", actual: "passive" },
+        { field: "panId", status: "verified", actual: 0 },
+      ],
+    });
+    expect(calls.indexOf("patch-mode")).toBeLessThan(
+      calls.indexOf("write-pan"),
+    );
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      networkId: "network",
+      lastKnownConfig: { panId: 0, uwbMode: "passive" },
+    });
+  });
+
+  test("does not write PAN 0 when passive UWB readback mismatches", async () => {
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "hardware"),
+      readNetworkId: jest.fn(async () => 7),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      patchOperationMode: jest.fn(async () => undefined),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      networkId: "network",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await expect(
+      service.unassignDeviceHardware("anchor"),
+    ).resolves.toMatchObject({
+      outcome: "partial",
+      error: { code: "VERIFY_MISMATCH" },
+      writes: [
+        { field: "uwbMode", status: "mismatch" },
+        { field: "panId", status: "skipped" },
+      ],
+    });
+    expect(native.writeNetworkId).not.toHaveBeenCalled();
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      networkId: "network",
+      lastKnownConfig: { panId: 7, uwbMode: "active" },
+    });
+  });
+
+  test("reports and persists a PAN 0 readback mismatch after passive verification", async () => {
+    const panReads = [7, 9, 9];
+    const passiveMode = { ...mode, uwbMode: "passive" as const };
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "hardware"),
+      readNetworkId: jest.fn(async () => panReads.shift() ?? 9),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => passiveMode),
+      patchOperationMode: jest.fn(),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "anchor",
+      networkId: "network",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await expect(
+      service.unassignDeviceHardware("anchor"),
+    ).resolves.toMatchObject({
+      outcome: "partial",
+      error: { code: "VERIFY_MISMATCH" },
+      writes: [
+        { field: "uwbMode", status: "verified" },
+        { field: "panId", status: "mismatch", actual: 9 },
+      ],
+    });
+    expect(native.patchOperationMode).not.toHaveBeenCalled();
+    expect(await repository.getDevice("anchor")).toMatchObject({
+      networkId: "network",
+      lastKnownConfig: { panId: 9, uwbMode: "passive" },
+    });
+  });
+
   test("applies sparse dirty fields, preserves reserved mode bytes and independently saved local details", async () => {
     let actualMode: Awaited<
       ReturnType<PansNativeGateway["readOperationMode"]>

@@ -101,4 +101,74 @@ describe("InMemoryPansManagerRepository", () => {
       }),
     ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
   });
+
+  test("deleting a network keeps devices but removes profile logs", async () => {
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveNetwork({
+      id: "network",
+      name: "Network",
+      panId: 7,
+      settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await repository.saveDevice({
+      id: "device",
+      networkId: "network",
+      transportDeviceId: "transport",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await repository.savePositionLogSession({
+      id: "log",
+      networkId: "network",
+      panId: 7,
+      deviceId: "device",
+      startedAt: 1,
+    });
+
+    await repository.deleteNetwork("network");
+
+    expect(await repository.getNetwork("network")).toBeUndefined();
+    expect(await repository.getDevice("device")).toEqual(
+      expect.not.objectContaining({ networkId: expect.anything() }),
+    );
+    expect(await repository.listPositionLogSessions()).toEqual([]);
+  });
+
+  test("deleting a device removes snapshots and position logs", async () => {
+    const repository = new InMemoryPansManagerRepository();
+    await repository.saveDevice({
+      id: "device",
+      transportDeviceId: "transport",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await repository.saveDeviceSnapshot({
+      deviceId: "device",
+      capturedAt: 1,
+      config: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+    });
+    await repository.savePositionLogSession({
+      id: "log",
+      networkId: "network",
+      panId: 7,
+      deviceId: "device",
+      startedAt: 1,
+    });
+
+    await repository.deleteDevice("device");
+
+    expect(await repository.getDevice("device")).toBeUndefined();
+    expect(await repository.listDeviceSnapshots("device")).toEqual([]);
+    expect(await repository.listPositionLogSessions()).toEqual([]);
+    expect(await repository.listPositionLogSamples("log")).toEqual([]);
+  });
 });

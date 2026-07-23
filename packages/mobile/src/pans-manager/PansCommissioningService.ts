@@ -16,7 +16,7 @@ import type {
   PansBatchOperationRecord,
   PansConfigurationResult,
 } from "./types";
-import { assertPanId, assertUniqueName } from "./validation";
+import { assertNetworkProfilePanId, assertUniqueName } from "./validation";
 
 export interface PansCommissioningDevice {
   device: ManagedDevice;
@@ -155,6 +155,7 @@ export class PansCommissioningService {
           { deviceId, operation: "assign network profile" },
         );
       }
+      assertNetworkProfilePanId(network.panId);
     } catch (error) {
       return assignmentFailure(
         deviceId,
@@ -339,7 +340,7 @@ export class PansCommissioningService {
           "A stable operation ID is required for PAN migration.",
         );
       }
-      assertPanId(input.targetPanId);
+      assertNetworkProfilePanId(input.targetPanId);
       const [loadedNetwork, profiles] = await Promise.all([
         this.repository.getNetwork(input.networkId),
         this.repository.listNetworks(),
@@ -563,7 +564,7 @@ export class PansCommissioningService {
     network: ManagedNetwork,
     devices: PansCommissioningDevice[],
   ): Promise<PansCommissioningResult> {
-    assertPanId(network.panId);
+    assertNetworkProfilePanId(network.panId);
     const existing = await this.repository.listNetworks();
     assertUniqueName(
       network.name,

@@ -234,6 +234,7 @@ function readyRuntime(
       configureDevice: jest.fn(),
       applyConfigurationDiff: jest.fn(),
       assignPanId: jest.fn(),
+      unassignDeviceHardware: jest.fn(),
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),

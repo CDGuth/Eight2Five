@@ -49,16 +49,19 @@ import {
   reviewNetworkEdit,
   stablePanMigrationOperationId,
 } from "./network-edit-form";
+import { SettingInfoCard } from "./components/setting-help";
 
 export interface NetworkEditModalProps {
   network?: ManagedNetwork;
   isOpen: boolean;
+  destructiveActionRequested?: boolean;
   onClose(): void;
 }
 
 export function NetworkEditModal({
   network,
   isOpen,
+  destructiveActionRequested = false,
   onClose,
 }: NetworkEditModalProps) {
   const theme = useEight2FiveTheme();
@@ -75,6 +78,8 @@ export function NetworkEditModal({
   const [error, setError] = React.useState<string>();
   const [saving, setSaving] = React.useState(false);
   const [migrating, setMigrating] = React.useState(false);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   const abortController = React.useRef<AbortController | undefined>(undefined);
   const loadedNetworkId = React.useRef<string | undefined>(undefined);
 
@@ -89,7 +94,8 @@ export function NetworkEditModal({
     setProgress({});
     setResult(undefined);
     setError(undefined);
-  }, [isOpen, network]);
+    setConfirmingDelete(false);
+  }, [destructiveActionRequested, isOpen, network]);
 
   React.useEffect(() => {
     if (isOpen) return;
@@ -110,6 +116,8 @@ export function NetworkEditModal({
     ),
   ).length;
   const reviewing = targetPanId !== undefined && targetPanId !== network.panId;
+  const deleteConfirmationVisible =
+    confirmingDelete || destructiveActionRequested;
 
   const reviewOrSave = async () => {
     setSaving(true);
@@ -170,6 +178,19 @@ export function NetworkEditModal({
       if (abortController.current === controller)
         abortController.current = undefined;
       setMigrating(false);
+    }
+  };
+
+  const deleteNetwork = async () => {
+    setDeleting(true);
+    setError(undefined);
+    try {
+      await manager.deleteNetwork(network.id);
+      onClose();
+    } catch (deleteError) {
+      setError(displayError(deleteError));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -278,6 +299,62 @@ export function NetworkEditModal({
                     style={{ color: theme.text }}
                   />
                 </Textarea>
+              </VStack>
+              <VStack style={{ gap: eight2FiveSpacing.sm }}>
+                <Heading size="md" style={{ color: theme.text }}>
+                  Destructive actions
+                </Heading>
+                <SettingInfoCard tone="warning">
+                  Deleting this saved profile removes its app settings and
+                  position logs. Device hardware is not changed; cached devices
+                  move to Unassigned if no remaining profile matches their PAN.
+                </SettingInfoCard>
+                {deleteConfirmationVisible ? (
+                  <VStack style={{ gap: eight2FiveSpacing.sm }}>
+                    <Text
+                      selectable
+                      accessibilityRole="alert"
+                      style={{ color: theme.danger }}
+                    >
+                      Delete “{network.name}” from this phone? PANS hardware PAN
+                      IDs will remain unchanged.
+                    </Text>
+                    <HStack
+                      className="flex-wrap"
+                      style={{ gap: eight2FiveSpacing.sm }}
+                    >
+                      <Button
+                        testID="confirm-delete-network"
+                        variant="destructive"
+                        isDisabled={deleting}
+                        onPress={() => void deleteNetwork()}
+                      >
+                        {deleting ? (
+                          <ButtonSpinner color={theme.raw.white} />
+                        ) : null}
+                        <ButtonText>Delete saved network</ButtonText>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        isDisabled={deleting}
+                        onPress={() => {
+                          if (destructiveActionRequested) onClose();
+                          else setConfirmingDelete(false);
+                        }}
+                      >
+                        <ButtonText>Cancel deletion</ButtonText>
+                      </Button>
+                    </HStack>
+                  </VStack>
+                ) : (
+                  <Button
+                    testID="request-delete-network"
+                    variant="destructive"
+                    onPress={() => setConfirmingDelete(true)}
+                  >
+                    <ButtonText>Delete saved network</ButtonText>
+                  </Button>
+                )}
               </VStack>
             </>
           ) : (
@@ -409,7 +486,7 @@ export function NetworkEditModal({
               </Button>
               <Button
                 testID="review-network-changes"
-                isDisabled={saving}
+                isDisabled={saving || deleting || deleteConfirmationVisible}
                 onPress={() => void reviewOrSave()}
               >
                 {saving ? <ButtonSpinner color={theme.raw.white} /> : null}

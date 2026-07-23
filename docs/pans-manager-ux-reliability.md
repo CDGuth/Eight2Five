@@ -10,7 +10,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 1 — App shell and navigation | Complete (device review pending) | Added a black safe-area scrim and toolbar for subapp routes, Gluestack Drawer navigation, focused toolbar action registration, home copy, PANS naming, and explicit map-label typography. |
 | 2 — Continuous discovery | Complete (device review pending) | Discovery now auto-starts after one permission flow, runs continuously, serializes rapid intent changes, and resumes after foregrounding. Obsolete duration settings were migrated out. |
 | 3 — Hardware-derived state | Complete (device review pending) | Device identity and cached profile membership now come from hardware label/PAN reads. Duplicate-PAN profiles surface as conflicts. Device-local nickname, notes, and profile selection were removed from UI and v2 exports. |
-| 4 — Hierarchy and deletion | Not started | |
+| 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertical-only drag with source-sized preview, swipe-to-delete with confirmation, and hardware-safe PAN 0 unassignment added. |
 | 5 — Form controls | Not started | |
 | 6 — Map behavior | Not started | |
 | 7 — Packet and live updates | Not started | |
@@ -60,3 +60,15 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Network export schema version 2 excludes device `networkId`, nickname, and notes. Export membership is recomputed from a unique hardware PAN match. Version 1 imports remain accepted, have deprecated local fields stripped, and derive membership after import.
 - Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`19` testbed suites / `86` tests, `24` shared-mobile suites / `108` tests, and `3` Expo PANS BLE API suites / `58` tests). Expo Doctor passed `21/21` for both apps and Expo dependency checks are current.
 - Full `npm run validate` remains environment-limited at the unchanged iOS native test failure (`libncurses.so.6` missing). Android native tests remain blocked by missing Java/`JAVA_HOME`; `adb devices` reports no attached target, so Android UI smoke tests and screenshots are deferred.
+
+## Phase 4 implementation notes
+
+- Networks and Devices now renders Unassigned Devices first, a divider, a Networks heading, then one-level network cards with a rail/elbow child connector. A shared `MANAGER_CARD_CONTENT_INSET` is applied to cards, rows, empty states, and the outer list so content never touches horizontal edges.
+- Offline rows use muted but accessible colors (`theme.textMuted` minimum) and the Lucide `BluetoothOff` icon; `SignalZero` is no longer used for offline state.
+- Dragging is vertically constrained: the preview keeps the measured source X and width, only Y follows the pointer, drop targets resolve from the preview midpoint, and invalid/cancelled drops animate back to the source. Only available, non-malformed Unassigned devices can be dragged.
+- Swipe-left deletion uses RNGH `ReanimatedSwipeable` with a one-open-row registry and `Trash2`; every swipe action and every settings destructive action requires an explicit confirmation step.
+- Deleting a network removes the saved profile and its position logs (transactionally in SQLite) without touching hardware; devices re-derive to Unassigned from cached PAN data. Legacy PAN 0 profiles are repair-only: they show a reserved-PAN warning, cannot accept assignments, and PAN 0 hardware is always treated as unassigned.
+- Offline device deletion removes the saved record, snapshots, and position logs with no BLE call. Online unassignment verifies passive UWB before writing and verifying reserved PAN 0, persists the exact readback (including mismatch state) for retry, and only then reconciles the cached profile match.
+- RNGH reference: <https://docs.swmansion.com/react-native-gesture-handler/docs/components/reanimated_swipeable>.
+- Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `93` tests, `24` shared-mobile suites / `115` tests, and `3` Expo PANS BLE API suites / `58` tests). Expo Doctor passed `21/21` for both apps and Expo dependency checks are current.
+- Full `npm run validate` remains environment-limited at the unchanged iOS native test failure (`libncurses.so.6` missing). Android native tests remain blocked by missing Java/`JAVA_HOME`; `adb devices` reports no attached target, so Android UI smoke tests, screenshots, and hardware unassignment verification on real devices are deferred.

@@ -1,5 +1,8 @@
 import type { ManagedNetwork } from "@eight2five/mobile/pans-manager/types";
-import { parsePanId } from "@eight2five/mobile/pans-manager/validation";
+import {
+  assertNetworkProfilePanId,
+  parsePanId,
+} from "@eight2five/mobile/pans-manager/validation";
 
 export interface PanMigrationConfirmation {
   oldPanId: number;
@@ -21,6 +24,7 @@ export function reviewNetworkEdit(
   availableMemberCount: number,
 ): NetworkEditReview {
   const targetPanId = parsePanId(panInput);
+  assertNetworkProfilePanId(targetPanId);
   if (
     profiles.some(
       (profile) => profile.id !== network.id && profile.panId === targetPanId,

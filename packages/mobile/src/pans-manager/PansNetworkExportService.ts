@@ -13,7 +13,7 @@ import {
   type PansNetworkExport,
 } from "./types";
 import {
-  assertPanId,
+  assertNetworkProfilePanId,
   assertUniqueName,
   normalizeDeviceConfig,
 } from "./validation";
@@ -236,7 +236,7 @@ function validateNetwork(value: unknown): asserts value is ManagedNetwork {
       "Network import metadata is invalid.",
     );
   }
-  assertPanId(value.panId as number);
+  assertNetworkProfilePanId(value.panId as number);
   validateNetworkSettings(value.settings);
 }
 
