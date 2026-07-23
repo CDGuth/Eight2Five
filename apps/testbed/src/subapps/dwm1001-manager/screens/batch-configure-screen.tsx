@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
-import type {
-  ManagedDevice,
-  ManagedDeviceConfig,
-  PansBatchOperationItem,
-  PansConfigurationResult,
+import {
+  getDeviceDisplayName,
+  type ManagedDevice,
+  type ManagedDeviceConfig,
+  type PansBatchOperationItem,
+  type PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -224,10 +225,7 @@ export function BatchConfigureScreen() {
   );
   const planLocked = items.length > 0;
   const labels = Object.fromEntries(
-    devices.map((device) => [
-      device.id,
-      device.nickname || device.label || device.id,
-    ]),
+    devices.map((device) => [device.id, getDeviceDisplayName(device)]),
   );
 
   return (
@@ -242,7 +240,7 @@ export function BatchConfigureScreen() {
         {devices.map((device) => (
           <SwitchField
             key={device.id}
-            label={device.nickname || device.label || device.id}
+            label={getDeviceDisplayName(device)}
             description={`${device.role ?? "unknown role"} · ${device.transportDeviceId}`}
             value={selected.has(device.id)}
             disabled={running || migration || planLocked}
@@ -321,7 +319,7 @@ export function BatchConfigureScreen() {
                 (device) => roleAction === "anchor" || device.role === "anchor",
               )
               .map((device) => ({
-                label: device.nickname || device.label || device.id,
+                label: getDeviceDisplayName(device),
                 value: device.id,
               })),
           ]}

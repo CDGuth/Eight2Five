@@ -1,14 +1,13 @@
 import React from "react";
 import type {
-  AssignDeviceToNetworkProfileResult,
   DiscoveredDeviceSnapshot,
   ManagedDevice,
   PansConfigurationResult,
-  UnassignDeviceFromNetworkProfileResult,
 } from "@eight2five/mobile/pans-manager";
 import {
   formatPanId,
   getNetworkDisplayName,
+  resolveCachedProfileMatch,
 } from "@eight2five/mobile/pans-manager";
 import {
   Button,
@@ -44,7 +43,6 @@ import {
 } from "@eight2five/ui/components/select";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
-import { Textarea, TextareaInput } from "@eight2five/ui/components/textarea";
 import {
   eight2FiveFonts,
   eight2FiveRadii,
@@ -63,6 +61,7 @@ import {
 } from "./device-settings-form";
 import { usePansManager } from "./manager-context";
 import { displayError } from "./manager-utils";
+import { SettingHelp, SettingInfoCard } from "./components/setting-help";
 
 export interface DeviceSettingsModalProps {
   device?: ManagedDevice;
@@ -87,15 +86,9 @@ export function DeviceSettingsModal({
   const [inspecting, setInspecting] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [inspectionError, setInspectionError] = React.useState<string>();
-  const [localMessage, setLocalMessage] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [configurationResult, setConfigurationResult] =
     React.useState<PansConfigurationResult>();
-  const [assignmentResult, setAssignmentResult] =
-    React.useState<AssignDeviceToNetworkProfileResult>();
-  const [unassignResult, setUnassignResult] =
-    React.useState<UnassignDeviceFromNetworkProfileResult>();
-  const [confirmingUnassign, setConfirmingUnassign] = React.useState(false);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const loadedDeviceId = React.useRef<string | undefined>(undefined);
 
@@ -107,12 +100,8 @@ export function DeviceSettingsModal({
     setForm(initial);
     inspectionAttempted.current = false;
     setInspectionError(undefined);
-    setLocalMessage(undefined);
     setError(undefined);
     setConfigurationResult(undefined);
-    setAssignmentResult(undefined);
-    setUnassignResult(undefined);
-    setConfirmingUnassign(false);
     setAdvancedOpen(false);
   }, [device, discovery?.name, isOpen]);
 
@@ -162,64 +151,20 @@ export function DeviceSettingsModal({
   const roleBaselineAvailable = baseline.role !== undefined;
   const roleFieldsEditable =
     hardwareEditable && baseline.role === form.role && form.role !== undefined;
-
-  const selectProfile = (value: string) => {
-    if (value === "unassigned") {
-      if (baseline.profileNetworkId) setConfirmingUnassign(true);
-      else setForm((current) => withoutProfileNetworkId(current!));
-      return;
-    }
-    setConfirmingUnassign(false);
-    setForm((current) => ({ ...current!, profileNetworkId: value }));
-  };
-
-  const confirmUnassign = async () => {
-    if (!baseline.profileNetworkId) return;
-    setSaving(true);
-    setError(undefined);
-    try {
-      const result = await manager.unassignDeviceFromNetworkProfile({
-        deviceId: device.id,
-        expectedNetworkId: baseline.profileNetworkId,
-      });
-      setUnassignResult(result);
-      if (result.outcome === "unassigned") {
-        setForm((current) => withoutProfileNetworkId(current!));
-        setBaseline((current) => withoutProfileNetworkId(current!));
-        setConfirmingUnassign(false);
-      } else {
-        setError(result.error?.message ?? "The association was not removed.");
-      }
-    } catch (unassignError) {
-      setError(displayError(unassignError));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const profileMatch = resolveCachedProfileMatch(manager.networks, form.panId);
+  const matchingProfiles = profileMatch.matchingNetworkIds
+    .map((networkId) =>
+      manager.networks.find((network) => network.id === networkId),
+    )
+    .filter((network) => network !== undefined);
 
   const save = async () => {
     setSaving(true);
     setError(undefined);
-    setLocalMessage(undefined);
     setConfigurationResult(undefined);
-    setAssignmentResult(undefined);
     try {
       const diff = buildDeviceConfigurationDiff(baseline, form);
       const failures: string[] = [];
-      if (Object.keys(diff.localChanges).length) {
-        try {
-          await manager.saveDeviceLocalDetails(device.id, diff.localChanges);
-          setLocalMessage("App details saved.");
-          setBaseline((current) => ({
-            ...current!,
-            nickname: form.nickname,
-            notes: form.notes,
-          }));
-        } catch (localError) {
-          failures.push(`App details: ${displayError(localError)}`);
-        }
-      }
-
       if (Object.keys(diff.hardwareChanges).length) {
         if (!available) {
           failures.push(
@@ -269,46 +214,6 @@ export function DeviceSettingsModal({
         }
       }
 
-      if (
-        form.profileNetworkId !== baseline.profileNetworkId &&
-        form.profileNetworkId
-      ) {
-        if (!available) {
-          failures.push(
-            "Profile assignment requires the device to be available.",
-          );
-        } else {
-          try {
-            const result = await manager.assignDeviceToNetworkProfile({
-              deviceId: device.id,
-              targetNetworkId: form.profileNetworkId,
-            });
-            setAssignmentResult(result);
-            if (result.outcome === "assigned") {
-              setBaseline((current) => ({
-                ...current!,
-                profileNetworkId: form.profileNetworkId,
-              }));
-            } else {
-              setForm((current) => ({
-                ...current!,
-                profileNetworkId: baseline.profileNetworkId,
-              }));
-              failures.push(
-                result.error?.message ?? "Profile assignment failed.",
-              );
-            }
-          } catch (assignmentError) {
-            setForm((current) => ({
-              ...current!,
-              profileNetworkId: baseline.profileNetworkId,
-            }));
-            failures.push(
-              `Profile assignment: ${displayError(assignmentError)}`,
-            );
-          }
-        }
-      }
       if (failures.length) setError(failures.join("\n"));
     } catch (saveError) {
       setError(displayError(saveError));
@@ -362,77 +267,10 @@ export function DeviceSettingsModal({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: eight2FiveSpacing.lg }}
         >
-          <FormSection title="Local">
-            <TextField
-              testID="device-app-name-input"
-              label="App name"
-              value={form.nickname}
-              onChangeText={(nickname) =>
-                setForm((current) => ({ ...current!, nickname }))
-              }
-            />
-            <ReadOnlyRow
-              label="Advertised name"
-              value={form.advertisedName ?? "Unavailable"}
-            />
-            <SelectField
-              testID="device-profile-select"
-              label="Saved network association"
-              value={form.profileNetworkId ?? "unassigned"}
-              choices={[
-                { label: "Unassigned", value: "unassigned" },
-                ...manager.networks.map((profile) => ({
-                  label: `${getNetworkDisplayName(profile)} · ${formatPanId(
-                    profile.panId,
-                  )}`,
-                  value: profile.id,
-                })),
-              ]}
-              onChange={selectProfile}
-              disabled={!available && form.profileNetworkId === undefined}
-            />
-            {confirmingUnassign && baseline.profileNetworkId ? (
-              <VStack
-                testID="confirm-device-unassign"
-                style={{ gap: eight2FiveSpacing.sm }}
-              >
-                <Text selectable size="sm" style={{ color: theme.text }}>
-                  Remove this app association only? The device hardware and PANS
-                  Network ID will remain unchanged.
-                </Text>
-                <HStack
-                  className="justify-end"
-                  style={{ gap: eight2FiveSpacing.sm }}
-                >
-                  <Button
-                    variant="ghost"
-                    onPress={() => setConfirmingUnassign(false)}
-                  >
-                    <ButtonText>Keep assigned</ButtonText>
-                  </Button>
-                  <Button
-                    testID="confirm-unassign-device"
-                    variant="outline"
-                    onPress={() => void confirmUnassign()}
-                  >
-                    <ButtonText>Remove app association</ButtonText>
-                  </Button>
-                </HStack>
-              </VStack>
-            ) : null}
-            <TextareaField
-              label="Notes"
-              value={form.notes}
-              onChangeText={(notes) =>
-                setForm((current) => ({ ...current!, notes }))
-              }
-            />
-          </FormSection>
-
-          <FormSection title="Hardware">
+          <FormSection title="Identity">
             <TextField
               testID="device-hardware-label-input"
-              label={cachedFieldLabel("Hardware PANS label", form, "label")}
+              label={cachedFieldLabel("PANS hardware label", form, "label")}
               value={form.hardwareLabel ?? ""}
               placeholder={
                 form.hardwareLabel === undefined ? "Unavailable" : undefined
@@ -443,6 +281,27 @@ export function DeviceSettingsModal({
               disabled={!hardwareEditable || form.hardwareLabel === undefined}
             />
             <ReadOnlyRow
+              label="Read status"
+              value={
+                form.source === "actual"
+                  ? "Read from device"
+                  : available
+                    ? "Cached · hardware read pending"
+                    : "Cached · device offline"
+              }
+            />
+            <ReadOnlyRow
+              label="Advertised name"
+              value={form.advertisedName ?? "Unavailable"}
+            />
+            <SettingHelp title="Hardware label">
+              Up to 16 UTF-8 bytes. This changes the PANS device and is cached
+              only when the device is offline.
+            </SettingHelp>
+          </FormSection>
+
+          <FormSection title="Network">
+            <ReadOnlyRow
               label={cachedFieldLabel("PANS Network ID", form, "panId")}
               value={
                 form.panId === undefined
@@ -450,6 +309,37 @@ export function DeviceSettingsModal({
                   : formatPanId(form.panId)
               }
             />
+            <ReadOnlyRow
+              label="Cached profile match"
+              value={
+                profileMatch.status === "matched"
+                  ? getNetworkDisplayName(matchingProfiles[0])
+                  : profileMatch.status === "conflict"
+                    ? "Conflict · repair duplicate PAN profiles"
+                    : profileMatch.status === "unverified"
+                      ? "Unverified"
+                      : "Unassigned"
+              }
+            />
+            {profileMatch.status === "conflict" ? (
+              <SettingInfoCard
+                tone="error"
+                testID="device-pan-profile-conflict"
+              >
+                PAN {formatPanId(profileMatch.panId!)} matches multiple saved
+                profiles:{" "}
+                {matchingProfiles.map(getNetworkDisplayName).join(", ")}. Repair
+                the profiles before assigning this device.
+              </SettingInfoCard>
+            ) : null}
+            <SettingHelp title="PANS Network ID">
+              Hardware value from 0 to 65535. PAN 0 (0x0000) is reserved for an
+              unassigned device. The app derives the cached profile match from
+              this value; a local selection never overrides hardware.
+            </SettingHelp>
+          </FormSection>
+
+          <FormSection title="Node role and UWB">
             <SelectField
               label="Role"
               value={form.role}
@@ -489,190 +379,173 @@ export function DeviceSettingsModal({
               }
               disabled={!hardwareEditable}
             />
-            <SelectField
-              label="Selected firmware slot"
-              value={
-                form.selectedFirmware === undefined
-                  ? undefined
-                  : String(form.selectedFirmware)
-              }
-              choices={[
-                { label: "Slot 1", value: "1" },
-                { label: "Slot 2", value: "2" },
-              ]}
-              onChange={(slot) =>
-                setForm((current) => ({
-                  ...current!,
-                  selectedFirmware: Number(slot) as 1 | 2,
-                }))
-              }
-              disabled={
-                !hardwareEditable || form.selectedFirmware === undefined
-              }
-            />
-            <OptionalSwitch
-              label="Firmware update participation"
-              value={form.firmwareUpdateEnabled}
-              onChange={(firmwareUpdateEnabled) =>
-                setForm((current) => ({
-                  ...current!,
-                  firmwareUpdateEnabled,
-                }))
-              }
-              disabled={!hardwareEditable}
-            />
-
-            {form.role === "anchor" ? (
-              <VStack style={{ gap: eight2FiveSpacing.md }}>
-                <OptionalSwitch
-                  label="Initiator"
-                  value={form.initiatorEnabled}
-                  onChange={(initiatorEnabled) =>
-                    setForm((current) => ({
-                      ...current!,
-                      initiatorEnabled,
-                    }))
-                  }
-                  disabled={!roleFieldsEditable}
-                />
-                <HStack style={{ gap: eight2FiveSpacing.sm }}>
-                  <TextField
-                    label="X"
-                    value={form.positionX ?? ""}
-                    placeholder="Unavailable"
-                    onChangeText={(positionX) =>
-                      setForm((current) => ({ ...current!, positionX }))
-                    }
-                    disabled={!roleFieldsEditable}
-                    compact
-                  />
-                  <TextField
-                    label="Y"
-                    value={form.positionY ?? ""}
-                    placeholder="Unavailable"
-                    onChangeText={(positionY) =>
-                      setForm((current) => ({ ...current!, positionY }))
-                    }
-                    disabled={!roleFieldsEditable}
-                    compact
-                  />
-                </HStack>
-                <HStack style={{ gap: eight2FiveSpacing.sm }}>
-                  <TextField
-                    label="Z"
-                    value={form.positionZ ?? ""}
-                    placeholder="Unavailable"
-                    onChangeText={(positionZ) =>
-                      setForm((current) => ({ ...current!, positionZ }))
-                    }
-                    disabled={!roleFieldsEditable}
-                    compact
-                  />
-                  <TextField
-                    label="Quality"
-                    value={form.positionQuality ?? ""}
-                    placeholder="Unavailable"
-                    onChangeText={(positionQuality) =>
-                      setForm((current) => ({
-                        ...current!,
-                        positionQuality,
-                      }))
-                    }
-                    disabled={!roleFieldsEditable}
-                    compact
-                  />
-                </HStack>
-                <Text selectable size="sm" style={{ color: theme.warning }}>
-                  Anchor position is write-only. A successful write remains
-                  unverified because PANS cannot read it back.
-                </Text>
-              </VStack>
-            ) : null}
-
-            {form.role === "tag" ? (
-              <VStack style={{ gap: eight2FiveSpacing.md }}>
-                <OptionalSwitch
-                  label="Location engine"
-                  value={form.locationEngineEnabled}
-                  onChange={(locationEngineEnabled) =>
-                    setForm((current) => ({
-                      ...current!,
-                      locationEngineEnabled,
-                    }))
-                  }
-                  disabled={!roleFieldsEditable}
-                />
-                <OptionalSwitch
-                  label="Responsive mode"
-                  value={
-                    form.lowPowerModeEnabled === undefined
-                      ? undefined
-                      : !form.lowPowerModeEnabled
-                  }
-                  onChange={(responsive) =>
-                    setForm((current) => ({
-                      ...current!,
-                      lowPowerModeEnabled: !responsive,
-                    }))
-                  }
-                  disabled={!roleFieldsEditable}
-                />
-                <OptionalSwitch
-                  label="Stationary detection"
-                  value={form.stationaryDetectionEnabled}
-                  onChange={(stationaryDetectionEnabled) =>
-                    setForm((current) => ({
-                      ...current!,
-                      stationaryDetectionEnabled,
-                    }))
-                  }
-                  disabled={!roleFieldsEditable}
-                />
-                <SelectField
-                  label={cachedFieldLabel(
-                    "Location-data mode",
-                    form,
-                    "locationDataMode",
-                  )}
-                  value={
-                    form.locationDataMode === undefined
-                      ? undefined
-                      : String(form.locationDataMode)
-                  }
-                  choices={[
-                    { label: "Position", value: "0" },
-                    { label: "Distances", value: "1" },
-                    { label: "Position + distances", value: "2" },
-                  ]}
-                  onChange={(locationDataMode) =>
-                    setForm((current) => ({
-                      ...current!,
-                      locationDataMode: Number(locationDataMode) as 0 | 1 | 2,
-                    }))
-                  }
-                  disabled={
-                    !roleFieldsEditable || form.locationDataMode === undefined
-                  }
-                />
-                <ReadOnlyRow
-                  label={cachedFieldLabel(
-                    "Moving update rate (read-only)",
-                    form,
-                    "updateRate",
-                  )}
-                  value={formatRate(form.movingUpdateRateMs)}
-                />
-                <ReadOnlyRow
-                  label={cachedFieldLabel(
-                    "Stationary update rate (read-only)",
-                    form,
-                    "updateRate",
-                  )}
-                  value={formatRate(form.stationaryUpdateRateMs)}
-                />
-              </VStack>
-            ) : null}
+            <SettingHelp title="Role and UWB mode">
+              Tags calculate positions when the location engine is enabled.
+              Anchors provide fixed coordinates. Active UWB participates in
+              ranging, passive listens without initiating, and off disables UWB.
+            </SettingHelp>
           </FormSection>
+
+          {form.role === "anchor" ? (
+            <FormSection title="Anchor configuration">
+              <OptionalSwitch
+                label="Initiator"
+                value={form.initiatorEnabled}
+                onChange={(initiatorEnabled) =>
+                  setForm((current) => ({
+                    ...current!,
+                    initiatorEnabled,
+                  }))
+                }
+                disabled={!roleFieldsEditable}
+              />
+              <SettingHelp title="Initiator and coordinates">
+                A network requires an initiator anchor. X, Y, and Z are meters
+                in the network coordinate system. Quality is optional from 1 to
+                100 and defaults to 100.
+              </SettingHelp>
+              <HStack style={{ gap: eight2FiveSpacing.sm }}>
+                <TextField
+                  label="X"
+                  value={form.positionX ?? ""}
+                  placeholder="Unavailable"
+                  onChangeText={(positionX) =>
+                    setForm((current) => ({ ...current!, positionX }))
+                  }
+                  disabled={!roleFieldsEditable}
+                  compact
+                />
+                <TextField
+                  label="Y"
+                  value={form.positionY ?? ""}
+                  placeholder="Unavailable"
+                  onChangeText={(positionY) =>
+                    setForm((current) => ({ ...current!, positionY }))
+                  }
+                  disabled={!roleFieldsEditable}
+                  compact
+                />
+              </HStack>
+              <HStack style={{ gap: eight2FiveSpacing.sm }}>
+                <TextField
+                  label="Z"
+                  value={form.positionZ ?? ""}
+                  placeholder="Unavailable"
+                  onChangeText={(positionZ) =>
+                    setForm((current) => ({ ...current!, positionZ }))
+                  }
+                  disabled={!roleFieldsEditable}
+                  compact
+                />
+                <TextField
+                  label="Quality"
+                  value={form.positionQuality ?? ""}
+                  placeholder="Unavailable"
+                  onChangeText={(positionQuality) =>
+                    setForm((current) => ({
+                      ...current!,
+                      positionQuality,
+                    }))
+                  }
+                  disabled={!roleFieldsEditable}
+                  compact
+                />
+              </HStack>
+              <Text selectable size="sm" style={{ color: theme.warning }}>
+                Anchor position is write-only. A successful write remains
+                unverified because PANS cannot read it back.
+              </Text>
+            </FormSection>
+          ) : null}
+
+          {form.role === "tag" ? (
+            <FormSection title="Tag configuration">
+              <OptionalSwitch
+                label="Location engine"
+                value={form.locationEngineEnabled}
+                onChange={(locationEngineEnabled) =>
+                  setForm((current) => ({
+                    ...current!,
+                    locationEngineEnabled,
+                  }))
+                }
+                disabled={!roleFieldsEditable}
+              />
+              <SettingHelp title="Tag update behavior">
+                The location engine calculates the tag position. Responsive mode
+                uses moving updates; stationary detection allows the slower
+                stationary rate. Rates are milliseconds and read-only here.
+              </SettingHelp>
+              <OptionalSwitch
+                label="Responsive mode"
+                value={
+                  form.lowPowerModeEnabled === undefined
+                    ? undefined
+                    : !form.lowPowerModeEnabled
+                }
+                onChange={(responsive) =>
+                  setForm((current) => ({
+                    ...current!,
+                    lowPowerModeEnabled: !responsive,
+                  }))
+                }
+                disabled={!roleFieldsEditable}
+              />
+              <OptionalSwitch
+                label="Stationary detection"
+                value={form.stationaryDetectionEnabled}
+                onChange={(stationaryDetectionEnabled) =>
+                  setForm((current) => ({
+                    ...current!,
+                    stationaryDetectionEnabled,
+                  }))
+                }
+                disabled={!roleFieldsEditable}
+              />
+              <SelectField
+                label={cachedFieldLabel(
+                  "Location-data mode",
+                  form,
+                  "locationDataMode",
+                )}
+                value={
+                  form.locationDataMode === undefined
+                    ? undefined
+                    : String(form.locationDataMode)
+                }
+                choices={[
+                  { label: "Position", value: "0" },
+                  { label: "Distances", value: "1" },
+                  { label: "Position + distances", value: "2" },
+                ]}
+                onChange={(locationDataMode) =>
+                  setForm((current) => ({
+                    ...current!,
+                    locationDataMode: Number(locationDataMode) as 0 | 1 | 2,
+                  }))
+                }
+                disabled={
+                  !roleFieldsEditable || form.locationDataMode === undefined
+                }
+              />
+              <ReadOnlyRow
+                label={cachedFieldLabel(
+                  "Moving update rate (read-only)",
+                  form,
+                  "updateRate",
+                )}
+                value={formatRate(form.movingUpdateRateMs)}
+              />
+              <ReadOnlyRow
+                label={cachedFieldLabel(
+                  "Stationary update rate (read-only)",
+                  form,
+                  "updateRate",
+                )}
+                value={formatRate(form.stationaryUpdateRateMs)}
+              />
+            </FormSection>
+          ) : null}
 
           <Button
             testID="toggle-device-advanced"
@@ -680,14 +553,51 @@ export function DeviceSettingsModal({
             className="justify-between"
             onPress={() => setAdvancedOpen((current) => !current)}
           >
-            <ButtonText>Advanced / diagnostics</ButtonText>
+            <ButtonText>Firmware and diagnostics</ButtonText>
             <ButtonIcon
               as={advancedOpen ? ChevronUp : ChevronDown}
               style={{ color: theme.icon }}
             />
           </Button>
           {advancedOpen ? (
-            <FormSection title="Advanced / diagnostics">
+            <FormSection title="Firmware and diagnostics">
+              <SelectField
+                label="Selected firmware slot"
+                value={
+                  form.selectedFirmware === undefined
+                    ? undefined
+                    : String(form.selectedFirmware)
+                }
+                choices={[
+                  { label: "Slot 1", value: "1" },
+                  { label: "Slot 2", value: "2" },
+                ]}
+                onChange={(slot) =>
+                  setForm((current) => ({
+                    ...current!,
+                    selectedFirmware: Number(slot) as 1 | 2,
+                  }))
+                }
+                disabled={
+                  !hardwareEditable || form.selectedFirmware === undefined
+                }
+              />
+              <OptionalSwitch
+                label="Firmware update participation"
+                value={form.firmwareUpdateEnabled}
+                onChange={(firmwareUpdateEnabled) =>
+                  setForm((current) => ({
+                    ...current!,
+                    firmwareUpdateEnabled,
+                  }))
+                }
+                disabled={!hardwareEditable}
+              />
+              <SettingHelp title="Firmware slot">
+                Selects boot slot 1 or 2 on hardware. Firmware-update
+                participation controls whether this node accepts the PANS update
+                workflow.
+              </SettingHelp>
               <ReadOnlyRow label="Transport" value="BLE" />
               <ReadOnlyRow
                 label="Transport ID"
@@ -714,9 +624,6 @@ export function DeviceSettingsModal({
               message={`Inspection failed; cached values retained. ${inspectionError}`}
             />
           ) : null}
-          {localMessage ? (
-            <ResultText tone="success" message={localMessage} />
-          ) : null}
           {configurationResult ? (
             <VStack testID="device-configuration-results" style={{ gap: four }}>
               {configurationResult.writes.map((write) => (
@@ -732,22 +639,6 @@ export function DeviceSettingsModal({
               ))}
             </VStack>
           ) : null}
-          {assignmentResult ? (
-            <ResultText
-              tone={
-                assignmentResult.outcome === "assigned" ? "success" : "warning"
-              }
-              message={`Profile assignment ${assignmentResult.outcome}.`}
-            />
-          ) : null}
-          {unassignResult ? (
-            <ResultText
-              tone={
-                unassignResult.outcome === "unassigned" ? "success" : "warning"
-              }
-              message={`App association ${unassignResult.outcome}. Hardware unchanged.`}
-            />
-          ) : null}
           {error ? <ResultText tone="error" message={error} /> : null}
         </ModalBody>
         <Divider style={{ backgroundColor: theme.border }} />
@@ -757,7 +648,7 @@ export function DeviceSettingsModal({
           </Button>
           <Button
             testID="save-device-settings"
-            isDisabled={saving || confirmingUnassign}
+            isDisabled={saving}
             onPress={() => void save()}
           >
             {saving ? <ButtonSpinner color={theme.raw.white} /> : null}
@@ -808,24 +699,6 @@ function TextField({
           style={[{ color: theme.text }, props.style]}
         />
       </Input>
-    </VStack>
-  );
-}
-
-function TextareaField({
-  label,
-  ...props
-}: React.ComponentProps<typeof TextareaInput> & { label: string }) {
-  const theme = useEight2FiveTheme();
-  return (
-    <VStack style={{ gap: four }}>
-      <FieldLabel>{label}</FieldLabel>
-      <Textarea style={fieldStyle(theme)}>
-        <TextareaInput
-          {...props}
-          style={[{ color: theme.text }, props.style]}
-        />
-      </Textarea>
     </VStack>
   );
 }
@@ -998,13 +871,6 @@ function cachedFieldLabel(
     form.unavailableHardwareFields.includes(field)
     ? `${label} (cached; read unavailable)`
     : label;
-}
-
-function withoutProfileNetworkId(
-  value: DeviceSettingsFormValues,
-): DeviceSettingsFormValues {
-  const { profileNetworkId: _profileNetworkId, ...unassigned } = value;
-  return unassigned;
 }
 
 function fieldStyle(theme: ReturnType<typeof useEight2FiveTheme>) {

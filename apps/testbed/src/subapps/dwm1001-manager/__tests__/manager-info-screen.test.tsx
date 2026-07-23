@@ -237,7 +237,6 @@ function readyRuntime(
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),
-      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },

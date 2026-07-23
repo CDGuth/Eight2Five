@@ -12,19 +12,26 @@ import type {
 import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "../types";
 
 describe("PANS manager display helpers", () => {
-  test("computes canonical device and profile names without using hardware labels", () => {
+  test("computes canonical identifiers and hardware-derived display names", () => {
     const device = savedDevice("local", "transport", {
       nodeIdHex: " 00AF ",
       nickname: "  Drum Major  ",
       label: "hardware-label",
     });
     expect(getCanonicalDeviceIdentifier(device)).toBe("00AF");
-    expect(getDeviceDisplayName(device)).toBe("Drum Major");
+    expect(getDeviceDisplayName(device)).toBe("hardware-label");
+    expect(
+      getDeviceDisplayName({
+        ...device,
+        lastKnownConfig: { ...anchorConfig(1), label: "  Cached label  " },
+      }),
+    ).toBe("Cached label");
     expect(
       getDeviceDisplayName({
         ...device,
         nodeIdHex: " ",
-        nickname: " ",
+        label: " ",
+        lastKnownConfig: undefined,
       }),
     ).toBe("Device transport");
     expect(
@@ -48,17 +55,16 @@ describe("selectNetworkDeviceSections", () => {
     const empty = savedNetwork("z-empty", "Zulu", 3);
     const devices = [
       savedDevice("matching", "transport-matching", {
-        networkId: alpha.id,
-        nickname: "Bravo",
-        lastKnownConfig: anchorConfig(1),
+        networkId: unnamed.id,
+        lastKnownConfig: { ...anchorConfig(1), label: "Bravo" },
       }),
       savedDevice("unverified", "transport-unverified", {
         networkId: alpha.id,
-        nickname: "Alpha",
+        label: "Alpha",
         lastKnownConfig: anchorConfig(undefined),
       }),
       savedDevice("mismatch", "transport-mismatch", {
-        networkId: unnamed.id,
+        networkId: alpha.id,
         lastKnownConfig: anchorConfig(9),
       }),
       savedDevice("offline", "transport-offline", {
@@ -113,41 +119,80 @@ describe("selectNetworkDeviceSections", () => {
     );
     expect(byId.get("matching")).toMatchObject({
       status: "assigned-matching",
+      cachedProfileMatchStatus: "matched",
+      networkId: "alpha",
       available: true,
       rssi: -40,
     });
-    expect(byId.get("unverified")?.status).toBe("assigned-unverified");
-    expect(byId.get("mismatch")?.status).toBe("assigned-pan-mismatch");
+    expect(byId.get("unverified")).toMatchObject({
+      status: "pan-unverified",
+      cachedProfileMatchStatus: "unverified",
+    });
+    expect(byId.get("unverified")).not.toHaveProperty("networkId");
+    expect(byId.get("mismatch")).toMatchObject({
+      status: "unassigned",
+      cachedProfileMatchStatus: "unassigned",
+      cachedPanId: 9,
+    });
     expect(byId.get("offline")).toMatchObject({
-      status: "unavailable",
+      status: "assigned-matching",
       available: false,
+      networkId: "unnamed",
     });
     expect(byId.get("offline")).not.toHaveProperty("rssi");
-    expect(byId.get("missing-profile")?.status).toBe("unassigned");
+    expect(byId.get("missing-profile")?.status).toBe("pan-unverified");
     expect(byId.get("transport-new")).toMatchObject({
       status: "unassigned",
       displayName: "Device transport-new",
       rssi: -20,
     });
     expect(sections[1].devices.map((device) => device.id)).toEqual([
-      "unverified",
       "matching",
     ]);
+    expect(sections[0].devices.map((device) => device.id)).toEqual(
+      expect.arrayContaining(["unverified", "mismatch", "missing-profile"]),
+    );
   });
 
-  test("marks saved devices unavailable when discovery is missing", () => {
+  test("keeps cached profile state separate from discovery availability", () => {
     const network = savedNetwork("network", "Network", 7);
     const sections = selectNetworkDeviceSections(
       [network],
       [
         savedDevice("device", "transport", {
-          networkId: network.id,
+          networkId: "stale-profile",
           lastKnownConfig: anchorConfig(99),
         }),
       ],
       [],
     );
-    expect(sections[1].devices[0].status).toBe("unavailable");
+    expect(sections[0].devices[0]).toMatchObject({
+      status: "unassigned",
+      available: false,
+      cachedPanId: 99,
+    });
+  });
+
+  test("places duplicate-PAN devices in unassigned with conflict metadata", () => {
+    const alpha = savedNetwork("alpha", "Alpha", 7);
+    const beta = savedNetwork("beta", "Beta", 7);
+    const sections = selectNetworkDeviceSections(
+      [beta, alpha],
+      [
+        savedDevice("device", "transport", {
+          networkId: alpha.id,
+          lastKnownConfig: anchorConfig(7),
+        }),
+      ],
+      [discovery("transport", -45, 10)],
+    );
+    expect(sections[0].devices[0]).toMatchObject({
+      status: "pan-conflict",
+      cachedProfileMatchStatus: "conflict",
+      cachedPanId: 7,
+      matchingNetworkIds: ["alpha", "beta"],
+    });
+    expect(sections[0].devices[0]).not.toHaveProperty("networkId");
   });
 });
 

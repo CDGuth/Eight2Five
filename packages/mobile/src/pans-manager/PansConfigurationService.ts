@@ -35,14 +35,14 @@ export class PansConfigurationService {
     );
   }
 
-  /** Reads hardware and explicitly replaces the persisted inspection cache. */
+  /** Refreshes the hardware cache while retaining optional values that cannot be read. */
   async inspectAndCache(deviceId: string): Promise<PansInspectionResult> {
     const device = await this.requireDevice(deviceId);
     const inspection = await this.sessions.withConnectedDevice(
       device.transportDeviceId,
       async (session) => await inspectConnected(session, device.id, this.now),
     );
-    const config = configFromInspection(inspection);
+    const config = configFromInspection(inspection, device.lastKnownConfig);
     if (
       config.role === "anchor" &&
       device.lastKnownConfig?.role === "anchor" &&
@@ -106,7 +106,7 @@ export class PansConfigurationService {
       warnings.push(
         ...result.warnings.filter((warning) => !warnings.includes(warning)),
       );
-      const config = configFromInspection(result);
+      const config = configFromInspection(result, device.lastKnownConfig);
       if (
         config.role === "anchor" &&
         device.lastKnownConfig?.role === "anchor" &&
@@ -114,7 +114,17 @@ export class PansConfigurationService {
       ) {
         config.position = device.lastKnownConfig.position;
       }
-      await this.persistConfiguration(device, { ...config, panId }, result);
+      const panWrite = writes.find((write) => write.field === "panId");
+      const persistedPanId =
+        typeof panWrite?.actual === "number" ? panWrite.actual : config.panId;
+      await this.persistConfiguration(
+        device,
+        {
+          ...config,
+          ...(persistedPanId !== undefined ? { panId: persistedPanId } : {}),
+        },
+        result,
+      );
       const mismatch = writes.some((write) => write.status !== "verified");
       return {
         deviceId,
@@ -310,7 +320,10 @@ export class PansConfigurationService {
         },
       );
 
-      const persistedConfig = configFromInspection(finalInspection);
+      const persistedConfig = configFromInspection(
+        finalInspection,
+        device.lastKnownConfig,
+      );
       preserveKnownAnchorPosition(
         persistedConfig,
         successfulPosition,
@@ -334,7 +347,10 @@ export class PansConfigurationService {
         operation: "apply configuration diff",
       });
       if (inspected && didWrite) {
-        const persistedConfig = configFromInspection(inspected);
+        const persistedConfig = configFromInspection(
+          inspected,
+          device.lastKnownConfig,
+        );
         preserveKnownAnchorPosition(
           persistedConfig,
           successfulPosition,

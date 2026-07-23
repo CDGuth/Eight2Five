@@ -19,7 +19,7 @@ const mode = {
 };
 
 describe("PansConfigurationService", () => {
-  test("inspectAndCache persists hardware reads while plain inspection remains read-only", async () => {
+  test("inspectAndCache retains hardware cache when optional reads are unavailable", async () => {
     const native = {
       connect: jest.fn(async () => true),
       disconnect: jest.fn(async () => true),
@@ -87,12 +87,14 @@ describe("PansConfigurationService", () => {
       deviceInfo: { nodeIdHex: "00AB" },
     });
     expect(await repository.getDevice("anchor")).toMatchObject({
-      label: "previous label",
+      label: "stale cached label",
       nodeIdHex: "00AB",
       role: "anchor",
       updatedAt: 500,
       lastKnownConfig: {
         role: "anchor",
+        label: "stale cached label",
+        panId: 99,
         uwbMode: "active",
         selectedFirmware: 1,
         ledEnabled: true,
@@ -102,12 +104,18 @@ describe("PansConfigurationService", () => {
       },
     });
     const persisted = await repository.getDevice("anchor");
-    expect(persisted?.lastKnownConfig).not.toHaveProperty("label");
-    expect(persisted?.lastKnownConfig).not.toHaveProperty("panId");
+    expect(persisted?.lastKnownConfig).toMatchObject({
+      label: "stale cached label",
+      panId: 99,
+    });
     expect(await repository.getLatestDeviceSnapshot("anchor")).toMatchObject({
       capturedAt: 500,
       inspection: { deviceId: "anchor", inspectedAt: 500 },
-      config: { position: savedPosition },
+      config: {
+        label: "stale cached label",
+        panId: 99,
+        position: savedPosition,
+      },
     });
   });
 

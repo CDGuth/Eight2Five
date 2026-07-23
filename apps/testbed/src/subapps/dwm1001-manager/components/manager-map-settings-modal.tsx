@@ -49,6 +49,7 @@ import type {
   PansMapDataController,
   PansMapVisibilityOptions,
 } from "../manager-map-controller";
+import { SettingHelp } from "./setting-help";
 
 const NETWORK_OVERLAY_NOTE =
   "Multiple networks are overlaid using their saved coordinates. The app does not automatically align independent coordinate systems.";
@@ -102,7 +103,7 @@ export function ManagerMapSettingsModal({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: eight2FiveSpacing.lg }}
         >
-          <SettingsSection title="Networks">
+          <SettingsSection title="Display">
             <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
               <MapButton
                 label="Select all"
@@ -143,12 +144,9 @@ export function ManagerMapSettingsModal({
                 </CheckboxLabel>
               </Checkbox>
             ))}
-            <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            <SettingHelp title="Network overlays">
               {NETWORK_OVERLAY_NOTE}
-            </Text>
-          </SettingsSection>
-
-          <SettingsSection title="Node visibility">
+            </SettingHelp>
             <VisibilitySwitch
               label="Anchors"
               option="anchors"
@@ -184,6 +182,74 @@ export function ManagerMapSettingsModal({
               option="rangingLines"
               controller={controller}
             />
+            <SwitchRow
+              label="Grid"
+              value={controller.grid.showGrid}
+              onChange={(showGrid) => controller.setGrid({ showGrid })}
+            />
+            <SwitchRow
+              label="Origin and axes"
+              value={controller.grid.showOrigin}
+              onChange={(showOrigin) => controller.setGrid({ showOrigin })}
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Units and coordinate system">
+            <SelectField
+              testID="map-grid-interval-select"
+              label="Grid interval"
+              value={String(controller.grid.fixedIntervalMeters ?? "automatic")}
+              placeholder="Automatic"
+              choices={[
+                { label: "Automatic", value: "automatic" },
+                { label: "0.1 m", value: "0.1" },
+                { label: "0.5 m", value: "0.5" },
+                { label: "1 m", value: "1" },
+                { label: "5 m", value: "5" },
+                { label: "10 m", value: "10" },
+              ]}
+              onChange={(value) =>
+                controller.setGrid({
+                  fixedIntervalMeters:
+                    value === "automatic" ? undefined : Number(value),
+                })
+              }
+            />
+            <SettingHelp title="Map coordinates">
+              PANS coordinates and saved bounds are stored in meters relative to
+              each network origin. Independent network coordinate systems are
+              overlaid without automatic alignment.
+            </SettingHelp>
+          </SettingsSection>
+
+          <SettingsSection title="Area and bounds">
+            <SettingHelp title="Map bounds">
+              Each network profile supplies minimum and maximum X and Y values
+              in meters. Bounds describe the expected field area; out-of-bounds
+              devices remain visible.
+            </SettingHelp>
+          </SettingsSection>
+
+          <SettingsSection title="Camera">
+            <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
+              <MapButton
+                label="Fit visible"
+                testID="map-fit-visible"
+                onPress={controller.fitVisible}
+              />
+              <MapButton
+                label="Fit anchors"
+                variant="outline"
+                testID="map-fit-anchors"
+                onPress={controller.fitAnchors}
+              />
+              <MapButton
+                label="Reset camera"
+                variant="outline"
+                testID="map-reset-camera"
+                onPress={controller.resetCamera}
+              />
+            </HStack>
           </SettingsSection>
 
           <SettingsSection title="Tracking">
@@ -253,59 +319,7 @@ export function ManagerMapSettingsModal({
             ) : null}
           </SettingsSection>
 
-          <SettingsSection title="Viewport">
-            <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
-              <MapButton
-                label="Fit visible"
-                testID="map-fit-visible"
-                onPress={controller.fitVisible}
-              />
-              <MapButton
-                label="Fit anchors"
-                variant="outline"
-                testID="map-fit-anchors"
-                onPress={controller.fitAnchors}
-              />
-              <MapButton
-                label="Reset camera"
-                variant="outline"
-                testID="map-reset-camera"
-                onPress={controller.resetCamera}
-              />
-            </HStack>
-            <SwitchRow
-              label="Grid"
-              value={controller.grid.showGrid}
-              onChange={(showGrid) => controller.setGrid({ showGrid })}
-            />
-            <SelectField
-              testID="map-grid-interval-select"
-              label="Grid interval"
-              value={String(controller.grid.fixedIntervalMeters ?? "automatic")}
-              placeholder="Automatic"
-              choices={[
-                { label: "Automatic", value: "automatic" },
-                { label: "0.1 m", value: "0.1" },
-                { label: "0.5 m", value: "0.5" },
-                { label: "1 m", value: "1" },
-                { label: "5 m", value: "5" },
-                { label: "10 m", value: "10" },
-              ]}
-              onChange={(value) =>
-                controller.setGrid({
-                  fixedIntervalMeters:
-                    value === "automatic" ? undefined : Number(value),
-                })
-              }
-            />
-            <SwitchRow
-              label="Origin"
-              value={controller.grid.showOrigin}
-              onChange={(showOrigin) => controller.setGrid({ showOrigin })}
-            />
-          </SettingsSection>
-
-          <SettingsSection title="Editing">
+          <SettingsSection title="Anchor editing">
             <SwitchRow
               label="Edit anchor position"
               value={controller.editingEnabled}

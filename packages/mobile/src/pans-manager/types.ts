@@ -119,7 +119,9 @@ export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
 
 /** App-only fields which may be independently saved without a BLE session. */
 export interface LocalDeviceChanges {
+  /** @deprecated PANS device nicknames are retained for database compatibility only. */
   nickname?: string | undefined;
+  /** @deprecated PANS device notes are retained for database compatibility only. */
   notes?: string | undefined;
 }
 
@@ -150,19 +152,20 @@ export interface DeviceConfigurationDiff {
 
 export interface ManagedDevice {
   id: string;
-  /** Local association with a saved app-side network profile. */
+  /** Cached profile match derived from the last hardware-verified PAN ID. */
   networkId?: string;
   transportDeviceId: string;
   macAddress?: string;
   nodeIdHex?: string;
-  /** App-only display name; this value is never written to PANS hardware. */
+  /** @deprecated Retained only for database/import compatibility. */
   nickname?: string;
-  /** Hardware PANS label read from or written to the device. */
+  /** Legacy hardware label cache. Prefer lastKnownConfig.label. */
   label?: string;
   role?: PansNodeRole;
   /** Cached configuration from the last hardware read or write attempt. */
   lastKnownConfig?: ManagedDeviceConfig;
   lastSeenAt?: number;
+  /** @deprecated Retained only for database/import compatibility. */
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -422,7 +425,7 @@ export function normalizeManagedNetworkSettings(
   };
 }
 
-export const PANS_NETWORK_EXPORT_VERSION = 1 as const;
+export const PANS_NETWORK_EXPORT_VERSION = 2 as const;
 
 export interface PansNetworkExport {
   schema: "eight2five.pans-network";

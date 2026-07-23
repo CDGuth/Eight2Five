@@ -1,6 +1,12 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { PansInspectionResult } from "@eight2five/mobile/pans-manager";
+import {
+  formatPanId,
+  getDeviceDisplayName,
+  getNetworkDisplayName,
+  resolveCachedProfileMatch,
+  type PansInspectionResult,
+} from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
@@ -21,8 +27,17 @@ export function DeviceSummaryScreen() {
   const theme = useEight2FiveTheme();
   const manager = usePansManager();
   const device = useManagedDevice(deviceId);
-  const network = manager.networks.find(
-    (item) => item.id === device?.networkId,
+  const cachedPanId = device?.lastKnownConfig?.panId;
+  const profileMatch = resolveCachedProfileMatch(manager.networks, cachedPanId);
+  const matchingProfiles = profileMatch.matchingNetworkIds
+    .map((networkId) =>
+      manager.networks.find((network) => network.id === networkId),
+    )
+    .filter((network) => network !== undefined);
+  const available = manager.discoveries.some(
+    (discovery) =>
+      discovery.transportDeviceId === device?.transportDeviceId &&
+      discovery.stale !== true,
   );
   const [inspection, setInspection] = React.useState<PansInspectionResult>();
   const [loading, setLoading] = React.useState(false);
@@ -50,7 +65,7 @@ export function DeviceSummaryScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard title={device.nickname || device.label || "DWM1001 device"}>
+      <SectionCard title={getDeviceDisplayName(device)}>
         <KeyValue label="Transport ID" value={device.transportDeviceId} />
         <KeyValue
           label="MAC"
@@ -62,10 +77,28 @@ export function DeviceSummaryScreen() {
           value={device.role ?? "Pending inspection"}
         />
         <KeyValue
-          label="Saved network association"
+          label="Cached hardware PAN"
           value={
-            network?.name ?? (device.networkId ? device.networkId : "None")
+            cachedPanId === undefined ? "Unverified" : formatPanId(cachedPanId)
           }
+        />
+        <KeyValue
+          label="Cached profile match"
+          value={
+            profileMatch.status === "matched"
+              ? getNetworkDisplayName(matchingProfiles[0]!)
+              : profileMatch.status === "conflict"
+                ? `Conflict: ${matchingProfiles
+                    .map(getNetworkDisplayName)
+                    .join(", ")}`
+                : profileMatch.status === "unverified"
+                  ? "Unverified"
+                  : "Unassigned"
+          }
+        />
+        <KeyValue
+          label="Hardware cache status"
+          value={available ? "Device available" : "Cached · device offline"}
         />
         <KeyValue
           label="Saved position"

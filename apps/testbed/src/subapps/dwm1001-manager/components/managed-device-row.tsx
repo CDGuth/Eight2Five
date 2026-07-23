@@ -1,5 +1,8 @@
 import React from "react";
-import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
+import {
+  getDeviceDisplayName,
+  type ManagedDevice,
+} from "@eight2five/mobile/pans-manager";
 import { Badge, BadgeText } from "@eight2five/ui/components/badge";
 import { Card } from "@eight2five/ui/components/card";
 import { HStack } from "@eight2five/ui/components/hstack";
@@ -49,7 +52,7 @@ export function ManagedDeviceRow({
                 fontFamily: eight2FiveFonts.styleSemibold,
               }}
             >
-              {device.nickname || device.label || device.transportDeviceId}
+              {getDeviceDisplayName(device)}
             </Text>
             <Badge variant={offline ? "destructive" : "secondary"}>
               <BadgeText>
@@ -61,11 +64,6 @@ export function ManagedDeviceRow({
             {device.transportDeviceId} · seen{" "}
             {formatRelativeTime(device.lastSeenAt)}
           </Text>
-          {device.notes?.includes("failed") ? (
-            <Text selectable size="sm" style={{ color: theme.danger }}>
-              {device.notes}
-            </Text>
-          ) : null}
         </VStack>
       </Card>
     </Pressable>

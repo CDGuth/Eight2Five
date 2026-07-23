@@ -4,6 +4,10 @@ import { PansBatchOperationService } from "./PansBatchOperationService";
 import type { PansBatchRunResult } from "./PansBatchOperationService";
 import type { PansManagerRepository } from "./PansManagerRepository";
 import { PansConfigurationService } from "./PansConfigurationService";
+import {
+  reconcileDeviceCachedProfileMatch,
+  resolveCachedProfileMatch,
+} from "./profile-matching";
 import type {
   ManagedDevice,
   ManagedDeviceConfig,
@@ -567,25 +571,49 @@ export class PansCommissioningService {
       existing.find((item) => item.id === network.id)?.name,
     );
     await this.repository.saveNetwork(network);
+    const profiles = await this.repository.listNetworks();
     const results: PansConfigurationResult[] = [];
     for (const entry of devices) {
-      await this.repository.saveDevice({
-        ...entry.device,
-        networkId: network.id,
-      });
-      await this.repository.associateDevice({
-        networkId: network.id,
-        deviceId: entry.device.id,
-        associatedAt: this.now(),
-      });
-      results.push(
-        await this.configuration.configureDevice(entry.device.id, {
-          ...entry.config,
-          panId: entry.config.panId ?? network.panId,
-        }),
+      await this.repository.saveDevice(
+        reconcileDeviceCachedProfileMatch(entry.device, profiles, this.now()),
       );
+      const result = await this.configuration.configureDevice(entry.device.id, {
+        ...entry.config,
+        panId: entry.config.panId ?? network.panId,
+      });
+      results.push(result);
+      const refreshed = await this.repository.getDevice(entry.device.id);
+      if (refreshed)
+        await persistCachedProfileMatch(
+          this.repository,
+          profiles,
+          refreshed,
+          this.now(),
+        );
     }
     return { network, results };
+  }
+}
+
+async function persistCachedProfileMatch(
+  repository: PansManagerRepository,
+  networks: ManagedNetwork[],
+  device: ManagedDevice,
+  updatedAt: number,
+): Promise<void> {
+  const match = resolveCachedProfileMatch(
+    networks,
+    device.lastKnownConfig?.panId,
+  );
+  if (device.networkId === match.networkId) return;
+  if (match.networkId) {
+    await repository.associateDevice({
+      networkId: match.networkId,
+      deviceId: device.id,
+      associatedAt: updatedAt,
+    });
+  } else if (device.networkId) {
+    await repository.dissociateDevice(device.networkId, device.id, updatedAt);
   }
 }
 

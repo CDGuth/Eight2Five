@@ -3,6 +3,7 @@ export * from "./errors";
 export * from "./validation";
 export * from "./display";
 export * from "./device-sections";
+export * from "./profile-matching";
 export * from "./device-discovery";
 export * from "./PansManagerRepository";
 export * from "./InMemoryPansManagerRepository";

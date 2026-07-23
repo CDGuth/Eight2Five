@@ -192,6 +192,7 @@ describe("NetworksDevicesScreen", () => {
     await act(async () => {
       pressTestId(tree, `device-settings-device:${device.id}`);
       await flushPromises();
+      await flushPromises();
     });
     expect(
       tree.root.findByProps({ testID: "device-settings-modal-root" }),
@@ -208,13 +209,15 @@ describe("NetworksDevicesScreen", () => {
     expect(expansionState(tree, `device-toggle-device:${device.id}`)).toBe(
       true,
     );
-    expect(harness.inspectAndCache).not.toHaveBeenCalled();
+    expect(harness.inspectAndCache).toHaveBeenCalledTimes(1);
+    expect(harness.inspectAndCache).toHaveBeenCalledWith(device.id);
 
     await act(async () => {
       pressTestId(tree, `refresh-device-${device.id}`);
       await flushPromises();
     });
     expect(harness.inspectAndCache).toHaveBeenCalledWith(device.id);
+    expect(harness.inspectAndCache).toHaveBeenCalledTimes(2);
     expect(findTextPrefix(tree, "Refreshed ")).toBeTruthy();
     await act(async () => tree.unmount());
   });
@@ -254,6 +257,40 @@ describe("NetworksDevicesScreen", () => {
     ).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     expect(harness.inspectAndCache).toHaveBeenCalledWith(persisted.id);
+    await act(async () => tree.unmount());
+  });
+
+  test("shows duplicate hardware PAN profile conflicts in the device row", async () => {
+    const alpha = savedNetwork();
+    const beta = { ...savedNetwork(), id: "network-2", name: "Field B" };
+    const device = savedDevice(alpha.id);
+    const harness = createRuntime({
+      networks: [alpha, beta],
+      devices: [device],
+      discoveries: [discovery(device.transportDeviceId)],
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        toolbarHarness(
+          <PansManagerProvider createRuntime={async () => harness.runtime}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
+      );
+      await flushPromises();
+    });
+    await act(async () => {
+      pressTestId(tree, `device-toggle-device:${device.id}`);
+    });
+
+    expect(
+      tree.root.findByProps({
+        testID: `device-profile-conflict-${device.id}`,
+      }),
+    ).toBeTruthy();
+
     await act(async () => tree.unmount());
   });
 
@@ -547,7 +584,32 @@ function createRuntime(
     saveDevice: jest.fn(async (device: ManagedDevice) => {
       devices = [...devices.filter((item) => item.id !== device.id), device];
     }),
-    associateDevice: jest.fn(),
+    associateDevice: jest.fn(
+      async (
+        association: Parameters<PansManagerRepository["associateDevice"]>[0],
+      ) => {
+        devices = devices.map((device) =>
+          device.id === association.deviceId
+            ? {
+                ...device,
+                networkId: association.networkId,
+                updatedAt: association.associatedAt,
+              }
+            : device,
+        );
+      },
+    ),
+    dissociateDevice: jest.fn(
+      async (networkId: string, deviceId: string, dissociatedAt: number) => {
+        devices = devices.map((device) => {
+          if (device.id !== deviceId || device.networkId !== networkId)
+            return device;
+          const updated = { ...device, updatedAt: dissociatedAt };
+          delete updated.networkId;
+          return updated;
+        });
+      },
+    ),
   } as unknown as jest.Mocked<PansManagerRepository>;
   const inspection = inspectionResult();
   const inspectAndCache = jest.fn().mockResolvedValue(inspection);
@@ -558,9 +620,29 @@ function createRuntime(
         stage: "complete" as const,
       };
       if (configured.outcome === "assigned") {
+        const targetPanId = options.networks?.find(
+          (network) => network.id === input.targetNetworkId,
+        )?.panId;
         devices = devices.map((device) =>
           device.id === input.deviceId
-            ? { ...device, networkId: input.targetNetworkId }
+            ? {
+                ...device,
+                networkId: input.targetNetworkId,
+                ...(targetPanId === undefined
+                  ? {}
+                  : {
+                      lastKnownConfig: {
+                        ...(device.lastKnownConfig ?? {
+                          role: "anchor" as const,
+                          uwbMode: "active" as const,
+                          ledEnabled: true,
+                          firmwareUpdateEnabled: false,
+                          initiatorEnabled: false,
+                        }),
+                        panId: targetPanId,
+                      },
+                    }),
+              }
             : device,
         );
       }
@@ -611,7 +693,6 @@ function createRuntime(
     },
     commissioning: {
       assignDeviceToNetworkProfile,
-      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },
@@ -800,7 +881,7 @@ function pressTestId(tree: TestRenderer.ReactTestRenderer, testID: string) {
     .findAllByProps({ testID })
     .find((node) => typeof node.props.onPress === "function");
   if (!target) throw new Error(`No pressable found for ${testID}`);
-  target.props.onPress();
+  return target.props.onPress();
 }
 
 function toolbarHarness(children: React.ReactNode) {

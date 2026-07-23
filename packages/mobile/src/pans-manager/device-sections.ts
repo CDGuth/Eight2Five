@@ -8,13 +8,16 @@ import type {
   ManagedDevice,
   ManagedNetwork,
 } from "./types";
+import {
+  resolveCachedProfileMatch,
+  type CachedProfileMatchStatus,
+} from "./profile-matching";
 
 export type DeviceNetworkStatus =
   | "unassigned"
-  | "assigned-unverified"
+  | "pan-unverified"
   | "assigned-matching"
-  | "assigned-pan-mismatch"
-  | "unavailable";
+  | "pan-conflict";
 
 /** @deprecated Use DeviceNetworkStatus. */
 export type NetworkDeviceStatus = DeviceNetworkStatus;
@@ -28,6 +31,9 @@ export interface DisplayDevice {
   displayName: string;
   status: DeviceNetworkStatus;
   available: boolean;
+  cachedProfileMatchStatus: CachedProfileMatchStatus;
+  cachedPanId?: number;
+  matchingNetworkIds: string[];
   networkId?: string;
   rssi?: number;
   savedDevice?: ManagedDevice;
@@ -77,10 +83,14 @@ export function selectNetworkDeviceSections(
 
   for (const device of devices) {
     const discovery = currentDiscoveries.get(device.transportDeviceId);
-    const profile = device.networkId
-      ? profilesById.get(device.networkId)
+    const match = resolveCachedProfileMatch(
+      networks,
+      device.lastKnownConfig?.panId,
+    );
+    const profile = match.networkId
+      ? profilesById.get(match.networkId)
       : undefined;
-    const display = displaySavedDevice(device, profile, discovery);
+    const display = displaySavedDevice(device, profile, discovery, match);
     (profile ? sectionsByNetworkId.get(profile.id)! : unassigned).devices.push(
       display,
     );
@@ -107,6 +117,7 @@ function displaySavedDevice(
   device: ManagedDevice,
   profile: ManagedNetwork | undefined,
   discovery: DiscoveredDeviceSnapshot | undefined,
+  match: ReturnType<typeof resolveCachedProfileMatch>,
 ): DisplayDevice {
   const available = discovery !== undefined && discovery.stale !== true;
   return {
@@ -115,9 +126,12 @@ function displaySavedDevice(
     transportDeviceId: device.transportDeviceId,
     canonicalIdentifier: getCanonicalDeviceIdentifier(device),
     displayName: getDeviceDisplayName(device),
-    status: statusForSavedDevice(device, profile, available),
+    status: statusForSavedDevice(profile, match.status),
     available,
-    ...(device.networkId ? { networkId: device.networkId } : {}),
+    cachedProfileMatchStatus: match.status,
+    ...(match.panId !== undefined ? { cachedPanId: match.panId } : {}),
+    matchingNetworkIds: match.matchingNetworkIds,
+    ...(match.networkId ? { networkId: match.networkId } : {}),
     ...(available ? { rssi: discovery.rssi } : {}),
     savedDevice: device,
     ...(discovery ? { discovery } : {}),
@@ -136,7 +150,8 @@ function displayDiscoveryOnlyDevice(
     id: fallbackId,
     transportDeviceId: discovery.transportDeviceId,
     nodeIdHex: undefined,
-    nickname: undefined,
+    label: undefined,
+    lastKnownConfig: undefined,
   };
   const available = discovery.stale !== true;
   return {
@@ -145,25 +160,22 @@ function displayDiscoveryOnlyDevice(
     transportDeviceId: discovery.transportDeviceId,
     canonicalIdentifier: getCanonicalDeviceIdentifier(identity),
     displayName: getDeviceDisplayName(identity),
-    status: available ? "unassigned" : "unavailable",
+    status: "unassigned",
     available,
+    cachedProfileMatchStatus: "unverified",
+    matchingNetworkIds: [],
     ...(available ? { rssi: discovery.rssi } : {}),
     discovery,
   };
 }
 
 function statusForSavedDevice(
-  device: ManagedDevice,
   profile: ManagedNetwork | undefined,
-  available: boolean,
+  matchStatus: CachedProfileMatchStatus,
 ): DeviceNetworkStatus {
-  if (!available) return "unavailable";
-  if (!profile) return "unassigned";
-  const cachedPanId = device.lastKnownConfig?.panId;
-  if (cachedPanId === undefined) return "assigned-unverified";
-  return cachedPanId === profile.panId
-    ? "assigned-matching"
-    : "assigned-pan-mismatch";
+  if (matchStatus === "conflict") return "pan-conflict";
+  if (matchStatus === "unverified") return "pan-unverified";
+  return profile ? "assigned-matching" : "unassigned";
 }
 
 function selectDiscoveriesByTransportId(

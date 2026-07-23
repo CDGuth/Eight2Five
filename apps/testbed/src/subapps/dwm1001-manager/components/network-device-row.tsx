@@ -42,6 +42,7 @@ import {
   NetworkDeviceDrag,
   type NetworkDeviceDragEvent,
 } from "./network-device-drag";
+import { SettingInfoCard } from "./setting-help";
 
 export interface NetworkDeviceRowDragCallbacks {
   onDragStart(event: NetworkDeviceDragEvent): void;
@@ -86,6 +87,7 @@ export function NetworkDeviceRow({
   const rssiLabel = Number.isFinite(rawRssi)
     ? `RSSI ${rawRssi} dBm${stale ? ", stale" : ""}`
     : "RSSI unavailable";
+  const profileStatus = profileStatusLabel(device);
 
   const openSettings = async () => {
     if (interactionsDisabled) return;
@@ -119,7 +121,7 @@ export function NetworkDeviceRow({
       testID={`device-toggle-${device.key}`}
       className="min-h-11 flex-1"
       disabled={interactionsDisabled}
-      accessibilityLabel={`${device.displayName} details, ${rssiLabel}`}
+      accessibilityLabel={`${device.displayName} details, ${profileStatus}, ${rssiLabel}`}
       accessibilityHint={
         expanded ? "Collapse device details" : "Expand device details"
       }
@@ -138,6 +140,21 @@ export function NetworkDeviceRow({
         <Text selectable size="sm" style={{ color: theme.textMuted }}>
           {device.canonicalIdentifier}
         </Text>
+        {device.status !== "assigned-matching" || !device.available ? (
+          <Text
+            testID={`device-profile-status-${device.id}`}
+            selectable
+            size="sm"
+            style={{
+              color:
+                device.status === "pan-conflict"
+                  ? theme.danger
+                  : theme.textMuted,
+            }}
+          >
+            {profileStatus}
+          </Text>
+        ) : null}
       </VStack>
       <HStack
         accessible
@@ -193,7 +210,7 @@ export function NetworkDeviceRow({
               variant="ghost"
               isDisabled={settingsLoading || interactionsDisabled}
               accessibilityLabel={`Settings for ${device.displayName}`}
-              accessibilityHint="Opens device settings, including saved network association"
+              accessibilityHint="Opens hardware-derived device settings"
               accessibilityState={{
                 disabled: settingsLoading || interactionsDisabled,
               }}
@@ -205,6 +222,15 @@ export function NetworkDeviceRow({
         </AccordionHeader>
         <Divider style={{ backgroundColor: theme.border }} />
         <AccordionContent className="pb-0">
+          {device.status === "pan-conflict" ? (
+            <SettingInfoCard
+              tone="error"
+              testID={`device-profile-conflict-${device.id}`}
+            >
+              This hardware PAN ID matches more than one saved profile. Repair
+              the duplicate PAN profiles before managing this device.
+            </SettingInfoCard>
+          ) : null}
           <DeviceDetails
             device={device}
             network={network}
@@ -255,6 +281,18 @@ export function NetworkDeviceRow({
   );
 }
 
+function profileStatusLabel(device: DisplayDevice): string {
+  const offline = device.available ? "" : "Offline · cached hardware state · ";
+  if (device.status === "pan-conflict")
+    return `${offline}Profile conflict for ${formatPanId(device.cachedPanId!)}`;
+  if (device.status === "pan-unverified")
+    return `${offline}Hardware PAN not verified`;
+  if (device.status === "unassigned" && device.cachedPanId !== undefined)
+    return `${offline}Unassigned · no profile matches ${formatPanId(device.cachedPanId)}`;
+  if (!device.available) return "Offline · cached hardware state";
+  return "Hardware PAN matches saved profile";
+}
+
 function DeviceDetails({
   device,
   network,
@@ -291,7 +329,9 @@ function DeviceDetails({
         />
         <DetailRow
           label="Hardware label"
-          value={inspection?.label ?? device.savedDevice?.label}
+          value={
+            inspection?.label ?? config?.label ?? device.savedDevice?.label
+          }
         />
         <DetailRow label="Last seen" value={formatTimestamp(lastSeen)} />
         <DetailRow label="RSSI" value={rssiLabel} />

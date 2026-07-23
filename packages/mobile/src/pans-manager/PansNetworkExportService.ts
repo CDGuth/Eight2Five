@@ -1,6 +1,10 @@
 import { ManagerError } from "./errors";
 import type { PansManagerRepository } from "./PansManagerRepository";
 import {
+  reconcileDeviceCachedProfileMatch,
+  resolveCachedProfileMatch,
+} from "./profile-matching";
+import {
   normalizeManagedNetworkSettings,
   PANS_NETWORK_EXPORT_VERSION,
   type DeviceConfigurationSnapshot,
@@ -28,7 +32,17 @@ export class PansNetworkExportService {
         "The requested network does not exist.",
       );
     }
-    const devices = await this.repository.listNetworkDevices(networkId);
+    const [networks, storedDevices] = await Promise.all([
+      this.repository.listNetworks(),
+      this.repository.listDevices(),
+    ]);
+    const devices = storedDevices
+      .filter(
+        (device) =>
+          resolveCachedProfileMatch(networks, device.lastKnownConfig?.panId)
+            .networkId === networkId,
+      )
+      .map(exportableDevice);
     const configurations = (
       await Promise.all(
         devices.map(
@@ -67,7 +81,7 @@ export class PansNetworkExportService {
         "device_id",
         "transport_device_id",
         "node_id",
-        "label",
+        "hardware_label",
         "role",
         "x_m",
         "y_m",
@@ -85,7 +99,7 @@ export class PansNetworkExportService {
           device.id,
           device.transportDeviceId,
           device.nodeIdHex ?? "",
-          device.nickname ?? device.label ?? "",
+          device.lastKnownConfig?.label ?? device.label ?? "",
           device.role ?? config?.role ?? "",
           position?.xMeters ?? "",
           position?.yMeters ?? "",
@@ -116,7 +130,7 @@ export class PansNetworkExportService {
         "Network import has an unknown schema.",
       );
     }
-    if (value.version !== PANS_NETWORK_EXPORT_VERSION) {
+    if (value.version !== 1 && value.version !== PANS_NETWORK_EXPORT_VERSION) {
       throw new ManagerError(
         "INVALID_CONFIGURATION",
         "Network import version is unsupported.",
@@ -163,9 +177,11 @@ export class PansNetworkExportService {
       normalizeDeviceConfig(snapshot.config as never);
     });
     const validated = clone(value as unknown as PansNetworkExport);
+    validated.version = PANS_NETWORK_EXPORT_VERSION;
     validated.network.settings = normalizeManagedNetworkSettings(
       validated.network.settings,
     );
+    validated.devices = validated.devices.map(exportableDevice);
     return validated;
   }
 
@@ -178,13 +194,19 @@ export class PansNetworkExportService {
       existing.find((network) => network.id === data.network.id)?.name,
     );
     await this.repository.saveNetwork(data.network);
+    const importedNetworks = await this.repository.listNetworks();
     for (const device of data.devices) {
-      await this.repository.saveDevice(device);
-      await this.repository.associateDevice({
-        networkId: data.network.id,
-        deviceId: device.id,
-        associatedAt: data.exportedAt,
-      });
+      const importedDevice = withLatestImportedHardwareCache(
+        device,
+        data.configurations,
+      );
+      await this.repository.saveDevice(
+        reconcileDeviceCachedProfileMatch(
+          importedDevice,
+          importedNetworks,
+          data.exportedAt,
+        ),
+      );
     }
     for (const snapshot of data.configurations) {
       await this.repository.saveDeviceSnapshot(snapshot);
@@ -304,4 +326,31 @@ function isFiniteNumber(value: unknown): value is number {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function exportableDevice(device: ManagedDevice): ManagedDevice {
+  const exported = { ...clone(device) };
+  delete exported.networkId;
+  delete exported.nickname;
+  delete exported.notes;
+  return exported;
+}
+
+function withLatestImportedHardwareCache(
+  device: ManagedDevice,
+  snapshots: DeviceConfigurationSnapshot[],
+): ManagedDevice {
+  if (device.lastKnownConfig) return device;
+  const latest = snapshots
+    .filter((snapshot) => snapshot.deviceId === device.id)
+    .sort((left, right) => right.capturedAt - left.capturedAt)[0];
+  if (!latest) return device;
+  return {
+    ...device,
+    role: latest.config.role,
+    ...(latest.config.label !== undefined
+      ? { label: latest.config.label }
+      : {}),
+    lastKnownConfig: clone(latest.config),
+  };
 }

@@ -1,9 +1,10 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
-import type {
-  PansPositionStreamService,
-  PositionLogSample,
-  PositionLogSession,
+import {
+  getDeviceDisplayName,
+  type PansPositionStreamService,
+  type PositionLogSample,
+  type PositionLogSession,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -126,7 +127,7 @@ export function NetworkLogScreen() {
           void appendSample(activeSession.current.id, sample.position, {
             timestampMs: sample.receivedAt,
             nodeId: device.nodeIdHex,
-            label: device.nickname || device.label,
+            label: getDeviceDisplayName(device),
             solver: "dwm1001-internal",
             anchorCount: sample.distances.length,
             distances: sample.distances,
@@ -211,7 +212,7 @@ export function NetworkLogScreen() {
           choices={devices
             .filter((device) => device.role === "tag")
             .map((device) => ({
-              label: device.nickname || device.label || device.id,
+              label: getDeviceDisplayName(device),
               value: device.id,
             }))}
         />

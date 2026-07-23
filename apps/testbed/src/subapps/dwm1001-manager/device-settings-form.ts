@@ -7,9 +7,6 @@ import type {
 } from "@eight2five/mobile/pans-manager";
 
 export interface DeviceSettingsFormValues {
-  nickname: string;
-  notes: string;
-  profileNetworkId?: string;
   advertisedName?: string;
   hardwareLabel?: string;
   panId?: number;
@@ -41,9 +38,6 @@ export function deviceSettingsFormFrom(
   const position = config?.role === "anchor" ? config.position : undefined;
   const tag = config?.role === "tag" ? config : undefined;
   return {
-    nickname: device.nickname ?? "",
-    notes: device.notes ?? "",
-    ...(device.networkId ? { profileNetworkId: device.networkId } : {}),
     ...(advertisedName ? { advertisedName } : {}),
     ...(config?.label !== undefined
       ? { hardwareLabel: config.label }
@@ -147,12 +141,6 @@ export function buildDeviceConfigurationDiff(
   current: DeviceSettingsFormValues,
 ): DeviceConfigurationDiff {
   const localChanges: DeviceConfigurationDiff["localChanges"] = {};
-  const nickname = current.nickname.trim() || undefined;
-  const baselineNickname = baseline.nickname.trim() || undefined;
-  if (nickname !== baselineNickname) localChanges.nickname = nickname;
-  const notes = current.notes.trim() || undefined;
-  const baselineNotes = baseline.notes.trim() || undefined;
-  if (notes !== baselineNotes) localChanges.notes = notes;
 
   const hardwareChanges: HardwareDeviceChanges = {};
   addKnownChange(

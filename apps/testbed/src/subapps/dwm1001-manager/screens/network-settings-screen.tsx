@@ -19,6 +19,7 @@ import {
   TextField,
   SelectField,
 } from "../components/manager-ui";
+import { SettingHelp } from "../components/setting-help";
 import {
   networkSettingsToForm,
   parseNetworkSettingsForm,
@@ -111,9 +112,8 @@ export function NetworkSettingsScreen() {
 
   return (
     <ManagerScreen>
-      <SectionCard title="Network details">
+      <SectionCard title="Identity">
         <TextField label="Name" value={name} onChangeText={setName} />
-        <KeyValue label="PANS Network ID" value={formatPanId(network.panId)} />
         <TextField
           label="Notes"
           value={notes}
@@ -128,7 +128,16 @@ export function NetworkSettingsScreen() {
         {error ? <StatePanel state="error" message={error} /> : null}
       </SectionCard>
 
-      <SectionCard title="Coordinate bounds">
+      <SectionCard title="PANS Network ID">
+        <KeyValue label="Hardware PAN" value={formatPanId(network.panId)} />
+        <SettingHelp title="PANS Network ID">
+          Saved networks use PAN IDs from 1 through 65535. PAN 0 (0x0000) is
+          reserved for unassigned hardware. A device matches this profile only
+          after its hardware PAN has been read and verified.
+        </SettingHelp>
+      </SectionCard>
+
+      <SectionCard title="Map and coordinate system">
         <TextField
           label="Minimum X (meters)"
           value={settingsForm.minXMeters}
@@ -188,9 +197,14 @@ export function NetworkSettingsScreen() {
           }
           keyboardType="numbers-and-punctuation"
         />
+        <SettingHelp title="Coordinates and bounds">
+          X and Y are horizontal meters from the network origin. Z is height in
+          meters. Bounds define the expected map area; they do not discard nodes
+          outside the rectangle.
+        </SettingHelp>
       </SectionCard>
 
-      <SectionCard title="Discovery and connection">
+      <SectionCard title="Device availability">
         <TextField
           label="Stale device timeout (seconds)"
           value={settingsForm.staleDeviceTimeoutSeconds}
@@ -209,9 +223,14 @@ export function NetworkSettingsScreen() {
             setSettingsForm((current) => ({ ...current, autoConnect: value }))
           }
         />
+        <SettingHelp title="Stale timeout">
+          Number of seconds without a discovery advertisement before the app
+          marks a device offline. Auto-connect controls app behavior only and
+          does not change PANS hardware.
+        </SettingHelp>
       </SectionCard>
 
-      <SectionCard title="Default tag behavior">
+      <SectionCard title="Defaults">
         <SwitchField
           label="Location engine"
           value={settingsForm.locationEngineEnabled}
@@ -279,9 +298,11 @@ export function NetworkSettingsScreen() {
           }
           keyboardType="decimal-pad"
         />
-      </SectionCard>
-
-      <SectionCard title="Position log retention">
+        <SettingHelp title="Tag update defaults">
+          The location engine computes positions. Moving and stationary rates
+          are milliseconds; stationary detection enables the slower interval.
+          Location-data mode chooses positions, anchor distances, or both.
+        </SettingHelp>
         <TextField
           label="Retention (days)"
           value={settingsForm.positionLogRetentionDays}
@@ -304,6 +325,10 @@ export function NetworkSettingsScreen() {
           }
           keyboardType="number-pad"
         />
+        <SettingHelp title="Position log defaults">
+          Retention days and maximum samples limit app-side log storage. They do
+          not change hardware or its update rate.
+        </SettingHelp>
       </SectionCard>
 
       <SectionCard title="Export network">
@@ -339,7 +364,7 @@ export function NetworkSettingsScreen() {
       </SectionCard>
 
       <SectionCard
-        title="Delete saved network"
+        title="Destructive actions"
         description="Removes app data only; hardware is not reset."
       >
         {confirmingDelete ? (

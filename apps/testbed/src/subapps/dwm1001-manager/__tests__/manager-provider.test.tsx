@@ -2,7 +2,10 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { Text } from "@eight2five/ui/components/text";
-import type { PansManagerRepository } from "@eight2five/mobile/pans-manager";
+import type {
+  ManagedDevice,
+  PansManagerRepository,
+} from "@eight2five/mobile/pans-manager";
 
 import {
   PansManagerProvider,
@@ -334,6 +337,136 @@ describe("PansManagerProvider", () => {
     await act(async () => tree.unmount());
   });
 
+  it("auto-inspects an available saved device and caches its hardware PAN match", async () => {
+    const network = {
+      id: "profile",
+      name: "Field",
+      panId: 7,
+      settings: {
+        coordinateBounds: {
+          minXMeters: -1,
+          maxXMeters: 1,
+          minYMeters: -1,
+          maxYMeters: 1,
+          minZMeters: -1,
+          maxZMeters: 1,
+        },
+        defaultAnchorHeightMeters: 1,
+        staleDeviceTimeoutMs: 1000,
+        defaultTagMode: {
+          locationEngineEnabled: true,
+          lowPowerModeEnabled: false,
+          stationaryDetectionEnabled: true,
+          locationDataMode: 0 as const,
+          movingUpdateRateMs: 100,
+          stationaryUpdateRateMs: 1000,
+        },
+        autoConnect: false,
+        positionLogRetentionDays: 1,
+        positionLogMaxSamples: 100,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    let storedDevice: ManagedDevice = {
+      id: "managed-1",
+      transportDeviceId: "transport-1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const repository = {
+      listNetworks: jest.fn(async () => [network]),
+      listDevices: jest.fn(async () => [storedDevice]),
+      saveDevice: jest.fn(async (device) => {
+        storedDevice = device;
+      }),
+      associateDevice: jest.fn(
+        async (
+          association: Parameters<PansManagerRepository["associateDevice"]>[0],
+        ) => {
+          storedDevice = {
+            ...storedDevice,
+            networkId: association.networkId,
+            updatedAt: association.associatedAt,
+          };
+        },
+      ),
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRepository;
+    const inspectAndCache = jest.fn(async () => {
+      storedDevice = {
+        ...storedDevice,
+        lastKnownConfig: {
+          role: "anchor" as const,
+          panId: 7,
+          uwbMode: "active" as const,
+          ledEnabled: true,
+          firmwareUpdateEnabled: false,
+          initiatorEnabled: false,
+        },
+      };
+      return {
+        deviceId: "managed-1",
+        transportDeviceId: "transport-1",
+        inspectedAt: 10,
+        panId: 7,
+        operationMode: {
+          role: "anchor" as const,
+          uwbMode: "active" as const,
+          selectedFirmware: 1 as const,
+          accelerometerEnabled: false,
+          ledEnabled: true,
+          firmwareUpdateEnabled: false,
+          initiatorEnabled: false,
+          lowPowerModeEnabled: false,
+          locationEngineEnabled: false,
+          raw: [0, 0] as [number, number],
+        },
+        warnings: [],
+      };
+    });
+    const runtime = createRuntimeValue({
+      repository,
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache,
+        configureDevice: jest.fn(),
+        applyConfigurationDiff: jest.fn(),
+        assignPanId: jest.fn(),
+      },
+    });
+    runtime.discovery.subscribe = jest.fn((listener) => {
+      listener([
+        {
+          transportDeviceId: "transport-1",
+          rssi: -50,
+          lastSeenAt: 10,
+          compatibility: "compatible",
+        },
+      ]);
+      return { remove: jest.fn() };
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(inspectAndCache).toHaveBeenCalledTimes(1);
+    expect(storedDevice).toMatchObject({ networkId: "profile" });
+    expect(repository.associateDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: "managed-1", networkId: "profile" }),
+    );
+    await act(async () => tree.unmount());
+  });
+
   it("exposes commissioning operations and refreshes persisted state", async () => {
     const assignDeviceToNetworkProfile = jest.fn().mockResolvedValue({
       deviceId: "device",
@@ -350,17 +483,9 @@ describe("PansManagerProvider", () => {
       membershipChanged: false,
       deviceResults: [],
     });
-    const unassignDeviceFromNetworkProfile = jest.fn().mockResolvedValue({
-      deviceId: "device",
-      expectedNetworkId: "profile",
-      previousNetworkId: "profile",
-      stage: "complete",
-      outcome: "unassigned",
-    });
     const runtime = createRuntimeValue({
       commissioning: {
         assignDeviceToNetworkProfile,
-        unassignDeviceFromNetworkProfile,
         migrateNetworkProfilePan,
       },
     });
@@ -376,9 +501,6 @@ describe("PansManagerProvider", () => {
 
     await act(async () => {
       await tree.root.findByProps({ testID: "assign-profile" }).props.onPress();
-      await tree.root
-        .findByProps({ testID: "unassign-profile" })
-        .props.onPress();
       await tree.root.findByProps({ testID: "migrate-pan" }).props.onPress();
     });
 
@@ -391,12 +513,8 @@ describe("PansManagerProvider", () => {
       targetPanId: 2,
       operationId: "migration",
     });
-    expect(unassignDeviceFromNetworkProfile).toHaveBeenCalledWith({
-      deviceId: "device",
-      expectedNetworkId: "profile",
-    });
-    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(4);
-    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(4);
+    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(3);
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(3);
     await act(async () => tree.unmount());
   });
 
@@ -471,69 +589,6 @@ describe("PansManagerProvider", () => {
     ).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
-
-  it("keeps a successful local device save when hardware application fails", async () => {
-    let savedDevice = {
-      id: "device",
-      transportDeviceId: "transport-device",
-      nickname: "Old app name",
-      notes: "User notes",
-      createdAt: 1,
-      updatedAt: 1,
-    };
-    const repository = {
-      listNetworks: jest.fn().mockResolvedValue([]),
-      listDevices: jest.fn(async () => [savedDevice]),
-      getDevice: jest.fn(async () => savedDevice),
-      saveDevice: jest.fn(async (device) => {
-        savedDevice = device;
-      }),
-      getSettings: jest.fn().mockResolvedValue(undefined),
-      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
-    } as unknown as PansManagerRepository;
-    const applyConfigurationDiff = jest.fn().mockResolvedValue({
-      deviceId: "device",
-      transportDeviceId: "transport-device",
-      outcome: "failure",
-      writes: [],
-      warnings: [],
-      error: { code: "DEVICE_OFFLINE", message: "Offline" },
-    });
-    const runtime = createRuntimeValue({
-      repository,
-      configuration: {
-        inspect: jest.fn(),
-        inspectAndCache: jest.fn(),
-        configureDevice: jest.fn(),
-        applyConfigurationDiff,
-        assignPanId: jest.fn(),
-      },
-    });
-    let tree!: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={async () => runtime}>
-          <DeviceIndependentSaveHarness />
-        </PansManagerProvider>,
-      );
-      await flushPromises();
-    });
-
-    await act(async () => {
-      await tree.root
-        .findByProps({ testID: "save-device-independent" })
-        .props.onPress();
-    });
-
-    expect(savedDevice).toMatchObject({
-      nickname: "New app name",
-      notes: "User notes",
-    });
-    expect(applyConfigurationDiff).toHaveBeenCalledWith("device", {
-      ledEnabled: false,
-    });
-    await act(async () => tree.unmount());
-  });
 });
 
 function ProviderHarness() {
@@ -599,17 +654,6 @@ function CommissioningHarness() {
         <ButtonText>Assign</ButtonText>
       </Button>
       <Button
-        testID="unassign-profile"
-        onPress={() =>
-          manager.unassignDeviceFromNetworkProfile({
-            deviceId: "device",
-            expectedNetworkId: "profile",
-          })
-        }
-      >
-        <ButtonText>Unassign</ButtonText>
-      </Button>
-      <Button
         testID="migrate-pan"
         onPress={() =>
           manager.migrateNetworkProfilePan({
@@ -639,25 +683,6 @@ function NetworkLocalDetailsHarness() {
       }
     >
       <ButtonText>Save local network details</ButtonText>
-    </Button>
-  );
-}
-
-function DeviceIndependentSaveHarness() {
-  const manager = usePansManager();
-  return (
-    <Button
-      testID="save-device-independent"
-      onPress={async () => {
-        await manager.saveDeviceLocalDetails("device", {
-          nickname: "  New app name  ",
-        });
-        await manager.applyDeviceConfiguration("device", {
-          ledEnabled: false,
-        });
-      }}
-    >
-      <ButtonText>Save independently</ButtonText>
     </Button>
   );
 }
@@ -743,7 +768,6 @@ function createRuntimeValue(
     },
     commissioning: {
       assignDeviceToNetworkProfile: jest.fn(),
-      unassignDeviceFromNetworkProfile: jest.fn(),
       migrateNetworkProfilePan: jest.fn(),
     },
     diagnostics: { inspect: jest.fn() },

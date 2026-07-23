@@ -11,8 +11,6 @@ import type {
   ManagedNetwork,
   MigrateNetworkProfilePanInput,
   MigrateNetworkProfilePanResult,
-  UnassignDeviceFromNetworkProfileInput,
-  UnassignDeviceFromNetworkProfileResult,
   PansBatchOperationService,
   PansBatchRunOptions,
   PansBatchRunResult,
@@ -41,6 +39,7 @@ import type {
   PansPosition,
 } from "@eight2five/mobile/pans-manager";
 import { assertUniqueName } from "@eight2five/mobile/pans-manager/validation";
+import { reconcileDeviceCachedProfileMatch } from "@eight2five/mobile/pans-manager/profile-matching";
 
 import {
   createManagerId,
@@ -87,9 +86,7 @@ export interface PansManagerRuntime {
   >;
   commissioning: Pick<
     PansCommissioningService,
-    | "assignDeviceToNetworkProfile"
-    | "unassignDeviceFromNetworkProfile"
-    | "migrateNetworkProfilePan"
+    "assignDeviceToNetworkProfile" | "migrateNetworkProfilePan"
   >;
   diagnostics: Pick<PansDiagnosticsService, "inspect">;
   batch: PansBatchOperationService;
@@ -168,10 +165,6 @@ interface PansManagerContextValue {
     notes?: string;
   }): Promise<ManagedNetwork>;
   deleteNetwork(networkId: string): Promise<void>;
-  saveDeviceLocalDetails(
-    deviceId: string,
-    localChanges: DeviceConfigurationDiff["localChanges"],
-  ): Promise<ManagedDevice>;
   inspectDevice(deviceId: string): Promise<PansInspectionResult>;
   inspectDiagnostics(deviceId: string): Promise<PansDiagnosticsResult>;
   configureDevice(
@@ -185,9 +178,6 @@ interface PansManagerContextValue {
   assignDeviceToNetworkProfile(
     input: AssignDeviceToNetworkProfileInput,
   ): Promise<AssignDeviceToNetworkProfileResult>;
-  unassignDeviceFromNetworkProfile(
-    input: UnassignDeviceFromNetworkProfileInput,
-  ): Promise<UnassignDeviceFromNetworkProfileResult>;
   migrateNetworkProfilePan(
     input: MigrateNetworkProfilePanInput,
   ): Promise<MigrateNetworkProfilePanResult>;
@@ -275,6 +265,10 @@ export function PansManagerProvider({
   );
   const permissionRequestAttemptedRef = React.useRef(false);
   const discoveryGenerationRef = React.useRef(0);
+  const autoInspectedDeviceIdsRef = React.useRef(new Set<string>());
+  const inspectionPromisesRef = React.useRef(
+    new Map<string, Promise<PansInspectionResult>>(),
+  );
 
   const retryInitialization = React.useCallback(() => {
     setInitialization("initializing");
@@ -286,11 +280,16 @@ export function PansManagerProvider({
 
   const refreshPersisted = React.useCallback(async () => {
     if (!runtime) return;
-    const [nextNetworks, nextDevices, savedSettings] = await Promise.all([
+    const [nextNetworks, storedDevices, savedSettings] = await Promise.all([
       runtime.repository.listNetworks(),
       runtime.repository.listDevices(),
       runtime.repository.getSettings(),
     ]);
+    const nextDevices = await reconcileCachedProfileMatches(
+      runtime.repository,
+      nextNetworks,
+      storedDevices,
+    );
     setNetworks(nextNetworks);
     setDevices(nextDevices);
     setDeviceSnapshots(
@@ -322,12 +321,17 @@ export function PansManagerProvider({
       .then(async (created) => {
         opened = created;
         if (!active) return await closeOpenedRuntime();
-        const [savedNetworks, savedDevices, storedSettings] = await Promise.all(
-          [
+        const [savedNetworks, storedDevices, storedSettings] =
+          await Promise.all([
             created.repository.listNetworks(),
             created.repository.listDevices(),
             created.repository.getSettings(),
-          ],
+          ]);
+        if (!active) return await closeOpenedRuntime();
+        const savedDevices = await reconcileCachedProfileMatches(
+          created.repository,
+          savedNetworks,
+          storedDevices,
         );
         if (!active) return await closeOpenedRuntime();
         const savedSnapshots = await loadLatestDeviceSnapshots(
@@ -356,6 +360,11 @@ export function PansManagerProvider({
       void closeOpenedRuntime();
     };
   }, [createRuntime, runtimeAttempt]);
+
+  React.useEffect(() => {
+    autoInspectedDeviceIdsRef.current.clear();
+    inspectionPromisesRef.current.clear();
+  }, [runtime]);
 
   React.useEffect(() => {
     if (!runtime) return;
@@ -662,40 +671,55 @@ export function PansManagerProvider({
     [refreshPersisted, runtime],
   );
 
-  const saveDeviceLocalDetails = React.useCallback(
-    async (
-      deviceId: string,
-      localChanges: DeviceConfigurationDiff["localChanges"],
-    ) => {
+  const inspectDevice = React.useCallback(
+    async (deviceId: string) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      const latest = await runtime.repository.getDevice(deviceId);
-      if (!latest) throw new Error("Managed device not found.");
-      const saved: ManagedDevice = {
-        ...latest,
-        ...(Object.prototype.hasOwnProperty.call(localChanges, "nickname")
-          ? { nickname: localChanges.nickname?.trim() || undefined }
-          : {}),
-        ...(Object.prototype.hasOwnProperty.call(localChanges, "notes")
-          ? { notes: localChanges.notes?.trim() || undefined }
-          : {}),
-        updatedAt: Date.now(),
-      };
-      await runtime.repository.saveDevice(saved);
-      await refreshPersisted();
-      return saved;
+      const inFlight = inspectionPromisesRef.current.get(deviceId);
+      if (inFlight) return await inFlight;
+      const inspectionPromise = (async () => {
+        const inspection =
+          await runtime.configuration.inspectAndCache(deviceId);
+        await refreshPersisted();
+        return inspection;
+      })();
+      inspectionPromisesRef.current.set(deviceId, inspectionPromise);
+      try {
+        return await inspectionPromise;
+      } finally {
+        if (inspectionPromisesRef.current.get(deviceId) === inspectionPromise)
+          inspectionPromisesRef.current.delete(deviceId);
+      }
     },
     [refreshPersisted, runtime],
   );
 
-  const inspectDevice = React.useCallback(
-    async (deviceId: string) => {
-      if (!runtime) throw new Error("Manager is not ready.");
-      const inspection = await runtime.configuration.inspectAndCache(deviceId);
-      await refreshPersisted();
-      return inspection;
-    },
-    [refreshPersisted, runtime],
-  );
+  React.useEffect(() => {
+    if (!runtime) return;
+    const availableTransportIds = new Set(
+      discoveries
+        .filter(
+          (discovery) =>
+            discovery.stale !== true &&
+            discovery.compatibility !== "malformed" &&
+            discovery.transportDeviceId,
+        )
+        .map((discovery) => discovery.transportDeviceId),
+    );
+    for (const deviceId of autoInspectedDeviceIdsRef.current) {
+      const device = devices.find((item) => item.id === deviceId);
+      if (!device || !availableTransportIds.has(device.transportDeviceId))
+        autoInspectedDeviceIdsRef.current.delete(deviceId);
+    }
+    for (const device of devices) {
+      if (
+        autoInspectedDeviceIdsRef.current.has(device.id) ||
+        !availableTransportIds.has(device.transportDeviceId)
+      )
+        continue;
+      autoInspectedDeviceIdsRef.current.add(device.id);
+      void inspectDevice(device.id).catch(() => undefined);
+    }
+  }, [devices, discoveries, inspectDevice, runtime]);
 
   const inspectDiagnostics = React.useCallback(
     async (deviceId: string) => {
@@ -744,17 +768,6 @@ export function PansManagerProvider({
       if (!runtime) throw new Error("Manager is not ready.");
       const result =
         await runtime.commissioning.assignDeviceToNetworkProfile(input);
-      await refreshPersisted();
-      return result;
-    },
-    [refreshPersisted, runtime],
-  );
-
-  const unassignDeviceFromNetworkProfile = React.useCallback(
-    async (input: UnassignDeviceFromNetworkProfileInput) => {
-      if (!runtime) throw new Error("Manager is not ready.");
-      const result =
-        await runtime.commissioning.unassignDeviceFromNetworkProfile(input);
       await refreshPersisted();
       return result;
     },
@@ -937,13 +950,11 @@ export function PansManagerProvider({
       saveNetwork,
       saveNetworkLocalDetails,
       deleteNetwork,
-      saveDeviceLocalDetails,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,
       applyDeviceConfiguration,
       assignDeviceToNetworkProfile,
-      unassignDeviceFromNetworkProfile,
       migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,
@@ -988,13 +999,11 @@ export function PansManagerProvider({
       saveNetwork,
       saveNetworkLocalDetails,
       deleteNetwork,
-      saveDeviceLocalDetails,
       inspectDevice,
       inspectDiagnostics,
       configureDevice,
       applyDeviceConfiguration,
       assignDeviceToNetworkProfile,
-      unassignDeviceFromNetworkProfile,
       migrateNetworkProfilePan,
       disconnectDevice,
       exportNetworkJson,
@@ -1219,4 +1228,38 @@ async function loadLatestDeviceSnapshots(
         entry[1] !== undefined,
     ),
   );
+}
+
+async function reconcileCachedProfileMatches(
+  repository: PansManagerRepository,
+  networks: ManagedNetwork[],
+  devices: ManagedDevice[],
+): Promise<ManagedDevice[]> {
+  const updatedAt = Date.now();
+  let changed = false;
+  await Promise.all(
+    devices.map(async (device) => {
+      const reconciled = reconcileDeviceCachedProfileMatch(
+        device,
+        networks,
+        updatedAt,
+      );
+      if (reconciled === device) return;
+      changed = true;
+      if (reconciled.networkId) {
+        await repository.associateDevice({
+          networkId: reconciled.networkId,
+          deviceId: device.id,
+          associatedAt: updatedAt,
+        });
+      } else if (device.networkId) {
+        await repository.dissociateDevice(
+          device.networkId,
+          device.id,
+          updatedAt,
+        );
+      }
+    }),
+  );
+  return changed ? await repository.listDevices() : devices;
 }

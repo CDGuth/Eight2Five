@@ -3,7 +3,7 @@ import { formatPanId } from "./validation";
 
 type DeviceDisplayIdentity = Pick<
   ManagedDevice,
-  "id" | "transportDeviceId" | "nodeIdHex" | "nickname"
+  "id" | "transportDeviceId" | "nodeIdHex" | "label" | "lastKnownConfig"
 >;
 
 /** Returns the best stable hardware/transport/local identifier for a device. */
@@ -15,10 +15,12 @@ export function getCanonicalDeviceIdentifier(
   return nodeIdHex || transportDeviceId || device.id.trim();
 }
 
-/** Returns an app display name. The hardware label is intentionally ignored. */
+/** Returns a hardware-derived display name with a stable identifier fallback. */
 export function getDeviceDisplayName(device: DeviceDisplayIdentity): string {
   return (
-    device.nickname?.trim() || `Device ${getCanonicalDeviceIdentifier(device)}`
+    device.lastKnownConfig?.label?.trim() ||
+    device.label?.trim() ||
+    `Device ${getCanonicalDeviceIdentifier(device)}`
   );
 }
 

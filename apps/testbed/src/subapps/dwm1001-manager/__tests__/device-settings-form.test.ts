@@ -11,23 +11,24 @@ import {
 } from "../device-settings-form";
 
 describe("device settings form", () => {
-  test("keeps app, hardware, and advertised names distinct", () => {
+  test("uses only hardware and advertised names", () => {
     const form = deviceSettingsFormFrom(
       anchorDevice(),
       "DWM1001 advertisement",
     );
     expect(form).toMatchObject({
-      nickname: "App nickname",
       hardwareLabel: "PANS label",
       advertisedName: "DWM1001 advertisement",
     });
+    expect(form).not.toHaveProperty("nickname");
+    expect(form).not.toHaveProperty("notes");
+    expect(form).not.toHaveProperty("profileNetworkId");
   });
 
   test("builds an explicit dirty-field diff without PAN, rates, or defaults", () => {
     const baseline = deviceSettingsFormFrom(anchorDevice());
     const diff = buildDeviceConfigurationDiff(baseline, {
       ...baseline,
-      nickname: " New app nickname ",
       hardwareLabel: "",
       selectedFirmware: 2,
       ledEnabled: false,
@@ -35,7 +36,7 @@ describe("device settings form", () => {
     });
 
     expect(diff).toEqual({
-      localChanges: { nickname: "New app nickname" },
+      localChanges: {},
       hardwareChanges: {
         label: "",
         selectedFirmware: 2,

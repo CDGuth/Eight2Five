@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
+import { getDeviceDisplayName } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
@@ -25,7 +26,7 @@ export function DeviceFirmwareScreen() {
         title="Hardware qualification checklist"
         description={
           device
-            ? `Device: ${device.nickname || device.label || device.id}`
+            ? `Device: ${getDeviceDisplayName(device)}`
             : "The requested managed device was not found."
         }
       >

@@ -1,6 +1,9 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
-import type { ObservedPansTopology } from "@eight2five/mobile/pans-manager";
+import {
+  getDeviceDisplayName,
+  type ObservedPansTopology,
+} from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import {
   eight2FiveFonts,
@@ -69,9 +72,7 @@ export function NetworkTopologyScreen() {
           label="Configured initiators"
           value={
             initiators.length
-              ? initiators
-                  .map((device) => device.nickname || device.label || device.id)
-                  .join(", ")
+              ? initiators.map(getDeviceDisplayName).join(", ")
               : "None in verified local configs"
           }
         />
@@ -140,9 +141,10 @@ export function NetworkTopologyScreen() {
                       fontFamily: eight2FiveFonts.styleSemibold,
                     }}
                   >
-                    {devices.find(
-                      (device) => device.id === observation.deviceId,
-                    )?.nickname || observation.deviceId}
+                    {displayObservationDeviceName(
+                      devices,
+                      observation.deviceId,
+                    )}
                   </Text>
                   <Text selectable size="sm" style={{ color: theme.textMuted }}>
                     Local node: {observation.localNodeIdHex ?? "unknown"};
@@ -168,4 +170,12 @@ export function NetworkTopologyScreen() {
       ) : null}
     </ManagerScreen>
   );
+}
+
+function displayObservationDeviceName(
+  devices: Parameters<typeof getDeviceDisplayName>[0][],
+  deviceId: string,
+): string {
+  const device = devices.find((item) => item.id === deviceId);
+  return device ? getDeviceDisplayName(device) : deviceId;
 }

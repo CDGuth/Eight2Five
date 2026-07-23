@@ -24,7 +24,7 @@ export function NetworkDevicesScreen() {
     <ManagerScreen>
       <SectionCard
         title={`${network.name} devices`}
-        description={`${devices.length} locally associated device(s).`}
+        description={`${devices.length} device(s) with a verified cached hardware PAN match.`}
       >
         {devices.map((device) => (
           <ManagedDeviceRow
@@ -40,7 +40,7 @@ export function NetworkDevicesScreen() {
         {!devices.length ? (
           <StatePanel
             state="info"
-            message="No devices are associated with this profile."
+            message="No cached hardware PAN IDs uniquely match this profile."
           />
         ) : null}
       </SectionCard>
