@@ -121,8 +121,8 @@ From the repository root:
 npm run type-check --workspace modules/expo-pans-ble-api
 npm run lint --workspace modules/expo-pans-ble-api
 npm run test --workspace modules/expo-pans-ble-api
-npm run validate:expo:doctor
-npm run validate:expo:install-check
+npm run expo:doctor
+npm run expo:install-check
 ```
 
 Do not treat source-level tests as hardware qualification. The following checks are deferred until native builds and physical DWM1001/PANS hardware are available:
