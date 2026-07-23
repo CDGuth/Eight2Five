@@ -1,6 +1,7 @@
 import React from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
@@ -24,7 +25,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000000" }}>
       <GluestackUIProvider mode="system">
         <SafeAreaProvider>
           <Stack
@@ -33,6 +34,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: theme.background },
             }}
           />
+          <StatusBar hidden={false} style="light" />
         </SafeAreaProvider>
       </GluestackUIProvider>
     </GestureHandlerRootView>

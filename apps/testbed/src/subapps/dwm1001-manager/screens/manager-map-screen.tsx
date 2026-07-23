@@ -5,11 +5,11 @@ import { Settings2 } from "lucide-react-native";
 import { PansNetworkGrid } from "@eight2five/mobile/pans-manager";
 import type { PansGridPalette } from "@eight2five/mobile/pans-manager";
 import { Button, ButtonIcon } from "@eight2five/ui/components/button";
-import { useEight2FiveTheme } from "@eight2five/ui/theme";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { ManagerMapSettingsModal } from "../components/manager-map-settings-modal";
 import { usePansMapDataController } from "../manager-map-controller";
+import { useTestbedToolbarAction } from "../../../components/testbed-toolbar";
 
 export function ManagerMapScreen({
   initialNetworkId,
@@ -17,7 +17,6 @@ export function ManagerMapScreen({
   initialNetworkId?: string;
 }) {
   const theme = useEight2FiveTheme();
-  const insets = useSafeAreaInsets();
   const controller = usePansMapDataController(initialNetworkId);
   const stopTracking = controller.stopTracking;
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -37,6 +36,22 @@ export function ManagerMapScreen({
     }),
     [theme],
   );
+  const settingsAction = React.useMemo(
+    () => (
+      <Button
+        testID="manager-map-settings-button"
+        accessibilityLabel="Open map settings"
+        variant="link"
+        size="icon"
+        onPress={() => setSettingsOpen(true)}
+        className="h-11 w-11"
+      >
+        <ButtonIcon as={Settings2} style={{ color: theme.raw.white }} />
+      </Button>
+    ),
+    [theme.raw.white],
+  );
+  useTestbedToolbarAction("pans-map-settings", settingsAction);
 
   useFocusEffect(
     React.useCallback(
@@ -64,6 +79,7 @@ export function ManagerMapScreen({
         selectedNodeId={controller.selectedNodeId}
         onSelectNode={controller.setSelectedNodeId}
         showLabels={controller.visibility.labels}
+        labelFontFamily={eight2FiveFonts.utilityRegular}
         showGrid={controller.grid.showGrid}
         gridIntervalMeters={controller.grid.fixedIntervalMeters}
         showOrigin={controller.grid.showOrigin}
@@ -73,22 +89,6 @@ export function ManagerMapScreen({
           setSettingsOpen(true);
         }}
       />
-      <Button
-        testID="manager-map-settings-button"
-        accessibilityLabel="Open map settings"
-        variant="outline"
-        size="icon"
-        onPress={() => setSettingsOpen(true)}
-        style={{
-          position: "absolute",
-          top: insets.top + 8,
-          right: insets.right + 8,
-          backgroundColor: theme.surfaceRaised,
-          borderColor: theme.border,
-        }}
-      >
-        <ButtonIcon as={Settings2} style={{ color: theme.icon }} />
-      </Button>
       <ManagerMapSettingsModal
         controller={controller}
         isOpen={settingsOpen}

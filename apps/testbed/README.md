@@ -2,9 +2,9 @@
 
 Expo Router host for isolated hardware and localization experiments.
 
-## DWM1001 Network Manager
+## PANS Network Manager
 
-The registered `DWM1001 Network Manager` subapp can:
+The registered `PANS Network Manager` subapp can:
 
 - explicitly discover compatible PANS advertisements;
 - persist local network profiles and device metadata in SQLite;

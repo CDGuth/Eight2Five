@@ -7,7 +7,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 0 — Baseline, fixtures, observability | Complete (environment-limited) | Canonical location packets and deterministic 1/10 Hz notification source added. Device screenshots and a real tag capture are deferred because no device is available. |
-| 1 — App shell and navigation | Not started | |
+| 1 — App shell and navigation | Complete (device review pending) | Added a black safe-area scrim and toolbar for subapp routes, Gluestack Drawer navigation, focused toolbar action registration, home copy, PANS naming, and explicit map-label typography. |
 | 2 — Continuous discovery | Not started | |
 | 3 — Hardware-derived state | Not started | |
 | 4 — Hierarchy and deletion | Not started | |
@@ -31,3 +31,13 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Packet fixtures: `modules/expo-pans-ble-api/src/testing/PansLocationDataFixtures.ts`
 - Synthetic notification source: `packages/mobile/src/pans-manager/testing/SyntheticPansPositionNotificationSource.ts`
 - Stream-order regression: `packages/mobile/src/pans-manager/__tests__/synthetic-position-notifications.test.ts`
+
+## Phase 1 implementation notes
+
+- `apps/testbed/app/(subapps)/_layout.tsx` keeps the home route outside the toolbar while applying `TestbedSubappShell` to every nested subapp route.
+- `apps/testbed/src/components/testbed-toolbar.tsx` scopes actions to focused routes and removes them on blur/unmount. Networks registers Scan and Map registers Settings.
+- `apps/testbed/src/components/TestbedSubappShell.tsx` uses the generated Gluestack Drawer with Home, a divider, and registered subapps only. Drawer rows expose labels, selected state, and 44-point minimum targets.
+- `apps/testbed/app/_layout.tsx` renders a visible light `StatusBar`; both home and subapp layouts draw black content behind transparent system-bar icons.
+- Source Sans 3 is loaded before routing and is now explicitly applied to `PansNetworkGrid` labels.
+- Official implementation references: <https://github.com/expo/expo/blob/main/docs/pages/tutorial/configuration.mdx> and <https://github.com/gluestack/gluestack-ui/blob/main/apps/website/app/ui/docs/components/drawer/index.mdx>.
+- Screenshots and no-flash status-bar verification remain device tasks because no simulator or physical device is attached to this environment.

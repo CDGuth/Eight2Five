@@ -71,7 +71,7 @@ export function ManagerInfoScreen() {
 
   return (
     <SafeAreaView
-      edges={["top", "left", "right"]}
+      edges={["left", "right"]}
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <ScrollView

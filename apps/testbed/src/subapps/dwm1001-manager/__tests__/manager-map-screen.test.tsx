@@ -8,6 +8,10 @@ import { Switch } from "@eight2five/ui/components/switch";
 
 import type { PansMapDataController } from "../manager-map-controller";
 import { ManagerMapScreen } from "../screens/manager-map-screen";
+import {
+  TestbedToolbarActionProvider,
+  TestbedToolbarActionSlot,
+} from "../../../components/testbed-toolbar";
 
 let mockController: PansMapDataController;
 
@@ -32,9 +36,13 @@ jest.mock("@eight2five/ui/components/modal", () => {
     ModalHeader: Wrapper,
   };
 });
-jest.mock("expo-router", () => ({
-  useFocusEffect: jest.fn(),
-}));
+jest.mock("expo-router", () => {
+  const MockReact = jest.requireActual<typeof import("react")>("react");
+  return {
+    useFocusEffect: (callback: () => void | (() => void)) =>
+      MockReact.useEffect(callback, [callback]),
+  };
+});
 jest.mock("../manager-map-controller", () => ({
   usePansMapDataController: () => mockController,
 }));
@@ -50,6 +58,7 @@ describe("ManagerMapScreen", () => {
     expect(root.props.style).toMatchObject({ flex: 1 });
     const grid = tree.root.findByType(PansNetworkGrid);
     expect(grid.props.style).toEqual({ flex: 1 });
+    expect(grid.props.labelFontFamily).toBe("SourceSans3_400Regular");
     expect(Object.keys(grid.props.palette).sort()).toEqual(
       [
         "background",
@@ -86,7 +95,7 @@ describe("ManagerMapScreen", () => {
         .isOpen,
     ).toBe(true);
 
-    await act(async () => tree.update(<ManagerMapScreen />));
+    await act(async () => tree.update(mapScreenElement()));
     expect(
       tree.root.findByProps({ testID: "manager-map-settings-modal-root" }).props
         .isOpen,
@@ -150,9 +159,18 @@ describe("ManagerMapScreen", () => {
 async function renderScreen() {
   let tree!: TestRenderer.ReactTestRenderer;
   await act(async () => {
-    tree = TestRenderer.create(<ManagerMapScreen />);
+    tree = TestRenderer.create(mapScreenElement());
   });
   return tree;
+}
+
+function mapScreenElement() {
+  return (
+    <TestbedToolbarActionProvider>
+      <TestbedToolbarActionSlot />
+      <ManagerMapScreen />
+    </TestbedToolbarActionProvider>
+  );
 }
 
 function findText(tree: TestRenderer.ReactTestRenderer, value: string) {

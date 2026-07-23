@@ -20,10 +20,10 @@ describe("testbed subapp registry", () => {
     }
   });
 
-  it("registers the DWM1001 manager", () => {
+  it("registers the PANS manager", () => {
     expect(getSubappById("dwm1001-manager")).toEqual(
       expect.objectContaining({
-        title: "DWM1001-DEV Network Manager",
+        title: "PANS Network Manager",
         badge: "Hardware",
         routeName: "(subapps)/dwm1001-manager/(tabs)/networks-devices",
         href: "/(subapps)/dwm1001-manager/(tabs)/networks-devices",

@@ -12,7 +12,7 @@ export interface SubappConfig {
 export const SUBAPPS = [
   {
     id: "dwm1001-manager",
-    title: "DWM1001-DEV Network Manager",
+    title: "PANS Network Manager",
     description:
       "Set up anchors and tags, position the network, and track devices.",
     badge: "Hardware",

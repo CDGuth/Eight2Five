@@ -29,6 +29,10 @@ import {
   NetworkDeviceDrag,
 } from "../components/network-device-drag";
 import { NetworkDeviceSection } from "../components/network-device-section";
+import {
+  TestbedToolbarActionProvider,
+  TestbedToolbarActionSlot,
+} from "../../../components/testbed-toolbar";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 jest.mock("react-native-worklets", () => ({
@@ -43,6 +47,10 @@ jest.mock("react-native-reanimated", () =>
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const MockReact = jest.requireActual<typeof import("react")>("react");
+    return MockReact.useEffect(callback, [callback]);
+  },
 }));
 
 describe("NetworksDevicesScreen", () => {
@@ -52,9 +60,11 @@ describe("NetworksDevicesScreen", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={() => deferred.promise}>
-          <NetworksDevicesScreen />
-        </PansManagerProvider>,
+        toolbarHarness(
+          <PansManagerProvider createRuntime={() => deferred.promise}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
       );
     });
 
@@ -97,9 +107,11 @@ describe("NetworksDevicesScreen", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={createRuntimeFactory}>
-          <NetworksDevicesScreen />
-        </PansManagerProvider>,
+        toolbarHarness(
+          <PansManagerProvider createRuntime={createRuntimeFactory}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
       );
       await flushPromises();
     });
@@ -127,9 +139,11 @@ describe("NetworksDevicesScreen", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={async () => harness.runtime}>
-          <NetworksDevicesScreen />
-        </PansManagerProvider>,
+        toolbarHarness(
+          <PansManagerProvider createRuntime={async () => harness.runtime}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
       );
       await flushPromises();
     });
@@ -209,9 +223,11 @@ describe("NetworksDevicesScreen", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={async () => harness.runtime}>
-          <NetworksDevicesScreen />
-        </PansManagerProvider>,
+        toolbarHarness(
+          <PansManagerProvider createRuntime={async () => harness.runtime}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
       );
       await flushPromises();
     });
@@ -244,9 +260,11 @@ describe("NetworksDevicesScreen", () => {
     let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        <PansManagerProvider createRuntime={async () => harness.runtime}>
-          <NetworksDevicesScreen />
-        </PansManagerProvider>,
+        toolbarHarness(
+          <PansManagerProvider createRuntime={async () => harness.runtime}>
+            <NetworksDevicesScreen />
+          </PansManagerProvider>,
+        ),
       );
       await flushPromises();
     });
@@ -769,6 +787,15 @@ function pressTestId(tree: TestRenderer.ReactTestRenderer, testID: string) {
     .find((node) => typeof node.props.onPress === "function");
   if (!target) throw new Error(`No pressable found for ${testID}`);
   target.props.onPress();
+}
+
+function toolbarHarness(children: React.ReactNode) {
+  return (
+    <TestbedToolbarActionProvider>
+      <TestbedToolbarActionSlot />
+      {children}
+    </TestbedToolbarActionProvider>
+  );
 }
 
 function expansionState(

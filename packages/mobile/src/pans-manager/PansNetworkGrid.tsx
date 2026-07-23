@@ -77,6 +77,7 @@ export interface PansNetworkGridProps {
   selectedNodeId?: string;
   onSelectNode?(nodeId: string | undefined): void;
   showLabels?: boolean;
+  labelFontFamily?: string;
   showGrid?: boolean;
   gridIntervalMeters?: number;
   showOrigin?: boolean;
@@ -100,6 +101,7 @@ export function PansNetworkGrid({
   selectedNodeId,
   onSelectNode,
   showLabels = true,
+  labelFontFamily = "SourceSans3_400Regular",
   showGrid = true,
   gridIntervalMeters,
   showOrigin = false,
@@ -438,6 +440,7 @@ export function PansNetworkGrid({
                 canvasSize={canvasSize}
                 gestureActive={gestureActive}
                 color={palette.label}
+                fontFamily={labelFontFamily}
               />
             ))
           : null}
@@ -513,12 +516,14 @@ const GridNodeLabel = React.memo(function GridNodeLabel({
   canvasSize,
   gestureActive,
   color,
+  fontFamily,
 }: {
   node: PansGridNode;
   camera: PansGridCameraSharedValues;
   canvasSize: SharedValue<GridSize>;
   gestureActive: SharedValue<boolean>;
   color: string;
+  fontFamily: string;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
     const position = node.livePosition?.value ?? node.position;
@@ -552,6 +557,7 @@ const GridNodeLabel = React.memo(function GridNodeLabel({
           top: 0,
           color,
           fontSize: 12,
+          fontFamily,
         },
         animatedStyle,
       ]}

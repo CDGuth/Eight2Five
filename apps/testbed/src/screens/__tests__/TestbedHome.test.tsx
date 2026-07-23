@@ -27,5 +27,11 @@ describe("TestbedHome", () => {
     });
     act(() => card.props.onPress());
     expect(onSelect).toHaveBeenCalledWith("demo");
+    expect(
+      tree.root.findByProps({ children: "Eight2Five Testbed App" }),
+    ).toBeTruthy();
+    expect(
+      tree.root.findByProps({ children: "Select a subapp to run." }),
+    ).toBeTruthy();
   });
 });

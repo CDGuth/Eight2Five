@@ -29,6 +29,7 @@ import { DeviceSettingsModal } from "../device-settings-modal";
 import { usePansManager } from "../manager-context";
 import { displayError } from "../manager-utils";
 import { NetworkEditModal } from "../network-edit-modal";
+import { useTestbedToolbarAction } from "../../../components/testbed-toolbar";
 
 export const NETWORK_DROP_AUTO_EXPAND_MS = 600;
 
@@ -372,51 +373,47 @@ export function NetworksDevicesScreen() {
           discovery.transportDeviceId === selectedDevice.transportDeviceId,
       )
     : undefined;
+  const scanAction = React.useMemo(
+    () =>
+      manager.initialization === "initializing" ? (
+        <HStack
+          accessible
+          accessibilityLabel="Native Module Loading"
+          accessibilityState={{ busy: true, disabled: true }}
+          pointerEvents="none"
+          className="min-h-11 items-center"
+          style={{ gap: eight2FiveSpacing.sm }}
+        >
+          <Spinner color={theme.raw.white} />
+          <Text style={{ color: theme.raw.white }}>Native Module Loading</Text>
+        </HStack>
+      ) : manager.initialization === "ready" ? (
+        <Button
+          testID="scan-control"
+          size="sm"
+          accessibilityLabel={
+            manager.isScanning ? "Stop device scan" : "Start device scan"
+          }
+          accessibilityState={{ selected: manager.isScanning }}
+          onPress={() => {
+            if (manager.isScanning) manager.stopDiscovery();
+            else void manager.startDiscovery();
+          }}
+        >
+          <ButtonIcon as={manager.isScanning ? Square : RadioTower} />
+          <ButtonText>{manager.isScanning ? "Stop" : "Scan"}</ButtonText>
+        </Button>
+      ) : null,
+    [manager, theme.raw.white],
+  );
+  useTestbedToolbarAction("pans-discovery-scan", scanAction);
 
   return (
     <SafeAreaView
-      edges={["top", "left", "right"]}
+      edges={["left", "right"]}
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <VStack className="flex-1">
-        <HStack
-          testID="network-devices-actions"
-          className="w-full min-h-14 items-center justify-end"
-          style={{ paddingHorizontal: eight2FiveSpacing.md }}
-        >
-          {manager.initialization === "initializing" ? (
-            <HStack
-              accessible
-              accessibilityLabel="Native Module Loading"
-              accessibilityState={{ busy: true, disabled: true }}
-              pointerEvents="none"
-              className="items-center"
-              style={{ gap: eight2FiveSpacing.sm }}
-            >
-              <Spinner color={theme.textMuted} />
-              <Text style={{ color: theme.textMuted }}>
-                Native Module Loading
-              </Text>
-            </HStack>
-          ) : manager.initialization === "ready" ? (
-            <Button
-              testID="scan-control"
-              size="sm"
-              accessibilityLabel={
-                manager.isScanning ? "Stop device scan" : "Start device scan"
-              }
-              accessibilityState={{ selected: manager.isScanning }}
-              onPress={() => {
-                if (manager.isScanning) manager.stopDiscovery();
-                else void manager.startDiscovery();
-              }}
-            >
-              <ButtonIcon as={manager.isScanning ? Square : RadioTower} />
-              <ButtonText>{manager.isScanning ? "Stop" : "Scan"}</ButtonText>
-            </Button>
-          ) : null}
-        </HStack>
-
         {manager.initializationError ? (
           <InlineError
             testID="initialization-error"
