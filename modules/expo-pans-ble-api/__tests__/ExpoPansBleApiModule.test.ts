@@ -52,6 +52,11 @@ import {
   PANS_BLE_UUIDS,
 } from "../src/ExpoPansBleApi.types";
 import type { PansBleCapabilities } from "../src/ExpoPansBleApi.types";
+import {
+  clonePansLocationDataFixture,
+  PANS_LOCATION_DATA_FIXTURES,
+  pansBytesToHex,
+} from "../src/testing/PansLocationDataFixtures";
 
 type NativeModuleMock = {
   startScanning: jest.Mock;
@@ -241,16 +246,15 @@ describe("PANS BLE codecs", () => {
   });
 
   test("decodes empty, position, distances, and combined location frames", () => {
-    expect(decodeLocationData([])).toEqual({
+    expect(decodeLocationData(clonePansLocationDataFixture("empty"))).toEqual({
       distances: [],
       raw: [],
       diagnostics: [],
     });
 
-    const positionOnly = decodeLocationData([
-      0,
-      ...positionBytes(1000, -2000, 3000, 77),
-    ]);
+    const positionOnly = decodeLocationData(
+      clonePansLocationDataFixture("positionOnly14"),
+    );
     expect(positionOnly.position).toMatchObject({
       xMeters: 1,
       yMeters: -2,
@@ -258,42 +262,26 @@ describe("PANS BLE codecs", () => {
       quality: 77,
     });
 
-    const distanceOnly = decodeLocationData([
-      1, 1, 0x34, 0x12, 0xe8, 0x03, 0, 0, 90,
-    ]);
+    const distanceOnly = decodeLocationData(
+      clonePansLocationDataFixture("distanceOnlyOneAnchor"),
+    );
     expect(distanceOnly.distances[0]).toMatchObject({
       nodeId: 0x1234,
       distanceMeters: 1,
       quality: 90,
     });
 
-    const combined = decodeLocationData([
-      2,
-      ...positionBytes(10, 20, 30, 55),
-      1,
-      0x78,
-      0x56,
-      0xd0,
-      0x07,
-      0,
-      0,
-      91,
-    ]);
+    const combined = decodeLocationData(
+      clonePansLocationDataFixture("combinedPositionAndDistance"),
+    );
     expect(combined.position?.zMeters).toBe(0.03);
     expect(combined.distances[0].nodeId).toBe(0x5678);
   });
 
   test("decodes type-2 distance-only fallback with multiple anchors", () => {
-    const decoded = decodeLocationData([
-      2,
-      2,
-      ...u16(1),
-      ...u32(1000),
-      80,
-      ...u16(2),
-      ...u32(2000),
-      81,
-    ]);
+    const decoded = decodeLocationData(
+      clonePansLocationDataFixture("type2DistanceOnlyFallback"),
+    );
 
     expect(decoded.position).toBeUndefined();
     expect(decoded.distances).toEqual([
@@ -304,7 +292,9 @@ describe("PANS BLE codecs", () => {
 
   test("reports malformed location diagnostics", () => {
     expect(() => decodeLocationData([9])).toThrow("unknown location-data");
-    const truncated = decodeLocationData([1, 2, 0x01]);
+    const truncated = decodeLocationData(
+      clonePansLocationDataFixture("truncatedDistance"),
+    );
     expect(truncated.diagnostics[0]).toContain("truncated distance");
   });
 
@@ -316,9 +306,9 @@ describe("PANS BLE codecs", () => {
     expect(combinedDistanceOnly.position).toBeUndefined();
     expect(combinedDistanceOnly.distances).toHaveLength(1);
 
-    const overrun = decodeLocationData([
-      1, 2, 0x01, 0x00, 0xe8, 0x03, 0, 0, 80,
-    ]);
+    const overrun = decodeLocationData(
+      clonePansLocationDataFixture("overDeclaredDistanceCount"),
+    );
     expect(overrun.distances).toHaveLength(1);
     expect(overrun.diagnostics[0]).toContain("truncated distance");
   });
@@ -331,6 +321,44 @@ describe("PANS BLE codecs", () => {
     expect(trailing.diagnostics[0]).toContain("trailing byte");
 
     expect(() => decodeLocationData([1, 16])).toThrow("exceeds maximum 15");
+  });
+
+  test.each([
+    ["positionOnly18ZeroPadding", "00000000"],
+    ["positionOnly18Extension", "deadbeef"],
+  ] as const)(
+    "decodes the canonical prefix and reproduces the trailing-byte diagnostic for %s",
+    (fixtureName, extensionHex) => {
+      const decoded = decodeLocationData(
+        clonePansLocationDataFixture(fixtureName),
+      );
+
+      expect(decoded.position).toMatchObject({
+        xMeters: 1,
+        yMeters: -2,
+        zMeters: 3,
+        quality: 77,
+      });
+      expect(decoded.diagnostics).toEqual([
+        "unexpected 4 trailing byte(s) after position frame",
+      ]);
+      expect(pansBytesToHex(decoded.raw.slice(14))).toBe(extensionHex);
+      expect(decoded.raw).toEqual([
+        ...PANS_LOCATION_DATA_FIXTURES[fixtureName],
+      ]);
+    },
+  );
+
+  test("decodes the canonical one- and four-anchor distance fixtures", () => {
+    expect(
+      decodeLocationData(clonePansLocationDataFixture("distanceOnlyOneAnchor"))
+        .distances,
+    ).toHaveLength(1);
+    expect(
+      decodeLocationData(
+        clonePansLocationDataFixture("distanceOnlyFourAnchors"),
+      ).distances,
+    ).toHaveLength(4);
   });
 
   test("decodes maximum distance entries", () => {

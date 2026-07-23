@@ -3,6 +3,7 @@ import {
   parseAnchorListPayload,
   parsePansLocationDataPayload,
 } from "../PansLocationDataParser";
+import { clonePansLocationDataFixture } from "expo-pans-ble-api";
 
 jest.mock("expo-modules-core", () => ({
   EventEmitter: jest.fn().mockImplementation(() => ({
@@ -22,13 +23,9 @@ jest.mock("expo-modules-core", () => ({
 
 describe("PansLocationDataParser", () => {
   test("adapts calculated coordinates with meters", () => {
-    const frame = parsePansLocationDataPayload([
-      0,
-      ...i32(1500),
-      ...i32(-2250),
-      ...i32(750),
-      80,
-    ]);
+    const frame = parsePansLocationDataPayload(
+      clonePansLocationDataFixture("positionOnly14"),
+    );
 
     const observations = locationFrameToObservations("tag-1", frame, 123);
 
@@ -36,27 +33,22 @@ describe("PansLocationDataParser", () => {
       mac: "tag-1",
       observedAtMs: 123,
       measurementKind: "position",
-      positionXMeters: 1.5,
-      positionYMeters: -2.25,
-      positionZMeters: 0.75,
-      quality: 80,
+      positionXMeters: 1,
+      positionYMeters: -2,
+      positionZMeters: 3,
+      quality: 77,
     });
   });
 
   test("adapts distance observations with anchor keys", () => {
-    const frame = parsePansLocationDataPayload([
-      1,
-      1,
-      0xef,
-      0xcd,
-      ...u32(4250),
-      91,
-    ]);
+    const frame = parsePansLocationDataPayload(
+      clonePansLocationDataFixture("distanceOnlyOneAnchor"),
+    );
 
     expect(locationFrameToObservations("tag-1", frame, 123)[0]).toMatchObject({
-      mac: "uwb-anchor-cdef",
-      distanceMeters: 4.25,
-      quality: 91,
+      mac: "uwb-anchor-1234",
+      distanceMeters: 1,
+      quality: 90,
     });
   });
 
@@ -75,15 +67,3 @@ describe("PansLocationDataParser", () => {
     });
   });
 });
-
-function i32(value: number): number[] {
-  const bytes = new Uint8Array(4);
-  new DataView(bytes.buffer).setInt32(0, value, true);
-  return Array.from(bytes);
-}
-
-function u32(value: number): number[] {
-  const bytes = new Uint8Array(4);
-  new DataView(bytes.buffer).setUint32(0, value, true);
-  return Array.from(bytes);
-}
