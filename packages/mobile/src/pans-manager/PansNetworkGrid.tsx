@@ -469,6 +469,20 @@ export function PansNetworkGrid({
     <GestureDetector gesture={gesture}>
       <View
         testID={testID}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel="PANS network map"
+        accessibilityHint="Shows anchors, tags, network bounds, and ranging relationships. Map settings provide non-gesture controls."
+        accessibilityValue={{
+          text: `${nodes.length} node${nodes.length === 1 ? "" : "s"}${
+            selectedNodeId
+              ? `; selected ${
+                  nodes.find((node) => node.id === selectedNodeId)?.label ??
+                  selectedNodeId
+                }`
+              : ""
+          }`,
+        }}
         style={[
           height === undefined ? { flex: 1 } : { height },
           { overflow: "hidden", backgroundColor: palette.background },
@@ -555,6 +569,9 @@ export function PansNetworkGrid({
         <NativeText
           testID={`${testID}-scale-indicator`}
           pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
           style={{
             position: "absolute",
             left: 12,
@@ -675,6 +692,9 @@ const GridNodeLabel = React.memo(function GridNodeLabel({
   return (
     <Animated.Text
       pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
       style={[
         {
           position: "absolute",
@@ -792,6 +812,9 @@ const GridAxisTickLabel = React.memo(function GridAxisTickLabel({
   return (
     <Animated.Text
       pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
       style={[
         {
           position: "absolute",

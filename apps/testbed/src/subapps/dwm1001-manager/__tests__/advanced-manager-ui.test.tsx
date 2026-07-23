@@ -96,6 +96,12 @@ describe("advanced DWM1001 manager UI", () => {
     expect(
       tree.root.findByProps({ testID: "pans-network-grid-canvas" }),
     ).toBeTruthy();
+    expect(grid.props).toMatchObject({
+      accessible: true,
+      accessibilityRole: "image",
+      accessibilityLabel: "PANS network map",
+      accessibilityValue: { text: "2 nodes" },
+    });
     await act(async () => tree.unmount());
   });
 

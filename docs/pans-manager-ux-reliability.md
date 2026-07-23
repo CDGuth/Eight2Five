@@ -14,7 +14,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 5 — Form controls | Complete (device review pending) | Manager selects now use an anchored popover rather than an action sheet. Anchor quality is optional and defaults to 100, with field-level validation and help text. |
 | 6 — Map behavior | Complete (device review pending) | Added persisted metric/imperial display units, infinite/bounded map modes, bounded-area rendering and camera constraints, origin axes and labels, scale readout, unit-aware editors/details, exact origin reset, and guarded two-pointer pinch focal handling. |
 | 7 — Packet and live updates | Complete (native/device verification deferred) | Added extension-tolerant decoding with structured diagnostics, normalized notification device IDs, native sequence/timing metadata, Android MTU preparation, read-before-subscribe startup, stage counters through map updates, and a deterministic five-minute 10 Hz pipeline test. |
-| 8 — Integration | Not started | |
+| 8 — Integration | Complete (physical/native iOS review deferred) | Completed repository verification, Android bundle exports, Android native-core tests, Expo checks, Syncpack fix/lint, and a map accessibility pass. Swift compilation and hardware qualification remain external prerequisites. |
 
 ## Phase 0 baseline — 2026-07-22
 
@@ -105,12 +105,26 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Map settings expose live pipeline counters through the final SharedValue position update stage. Native sequence discontinuities are explicitly described as diagnostic evidence rather than definitive loss because the sequence is process-wide.
 - A timer-free five-minute 10 Hz test sends 3,000 ordered position packets through device-ID filtering, decoding, sample emission, and counter tracking with no sequence discontinuity or JavaScript-stage loss.
 - Phase verification: all TypeScript and lint workspaces and Jest passed (`20` testbed suites / `98` tests, `25` shared-mobile suites / `122` tests, and `3` Expo PANS BLE API suites / `61` tests).
-- The native event additions require rebuilding the Android and iOS development clients. Native compilation, a physical five-minute 10 Hz soak, BLE trace comparison, and screenshots remain deferred because they require the user's repaired Swift/Java environment and attached DWM1001 hardware.
+- The native event additions require rebuilding the Android and iOS development clients. A physical five-minute 10 Hz soak, BLE trace comparison, screenshots, and iOS native compilation remain deferred because they require an attached DWM1001 target and the user's repaired Swift environment.
 
-## Post-review verification — 2026-07-23
+## Phase 8 integration notes
 
-- Type checking, linting, Syncpack, and all JavaScript/TypeScript Jest suites pass.
-- Current Jest totals are `20` testbed suites / `94` tests, `24` shared-mobile suites / `116` tests, and `3` Expo PANS BLE API suites / `58` tests.
-- Full `npm run validate` reaches native testing and stops at the iOS module test because the `swift` executable is unavailable on this Ubuntu 26 environment. Android native tests and the later Expo checks are therefore not reached by that command.
-- Direct Expo Doctor and Expo install checks currently report only three SDK 56 patch-version recommendations in both apps: `expo` `56.0.16` → `~56.0.17`, `expo-dev-client` `56.0.23` → `~56.0.24`, and `expo-router` `56.2.15` → `~56.2.16`.
-- Java/`JAVA_HOME` availability and Android native tests remain unverified in this review run.
+- The map is exposed as one summarized accessibility image with node count and selected-node context. Decorative node labels, axis ticks, and the scale caption are hidden from the accessibility tree to avoid dozens of duplicate announcements; settings retain accessible non-gesture controls.
+- `syncpack:fix` reported no changes and `syncpack:lint` passed. Expo Doctor passed all `21/21` checks for both Expo apps, and both Expo install checks report dependencies are current.
+- Android production JavaScript bundles export successfully for both `apps/mobile` and `apps/testbed`. The export-generated mobile Uniwind declaration now matches the already tracked testbed/root declarations.
+- The Android native-core suite runs successfully under Gradle 9.3.1: all 11 tests pass. Gradle reports existing deprecated-feature warnings that will matter before Gradle 10 but do not fail the current build.
+- The full `npm run validate` passes type checking, linting, Syncpack, and all Jest suites, then stops at the iOS native test because `swift` is not installed. The direct Android native test was run separately and passed.
+- Final automated totals are `20` testbed suites / `98` tests, `25` shared-mobile suites / `122` tests, `3` Expo PANS BLE API suites / `61` tests, and `11` Android native-core tests.
+- Remaining intervention-dependent work: rebuild development clients for the native event contract, compile/run Swift native tests, review the UI on physical Android and iOS devices, capture screenshots, and run the DWM1001 five-minute 10 Hz soak while comparing the live pipeline counters against a BLE trace.
+
+## Final verification — 2026-07-23
+
+- Type checking: passed across all workspaces.
+- Lint: passed across all workspaces.
+- Syncpack fix and lint: passed with no manifest changes.
+- JavaScript/TypeScript Jest: passed with the totals above.
+- Android native-core tests: 11 passed.
+- Expo Doctor: `21/21` for both apps.
+- Expo install checks: dependencies are current for both apps.
+- Android Expo exports: passed for both mobile and testbed.
+- Full repository validation: environment-limited only at `swift test` (`swift: not found`).
