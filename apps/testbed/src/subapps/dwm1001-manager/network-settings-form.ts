@@ -11,7 +11,6 @@ export interface NetworkSettingsFormState {
   staleDeviceTimeoutSeconds: string;
   movingUpdateRateMs: string;
   stationaryUpdateRateMs: string;
-  scanDurationSeconds: string;
   autoConnect: boolean;
   positionLogRetentionDays: string;
   positionLogMaxSamples: string;
@@ -41,7 +40,6 @@ export function networkSettingsToForm(
     stationaryUpdateRateMs: String(
       settings.defaultTagMode.stationaryUpdateRateMs,
     ),
-    scanDurationSeconds: String(settings.scanDurationMs / 1_000),
     autoConnect: settings.autoConnect,
     positionLogRetentionDays: String(settings.positionLogRetentionDays),
     positionLogMaxSamples: String(settings.positionLogMaxSamples),
@@ -67,7 +65,6 @@ export function parseNetworkSettingsForm(
     staleSeconds: parseFinite(form.staleDeviceTimeoutSeconds),
     movingRate: parseFinite(form.movingUpdateRateMs),
     stationaryRate: parseFinite(form.stationaryUpdateRateMs),
-    scanSeconds: parseFinite(form.scanDurationSeconds),
     retentionDays: parseFinite(form.positionLogRetentionDays),
     maxSamples: parseFinite(form.positionLogMaxSamples),
   };
@@ -82,12 +79,9 @@ export function parseNetworkSettingsForm(
   ) {
     return { error: "Each coordinate minimum must be less than its maximum." };
   }
-  if (
-    !Number.isFinite(values.staleSeconds * 1_000) ||
-    !Number.isFinite(values.scanSeconds * 1_000)
-  ) {
+  if (!Number.isFinite(values.staleSeconds * 1_000)) {
     return {
-      error: "Converted timeout and scan duration values must be finite.",
+      error: "Converted timeout value must be finite.",
     };
   }
   if (values.anchorHeight < values.minZ || values.anchorHeight > values.maxZ) {
@@ -97,7 +91,6 @@ export function parseNetworkSettingsForm(
     values.staleSeconds <= 0 ||
     values.movingRate <= 0 ||
     values.stationaryRate <= 0 ||
-    values.scanSeconds <= 0 ||
     values.retentionDays <= 0 ||
     values.maxSamples <= 0
   ) {
@@ -134,7 +127,6 @@ export function parseNetworkSettingsForm(
         movingUpdateRateMs: values.movingRate,
         stationaryUpdateRateMs: values.stationaryRate,
       },
-      scanDurationMs: values.scanSeconds * 1_000,
       autoConnect: form.autoConnect,
       positionLogRetentionDays: values.retentionDays,
       positionLogMaxSamples: values.maxSamples,

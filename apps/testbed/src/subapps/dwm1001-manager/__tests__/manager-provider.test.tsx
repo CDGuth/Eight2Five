@@ -13,12 +13,20 @@ import {
 } from "../manager-context";
 
 describe("PansManagerProvider", () => {
-  it("initializes storage without prompting or scanning, then starts explicitly", async () => {
-    const requestPermissions = jest
-      .fn()
-      .mockResolvedValue({ bluetooth: "granted" });
+  it("requests permission once, auto-starts, and allows immediate stop/start", async () => {
+    let permissionGranted = false;
+    const requestPermissions = jest.fn().mockImplementation(async () => {
+      permissionGranted = true;
+      return { bluetooth: "granted" };
+    });
     const start = jest.fn().mockResolvedValue(undefined);
-    const runtime = makeRuntime({ requestPermissions, start });
+    const runtime = makeRuntime({
+      getPermissionStatus: jest.fn(() => ({
+        bluetooth: permissionGranted ? "granted" : "undetermined",
+      })),
+      requestPermissions,
+      start,
+    });
     const createRuntime = jest.fn(async (reporter) => {
       reporter.module("ready");
       reporter.storage("ready");
@@ -36,24 +44,137 @@ describe("PansManagerProvider", () => {
     });
 
     expect(createRuntime).toHaveBeenCalledTimes(1);
-    expect(requestPermissions).not.toHaveBeenCalled();
-    expect(start).not.toHaveBeenCalled();
+    expect(requestPermissions).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
     expect(tree.root.findByProps({ children: "ready" })).toBeTruthy();
+    expect(tree.root.findByProps({ children: "scanning" })).toBeTruthy();
+
+    await act(async () => {
+      await tree.root.findByProps({ testID: "stop-discovery" }).props.onPress();
+    });
+    expect(runtime.discovery.stop).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByProps({ children: "idle" })).toBeTruthy();
 
     await act(async () => {
       await tree.root
         .findByProps({ testID: "start-discovery" })
         .props.onPress();
     });
-
     expect(requestPermissions).toHaveBeenCalledTimes(1);
-    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(2);
     expect(tree.root.findByProps({ children: "scanning" })).toBeTruthy();
 
     await act(async () => tree.unmount());
     expect(runtime.discovery.stop).toHaveBeenCalled();
     expect(runtime.sessions.closeAll).toHaveBeenCalled();
     expect(runtime.closeStorage).toHaveBeenCalled();
+  });
+
+  it("preserves desired scanning across background and restarts on foreground", async () => {
+    const appState = createAppState("active");
+    const start = jest.fn().mockResolvedValue(undefined);
+    const runtime = makeRuntime({
+      getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
+      start,
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider
+          createRuntime={async () => runtime}
+          appState={appState.adapter}
+        >
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      appState.emit("background");
+      await flushPromises();
+    });
+    expect(runtime.discovery.stop).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByProps({ children: "desired" })).toBeTruthy();
+
+    await act(async () => {
+      appState.emit("active");
+      await flushPromises();
+    });
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(runtime.discovery.requestPermissions).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it("does not loop permission prompts after denial", async () => {
+    const appState = createAppState("active");
+    const requestPermissions = jest.fn().mockResolvedValue({
+      bluetooth: "denied",
+      canAskAgain: false,
+    });
+    const runtime = makeRuntime({ requestPermissions });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider
+          createRuntime={async () => runtime}
+          appState={appState.adapter}
+        >
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    expect(requestPermissions).toHaveBeenCalledTimes(1);
+    expect(runtime.discovery.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      appState.emit("background");
+      appState.emit("active");
+      await flushPromises();
+    });
+    expect(requestPermissions).toHaveBeenCalledTimes(1);
+    expect(runtime.discovery.start).not.toHaveBeenCalled();
+    expect(
+      tree.root.findByProps({
+        children:
+          "Nearby Devices permission is required to discover PANS devices.",
+      }),
+    ).toBeTruthy();
+    await act(async () => tree.unmount());
+  });
+
+  it("recovers after a native scan start failure", async () => {
+    const start = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("Native scan failed"))
+      .mockResolvedValueOnce(undefined);
+    const runtime = makeRuntime({
+      getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
+      start,
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    expect(
+      tree.root.findByProps({ children: "Native scan failed" }),
+    ).toBeTruthy();
+
+    await act(async () => {
+      await tree.root
+        .findByProps({ testID: "start-discovery" })
+        .props.onPress();
+    });
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(tree.root.findByProps({ children: "scanning" })).toBeTruthy();
+    await act(async () => tree.unmount());
   });
 
   it("surfaces initialization failures and supports retry", async () => {
@@ -88,6 +209,29 @@ describe("PansManagerProvider", () => {
     expect(createRuntime).toHaveBeenCalledTimes(2);
     expect(tree.root.findByProps({ children: "ready" })).toBeTruthy();
     await act(async () => tree.unmount());
+  });
+
+  it("closes a runtime that resolves after the provider unmounts", async () => {
+    const deferred = createDeferred<PansManagerRuntime>();
+    const runtime = createRuntimeValue();
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={() => deferred.promise}>
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+    });
+    await act(async () => tree.unmount());
+
+    await act(async () => {
+      deferred.resolve(runtime);
+      await flushPromises();
+    });
+
+    expect(runtime.discovery.stop).toHaveBeenCalledTimes(1);
+    expect(runtime.sessions.closeAll).toHaveBeenCalledTimes(1);
+    expect(runtime.closeStorage).toHaveBeenCalledTimes(1);
   });
 
   it("resolves a managed device ID before requesting diagnostics", async () => {
@@ -280,7 +424,6 @@ describe("PansManagerProvider", () => {
           movingUpdateRateMs: 100,
           stationaryUpdateRateMs: 1000,
         },
-        scanDurationMs: 1000,
         autoConnect: false,
         positionLogRetentionDays: 1,
         positionLogMaxSamples: 100,
@@ -401,8 +544,13 @@ function ProviderHarness() {
       <Text>{readiness.initialization}</Text>
       <Text>{readiness.error}</Text>
       <Text>{discovery.isScanning ? "scanning" : "idle"}</Text>
+      <Text>{discovery.desiredScanning ? "desired" : "not desired"}</Text>
+      <Text>{discovery.error}</Text>
       <Button testID="start-discovery" onPress={() => discovery.start()}>
         <ButtonText>Start</ButtonText>
+      </Button>
+      <Button testID="stop-discovery" onPress={() => discovery.stop()}>
+        <ButtonText>Stop</ButtonText>
       </Button>
       <Button testID="retry-manager" onPress={readiness.retry}>
         <ButtonText>Retry</ButtonText>
@@ -517,6 +665,8 @@ function DeviceIndependentSaveHarness() {
 function makeRuntime(overrides: Record<string, jest.Mock> = {}) {
   return createRuntimeValue({
     discovery: {
+      state: "idle",
+      desiredScanning: false,
       getPermissionStatus: jest.fn(() => ({ bluetooth: "undetermined" })),
       requestPermissions: jest.fn().mockResolvedValue({ bluetooth: "granted" }),
       start: jest.fn().mockResolvedValue(undefined),
@@ -529,6 +679,10 @@ function makeRuntime(overrides: Record<string, jest.Mock> = {}) {
       subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
       subscribeDiagnostics: jest.fn((listener) => {
         listener(scanDiagnostics());
+        return { remove: jest.fn() };
+      }),
+      subscribeState: jest.fn((listener) => {
+        listener("idle");
         return { remove: jest.fn() };
       }),
       getDiagnostics: jest.fn(() => scanDiagnostics()),
@@ -554,6 +708,8 @@ function createRuntimeValue(
     repository,
     discovery: {
       isScanning: false,
+      state: "idle",
+      desiredScanning: false,
       getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
       requestPermissions: jest.fn().mockResolvedValue({ bluetooth: "granted" }),
       start: jest.fn().mockResolvedValue(undefined),
@@ -566,6 +722,10 @@ function createRuntimeValue(
       subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
       subscribeDiagnostics: jest.fn((listener) => {
         listener(scanDiagnostics());
+        return { remove: jest.fn() };
+      }),
+      subscribeState: jest.fn((listener) => {
+        listener("idle");
         return { remove: jest.fn() };
       }),
       getDiagnostics: jest.fn(() => scanDiagnostics()),
@@ -620,4 +780,33 @@ function scanDiagnostics() {
     rawAdvertisementHitCount: 0,
     rejectedResultCount: 0,
   };
+}
+
+function createAppState(initialState: "active" | "background") {
+  const listeners = new Set<(state: "active" | "background") => void>();
+  return {
+    adapter: {
+      currentState: initialState,
+      addEventListener: (
+        _type: "change",
+        listener: (state: "active" | "background") => void,
+      ) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      },
+    },
+    emit(state: "active" | "background") {
+      listeners.forEach((listener) => listener(state));
+    },
+  };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
 }

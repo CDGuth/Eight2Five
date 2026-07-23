@@ -12,9 +12,13 @@ import type {
   PositionLogSample,
   PositionLogSession,
 } from "./types";
+import {
+  normalizeManagedNetworkSettings,
+  normalizePansManagerSettings,
+} from "./types";
 
 export const PANS_MANAGER_DB_NAME = "eight2five-pans-manager.db";
-export const PANS_MANAGER_SCHEMA_VERSION = 1;
+export const PANS_MANAGER_SCHEMA_VERSION = 2;
 
 export interface OpenPansManagerRepositoryResult {
   repository: SqlitePansManagerRepository;
@@ -159,6 +163,21 @@ export async function migratePansManagerDatabase(
       await db.execAsync("PRAGMA user_version = 1;");
     });
   }
+  if (current < 2) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(`
+        UPDATE pans_networks
+        SET settings_json = json_remove(settings_json, '$.scanDurationMs');
+        UPDATE pans_manager_settings
+        SET value_json = json_remove(value_json, '$.discoveryScanDurationMs');
+      `);
+      await db.runAsync(
+        "INSERT OR REPLACE INTO pans_schema_migrations (version, applied_at) VALUES (?, ?)",
+        [2, Date.now()],
+      );
+      await db.execAsync("PRAGMA user_version = 2;");
+    });
+  }
   await db.execAsync("PRAGMA foreign_keys = ON;");
 }
 
@@ -199,7 +218,7 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
         network.id,
         network.name,
         network.panId,
-        stringifyJson(network.settings),
+        stringifyJson(normalizeManagedNetworkSettings(network.settings)),
         nullable(network.notes),
         network.createdAt,
         network.updatedAt,
@@ -336,14 +355,18 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
       "SELECT value_json FROM pans_manager_settings WHERE singleton_id = ?",
       [1],
     );
-    return row ? parseJson(row.value_json, "manager settings") : undefined;
+    return row
+      ? normalizePansManagerSettings(
+          parseJson(row.value_json, "manager settings"),
+        )
+      : undefined;
   }
 
   async saveSettings(settings: PansManagerSettings): Promise<void> {
     await this.db.runAsync(
       `INSERT INTO pans_manager_settings (singleton_id, value_json) VALUES (?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET value_json=excluded.value_json`,
-      [1, stringifyJson(settings)],
+      [1, stringifyJson(normalizePansManagerSettings(settings))],
     );
   }
 
@@ -556,7 +579,9 @@ function toNetwork(row: Row): ManagedNetwork {
     id: text(row.id),
     name: text(row.name),
     panId: number(row.pan_id),
-    settings: parseJson(text(row.settings_json), "network settings"),
+    settings: normalizeManagedNetworkSettings(
+      parseJson(text(row.settings_json), "network settings"),
+    ),
     ...(hasValue(row.notes) ? { notes: text(row.notes) } : {}),
     createdAt: number(row.created_at),
     updatedAt: number(row.updated_at),

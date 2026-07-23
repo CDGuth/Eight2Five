@@ -202,17 +202,6 @@ export function NetworkSettingsScreen() {
           }
           keyboardType="decimal-pad"
         />
-        <TextField
-          label="Scan duration (seconds)"
-          value={settingsForm.scanDurationSeconds}
-          onChangeText={(value) =>
-            setSettingsForm((current) => ({
-              ...current,
-              scanDurationSeconds: value,
-            }))
-          }
-          keyboardType="decimal-pad"
-        />
         <SwitchField
           label="Auto-connect"
           value={settingsForm.autoConnect}

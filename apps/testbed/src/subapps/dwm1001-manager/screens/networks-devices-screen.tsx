@@ -5,11 +5,7 @@ import {
   type DisplayDevice,
   type NetworkDeviceSection as NetworkDeviceSectionModel,
 } from "@eight2five/mobile/pans-manager";
-import {
-  Button,
-  ButtonIcon,
-  ButtonText,
-} from "@eight2five/ui/components/button";
+import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { FlatList } from "@eight2five/ui/components/flat-list";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { SafeAreaView } from "@eight2five/ui/components/safe-area-view";
@@ -17,7 +13,6 @@ import { Spinner } from "@eight2five/ui/components/spinner";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
-import { RadioTower, Square } from "lucide-react-native";
 
 import {
   findNetworkDropTarget,
@@ -373,39 +368,51 @@ export function NetworksDevicesScreen() {
           discovery.transportDeviceId === selectedDevice.transportDeviceId,
       )
     : undefined;
-  const scanAction = React.useMemo(
-    () =>
-      manager.initialization === "initializing" ? (
-        <HStack
-          accessible
-          accessibilityLabel="Native Module Loading"
-          accessibilityState={{ busy: true, disabled: true }}
-          pointerEvents="none"
-          className="min-h-11 items-center"
-          style={{ gap: eight2FiveSpacing.sm }}
-        >
+  const scanAction = React.useMemo(() => {
+    const loading = manager.initialization === "initializing";
+    const active =
+      manager.discoveryState === "starting" ||
+      manager.discoveryState === "scanning";
+    const stopping = manager.discoveryState === "stopping";
+    const busy = loading || active || stopping;
+    return manager.initialization !== "error" ? (
+      <Button
+        testID="scan-control"
+        variant="link"
+        size="default"
+        isDisabled={loading || stopping}
+        accessibilityLabel={
+          loading
+            ? "Loading scanner"
+            : stopping
+              ? "Stopping scan"
+              : active
+                ? "Stop device scan"
+                : "Start device scan"
+        }
+        accessibilityState={{
+          busy,
+          disabled: loading || stopping,
+          selected: active,
+        }}
+        onPress={() => {
+          if (active) void manager.stopDiscovery();
+          else void manager.startDiscovery();
+        }}
+        className="min-h-11 rounded-lg px-4 data-[active=true]:bg-white/10"
+        style={{
+          backgroundColor:
+            active || stopping ? "rgba(255,255,255,0.12)" : "transparent",
+        }}
+      >
+        {busy ? (
           <Spinner color={theme.raw.white} />
-          <Text style={{ color: theme.raw.white }}>Native Module Loading</Text>
-        </HStack>
-      ) : manager.initialization === "ready" ? (
-        <Button
-          testID="scan-control"
-          size="sm"
-          accessibilityLabel={
-            manager.isScanning ? "Stop device scan" : "Start device scan"
-          }
-          accessibilityState={{ selected: manager.isScanning }}
-          onPress={() => {
-            if (manager.isScanning) manager.stopDiscovery();
-            else void manager.startDiscovery();
-          }}
-        >
-          <ButtonIcon as={manager.isScanning ? Square : RadioTower} />
-          <ButtonText>{manager.isScanning ? "Stop" : "Scan"}</ButtonText>
-        </Button>
-      ) : null,
-    [manager, theme.raw.white],
-  );
+        ) : (
+          <ButtonText style={{ color: theme.raw.white }}>Scan</ButtonText>
+        )}
+      </Button>
+    ) : null;
+  }, [manager, theme.raw.white]);
   useTestbedToolbarAction("pans-discovery-scan", scanAction);
 
   return (

@@ -8,7 +8,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | --- | --- | --- |
 | 0 — Baseline, fixtures, observability | Complete (environment-limited) | Canonical location packets and deterministic 1/10 Hz notification source added. Device screenshots and a real tag capture are deferred because no device is available. |
 | 1 — App shell and navigation | Complete (device review pending) | Added a black safe-area scrim and toolbar for subapp routes, Gluestack Drawer navigation, focused toolbar action registration, home copy, PANS naming, and explicit map-label typography. |
-| 2 — Continuous discovery | Not started | |
+| 2 — Continuous discovery | Complete (device review pending) | Discovery now auto-starts after one permission flow, runs continuously, serializes rapid intent changes, and resumes after foregrounding. Obsolete duration settings were migrated out. |
 | 3 — Hardware-derived state | Not started | |
 | 4 — Hierarchy and deletion | Not started | |
 | 5 — Form controls | Not started | |
@@ -41,3 +41,12 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Source Sans 3 is loaded before routing and is now explicitly applied to `PansNetworkGrid` labels.
 - Official implementation references: <https://github.com/expo/expo/blob/main/docs/pages/tutorial/configuration.mdx> and <https://github.com/gluestack/gluestack-ui/blob/main/apps/website/app/ui/docs/components/drawer/index.mdx>.
 - Screenshots and no-flash status-bar verification remain device tasks because no simulator or physical device is attached to this environment.
+
+## Phase 2 implementation notes
+
+- `PansDiscoveryService` now uses `idle → starting → scanning → stopping → idle` reconciliation with a retained desired state. Duplicate starts/stops coalesce, stop during a pending start is honored after native start resolves, and stale work cannot reactivate a stopped scan.
+- The no-result watchdog remains diagnostic-only. The 25-second stop timer, restart cooldown, and `SCAN_THROTTLED` error were removed.
+- `PansManagerProvider` auto-starts after permission is granted, requests permission at most once per provider lifetime, preserves scan intent through backgrounding, and restarts on foreground after re-reading permission state.
+- Database schema version 2 removes legacy `scanDurationMs` and `discoveryScanDurationMs` JSON properties. Runtime normalizers also strip both properties so old databases and imports remain readable without writing the fields back.
+- The toolbar action now has no scan/stop glyph: idle displays white `Scan`; starting/scanning/stopping display a white spinner over the always-black toolbar.
+- React Native AppState implementation reference: <https://github.com/react/react-native-website/blob/main/docs/appstate.md>.

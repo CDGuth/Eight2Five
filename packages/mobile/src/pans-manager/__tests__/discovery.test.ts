@@ -72,7 +72,7 @@ describe("PansDiscoveryService", () => {
     expect(gateway.clearDevices).toHaveBeenCalled();
     expect(service.getSnapshots()).toEqual([]);
     expect(scanError).toBeDefined();
-    service.stop();
+    await service.stop();
   });
 
   test("surfaces asynchronous scan failures and stops discovery state", async () => {
@@ -125,9 +125,8 @@ describe("PansDiscoveryService", () => {
     expect(service.getDiagnostics().lastError?.nativeCode).toBe(6);
   });
 
-  test("stops a bounded scan and rejects an immediate restart", async () => {
+  test("continues scanning beyond the former 25-second timeout and restarts immediately", async () => {
     jest.useFakeTimers();
-    let now = 1_000;
     const gateway: PansDiscoveryGateway = {
       getPermissionStatus: () => ({ bluetooth: "granted" }),
       requestPermissions: jest.fn(),
@@ -149,29 +148,66 @@ describe("PansDiscoveryService", () => {
       addErrorListener: () => ({ remove: jest.fn() }),
     };
     const service = new PansDiscoveryService(gateway, {
-      now: () => now,
-      scanDurationMs: 100,
-      restartCooldownMs: 50,
+      diagnosticsPollIntervalMs: 1_000,
     });
 
     try {
       await service.start();
-      now = 1_100;
-      jest.advanceTimersByTime(100);
+      jest.advanceTimersByTime(30_000);
+      expect(service.isScanning).toBe(true);
+      expect(gateway.stopScanning).not.toHaveBeenCalled();
 
-      expect(service.isScanning).toBe(false);
-      expect(gateway.stopScanning).toHaveBeenCalledTimes(1);
-      await expect(service.start()).rejects.toMatchObject({
-        code: "SCAN_THROTTLED",
-      });
-
-      now = 1_150;
+      await service.stop();
       await service.start();
       expect(gateway.startScanning).toHaveBeenCalledTimes(2);
-      service.stop();
+      expect(gateway.stopScanning).toHaveBeenCalledTimes(1);
+      await service.stop();
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  test("coalesces rapid alternating requests and converges on final intent", async () => {
+    const gateway = discoveryGateway();
+    const service = new PansDiscoveryService(gateway);
+
+    const requests: Promise<void>[] = [];
+    for (let index = 0; index < 10; index += 1) {
+      requests.push(index % 2 === 0 ? service.start() : service.stop());
+    }
+    await Promise.all(requests);
+
+    expect(service.desiredScanning).toBe(false);
+    expect(service.state).toBe("idle");
+    expect(gateway.startScanning).toHaveBeenCalledTimes(1);
+    expect(gateway.stopScanning).toHaveBeenCalledTimes(1);
+  });
+
+  test("a pending native start cannot reactivate a stopped scan", async () => {
+    const deferred = createDeferred<void>();
+    const gateway = discoveryGateway({
+      startScanning: jest.fn(() => deferred.promise),
+    });
+    const service = new PansDiscoveryService(gateway);
+    const states: string[] = [];
+    service.subscribeState((state) => states.push(state));
+
+    const start = service.start();
+    await Promise.resolve();
+    const stop = service.stop();
+    deferred.resolve();
+    await Promise.all([start, stop]);
+
+    expect(service.desiredScanning).toBe(false);
+    expect(service.state).toBe("idle");
+    expect(gateway.stopScanning).toHaveBeenCalledTimes(1);
+    expect(states).toEqual([
+      "idle",
+      "starting",
+      "scanning",
+      "stopping",
+      "idle",
+    ]);
   });
 
   test("synchronizes service state when native scanning stops for GATT", async () => {
@@ -208,8 +244,46 @@ describe("PansDiscoveryService", () => {
       expect(service.isScanning).toBe(false);
       expect(gateway.stopScanning).not.toHaveBeenCalled();
     } finally {
-      service.stop();
+      await service.stop();
       jest.useRealTimers();
     }
   });
 });
+
+function discoveryGateway(
+  overrides: Partial<PansDiscoveryGateway> = {},
+): PansDiscoveryGateway {
+  return {
+    getPermissionStatus: () => ({ bluetooth: "granted" }),
+    requestPermissions: jest.fn(async () => ({
+      bluetooth: "granted" as const,
+    })),
+    startScanning: jest.fn(async () => undefined),
+    stopScanning: jest.fn(),
+    clearDevices: jest.fn(),
+    getScanDiagnostics: () => ({
+      state: "scanning",
+      buildId: "test-build",
+      scanSessionId: 1,
+      rawResultCount: 1,
+      pansResultCount: 1,
+      parsedServiceDataHitCount: 1,
+      rawAdvertisementHitCount: 0,
+      rejectedResultCount: 0,
+      startedAtMs: 1,
+    }),
+    addDeviceDiscoveredListener: () => ({ remove: jest.fn() }),
+    addErrorListener: () => ({ remove: jest.fn() }),
+    ...overrides,
+  };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}

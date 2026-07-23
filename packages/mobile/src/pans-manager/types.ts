@@ -39,7 +39,6 @@ export interface ManagedNetworkSettings {
   defaultAnchorHeightMeters: number;
   staleDeviceTimeoutMs: number;
   defaultTagMode: DefaultTagModeSettings;
-  scanDurationMs: number;
   autoConnect: boolean;
   positionLogRetentionDays: number;
   positionLogMaxSamples: number;
@@ -64,7 +63,6 @@ export const DEFAULT_MANAGED_NETWORK_SETTINGS: ManagedNetworkSettings = {
     movingUpdateRateMs: 100,
     stationaryUpdateRateMs: 1_000,
   },
-  scanDurationMs: 15_000,
   autoConnect: false,
   positionLogRetentionDays: 30,
   positionLogMaxSamples: 100_000,
@@ -382,7 +380,6 @@ export interface DeviceConfigurationSnapshot {
 
 export interface PansManagerSettings {
   discoveryStaleAfterMs: number;
-  discoveryScanDurationMs: number;
   connectionTimeoutMs: number;
   positionLogMemoryCap: number;
   positionLogFlushSize: number;
@@ -390,7 +387,6 @@ export interface PansManagerSettings {
 
 export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
   discoveryStaleAfterMs: 10_000,
-  discoveryScanDurationMs: 25_000,
   connectionTimeoutMs: 10_000,
   positionLogMemoryCap: 1_000,
   positionLogFlushSize: 100,
@@ -399,7 +395,31 @@ export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
 export function normalizePansManagerSettings(
   settings?: Partial<PansManagerSettings>,
 ): PansManagerSettings {
-  return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...settings };
+  const compatible = { ...(settings ?? {}) } as Partial<PansManagerSettings> &
+    Record<string, unknown>;
+  delete compatible.discoveryScanDurationMs;
+  return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...compatible };
+}
+
+export function normalizeManagedNetworkSettings(
+  settings?: Partial<ManagedNetworkSettings>,
+): ManagedNetworkSettings {
+  const compatible = {
+    ...(settings ?? {}),
+  } as Partial<ManagedNetworkSettings> & Record<string, unknown>;
+  delete compatible.scanDurationMs;
+  return {
+    ...DEFAULT_MANAGED_NETWORK_SETTINGS,
+    ...compatible,
+    coordinateBounds: {
+      ...DEFAULT_MANAGED_NETWORK_SETTINGS.coordinateBounds,
+      ...settings?.coordinateBounds,
+    },
+    defaultTagMode: {
+      ...DEFAULT_MANAGED_NETWORK_SETTINGS.defaultTagMode,
+      ...settings?.defaultTagMode,
+    },
+  };
 }
 
 export const PANS_NETWORK_EXPORT_VERSION = 1 as const;

@@ -15,6 +15,7 @@ import {
   type PansInspectionResult,
   type PansManagerRepository,
 } from "@eight2five/mobile/pans-manager";
+import { Spinner } from "@eight2five/ui/components/spinner";
 
 import {
   PansManagerProvider,
@@ -54,7 +55,7 @@ jest.mock("expo-router", () => ({
 }));
 
 describe("NetworksDevicesScreen", () => {
-  test("does not auto-scan, shows native loading, and exposes one Scan/Stop toggle", async () => {
+  test("shows toolbar loading, auto-starts, and supports immediate stop/start", async () => {
     const deferred = createDeferred<PansManagerRuntime>();
     const runtime = createRuntime().runtime;
     let tree!: TestRenderer.ReactTestRenderer;
@@ -68,7 +69,7 @@ describe("NetworksDevicesScreen", () => {
       );
     });
 
-    expect(findText(tree, "Native Module Loading")).toBeTruthy();
+    expect(tree.root.findAllByType(Spinner)).not.toHaveLength(0);
     expect(findText(tree, "Scan")).toBeUndefined();
     expect(findText(tree, "Stop")).toBeUndefined();
     expect(runtime.discovery.start).not.toHaveBeenCalled();
@@ -78,23 +79,23 @@ describe("NetworksDevicesScreen", () => {
       await flushPromises();
     });
 
-    expect(findText(tree, "Scan")).toBeTruthy();
-    expect(countScanStopLabels(tree)).toBe(1);
-    expect(runtime.discovery.start).not.toHaveBeenCalled();
+    expect(findText(tree, "Scan")).toBeUndefined();
+    expect(runtime.discovery.start).toHaveBeenCalledTimes(1);
+    expect(findText(tree, "Scanning…")).toBeTruthy();
 
     await act(async () => {
       pressTestId(tree, "scan-control");
       await flushPromises();
     });
-    expect(runtime.discovery.start).toHaveBeenCalledTimes(1);
-    expect(findText(tree, "Stop")).toBeTruthy();
-    expect(countScanStopLabels(tree)).toBe(1);
+    expect(runtime.discovery.stop).toHaveBeenCalledTimes(1);
+    expect(findText(tree, "Scan")).toBeTruthy();
 
     await act(async () => {
       pressTestId(tree, "scan-control");
+      await flushPromises();
     });
-    expect(runtime.discovery.stop).toHaveBeenCalledTimes(1);
-    expect(findText(tree, "Scan")).toBeTruthy();
+    expect(runtime.discovery.start).toHaveBeenCalledTimes(2);
+    expect(findText(tree, "Scan")).toBeUndefined();
     await act(async () => tree.unmount());
   });
 
@@ -128,7 +129,8 @@ describe("NetworksDevicesScreen", () => {
       await flushPromises();
     });
     expect(createRuntimeFactory).toHaveBeenCalledTimes(2);
-    expect(findText(tree, "Scan")).toBeTruthy();
+    expect(runtime.discovery.start).toHaveBeenCalledTimes(1);
+    expect(findText(tree, "Scan")).toBeUndefined();
     await act(async () => tree.unmount());
   });
 
@@ -266,6 +268,12 @@ describe("NetworksDevicesScreen", () => {
           </PansManagerProvider>,
         ),
       );
+      await flushPromises();
+    });
+    expect(findText(tree, "Scanning…")).toBeTruthy();
+
+    await act(async () => {
+      pressTestId(tree, "scan-control");
       await flushPromises();
     });
     expect(findText(tree, "No devices")).toBeTruthy();
@@ -567,6 +575,8 @@ function createRuntime(
     repository,
     discovery: {
       isScanning: false,
+      state: "idle",
+      desiredScanning: false,
       getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
       requestPermissions: jest.fn().mockResolvedValue({ bluetooth: "granted" }),
       start: jest.fn().mockResolvedValue(undefined),
@@ -582,6 +592,10 @@ function createRuntime(
         return { remove: jest.fn() };
       }),
       subscribeDiagnostics: jest.fn(() => ({ remove: jest.fn() })),
+      subscribeState: jest.fn((listener) => {
+        listener("idle");
+        return { remove: jest.fn() };
+      }),
       getDiagnostics: jest.fn(() => scanDiagnostics()),
     },
     sessions: {
@@ -846,15 +860,6 @@ function accessibilityLabel(
     .find((node) => typeof node.props.accessibilityLabel === "string");
   if (!target) throw new Error(`No accessibility label found for ${testID}`);
   return target.props.accessibilityLabel;
-}
-
-function countScanStopLabels(tree: TestRenderer.ReactTestRenderer): number {
-  return tree.root
-    .findAllByType("Text" as never)
-    .filter(
-      (node) =>
-        node.props.children === "Scan" || node.props.children === "Stop",
-    ).length;
 }
 
 function createDeferred<T>() {

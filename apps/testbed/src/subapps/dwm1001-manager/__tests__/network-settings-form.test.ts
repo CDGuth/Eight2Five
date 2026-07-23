@@ -22,7 +22,6 @@ const DEFAULT_MANAGED_NETWORK_SETTINGS = {
     movingUpdateRateMs: 100,
     stationaryUpdateRateMs: 1_000,
   },
-  scanDurationMs: 15_000,
   autoConnect: false,
   positionLogRetentionDays: 30,
   positionLogMaxSamples: 100_000,
@@ -32,14 +31,12 @@ describe("network settings form", () => {
   test("round trips all managed network settings and unit conversions", () => {
     const form = networkSettingsToForm(DEFAULT_MANAGED_NETWORK_SETTINGS);
     form.staleDeviceTimeoutSeconds = "12.5";
-    form.scanDurationSeconds = "8";
     form.autoConnect = true;
 
     expect(parseNetworkSettingsForm(form)).toEqual({
       settings: {
         ...DEFAULT_MANAGED_NETWORK_SETTINGS,
         staleDeviceTimeoutMs: 12_500,
-        scanDurationMs: 8_000,
         autoConnect: true,
       },
     });
@@ -54,7 +51,7 @@ describe("network settings form", () => {
     ],
     [
       "rejects non-positive time values",
-      { scanDurationSeconds: "0" },
+      { staleDeviceTimeoutSeconds: "0" },
       "positive",
     ],
     [

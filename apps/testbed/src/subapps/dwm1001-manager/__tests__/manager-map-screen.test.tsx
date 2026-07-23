@@ -206,7 +206,6 @@ function controllerFixture(): PansMapDataController {
             movingUpdateRateMs: 100,
             stationaryUpdateRateMs: 1_000,
           },
-          scanDurationMs: 1_000,
           autoConnect: false,
           positionLogRetentionDays: 1,
           positionLogMaxSamples: 100,

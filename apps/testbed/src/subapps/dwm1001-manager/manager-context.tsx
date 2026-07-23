@@ -1,4 +1,5 @@
 import React from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import type {
   AssignDeviceToNetworkProfileInput,
   AssignDeviceToNetworkProfileResult,
@@ -23,6 +24,7 @@ import type {
   PansDiagnosticsService,
   PansDiscoveryService,
   PansDiscoveryDiagnostics,
+  PansDiscoveryState,
   PansInspectionResult,
   PansManagerRepository,
   PansManagerSettings,
@@ -61,6 +63,8 @@ export interface PansManagerRuntime {
   discovery: Pick<
     PansDiscoveryService,
     | "isScanning"
+    | "state"
+    | "desiredScanning"
     | "getPermissionStatus"
     | "requestPermissions"
     | "start"
@@ -69,6 +73,7 @@ export interface PansManagerRuntime {
     | "subscribe"
     | "subscribeErrors"
     | "subscribeDiagnostics"
+    | "subscribeState"
     | "getDiagnostics"
   >;
   sessions: Pick<PansDeviceSessionManager, "closeDevice" | "closeAll">;
@@ -143,13 +148,15 @@ interface PansManagerContextValue {
   refreshPersisted(): Promise<void>;
   discoveries: DiscoveredDeviceSnapshot[];
   isScanning: boolean;
+  discoveryState: PansDiscoveryState;
+  desiredScanning: boolean;
   discoveryError?: string;
   discoveryDiagnostics: PansDiscoveryDiagnostics | undefined;
   selectedDiscoveryIds: Set<string>;
   toggleDiscoverySelection(id: string): void;
   clearDiscoverySelection(): void;
   startDiscovery(): Promise<void>;
-  stopDiscovery(): void;
+  stopDiscovery(): Promise<void>;
   clearDiscovery(): void;
   persistDiscovery(discovery: DiscoveredDeviceSnapshot): Promise<ManagedDevice>;
   assignDiscoveries(networkId: string, ids: string[]): Promise<void>;
@@ -214,11 +221,21 @@ const PansManagerContext = React.createContext<PansManagerContextValue | null>(
 export interface PansManagerProviderProps {
   children: React.ReactNode;
   createRuntime?: PansManagerRuntimeFactory;
+  appState?: PansManagerAppState;
+}
+
+export interface PansManagerAppState {
+  readonly currentState: AppStateStatus | null;
+  addEventListener(
+    type: "change",
+    listener: (state: AppStateStatus) => void,
+  ): { remove(): void };
 }
 
 export function PansManagerProvider({
   children,
   createRuntime = createDefaultRuntime,
+  appState = AppState,
 }: PansManagerProviderProps) {
   const [initialization, setInitialization] =
     React.useState<PansManagerContextValue["initialization"]>("initializing");
@@ -242,12 +259,22 @@ export function PansManagerProvider({
     DiscoveredDeviceSnapshot[]
   >([]);
   const [isScanning, setIsScanning] = React.useState(false);
+  const [discoveryState, setDiscoveryState] =
+    React.useState<PansDiscoveryState>("idle");
+  const [desiredScanning, setDesiredScanning] = React.useState(true);
   const [discoveryError, setDiscoveryError] = React.useState<string>();
   const [discoveryDiagnostics, setDiscoveryDiagnostics] =
     React.useState<PansDiscoveryDiagnostics>();
   const [selectedDiscoveryIds, setSelectedDiscoveryIds] = React.useState(
     () => new Set<string>(),
   );
+  const desiredScanningRef = React.useRef(true);
+  const appIsActiveRef = React.useRef(
+    appState.currentState !== "background" &&
+      appState.currentState !== "inactive",
+  );
+  const permissionRequestAttemptedRef = React.useRef(false);
+  const discoveryGenerationRef = React.useRef(0);
 
   const retryInitialization = React.useCallback(() => {
     setInitialization("initializing");
@@ -275,13 +302,26 @@ export function PansManagerProvider({
   React.useEffect(() => {
     let active = true;
     let opened: PansManagerRuntime | undefined;
+    let closePromise: Promise<void> | undefined;
+    const closeOpenedRuntime = () => {
+      if (!opened) return Promise.resolve();
+      closePromise ??= (async () => {
+        await opened?.discovery.stop();
+        await Promise.allSettled([
+          opened?.logs.flush(),
+          opened?.sessions.closeAll(),
+        ]);
+        await opened?.closeStorage();
+      })();
+      return closePromise;
+    };
     createRuntime({
       module: (status) => active && setModuleStatus(status),
       storage: (status) => active && setStorageStatus(status),
     })
       .then(async (created) => {
         opened = created;
-        if (!active) return;
+        if (!active) return await closeOpenedRuntime();
         const [savedNetworks, savedDevices, storedSettings] = await Promise.all(
           [
             created.repository.listNetworks(),
@@ -289,12 +329,12 @@ export function PansManagerProvider({
             created.repository.getSettings(),
           ],
         );
-        if (!active) return;
+        if (!active) return await closeOpenedRuntime();
         const savedSnapshots = await loadLatestDeviceSnapshots(
           created.repository,
           savedDevices,
         );
-        if (!active) return;
+        if (!active) return await closeOpenedRuntime();
         setRuntime(created);
         setNetworks(savedNetworks);
         setDevices(savedDevices);
@@ -313,13 +353,7 @@ export function PansManagerProvider({
       });
     return () => {
       active = false;
-      const current = opened;
-      if (!current) return;
-      current.discovery.stop();
-      void Promise.allSettled([
-        current.logs.flush(),
-        current.sessions.closeAll(),
-      ]).then(async () => await current.closeStorage());
+      void closeOpenedRuntime();
     };
   }, [createRuntime, runtimeAttempt]);
 
@@ -339,37 +373,130 @@ export function PansManagerProvider({
         setIsScanning(runtime.discovery.isScanning);
       },
     );
+    const stateSubscription = runtime.discovery.subscribeState((state) => {
+      setDiscoveryState(state);
+      setIsScanning(state === "scanning");
+    });
     return () => {
       subscription.remove();
       errorSubscription.remove();
       diagnosticsSubscription.remove();
+      stateSubscription.remove();
     };
   }, [runtime]);
 
-  const startDiscovery = React.useCallback(async () => {
-    if (!runtime) return;
-    setDiscoveryError(undefined);
-    try {
-      let status = runtime.discovery.getPermissionStatus();
-      if (!permissionsGranted(status)) {
-        status = await runtime.discovery.requestPermissions();
-      }
-      setPermission(status);
-      if (!permissionsGranted(status)) {
-        throw new Error(permissionFailureMessage(status));
-      }
-      await runtime.discovery.start();
-      setIsScanning(true);
-    } catch (error) {
-      setDiscoveryError(displayError(error));
-      setIsScanning(false);
-    }
-  }, [runtime]);
+  const reconcileDiscovery = React.useCallback(
+    async (allowPermissionRequest: boolean) => {
+      if (!runtime) return;
+      const generation = ++discoveryGenerationRef.current;
+      const isCurrent = () =>
+        generation === discoveryGenerationRef.current &&
+        desiredScanningRef.current &&
+        appIsActiveRef.current;
 
-  const stopDiscovery = React.useCallback(() => {
-    runtime?.discovery.stop();
+      if (!desiredScanningRef.current || !appIsActiveRef.current) {
+        if (runtime.discovery.state !== "idle") setDiscoveryState("stopping");
+        await runtime.discovery.stop();
+        if (generation === discoveryGenerationRef.current) {
+          setDiscoveryState("idle");
+          setIsScanning(false);
+        }
+        return;
+      }
+
+      setDiscoveryError(undefined);
+      try {
+        let status = runtime.discovery.getPermissionStatus();
+        setPermission(status);
+        if (
+          !permissionsGranted(status) &&
+          allowPermissionRequest &&
+          shouldRequestPermissions(status) &&
+          !permissionRequestAttemptedRef.current
+        ) {
+          permissionRequestAttemptedRef.current = true;
+          setDiscoveryState("starting");
+          status = await runtime.discovery.requestPermissions();
+          if (!isCurrent()) return;
+          setPermission(status);
+        }
+        if (!permissionsGranted(status)) {
+          setDiscoveryState("idle");
+          setIsScanning(false);
+          setDiscoveryError(permissionFailureMessage(status));
+          return;
+        }
+        if (!isCurrent()) return;
+        setDiscoveryState("starting");
+        await runtime.discovery.start();
+        if (!isCurrent()) {
+          setDiscoveryState("stopping");
+          await runtime.discovery.stop();
+          if (generation === discoveryGenerationRef.current)
+            setDiscoveryState("idle");
+          return;
+        }
+        setDiscoveryState("scanning");
+        setIsScanning(true);
+      } catch (error) {
+        if (generation !== discoveryGenerationRef.current) return;
+        setDiscoveryError(displayError(error));
+        setDiscoveryState("error");
+        setIsScanning(false);
+      }
+    },
+    [runtime],
+  );
+
+  const startDiscovery = React.useCallback(async () => {
+    desiredScanningRef.current = true;
+    setDesiredScanning(true);
+    await reconcileDiscovery(true);
+  }, [reconcileDiscovery]);
+
+  const stopDiscovery = React.useCallback(async () => {
+    desiredScanningRef.current = false;
+    setDesiredScanning(false);
+    discoveryGenerationRef.current += 1;
+    if (!runtime) return;
+    if (runtime.discovery.state !== "idle") setDiscoveryState("stopping");
+    await runtime.discovery.stop();
+    setDiscoveryState("idle");
     setIsScanning(false);
   }, [runtime]);
+
+  React.useEffect(() => {
+    if (!runtime) return;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) return reconcileDiscovery(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [reconcileDiscovery, runtime]);
+
+  React.useEffect(() => {
+    const subscription = appState.addEventListener("change", (nextState) => {
+      appIsActiveRef.current = nextState === "active";
+      if (nextState === "active") {
+        const status = runtime?.discovery.getPermissionStatus();
+        if (status) setPermission(status);
+        if (desiredScanningRef.current) void reconcileDiscovery(false);
+        return;
+      }
+      discoveryGenerationRef.current += 1;
+      if (!runtime) return;
+      if (runtime.discovery.state !== "idle") setDiscoveryState("stopping");
+      void Promise.resolve(runtime.discovery.stop()).finally(() => {
+        if (!appIsActiveRef.current) {
+          setDiscoveryState("idle");
+          setIsScanning(false);
+        }
+      });
+    });
+    return () => subscription.remove();
+  }, [appState, reconcileDiscovery, runtime]);
 
   const clearDiscovery = React.useCallback(() => {
     runtime?.discovery.clear();
@@ -788,6 +915,8 @@ export function PansManagerProvider({
       refreshPersisted,
       discoveries,
       isScanning,
+      discoveryState,
+      desiredScanning,
       discoveryError,
       discoveryDiagnostics,
       selectedDiscoveryIds,
@@ -845,6 +974,8 @@ export function PansManagerProvider({
       refreshPersisted,
       discoveries,
       isScanning,
+      discoveryState,
+      desiredScanning,
       discoveryError,
       discoveryDiagnostics,
       selectedDiscoveryIds,
@@ -914,6 +1045,8 @@ export function usePansDiscovery() {
   return {
     discoveries: manager.discoveries,
     isScanning: manager.isScanning,
+    state: manager.discoveryState,
+    desiredScanning: manager.desiredScanning,
     error: manager.discoveryError,
     diagnostics: manager.discoveryDiagnostics,
     selectedIds: manager.selectedDiscoveryIds,
@@ -979,7 +1112,6 @@ async function createDefaultRuntime(
     );
     const discovery = new manager.PansDiscoveryService(undefined, {
       staleAfterMs: settings.discoveryStaleAfterMs,
-      scanDurationMs: settings.discoveryScanDurationMs,
     });
     const sessions = new manager.PansDeviceSessionManager(
       undefined,
@@ -1038,21 +1170,33 @@ function permissionFailureMessage(status: ManagerPermissionStatus): string {
     return "Enable Location services before starting discovery.";
   }
   if (status.location && status.location !== "granted") {
-    return "Precise location permission is required to receive DWM1001 scan results.";
+    return "Precise location permission is required to receive PANS scan results.";
   }
-  return "Nearby Devices permission is required to discover DWM1001 devices.";
+  return "Nearby Devices permission is required to discover PANS devices.";
+}
+
+function shouldRequestPermissions(status: ManagerPermissionStatus): boolean {
+  if (status.canAskAgain === false) return false;
+  return (
+    status.bluetooth === "undetermined" ||
+    status.bluetooth === "denied" ||
+    status.location === "undetermined" ||
+    status.location === "denied"
+  );
 }
 
 function managerSettingsWithDefaults(
   settings: Partial<PansManagerSettings> | undefined,
 ): PansManagerSettings {
+  const compatible = { ...(settings ?? {}) } as Partial<PansManagerSettings> &
+    Record<string, unknown>;
+  delete compatible.discoveryScanDurationMs;
   return {
     discoveryStaleAfterMs: 10_000,
-    discoveryScanDurationMs: 25_000,
     connectionTimeoutMs: 10_000,
     positionLogMemoryCap: 1_000,
     positionLogFlushSize: 100,
-    ...settings,
+    ...compatible,
   };
 }
 

@@ -205,6 +205,8 @@ function readyRuntime(
     repository,
     discovery: {
       isScanning: false,
+      state: "idle",
+      desiredScanning: false,
       getPermissionStatus: jest.fn(() => ({
         bluetooth: "granted" as const,
         bluetoothState: "enabled" as const,
@@ -219,6 +221,10 @@ function readyRuntime(
       }),
       subscribeErrors: jest.fn(() => ({ remove: jest.fn() })),
       subscribeDiagnostics: jest.fn(() => ({ remove: jest.fn() })),
+      subscribeState: jest.fn((listener) => {
+        listener("idle");
+        return { remove: jest.fn() };
+      }),
       getDiagnostics: jest.fn(() => scanDiagnostics()),
     },
     sessions: { closeDevice: jest.fn(), closeAll: jest.fn() },

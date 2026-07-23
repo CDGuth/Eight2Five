@@ -1,6 +1,7 @@
 import { ManagerError } from "./errors";
 import type { PansManagerRepository } from "./PansManagerRepository";
 import {
+  normalizeManagedNetworkSettings,
   PANS_NETWORK_EXPORT_VERSION,
   type DeviceConfigurationSnapshot,
   type ManagedDevice,
@@ -43,7 +44,10 @@ export class PansNetworkExportService {
       schema: "eight2five.pans-network",
       version: PANS_NETWORK_EXPORT_VERSION,
       exportedAt: this.now(),
-      network: clone(network),
+      network: {
+        ...clone(network),
+        settings: normalizeManagedNetworkSettings(network.settings),
+      },
       devices: clone(devices),
       configurations: clone(configurations),
     };
@@ -158,7 +162,11 @@ export class PansNetworkExportService {
       }
       normalizeDeviceConfig(snapshot.config as never);
     });
-    return clone(value as unknown as PansNetworkExport);
+    const validated = clone(value as unknown as PansNetworkExport);
+    validated.network.settings = normalizeManagedNetworkSettings(
+      validated.network.settings,
+    );
+    return validated;
   }
 
   async importNetwork(input: string | unknown): Promise<PansNetworkExport> {
@@ -264,7 +272,6 @@ function validateNetworkSettings(value: unknown): void {
       bounds.maxZMeters,
       value.defaultAnchorHeightMeters,
       value.staleDeviceTimeoutMs,
-      value.scanDurationMs,
       value.positionLogRetentionDays,
       value.positionLogMaxSamples,
       tag.movingUpdateRateMs,
