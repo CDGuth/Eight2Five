@@ -122,6 +122,12 @@ export interface PansCharacteristicNotificationEvent {
   deviceId: string;
   characteristicUuid: string;
   payload: number[];
+  /** Monotonic per-process native callback sequence. */
+  sequence?: number;
+  /** Native monotonic clock timestamp captured at callback receipt. */
+  monotonicTimestampMs?: number;
+  /** Native payload length before JavaScript conversion. */
+  payloadLength?: number;
 }
 
 export type PansApiErrorCode =
@@ -188,12 +194,30 @@ export interface PansDistance {
   quality: number;
 }
 
+export type PansDecoderDiagnosticCode =
+  | "TRAILING_BYTES"
+  | "TRUNCATED_FRAME"
+  | "MISSING_COUNT"
+  | "TRUNCATED_ENTRY"
+  | "UNRECOGNIZED_LAYOUT";
+
+export interface PansDecoderDiagnostic {
+  code: PansDecoderDiagnosticCode;
+  severity: "warning";
+  message: string;
+  offset?: number;
+  byteCount?: number;
+  bytes?: number[];
+}
+
 export interface PansLocationData {
   frameType?: 0 | 1 | 2;
   position?: PansPosition;
   distances: PansDistance[];
   raw: number[];
+  /** Compatibility messages for existing consumers. */
   diagnostics: string[];
+  decoderDiagnostics: PansDecoderDiagnostic[];
 }
 
 export interface PansProxyPosition {

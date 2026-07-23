@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -43,6 +44,7 @@ class ExpoPansBleApiModule : Module() {
   private var hasRequestedPermissions = false
   private var pendingPermissionPromise: Promise? = null
   private val nextOperationId = AtomicLong(1L)
+  private val notificationSequence = AtomicLong(0L)
   private val scanDiagnosticsLock = Any()
   private var scanState = "idle"
   private var scanSessionId = 0L
@@ -547,7 +549,10 @@ class ExpoPansBleApiModule : Module() {
       "deviceId" to deviceId,
       "macAddress" to deviceId,
       "characteristicUuid" to characteristic.uuid.toString().lowercase(),
-      "payload" to value.map { it.toInt() and 0xff }
+      "payload" to value.map { it.toInt() and 0xff },
+      "sequence" to notificationSequence.incrementAndGet(),
+      "monotonicTimestampMs" to SystemClock.elapsedRealtimeNanos() / 1_000_000.0,
+      "payloadLength" to value.size
     ))
   }
 

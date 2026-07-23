@@ -1,5 +1,6 @@
 import type {
   PansBleDevice,
+  PansDecoderDiagnostic,
   PansDeviceInfo,
   PansDistance,
   PansAnchorList,
@@ -377,6 +378,10 @@ export interface PansPositionStreamSample {
   position?: PansPosition;
   distances: PansDistance[];
   diagnostics: string[];
+  decoderDiagnostics: PansDecoderDiagnostic[];
+  nativeSequence?: number;
+  nativeMonotonicTimestampMs?: number;
+  payloadLength?: number;
 }
 
 export interface DeviceConfigurationSnapshot {

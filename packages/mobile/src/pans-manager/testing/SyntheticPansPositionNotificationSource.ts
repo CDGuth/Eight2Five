@@ -59,7 +59,9 @@ export class SyntheticPansPositionNotificationSource {
       transportDeviceId: this.transportDeviceId,
       sequence: this.sequence,
       emittedAtMs: this.nextEmittedAtMs,
+      monotonicTimestampMs: this.nextEmittedAtMs,
       payload: positionPacket(this.sequence),
+      payloadLength: 14,
     };
     this.sequence += 1;
     this.nextEmittedAtMs += this.intervalMs;

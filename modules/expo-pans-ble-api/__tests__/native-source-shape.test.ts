@@ -35,6 +35,20 @@ describe("native source API shape", () => {
     expect(source).toContain("NATIVE_DISCOVERY_RETENTION_MS = 60_000L");
   });
 
+  test("native notification events expose sequence, monotonic time, and payload length", () => {
+    const android = readModuleSource(
+      "android/src/main/java/expo/modules/pansbleapi/ExpoPansBleApiModule.kt",
+    );
+    const ios = readModuleSource("ios/ExpoPansBleApiModule.swift");
+
+    expect(android).toContain("notificationSequence.incrementAndGet()");
+    expect(android).toContain("SystemClock.elapsedRealtimeNanos()");
+    expect(android).toContain('"payloadLength" to value.size');
+    expect(ios).toContain("notificationSequence &+= 1");
+    expect(ios).toContain("ProcessInfo.processInfo.systemUptime * 1000.0");
+    expect(ios).toContain('"payloadLength": payload.count');
+  });
+
   test("iOS requestPermissions defers while CoreBluetooth authorization is undetermined", () => {
     const source = readModuleSource("ios/ExpoPansBleApiModule.swift");
 

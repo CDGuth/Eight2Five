@@ -19,6 +19,7 @@ import {
   type PansGridCameraSharedValues,
   type PansGridNode,
   type PansGridObservedEdge,
+  type PansPositionStreamCounters,
   type PansPositionStreamSample,
 } from "@eight2five/mobile/pans-manager";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
@@ -52,6 +53,10 @@ export interface PendingAnchorEdit {
   coordinate: GridPoint;
   zMeters: number;
   quality: number;
+}
+
+export interface PansMapPipelineCounters extends PansPositionStreamCounters {
+  mapPositionUpdates: number;
 }
 
 export type PansMapTrackingStatus =
@@ -108,6 +113,7 @@ export interface PansMapDataController {
   trackingStatus: PansMapTrackingStatus;
   trackingSource: "none" | "direct-ble";
   trackingDiagnostic?: string;
+  trackingCounters?: PansMapPipelineCounters;
   selectedDirectTagId: string;
   setSelectedDirectTagId(deviceId: string): void;
   trackableTags: ManagedDevice[];
@@ -174,6 +180,8 @@ export function usePansMapDataController(
   const [trackingStatus, setTrackingStatus] =
     React.useState<PansMapTrackingStatus>("stopped");
   const [trackingDiagnostic, setTrackingDiagnostic] = React.useState<string>();
+  const [trackingCounters, setTrackingCounters] =
+    React.useState<PansMapPipelineCounters>();
   const trackingDiagnosticRef = React.useRef<string | undefined>(undefined);
   const [selectedDirectTagId, setSelectedDirectTagIdState] = React.useState("");
   const [activeTagId, setActiveTagId] = React.useState<string>();
@@ -399,6 +407,7 @@ export function usePansMapDataController(
     startRequestedRef.current = true;
     setTrackingStatus("starting");
     setTrackingDiagnostic(undefined);
+    setTrackingCounters(undefined);
     trackingDiagnosticRef.current = undefined;
     setActiveTagId(device.id);
     setSelectedNodeId(device.id);
@@ -411,6 +420,16 @@ export function usePansMapDataController(
         transportDeviceId: device.transportDeviceId,
         onSample: (sample) => {
           if (streamRef.current !== stream) return;
+          if (sample.position) {
+            setTrackingCounters((current) =>
+              current
+                ? {
+                    ...current,
+                    mapPositionUpdates: current.mapPositionUpdates + 1,
+                  }
+                : current,
+            );
+          }
           acceptDirectSample({
             sample,
             device,
@@ -441,6 +460,13 @@ export function usePansMapDataController(
             follow: followRef,
             camera,
           });
+        },
+        onCounters: (counters) => {
+          if (streamRef.current !== stream) return;
+          setTrackingCounters((current) => ({
+            ...counters,
+            mapPositionUpdates: current?.mapPositionUpdates ?? 0,
+          }));
         },
         onDiagnostic: (message) => {
           if (streamRef.current === stream) {
@@ -667,6 +693,7 @@ export function usePansMapDataController(
         ? "direct-ble"
         : "none",
     trackingDiagnostic,
+    trackingCounters,
     selectedDirectTagId,
     setSelectedDirectTagId: (deviceId) => {
       if (trackingStatus === "stopped" || trackingStatus === "error")
@@ -884,8 +911,16 @@ function acceptDirectSample(options: {
   options.onEdges(
     resolveRangingEdges(device.id, sample.distances, options.visibleAnchors),
   );
-  if (sample.diagnostics.length)
-    options.onInitialDiagnostic(sample.diagnostics.join("; "));
+  const toleratedExtensionMessages = new Set(
+    sample.decoderDiagnostics
+      .filter((diagnostic) => diagnostic.code === "TRAILING_BYTES")
+      .map((diagnostic) => diagnostic.message),
+  );
+  const actionableDiagnostics = sample.diagnostics.filter(
+    (message) => !toleratedExtensionMessages.has(message),
+  );
+  if (actionableDiagnostics.length)
+    options.onInitialDiagnostic(actionableDiagnostics.join("; "));
 }
 
 function isFiniteAnchorPosition(

@@ -13,7 +13,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertically constrained drag, swipe-to-delete with confirmation, and guarded unassignment using the PANS default PAN ID 0. |
 | 5 — Form controls | Complete (device review pending) | Manager selects now use an anchored popover rather than an action sheet. Anchor quality is optional and defaults to 100, with field-level validation and help text. |
 | 6 — Map behavior | Complete (device review pending) | Added persisted metric/imperial display units, infinite/bounded map modes, bounded-area rendering and camera constraints, origin axes and labels, scale readout, unit-aware editors/details, exact origin reset, and guarded two-pointer pinch focal handling. |
-| 7 — Packet and live updates | Not started | |
+| 7 — Packet and live updates | Complete (native/device verification deferred) | Added extension-tolerant decoding with structured diagnostics, normalized notification device IDs, native sequence/timing metadata, Android MTU preparation, read-before-subscribe startup, stage counters through map updates, and a deterministic five-minute 10 Hz pipeline test. |
 | 8 — Integration | Not started | |
 
 ## Phase 0 baseline — 2026-07-22
@@ -93,6 +93,19 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Pinch handling no longer reads focal coordinates during gesture start. Updates with fewer than two pointers are ignored; the first valid two-pointer update establishes the focal world coordinate without a camera jump.
 - Phase verification: all TypeScript and lint workspaces and Jest passed (`20` testbed suites / `98` tests, `25` shared-mobile suites / `120` tests, and `3` Expo PANS BLE API suites / `58` tests).
 - Gesture feel, boundary behavior on unusually small rectangles, text density at extreme zoom, and physical-device accessibility remain deferred to Android/iOS review.
+
+## Phase 7 implementation notes
+
+- Location decoding now preserves both compatibility strings and structured diagnostics with stable codes, byte offsets, byte counts, and copies of extension bytes. Canonical position data is retained when extra bytes follow type-0 or type-2 frames.
+- Type-2 parsing prefers the exact documented distance-only fallback before accepting an extended position-plus-distances layout, avoiding false position decoding when a fallback packet's byte 14 happens to be zero. Unrecognized type-2 extensions still preserve a valid 13-byte position prefix rather than discarding it.
+- Benign trailing-byte diagnostics remain available in counters and decoded samples but no longer become the map's user-facing tracking warning when the position itself is valid.
+- Android and iOS notification callbacks now attach a process-wide sequence, monotonic receipt timestamp, and native payload length. The JavaScript stream exposes these fields and counts callbacks, device-ID matches, decoded frames, positions, distance frames, diagnostic frames, decode failures, emitted samples, and sequence discontinuities.
+- Transport device IDs are normalized across colon-separated, hyphen-separated, compact hexadecimal, UUID case, and ordinary textual forms before filtering. This removes silent drops caused only by platform formatting differences.
+- Android-capable live sessions request MTU 247 before starting location traffic. Unsupported platforms skip the request without failing the stream. The initial location read now happens before notifications are enabled, preventing CoreBluetooth's shared read/notification callback from consuming a live notification as the read response.
+- Map settings expose live pipeline counters through the final SharedValue position update stage. Native sequence discontinuities are explicitly described as diagnostic evidence rather than definitive loss because the sequence is process-wide.
+- A timer-free five-minute 10 Hz test sends 3,000 ordered position packets through device-ID filtering, decoding, sample emission, and counter tracking with no sequence discontinuity or JavaScript-stage loss.
+- Phase verification: all TypeScript and lint workspaces and Jest passed (`20` testbed suites / `98` tests, `25` shared-mobile suites / `122` tests, and `3` Expo PANS BLE API suites / `61` tests).
+- The native event additions require rebuilding the Android and iOS development clients. Native compilation, a physical five-minute 10 Hz soak, BLE trace comparison, and screenshots remain deferred because they require the user's repaired Swift/Java environment and attached DWM1001 hardware.
 
 ## Post-review verification — 2026-07-23
 

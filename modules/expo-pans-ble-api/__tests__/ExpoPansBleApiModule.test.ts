@@ -250,6 +250,7 @@ describe("PANS BLE codecs", () => {
       distances: [],
       raw: [],
       diagnostics: [],
+      decoderDiagnostics: [],
     });
 
     const positionOnly = decodeLocationData(
@@ -342,12 +343,64 @@ describe("PANS BLE codecs", () => {
       expect(decoded.diagnostics).toEqual([
         "unexpected 4 trailing byte(s) after position frame",
       ]);
+      expect(decoded.decoderDiagnostics).toEqual([
+        {
+          code: "TRAILING_BYTES",
+          severity: "warning",
+          message: "unexpected 4 trailing byte(s) after position frame",
+          offset: 14,
+          byteCount: 4,
+          bytes: [...decoded.raw.slice(14)],
+        },
+      ]);
       expect(pansBytesToHex(decoded.raw.slice(14))).toBe(extensionHex);
       expect(decoded.raw).toEqual([
         ...PANS_LOCATION_DATA_FIXTURES[fixtureName],
       ]);
     },
   );
+
+  test("preserves type-2 position and distances when extension bytes follow", () => {
+    const payload = [
+      ...clonePansLocationDataFixture("combinedPositionAndDistance"),
+      0xde,
+      0xad,
+    ];
+    const decoded = decodeLocationData(payload);
+
+    expect(decoded.position).toMatchObject({
+      xMeters: 0.01,
+      yMeters: 0.02,
+      zMeters: 0.03,
+      quality: 55,
+    });
+    expect(decoded.distances).toHaveLength(1);
+    expect(decoded.decoderDiagnostics).toEqual([
+      expect.objectContaining({
+        code: "TRAILING_BYTES",
+        offset: 22,
+        byteCount: 2,
+        bytes: [0xde, 0xad],
+      }),
+    ]);
+  });
+
+  test("preserves a type-2 position when an extension layout is unrecognized", () => {
+    const canonicalPosition =
+      clonePansLocationDataFixture("positionOnly14").slice(1);
+    const decoded = decodeLocationData([2, ...canonicalPosition, 0xff, 0xee]);
+
+    expect(decoded.position).toMatchObject({
+      xMeters: 1,
+      yMeters: -2,
+      zMeters: 3,
+      quality: 77,
+    });
+    expect(decoded.decoderDiagnostics[0]).toMatchObject({
+      code: "UNRECOGNIZED_LAYOUT",
+      bytes: [0xff, 0xee],
+    });
+  });
 
   test("decodes the canonical one- and four-anchor distance fixtures", () => {
     expect(

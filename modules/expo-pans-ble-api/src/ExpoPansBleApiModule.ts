@@ -15,6 +15,7 @@ import {
   PansBleScanDiagnostics,
   PansCharacteristicNotificationEvent,
   PansClusterInfo,
+  PansDecoderDiagnostic,
   PansDeviceInfo,
   PansDistance,
   PansFirmwareUpdateOffer,
@@ -716,7 +717,9 @@ export function decodePosition(payload: number[], offset = 0): PansPosition {
 export function decodeLocationData(payload: number[]): PansLocationData {
   const raw = validateBytes(payload);
   const diagnostics: string[] = [];
-  if (!raw.length) return { distances: [], raw, diagnostics };
+  const decoderDiagnostics: PansDecoderDiagnostic[] = [];
+  if (!raw.length)
+    return { distances: [], raw, diagnostics, decoderDiagnostics };
 
   const frameType = raw[0];
   if (frameType !== 0 && frameType !== 1 && frameType !== 2) {
@@ -731,15 +734,33 @@ export function decodeLocationData(payload: number[]): PansLocationData {
     if (raw.length >= 14) {
       position = decodePosition(raw, 1);
       if (raw.length > 14) {
-        diagnostics.push(
-          `unexpected ${raw.length - 14} trailing byte(s) after position frame`,
-        );
+        addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+          code: "TRAILING_BYTES",
+          severity: "warning",
+          message: `unexpected ${raw.length - 14} trailing byte(s) after position frame`,
+          offset: 14,
+          byteCount: raw.length - 14,
+          bytes: raw.slice(14),
+        });
       }
     } else {
-      diagnostics.push("position frame is shorter than 14 bytes");
+      addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+        code: "TRUNCATED_FRAME",
+        severity: "warning",
+        message: "position frame is shorter than 14 bytes",
+        byteCount: raw.length,
+        bytes: raw.slice(),
+      });
     }
 
-    return { frameType, position, distances: [], raw, diagnostics };
+    return {
+      frameType,
+      position,
+      distances: [],
+      raw,
+      diagnostics,
+      decoderDiagnostics,
+    };
   }
 
   if (frameType === 1) {
@@ -749,23 +770,45 @@ export function decodeLocationData(payload: number[]): PansLocationData {
         raw,
         1,
         diagnostics,
+        decoderDiagnostics,
         MAX_DISTANCE_ONLY_ENTRIES,
       ),
       raw,
       diagnostics,
+      decoderDiagnostics,
     };
   }
 
-  const combinedLayoutIsValid =
-    raw.length >= 15 &&
-    isExactDistanceSection(raw, 14, MAX_COMBINED_DISTANCE_ENTRIES);
-  const distanceOnlyFallbackIsValid = isExactDistanceSection(
+  const combinedLayoutEnd =
+    raw.length >= 15
+      ? distanceSectionEnd(raw, 14, MAX_COMBINED_DISTANCE_ENTRIES)
+      : undefined;
+  const distanceOnlyFallbackEnd = distanceSectionEnd(
     raw,
     1,
     MAX_DISTANCE_ONLY_ENTRIES,
   );
 
-  if (combinedLayoutIsValid) {
+  // A documented type-2 distance-only fallback can otherwise look like a
+  // zero-distance combined frame when byte 14 happens to be zero. Prefer the
+  // exact distance-only layout before accepting an extended combined layout.
+  if (distanceOnlyFallbackEnd === raw.length) {
+    return {
+      frameType,
+      distances: decodeDistances(
+        raw,
+        1,
+        diagnostics,
+        decoderDiagnostics,
+        MAX_DISTANCE_ONLY_ENTRIES,
+      ),
+      raw,
+      diagnostics,
+      decoderDiagnostics,
+    };
+  }
+
+  if (combinedLayoutEnd !== undefined) {
     position = decodePosition(raw, 1);
 
     return {
@@ -775,31 +818,49 @@ export function decodeLocationData(payload: number[]): PansLocationData {
         raw,
         14,
         diagnostics,
+        decoderDiagnostics,
         MAX_COMBINED_DISTANCE_ENTRIES,
       ),
       raw,
       diagnostics,
+      decoderDiagnostics,
     };
   }
 
-  if (distanceOnlyFallbackIsValid) {
+  if (distanceOnlyFallbackEnd !== undefined) {
     return {
       frameType,
       distances: decodeDistances(
         raw,
         1,
         diagnostics,
+        decoderDiagnostics,
         MAX_DISTANCE_ONLY_ENTRIES,
       ),
       raw,
       diagnostics,
+      decoderDiagnostics,
     };
   }
 
-  diagnostics.push(
-    "combined frame does not match position-plus-distances or distance-only layout",
-  );
-  return { frameType, distances: [], raw, diagnostics };
+  if (raw.length >= 14) position = decodePosition(raw, 1);
+  addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+    code: "UNRECOGNIZED_LAYOUT",
+    severity: "warning",
+    message:
+      "combined frame does not match position-plus-distances or distance-only layout",
+    offset: position ? 14 : 1,
+    byteCount: raw.length - (position ? 14 : 1),
+    bytes: raw.slice(position ? 14 : 1),
+  });
+  return {
+    frameType,
+    position,
+    distances: [],
+    raw,
+    diagnostics,
+    decoderDiagnostics,
+  };
 }
 
 export function decodeProxyPositions(payload: number[]): PansProxyPosition[] {
@@ -1022,26 +1083,35 @@ function decodeDistance(payload: number[], offset: number): PansDistance {
   };
 }
 
-function isExactDistanceSection(
+function distanceSectionEnd(
   raw: number[],
   countOffset: number,
   maxCount: number,
-): boolean {
-  if (countOffset >= raw.length) return false;
+): number | undefined {
+  if (countOffset >= raw.length) return undefined;
 
   const count = raw[countOffset];
-  if (count > maxCount) return false;
-  return countOffset + 1 + count * 7 === raw.length;
+  if (count > maxCount) return undefined;
+  const end = countOffset + 1 + count * 7;
+  return end <= raw.length ? end : undefined;
 }
 
 function decodeDistances(
   raw: number[],
   countOffset: number,
   diagnostics: string[],
+  decoderDiagnostics: PansDecoderDiagnostic[],
   maxCount: number,
 ): PansDistance[] {
   if (countOffset >= raw.length) {
-    diagnostics.push("distance frame is missing count byte");
+    addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+      code: "MISSING_COUNT",
+      severity: "warning",
+      message: "distance frame is missing count byte",
+      offset: countOffset,
+      byteCount: 0,
+      bytes: [],
+    });
     return [];
   }
 
@@ -1056,7 +1126,14 @@ function decodeDistances(
 
   for (let i = 0; i < count; i += 1) {
     if (index + 7 > raw.length) {
-      diagnostics.push(`truncated distance entry ${i + 1} of ${count}`);
+      addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+        code: "TRUNCATED_ENTRY",
+        severity: "warning",
+        message: `truncated distance entry ${i + 1} of ${count}`,
+        offset: index,
+        byteCount: raw.length - index,
+        bytes: raw.slice(index),
+      });
       break;
     }
 
@@ -1065,12 +1142,26 @@ function decodeDistances(
   }
 
   if (index < raw.length) {
-    diagnostics.push(
-      `unexpected ${raw.length - index} trailing byte(s) after distance entries`,
-    );
+    addDecoderDiagnostic(diagnostics, decoderDiagnostics, {
+      code: "TRAILING_BYTES",
+      severity: "warning",
+      message: `unexpected ${raw.length - index} trailing byte(s) after distance entries`,
+      offset: index,
+      byteCount: raw.length - index,
+      bytes: raw.slice(index),
+    });
   }
 
   return distances;
+}
+
+function addDecoderDiagnostic(
+  diagnostics: string[],
+  decoderDiagnostics: PansDecoderDiagnostic[],
+  diagnostic: PansDecoderDiagnostic,
+): void {
+  decoderDiagnostics.push(diagnostic);
+  diagnostics.push(diagnostic.message);
 }
 
 function readUint64Hex(payload: number[], offset: number): string {

@@ -347,6 +347,55 @@ export function ManagerMapSettingsModal({
             ) : null}
           </SettingsSection>
 
+          {controller.trackingCounters ? (
+            <SettingsSection title="Live pipeline">
+              <KeyValue
+                label="Native notifications"
+                value={String(controller.trackingCounters.notificationEvents)}
+              />
+              <KeyValue
+                label="Matching device"
+                value={String(
+                  controller.trackingCounters.matchingDeviceNotifications,
+                )}
+              />
+              <KeyValue
+                label="Decoded frames"
+                value={String(controller.trackingCounters.decodedFrames)}
+              />
+              <KeyValue
+                label="Position frames"
+                value={String(controller.trackingCounters.positionFrames)}
+              />
+              <KeyValue
+                label="Map position updates"
+                value={String(controller.trackingCounters.mapPositionUpdates)}
+              />
+              <KeyValue
+                label="Decode failures"
+                value={String(controller.trackingCounters.decodeFailures)}
+              />
+              <KeyValue
+                label="Native sequence discontinuities"
+                value={String(
+                  controller.trackingCounters.nativeSequenceDiscontinuities,
+                )}
+              />
+              {controller.trackingCounters.negotiatedMtu !== undefined ? (
+                <KeyValue
+                  label="Negotiated MTU"
+                  value={String(controller.trackingCounters.negotiatedMtu)}
+                />
+              ) : null}
+              <SettingHelp title="Pipeline counters">
+                Counters separate native callbacks, device-ID filtering,
+                decoding, position-bearing frames, and SharedValue map updates.
+                A sequence discontinuity is diagnostic evidence, not proof of a
+                dropped frame, because the native sequence is process-wide.
+              </SettingHelp>
+            </SettingsSection>
+          ) : null}
+
           <SettingsSection title="Anchor editing">
             <SwitchRow
               label="Edit anchor position"

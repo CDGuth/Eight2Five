@@ -2,6 +2,7 @@ import {
   addLocationDataListener,
   connect,
   decodeLocationData,
+  getCapabilities,
   disconnect,
   patchOperationMode,
   readAnchorList,
@@ -14,6 +15,7 @@ import {
   readNetworkId,
   readOperationMode,
   requestExplicitDisconnect,
+  requestMtu,
   readStatistics,
   readTagUpdateRate,
   subscribeLocationData,
@@ -68,6 +70,7 @@ export interface PansNativeGateway {
     listener: (event: PansLocationNotification) => void,
   ): PansLocationSubscription;
   decodeLocationData(payload: number[]): PansLocationData;
+  requestMtu?(deviceId: string, mtu: number): Promise<number | undefined>;
   writePersistedPosition(
     deviceId: string,
     position: Omit<PansPosition, "zMeters" | "quality"> & {
@@ -81,6 +84,9 @@ export interface PansNativeGateway {
 export interface PansLocationNotification {
   transportDeviceId: string;
   payload: number[];
+  sequence?: number;
+  monotonicTimestampMs?: number;
+  payloadLength?: number;
 }
 
 export interface PansLocationSubscription {
@@ -113,9 +119,16 @@ export const defaultPansNativeGateway: PansNativeGateway = {
       listener({
         transportDeviceId: event.deviceId,
         payload: event.payload,
+        sequence: event.sequence,
+        monotonicTimestampMs: event.monotonicTimestampMs,
+        payloadLength: event.payloadLength,
       }),
     ),
   decodeLocationData,
+  requestMtu: async (deviceId, mtu) =>
+    getCapabilities().supportsMtuRequest
+      ? await requestMtu(deviceId, mtu)
+      : undefined,
   writePersistedPosition,
 };
 
@@ -142,6 +155,7 @@ export interface ConnectedPansSession {
     listener: (event: PansLocationNotification) => void,
   ): PansLocationSubscription;
   decodeLocationData(payload: number[]): PansLocationData;
+  requestMtu?(mtu: number): Promise<number | undefined>;
   writePersistedPosition(
     position: Omit<PansPosition, "zMeters" | "quality"> & {
       zMeters?: number;
@@ -395,6 +409,12 @@ export class PansDeviceSessionManager {
       addLocationDataListener: (listener) =>
         this.gateway.addLocationDataListener(listener),
       decodeLocationData: (payload) => this.gateway.decodeLocationData(payload),
+      ...(this.gateway.requestMtu
+        ? {
+            requestMtu: async (mtu: number) =>
+              await this.gateway.requestMtu?.(transportDeviceId, mtu),
+          }
+        : {}),
       writePersistedPosition: async (position) =>
         await this.gateway.writePersistedPosition(transportDeviceId, position),
     };
