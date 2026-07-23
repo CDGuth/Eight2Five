@@ -463,7 +463,7 @@ describe("PansConfigurationService", () => {
     });
   });
 
-  test("unassigns hardware by verifying passive UWB before the app PAN 0 convention", async () => {
+  test("unassigns hardware by verifying passive UWB before restoring PANS default PAN 0", async () => {
     const calls: string[] = [];
     let currentPanId = 7;
     let currentMode: Awaited<

@@ -162,8 +162,9 @@ export class PansConfigurationService {
   }
 
   /**
-   * Removes a verified saved-network association using Eight2Five's PAN 0
-   * convention, after first making UWB passive and verifying every write.
+   * Removes a verified saved-network association by restoring the PANS default
+   * PAN ID 0 used for the unassigned-device state. UWB is made passive first,
+   * and every hardware write is read back before the cached match is changed.
    */
   async unassignDeviceHardware(
     deviceId: string,
@@ -299,7 +300,7 @@ export class PansConfigurationService {
                 code: normalized?.code ?? ("VERIFY_MISMATCH" as const),
                 message:
                   normalized?.message ??
-                  "Passive UWB mode and the Eight2Five unassigned PAN ID did not both verify.",
+                  "Passive UWB mode and the PANS default unassigned PAN ID did not both verify.",
               },
             }
           : {}),

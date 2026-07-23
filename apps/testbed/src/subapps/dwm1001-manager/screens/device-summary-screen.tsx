@@ -256,7 +256,7 @@ export function DeviceSummaryScreen() {
         title="Destructive actions"
         description={
           available
-            ? "Makes UWB passive, verifies it, then writes and verifies Eight2Five's PAN 0 unassigned-device convention."
+            ? "Makes UWB passive, verifies it, then restores and verifies the PANS default PAN ID 0 used for unassigned devices."
             : "Removes this saved phone record, snapshots, and position logs without contacting hardware."
         }
       >

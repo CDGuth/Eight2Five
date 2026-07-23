@@ -5,16 +5,20 @@ import type { ManagedDeviceConfig } from "./types";
 const MAX_INT32_METERS = 2_147_483_647 / 1_000;
 
 /**
- * Eight2Five's unassigned-device PAN convention.
+ * PANS default PAN ID used for the unassigned-device state.
  *
- * The official MDEK1001 manager documents that removing a device returns it to
- * the Unassigned Devices list (MDEK1001 System User Manual 1.3, section 6.4.2).
- * Qorvo support also identifies 0 as the PANS default PAN ID:
+ * PANS defaults the PAN ID to 0 and stores it with the node configuration in
+ * nonvolatile memory. The MDEK1001 manager manual documents that removing a
+ * device returns it to the Unassigned Devices list, although the public API and
+ * manager manuals do not explicitly describe the PAN write performed during
+ * that action.
+ *
+ * The firmware API documents PAN IDs only as unsigned 16-bit values and does
+ * not mark 0 as reserved, so PAN 0 is a PANS default/unassigned value rather
+ * than a protocol-reserved identifier.
+ * Sources: MDEK1001 System User Manual 1.3, section 6.4.2; DWM1001 Firmware API
+ * Guide 2.3, sections 5.3.29-5.3.30; Qorvo support:
  * https://forum.qorvo.com/t/dwm1001-pans-custom-shell-output/6094/5
- *
- * The firmware API itself only documents PAN IDs as unsigned 16-bit values, so
- * keep this as an explicit app convention rather than claiming PAN 0 is a
- * protocol-reserved value.
  */
 export const PANS_UNASSIGNED_PAN_ID = 0;
 
@@ -44,13 +48,13 @@ export function assertPanId(panId: number): void {
   }
 }
 
-/** Validates a saved network profile PAN against the app's PAN 0 convention. */
+/** Prevents saved networks from using PANS's default unassigned PAN ID. */
 export function assertNetworkProfilePanId(panId: number): void {
   assertPanId(panId);
   if (panId === PANS_UNASSIGNED_PAN_ID) {
     throw new ManagerError(
       "INVALID_CONFIGURATION",
-      "Saved network PAN ID must be an integer from 1 to 65535; Eight2Five uses 0 for unassigned devices.",
+      "Saved network PAN ID must be an integer from 1 to 65535; PAN 0 is the PANS default used for unassigned devices.",
     );
   }
 }

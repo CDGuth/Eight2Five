@@ -711,7 +711,7 @@ export function PansManagerProvider({
       );
       if (available) {
         throw new Error(
-          "Available devices must verify passive UWB mode and Eight2Five's PAN 0 unassigned-device convention before their saved match can be removed.",
+          "Available devices must verify passive UWB mode and the PANS default PAN ID 0 unassigned state before their saved match can be removed.",
         );
       }
       await runtime.repository.deleteDevice(deviceId);

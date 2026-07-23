@@ -316,7 +316,10 @@ describe("NetworksDevicesScreen", () => {
     const tree = await renderNetworkScreen(harness);
 
     expect(
-      findTextContaining(tree, "PAN 0 is used for unassigned devices"),
+      findTextContaining(
+        tree,
+        "PAN 0 is the PANS default for unassigned devices",
+      ),
     ).toBeTruthy();
     expect(
       tree.root.findAllByProps({

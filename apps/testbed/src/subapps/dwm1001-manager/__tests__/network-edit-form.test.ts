@@ -33,10 +33,10 @@ describe("network edit review", () => {
     ).toThrow("already uses that PAN ID");
   });
 
-  test("uses PAN 0 as the app unassigned-device convention", () => {
+  test("rejects the PANS default PAN 0 from saved network profiles", () => {
     expect(() =>
       reviewNetworkEdit(network("one", 1), "0", [network("one", 1)], 1, 1),
-    ).toThrow("Eight2Five uses 0 for unassigned devices");
+    ).toThrow("PAN 0 is the PANS default used for unassigned devices");
   });
 
   test("reuses one stable operation ID for partial/cancelled retries", () => {

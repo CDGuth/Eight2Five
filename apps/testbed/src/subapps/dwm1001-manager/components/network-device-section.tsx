@@ -201,8 +201,8 @@ export function NetworkDeviceSection({
                 </Text>
                 {legacyUnassignedPan ? (
                   <Text selectable size="sm" style={{ color: theme.danger }}>
-                    PAN 0 is used for unassigned devices · repair or delete this
-                    profile
+                    PAN 0 is the PANS default for unassigned devices · repair or
+                    delete this profile
                   </Text>
                 ) : null}
               </VStack>
@@ -238,9 +238,9 @@ export function NetworkDeviceSection({
           >
             {legacyUnassignedPan ? (
               <SettingInfoCard tone="error">
-                This legacy profile uses PAN 0, which Eight2Five treats as the
-                unassigned-device value. It cannot accept assignments. Change it
-                to PAN 1–65535 or delete it.
+                This legacy profile uses PAN 0, the PANS default PAN ID used for
+                unassigned devices. It cannot accept assignments. Change it to
+                PAN 1–65535 or delete it.
               </SettingInfoCard>
             ) : null}
             {section.devices.map((device, index) => {

@@ -365,9 +365,10 @@ export function DeviceSettingsModal({
               </SettingInfoCard>
             ) : null}
             <SettingHelp title="PANS Network ID">
-              Hardware value from 0 to 65535. Eight2Five treats PAN 0 (0x0000)
-              as its unassigned-device value. The app derives the cached profile
-              match from this value; a local selection never overrides hardware.
+              Hardware value from 0 to 65535. PAN 0 (0x0000) is the PANS default
+              PAN ID and is used for the unassigned-device state. The app
+              derives the cached profile match from this value; a local
+              selection never overrides hardware.
             </SettingHelp>
           </FormSection>
 
@@ -653,7 +654,7 @@ export function DeviceSettingsModal({
           <FormSection title="Destructive actions">
             <SettingInfoCard tone="warning">
               {available
-                ? "Unassigning writes passive UWB mode, verifies it, then writes and verifies Eight2Five's PAN 0 unassigned-device convention. The saved device record is kept for retry and diagnostics."
+                ? "Unassigning writes passive UWB mode, verifies it, then restores and verifies the PANS default PAN ID 0 used for unassigned devices. The saved device record is kept for retry and diagnostics."
                 : "Deleting an offline device removes its saved phone record, snapshots, and position logs without contacting hardware. Rediscovery creates a new unassigned record."}
             </SettingInfoCard>
             {destructiveConfirmationVisible ? (
@@ -664,7 +665,7 @@ export function DeviceSettingsModal({
                   style={{ color: theme.danger }}
                 >
                   {available
-                    ? "Confirm hardware unassignment? UWB will be made passive before Eight2Five's PAN 0 unassigned-device value is written."
+                    ? "Confirm hardware unassignment? UWB will be made passive before the PANS default PAN ID 0 is written."
                     : "Confirm deletion of this saved phone record? This cannot be undone."}
                 </Text>
                 <HStack

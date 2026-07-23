@@ -131,9 +131,10 @@ export function NetworkSettingsScreen() {
       <SectionCard title="PANS Network ID">
         <KeyValue label="Hardware PAN" value={formatPanId(network.panId)} />
         <SettingHelp title="PANS Network ID">
-          Saved networks use PAN IDs from 1 through 65535. Eight2Five uses PAN 0
-          (0x0000) as its unassigned-device convention. A device matches this
-          profile only after its hardware PAN has been read and verified.
+          Saved networks use PAN IDs from 1 through 65535. PAN 0 (0x0000) is the
+          PANS default PAN ID and is used for the unassigned-device state. A
+          device matches this profile only after its hardware PAN has been read
+          and verified.
         </SettingHelp>
       </SectionCard>
 

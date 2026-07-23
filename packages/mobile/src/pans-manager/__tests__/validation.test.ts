@@ -27,7 +27,7 @@ describe("PANS manager validation", () => {
     expect(() => parsePanId("0x10000")).toThrow("PAN ID");
     expect(() => parsePanId("12junk")).toThrow("PAN ID");
     expect(() => assertNetworkProfilePanId(0)).toThrow(
-      "Eight2Five uses 0 for unassigned devices",
+      "PAN 0 is the PANS default used for unassigned devices",
     );
     expect(() => assertNetworkProfilePanId(1)).not.toThrow();
   });
