@@ -74,33 +74,41 @@ jest.mock("@eight2five/ui/components/toast", () => {
   };
 });
 
-jest.mock("@shopify/react-native-skia", () => {
-  const React = require("react");
-  const { View } = require("react-native");
+jest.mock(
+  "@shopify/react-native-skia",
+  () => {
+    const React = require("react");
+    const { View } = require("react-native");
 
-  const MockSkiaNode = ({ children, testID, ...props }: any) =>
-    React.createElement(View, { testID: testID ?? "skia-node", ...props }, children);
-
-  return {
-    Canvas: ({ children, testID, ...props }: any) =>
+    const MockSkiaNode = ({ children, testID, ...props }: any) =>
       React.createElement(
         View,
-        { testID: testID ?? "skia-canvas", ...props },
+        { testID: testID ?? "skia-node", ...props },
         children,
-      ),
-    Rect: (props: any) =>
-      React.createElement(View, { testID: "skia-rect", ...props }),
-    Fill: (props: any) =>
-      React.createElement(View, { testID: "skia-fill", ...props }),
-    Group: MockSkiaNode,
-    Line: MockSkiaNode,
-    Path: MockSkiaNode,
-    Circle: MockSkiaNode,
-    LinearGradient: MockSkiaNode,
-    useFont: () => ({}),
-    vec: (x: number, y: number) => ({ x, y }),
-  };
-});
+      );
+
+    return {
+      Canvas: ({ children, testID, ...props }: any) =>
+        React.createElement(
+          View,
+          { testID: testID ?? "skia-canvas", ...props },
+          children,
+        ),
+      Rect: (props: any) =>
+        React.createElement(View, { testID: "skia-rect", ...props }),
+      Fill: (props: any) =>
+        React.createElement(View, { testID: "skia-fill", ...props }),
+      Group: MockSkiaNode,
+      Line: MockSkiaNode,
+      Path: MockSkiaNode,
+      Circle: MockSkiaNode,
+      LinearGradient: MockSkiaNode,
+      useFont: () => ({}),
+      vec: (x: number, y: number) => ({ x, y }),
+    };
+  },
+  { virtual: true },
+);
 
 jest.mock("victory-native", () => {
   const React = require("react");

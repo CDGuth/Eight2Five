@@ -33,10 +33,10 @@
     "validate": "npm run type-check && npm run lint && npm run syncpack:lint && npm run test && npm run expo:doctor && npm run expo:install-check"
   },
   "devDependencies": {
-    "@expo/config-plugins": "^56.0.9",
+    "@expo/config-plugins": "^57.0.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.20.0",
-    "babel-preset-expo": "~56.0.4",
+    "babel-preset-expo": "~57.0.4",
     "syncpack": "^15.3.2",
     "typescript": "~6.0.3"
   }
