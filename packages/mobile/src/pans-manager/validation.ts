@@ -4,6 +4,20 @@ import type { ManagedDeviceConfig } from "./types";
 
 const MAX_INT32_METERS = 2_147_483_647 / 1_000;
 
+/**
+ * Eight2Five's unassigned-device PAN convention.
+ *
+ * The official MDEK1001 manager documents that removing a device returns it to
+ * the Unassigned Devices list (MDEK1001 System User Manual 1.3, section 6.4.2).
+ * Qorvo support also identifies 0 as the PANS default PAN ID:
+ * https://forum.qorvo.com/t/dwm1001-pans-custom-shell-output/6094/5
+ *
+ * The firmware API itself only documents PAN IDs as unsigned 16-bit values, so
+ * keep this as an explicit app convention rather than claiming PAN 0 is a
+ * protocol-reserved value.
+ */
+export const PANS_UNASSIGNED_PAN_ID = 0;
+
 export function parsePanId(value: string | number): number {
   if (typeof value === "number") {
     assertPanId(value);
@@ -30,13 +44,13 @@ export function assertPanId(panId: number): void {
   }
 }
 
-/** Validates a saved network profile PAN. PAN 0 is reserved for unassigned hardware. */
+/** Validates a saved network profile PAN against the app's PAN 0 convention. */
 export function assertNetworkProfilePanId(panId: number): void {
   assertPanId(panId);
-  if (panId === 0) {
+  if (panId === PANS_UNASSIGNED_PAN_ID) {
     throw new ManagerError(
       "INVALID_CONFIGURATION",
-      "Saved network PAN ID must be an integer from 1 to 65535; 0 is reserved for unassigned devices.",
+      "Saved network PAN ID must be an integer from 1 to 65535; Eight2Five uses 0 for unassigned devices.",
     );
   }
 }

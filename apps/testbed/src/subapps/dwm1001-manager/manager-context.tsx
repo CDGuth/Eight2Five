@@ -52,6 +52,9 @@ import {
 
 export type ManagerStepStatus = "checking" | "opening" | "ready" | "error";
 
+const AUTO_INSPECTION_RETRY_BASE_MS = 1_000;
+const AUTO_INSPECTION_RETRY_MAX_MS = 30_000;
+
 export interface ManagerPermissionStatus {
   bluetooth: "granted" | "denied" | "undetermined" | "unavailable";
   location?: "granted" | "denied" | "undetermined" | "unavailable";
@@ -272,6 +275,13 @@ export function PansManagerProvider({
   const permissionRequestAttemptedRef = React.useRef(false);
   const discoveryGenerationRef = React.useRef(0);
   const autoInspectedDeviceIdsRef = React.useRef(new Set<string>());
+  const autoInspectionRuntimeGenerationRef = React.useRef(0);
+  const autoInspectionFailureCountRef = React.useRef(new Map<string, number>());
+  const autoInspectionRetryTimersRef = React.useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const [autoInspectionRetryGeneration, setAutoInspectionRetryGeneration] =
+    React.useState(0);
   const inspectionPromisesRef = React.useRef(
     new Map<string, Promise<PansInspectionResult>>(),
   );
@@ -368,8 +378,19 @@ export function PansManagerProvider({
   }, [createRuntime, runtimeAttempt]);
 
   React.useEffect(() => {
+    const generation = ++autoInspectionRuntimeGenerationRef.current;
+    const retryTimers = autoInspectionRetryTimersRef.current;
     autoInspectedDeviceIdsRef.current.clear();
+    autoInspectionFailureCountRef.current.clear();
+    for (const timer of retryTimers.values()) clearTimeout(timer);
+    retryTimers.clear();
     inspectionPromisesRef.current.clear();
+    return () => {
+      if (autoInspectionRuntimeGenerationRef.current === generation)
+        autoInspectionRuntimeGenerationRef.current += 1;
+      for (const timer of retryTimers.values()) clearTimeout(timer);
+      retryTimers.clear();
+    };
   }, [runtime]);
 
   React.useEffect(() => {
@@ -690,7 +711,7 @@ export function PansManagerProvider({
       );
       if (available) {
         throw new Error(
-          "Available devices must verify passive UWB mode and PAN 0 before their saved match can be removed.",
+          "Available devices must verify passive UWB mode and Eight2Five's PAN 0 unassigned-device convention before their saved match can be removed.",
         );
       }
       await runtime.repository.deleteDevice(deviceId);
@@ -756,21 +777,71 @@ export function PansManagerProvider({
         )
         .map((discovery) => discovery.transportDeviceId),
     );
-    for (const deviceId of autoInspectedDeviceIdsRef.current) {
+    const runtimeGeneration = autoInspectionRuntimeGenerationRef.current;
+    const trackedDeviceIds = new Set([
+      ...autoInspectedDeviceIdsRef.current,
+      ...autoInspectionFailureCountRef.current.keys(),
+      ...autoInspectionRetryTimersRef.current.keys(),
+    ]);
+    for (const deviceId of trackedDeviceIds) {
       const device = devices.find((item) => item.id === deviceId);
-      if (!device || !availableTransportIds.has(device.transportDeviceId))
-        autoInspectedDeviceIdsRef.current.delete(deviceId);
+      if (device && availableTransportIds.has(device.transportDeviceId))
+        continue;
+      autoInspectedDeviceIdsRef.current.delete(deviceId);
+      autoInspectionFailureCountRef.current.delete(deviceId);
+      const retryTimer = autoInspectionRetryTimersRef.current.get(deviceId);
+      if (retryTimer) clearTimeout(retryTimer);
+      autoInspectionRetryTimersRef.current.delete(deviceId);
     }
     for (const device of devices) {
       if (
         autoInspectedDeviceIdsRef.current.has(device.id) ||
+        autoInspectionRetryTimersRef.current.has(device.id) ||
         !availableTransportIds.has(device.transportDeviceId)
       )
         continue;
       autoInspectedDeviceIdsRef.current.add(device.id);
-      void inspectDevice(device.id).catch(() => undefined);
+      void inspectDevice(device.id)
+        .then(() => {
+          if (autoInspectionRuntimeGenerationRef.current !== runtimeGeneration)
+            return;
+          autoInspectionFailureCountRef.current.delete(device.id);
+          const retryTimer = autoInspectionRetryTimersRef.current.get(
+            device.id,
+          );
+          if (retryTimer) clearTimeout(retryTimer);
+          autoInspectionRetryTimersRef.current.delete(device.id);
+        })
+        .catch(() => {
+          if (autoInspectionRuntimeGenerationRef.current !== runtimeGeneration)
+            return;
+          autoInspectedDeviceIdsRef.current.delete(device.id);
+          const failureCount =
+            (autoInspectionFailureCountRef.current.get(device.id) ?? 0) + 1;
+          autoInspectionFailureCountRef.current.set(device.id, failureCount);
+          if (autoInspectionRetryTimersRef.current.has(device.id)) return;
+          const delayMs = Math.min(
+            AUTO_INSPECTION_RETRY_BASE_MS * 2 ** (failureCount - 1),
+            AUTO_INSPECTION_RETRY_MAX_MS,
+          );
+          const timer = setTimeout(() => {
+            if (
+              autoInspectionRuntimeGenerationRef.current !== runtimeGeneration
+            )
+              return;
+            autoInspectionRetryTimersRef.current.delete(device.id);
+            setAutoInspectionRetryGeneration((generation) => generation + 1);
+          }, delayMs);
+          autoInspectionRetryTimersRef.current.set(device.id, timer);
+        });
     }
-  }, [devices, discoveries, inspectDevice, runtime]);
+  }, [
+    autoInspectionRetryGeneration,
+    devices,
+    discoveries,
+    inspectDevice,
+    runtime,
+  ]);
 
   const inspectDiagnostics = React.useCallback(
     async (deviceId: string) => {

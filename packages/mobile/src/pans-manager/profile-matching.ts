@@ -1,4 +1,5 @@
 import type { ManagedDevice, ManagedNetwork } from "./types";
+import { PANS_UNASSIGNED_PAN_ID } from "./validation";
 
 export type CachedProfileMatchStatus =
   | "unverified"
@@ -21,7 +22,7 @@ export function resolveCachedProfileMatch(
   if (panId === undefined) {
     return { status: "unverified", matchingNetworkIds: [] };
   }
-  if (panId === 0) {
+  if (panId === PANS_UNASSIGNED_PAN_ID) {
     return { status: "unassigned", panId, matchingNetworkIds: [] };
   }
   const matchingNetworkIds = networks

@@ -3,6 +3,7 @@ import TestRenderer, { act } from "react-test-renderer";
 import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { Text } from "@eight2five/ui/components/text";
 import type {
+  DiscoveredDeviceSnapshot,
   ManagedDevice,
   PansManagerRepository,
 } from "@eight2five/mobile/pans-manager";
@@ -468,6 +469,84 @@ describe("PansManagerProvider", () => {
       expect.objectContaining({ deviceId: "managed-1", networkId: "profile" }),
     );
     await act(async () => tree.unmount());
+  });
+
+  it("retries a failed automatic inspection while the device remains available", async () => {
+    jest.useFakeTimers();
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    try {
+      const device: ManagedDevice = {
+        id: "managed-1",
+        transportDeviceId: "transport-1",
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      const repository = {
+        listNetworks: jest.fn().mockResolvedValue([]),
+        listDevices: jest.fn().mockResolvedValue([device]),
+        getSettings: jest.fn().mockResolvedValue(undefined),
+        getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PansManagerRepository;
+      const inspectAndCache = jest
+        .fn()
+        .mockRejectedValueOnce(new Error("temporary GATT failure"))
+        .mockResolvedValueOnce({} as never);
+      let discoveryListener:
+        | ((snapshots: DiscoveredDeviceSnapshot[]) => void)
+        | undefined;
+      const discovery: DiscoveredDeviceSnapshot = {
+        transportDeviceId: "transport-1",
+        rssi: -50,
+        lastSeenAt: 10,
+        compatibility: "compatible",
+      };
+      const runtime = createRuntimeValue({
+        repository,
+        configuration: {
+          inspect: jest.fn(),
+          inspectAndCache,
+          configureDevice: jest.fn(),
+          applyConfigurationDiff: jest.fn(),
+          assignPanId: jest.fn(),
+          unassignDeviceHardware: jest.fn(),
+        },
+      });
+      runtime.discovery.subscribe = jest.fn((listener) => {
+        discoveryListener = listener;
+        listener([discovery]);
+        return { remove: jest.fn() };
+      });
+
+      await act(async () => {
+        tree = TestRenderer.create(
+          <PansManagerProvider createRuntime={async () => runtime}>
+            <ProviderHarness />
+          </PansManagerProvider>,
+        );
+        await flushPromises();
+        await flushPromises();
+      });
+      expect(inspectAndCache).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        discoveryListener?.([{ ...discovery, lastSeenAt: 20 }]);
+        await flushPromises();
+      });
+      expect(inspectAndCache).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        jest.advanceTimersByTime(1_000);
+        await flushPromises();
+        await flushPromises();
+      });
+      expect(inspectAndCache).toHaveBeenCalledTimes(2);
+
+      await act(async () => tree?.unmount());
+      tree = undefined;
+    } finally {
+      if (tree) await act(async () => tree?.unmount());
+      jest.useRealTimers();
+    }
   });
 
   it("exposes commissioning operations and refreshes persisted state", async () => {

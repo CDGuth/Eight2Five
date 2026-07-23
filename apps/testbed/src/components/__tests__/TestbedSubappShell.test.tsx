@@ -6,7 +6,7 @@ import { renderWithAct } from "../../testUtils/renderWithAct";
 import { TestbedSubappShell } from "../TestbedSubappShell";
 import { useTestbedToolbarAction } from "../testbed-toolbar";
 
-const mockPush = jest.fn();
+const mockReplace = jest.fn();
 let mockPathname = "/dwm1001-manager/networks-devices";
 
 jest.mock("expo-router", () => {
@@ -15,7 +15,7 @@ jest.mock("expo-router", () => {
     useFocusEffect: (callback: () => void | (() => void)) =>
       MockReact.useEffect(callback, [callback]),
     usePathname: () => mockPathname,
-    useRouter: () => ({ push: mockPush }),
+    useRouter: () => ({ replace: mockReplace }),
   };
 });
 
@@ -78,7 +78,7 @@ describe("TestbedSubappShell", () => {
     act(() =>
       tree.root.findByProps({ testID: "testbed-drawer-home" }).props.onPress(),
     );
-    expect(mockPush).toHaveBeenLastCalledWith("/");
+    expect(mockReplace).toHaveBeenLastCalledWith("/");
     expect(drawer().props.isOpen).toBe(false);
 
     act(() =>
@@ -89,7 +89,7 @@ describe("TestbedSubappShell", () => {
     });
     expect(managerRow.props.accessibilityState).toEqual({ selected: true });
     act(() => managerRow.props.onPress());
-    expect(mockPush).toHaveBeenLastCalledWith(
+    expect(mockReplace).toHaveBeenLastCalledWith(
       "/(subapps)/dwm1001-manager/(tabs)/networks-devices",
     );
     expect(drawer().props.isOpen).toBe(false);

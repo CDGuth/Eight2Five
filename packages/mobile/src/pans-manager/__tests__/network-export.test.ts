@@ -171,7 +171,7 @@ describe("PansNetworkExportService", () => {
         ...exportFixture(2),
         network: { ...exportFixture(2).network, panId: 0 },
       }),
-    ).toThrow("reserved");
+    ).toThrow("Eight2Five uses 0 for unassigned devices");
   });
 });
 

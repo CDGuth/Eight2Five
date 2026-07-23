@@ -83,6 +83,10 @@ export function NetworkDeviceDrag({
   const previewOpacity = useSharedValue(0);
   const active = useSharedValue(0);
   const sourceRef = React.useRef<React.ComponentRef<typeof View>>(null);
+  const dragSessionRef = React.useRef(0);
+  const dragStartedRef = React.useRef(false);
+  const finalizedBeforeStartRef = React.useRef(false);
+  const latestAbsoluteYRef = React.useRef<number | undefined>(undefined);
   const sourceBoundsRef = React.useRef({
     left: 0,
     top: 0,
@@ -102,33 +106,53 @@ export function NetworkDeviceDrag({
   /* eslint-disable react-hooks/immutability */
   const notifyStart = React.useCallback(
     (_absoluteX: number, absoluteY: number) => {
+      const session = ++dragSessionRef.current;
+      dragStartedRef.current = false;
+      finalizedBeforeStartRef.current = false;
+      latestAbsoluteYRef.current = absoluteY;
       const start = (
         left: number,
         top: number,
         width: number,
         height: number,
       ) => {
+        if (
+          dragSessionRef.current !== session ||
+          finalizedBeforeStartRef.current
+        )
+          return;
         const bounds = {
           left: Number.isFinite(left) ? left : 0,
           top: Number.isFinite(top) ? top : absoluteY - 32,
           width: Number.isFinite(width) && width > 0 ? width : 180,
           height: Number.isFinite(height) && height > 0 ? height : 64,
         };
+        const currentY = latestAbsoluteYRef.current ?? absoluteY;
         sourceBoundsRef.current = bounds;
         x.value = bounds.left;
-        y.value = absoluteY;
+        y.value = currentY;
         previewWidth.value = bounds.width;
         previewHeight.value = bounds.height;
         sourceCenterY.value = bounds.top + bounds.height / 2;
         previewOpacity.value = 1;
+        dragStartedRef.current = true;
         setPreviewVisible(true);
         callbacksRef.current.onDragStart(
           createNetworkDeviceDragEvent(
             detailsRef.current.deviceKey,
-            absoluteY,
+            currentY,
             bounds,
           ),
         );
+        if (currentY !== absoluteY) {
+          callbacksRef.current.onDragMove(
+            createNetworkDeviceDragEvent(
+              detailsRef.current.deviceKey,
+              currentY,
+              bounds,
+            ),
+          );
+        }
       };
       if (typeof sourceRef.current?.measureInWindow === "function")
         sourceRef.current.measureInWindow(start);
@@ -138,6 +162,8 @@ export function NetworkDeviceDrag({
   );
   const notifyMove = React.useCallback(
     (_absoluteX: number, absoluteY: number) => {
+      latestAbsoluteYRef.current = absoluteY;
+      if (!dragStartedRef.current) return;
       const bounds = sourceBoundsRef.current;
       callbacksRef.current.onDragMove(
         createNetworkDeviceDragEvent(
@@ -151,6 +177,12 @@ export function NetworkDeviceDrag({
   );
   const notifyEnd = React.useCallback(
     (_absoluteX: number, absoluteY: number, cancelled: boolean) => {
+      latestAbsoluteYRef.current = absoluteY;
+      if (!dragStartedRef.current) {
+        finalizedBeforeStartRef.current = true;
+        return;
+      }
+      dragStartedRef.current = false;
       const bounds = sourceBoundsRef.current;
       const accepted = callbacksRef.current.onDragEnd(
         createNetworkDeviceDragEvent(

@@ -33,10 +33,10 @@ describe("network edit review", () => {
     ).toThrow("already uses that PAN ID");
   });
 
-  test("reserves PAN 0 for unassigned hardware", () => {
+  test("uses PAN 0 as the app unassigned-device convention", () => {
     expect(() =>
       reviewNetworkEdit(network("one", 1), "0", [network("one", 1)], 1, 1),
-    ).toThrow("reserved");
+    ).toThrow("Eight2Five uses 0 for unassigned devices");
   });
 
   test("reuses one stable operation ID for partial/cancelled retries", () => {

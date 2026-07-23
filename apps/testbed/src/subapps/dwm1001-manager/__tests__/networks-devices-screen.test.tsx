@@ -315,7 +315,9 @@ describe("NetworksDevicesScreen", () => {
     const harness = createRuntime({ networks: [legacy] });
     const tree = await renderNetworkScreen(harness);
 
-    expect(findTextContaining(tree, "PAN 0 is reserved")).toBeTruthy();
+    expect(
+      findTextContaining(tree, "PAN 0 is used for unassigned devices"),
+    ).toBeTruthy();
     expect(
       tree.root.findAllByProps({
         testID: `network-drop-zone-${legacy.id}`,

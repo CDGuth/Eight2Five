@@ -3,6 +3,7 @@ import { ManagerError, normalizeManagerError } from "./errors";
 import type { PansManagerRepository } from "./PansManagerRepository";
 import type { ConnectedPansSession } from "./PansDeviceSessionManager";
 import { PansDeviceSessionManager } from "./PansDeviceSessionManager";
+import { resolveCachedProfileMatch } from "./profile-matching";
 import type {
   ManagedAnchorConfig,
   ManagedDevice,
@@ -18,6 +19,7 @@ import {
   assertValidLabel,
   assertValidPosition,
   normalizeDeviceConfig,
+  PANS_UNASSIGNED_PAN_ID,
 } from "./validation";
 
 export class PansConfigurationService {
@@ -159,11 +161,15 @@ export class PansConfigurationService {
     }
   }
 
-  /** Safely removes a device from UWB participation before assigning reserved PAN 0. */
+  /**
+   * Removes a verified saved-network association using Eight2Five's PAN 0
+   * convention, after first making UWB passive and verifying every write.
+   */
   async unassignDeviceHardware(
     deviceId: string,
   ): Promise<PansConfigurationResult> {
     const device = await this.requireDevice(deviceId);
+    const networks = await this.repository.listNetworks();
     const writes: VerifiedWrite[] = [];
     const warnings: string[] = [];
     let inspected: PansInspectionResult | undefined;
@@ -176,6 +182,28 @@ export class PansConfigurationService {
         async (session) => {
           inspected = await inspectConnected(session, device.id, this.now);
           warnings.push(...inspected.warnings);
+          const profileMatch = resolveCachedProfileMatch(
+            networks,
+            inspected.panId,
+          );
+          const alreadyUnassigned = inspected.panId === PANS_UNASSIGNED_PAN_ID;
+          const associationVerified =
+            alreadyUnassigned ||
+            (profileMatch.status === "matched" &&
+              profileMatch.networkId === device.networkId);
+          if (!associationVerified) {
+            const warning =
+              "Hardware unassignment was not attempted because the current PAN does not uniquely match the saved device association.";
+            writes.push({
+              field: "panId",
+              status: "skipped",
+              requested: PANS_UNASSIGNED_PAN_ID,
+              actual: inspected.panId,
+              warning,
+            });
+            warnings.push(warning);
+            return inspected;
+          }
 
           let passiveVerified = inspected.operationMode.uwbMode === "passive";
           if (passiveVerified) {
@@ -197,26 +225,34 @@ export class PansConfigurationService {
 
           if (!passiveVerified) {
             const warning =
-              "PAN ID 0 was not written because passive UWB mode did not verify.";
+              "The unassigned PAN ID was not written because passive UWB mode did not verify.";
             writes.push({
               field: "panId",
               status: "skipped",
-              requested: 0,
+              requested: PANS_UNASSIGNED_PAN_ID,
               warning,
             });
             warnings.push(warning);
-          } else if (inspected.panId === 0) {
-            writes.push(verified("panId", 0, 0));
+          } else if (inspected.panId === PANS_UNASSIGNED_PAN_ID) {
+            writes.push(
+              verified("panId", PANS_UNASSIGNED_PAN_ID, PANS_UNASSIGNED_PAN_ID),
+            );
           } else {
             try {
-              requireWrite(await session.writeNetworkId(0), "PAN ID", deviceId);
+              requireWrite(
+                await session.writeNetworkId(PANS_UNASSIGNED_PAN_ID),
+                "PAN ID",
+                deviceId,
+              );
               didWrite = true;
               const actualPanId = await session.readNetworkId();
               inspected = { ...inspected, panId: actualPanId };
-              writes.push(verified("panId", 0, actualPanId));
+              writes.push(
+                verified("panId", PANS_UNASSIGNED_PAN_ID, actualPanId),
+              );
             } catch (error) {
               operationFailure ??= error;
-              writes.push(failedWrite("panId", 0, error));
+              writes.push(failedWrite("panId", PANS_UNASSIGNED_PAN_ID, error));
             }
           }
 
@@ -241,7 +277,7 @@ export class PansConfigurationService {
       await this.persistInspection(device, persistedConfig, finalInspection);
 
       const exact =
-        finalInspection.panId === 0 &&
+        finalInspection.panId === PANS_UNASSIGNED_PAN_ID &&
         finalInspection.operationMode.uwbMode === "passive" &&
         writes.every((write) => write.status === "verified");
       const normalized = operationFailure
@@ -263,7 +299,7 @@ export class PansConfigurationService {
                 code: normalized?.code ?? ("VERIFY_MISMATCH" as const),
                 message:
                   normalized?.message ??
-                  "Passive UWB mode and reserved PAN ID 0 did not both verify.",
+                  "Passive UWB mode and the Eight2Five unassigned PAN ID did not both verify.",
               },
             }
           : {}),

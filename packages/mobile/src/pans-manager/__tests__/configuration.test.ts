@@ -2,8 +2,23 @@ import { InMemoryPansManagerRepository } from "../InMemoryPansManagerRepository"
 import { PansConfigurationService } from "../PansConfigurationService";
 import type { PansNativeGateway } from "../PansDeviceSessionManager";
 import { PansDeviceSessionManager } from "../PansDeviceSessionManager";
+import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "../types";
 
 jest.mock("expo-pans-ble-api", () => ({}));
+
+async function seedNetwork(
+  repository: InMemoryPansManagerRepository,
+  panId = 7,
+): Promise<void> {
+  await repository.saveNetwork({
+    id: "network",
+    name: "Network",
+    panId,
+    settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+}
 
 const mode = {
   role: "anchor" as const,
@@ -448,7 +463,7 @@ describe("PansConfigurationService", () => {
     });
   });
 
-  test("unassigns hardware by verifying passive UWB before reserved PAN 0", async () => {
+  test("unassigns hardware by verifying passive UWB before the app PAN 0 convention", async () => {
     const calls: string[] = [];
     let currentPanId = 7;
     let currentMode: Awaited<
@@ -480,6 +495,7 @@ describe("PansConfigurationService", () => {
       readTagUpdateRate: jest.fn(),
     } as unknown as PansNativeGateway;
     const repository = new InMemoryPansManagerRepository();
+    await seedNetwork(repository);
     await repository.saveDevice({
       id: "anchor",
       networkId: "network",
@@ -519,7 +535,60 @@ describe("PansConfigurationService", () => {
     });
   });
 
-  test("does not write PAN 0 when passive UWB readback mismatches", async () => {
+  test("does not unassign hardware when its PAN no longer matches the saved association", async () => {
+    const native = {
+      connect: jest.fn(async () => true),
+      disconnect: jest.fn(async () => true),
+      readLabel: jest.fn(async () => "hardware"),
+      readNetworkId: jest.fn(async () => 9),
+      writeNetworkId: jest.fn(async () => true),
+      readOperationMode: jest.fn(async () => mode),
+      patchOperationMode: jest.fn(async () => undefined),
+      readDeviceInfo: jest.fn(async () => ({ raw: [] })),
+      readLocationDataMode: jest.fn(),
+      readTagUpdateRate: jest.fn(),
+    } as unknown as PansNativeGateway;
+    const repository = new InMemoryPansManagerRepository();
+    await seedNetwork(repository, 7);
+    await repository.saveDevice({
+      id: "anchor",
+      networkId: "network",
+      transportDeviceId: "transport-anchor",
+      lastKnownConfig: {
+        role: "anchor",
+        panId: 7,
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const service = new PansConfigurationService(
+      new PansDeviceSessionManager(native),
+      repository,
+    );
+
+    await expect(
+      service.unassignDeviceHardware("anchor"),
+    ).resolves.toMatchObject({
+      outcome: "partial",
+      inspected: { panId: 9 },
+      writes: [
+        {
+          field: "panId",
+          status: "skipped",
+          requested: 0,
+          actual: 9,
+        },
+      ],
+    });
+    expect(native.patchOperationMode).not.toHaveBeenCalled();
+    expect(native.writeNetworkId).not.toHaveBeenCalled();
+  });
+
+  test("does not write the unassigned PAN when passive UWB readback mismatches", async () => {
     const native = {
       connect: jest.fn(async () => true),
       disconnect: jest.fn(async () => true),
@@ -533,6 +602,7 @@ describe("PansConfigurationService", () => {
       readTagUpdateRate: jest.fn(),
     } as unknown as PansNativeGateway;
     const repository = new InMemoryPansManagerRepository();
+    await seedNetwork(repository);
     await repository.saveDevice({
       id: "anchor",
       networkId: "network",
@@ -570,7 +640,7 @@ describe("PansConfigurationService", () => {
     });
   });
 
-  test("reports and persists a PAN 0 readback mismatch after passive verification", async () => {
+  test("reports and persists an unassigned-PAN readback mismatch after passive verification", async () => {
     const panReads = [7, 9, 9];
     const passiveMode = { ...mode, uwbMode: "passive" as const };
     const native = {
@@ -586,6 +656,7 @@ describe("PansConfigurationService", () => {
       readTagUpdateRate: jest.fn(),
     } as unknown as PansNativeGateway;
     const repository = new InMemoryPansManagerRepository();
+    await seedNetwork(repository);
     await repository.saveDevice({
       id: "anchor",
       networkId: "network",

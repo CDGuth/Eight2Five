@@ -42,7 +42,7 @@ export function TestbedSubappShell({
   const navigate = React.useCallback(
     (href: (typeof SUBAPPS)[number]["href"] | "/") => {
       closeDrawer();
-      router.push(href);
+      router.replace(href);
     },
     [closeDrawer, router],
   );

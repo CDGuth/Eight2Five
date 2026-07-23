@@ -8,6 +8,7 @@ import type {
 import {
   formatPanId,
   getNetworkDisplayName,
+  PANS_UNASSIGNED_PAN_ID,
 } from "@eight2five/mobile/pans-manager";
 import {
   Accordion,
@@ -102,14 +103,14 @@ export function NetworkDeviceSection({
   const count = `${section.devices.length} ${
     section.devices.length === 1 ? "device" : "devices"
   }`;
-  const legacyReservedPan = section.network?.panId === 0;
+  const legacyUnassignedPan = section.network?.panId === PANS_UNASSIGNED_PAN_ID;
   const resolvedEmptyMessage =
     emptyMessage ??
     (section.network && section.devices.length === 0
       ? "No devices match this network."
       : undefined);
   const networkId = section.network?.id;
-  const dropTargetNetworkId = legacyReservedPan ? undefined : networkId;
+  const dropTargetNetworkId = legacyUnassignedPan ? undefined : networkId;
   const measureDropZone = React.useCallback(() => {
     if (!dropTargetNetworkId || !onDropZoneChange) return;
     headerRef.current?.measureInWindow((x, y, width, height) => {
@@ -198,9 +199,10 @@ export function NetworkDeviceSection({
                   {pan ? `PAN ${pan} · ` : ""}
                   {count}
                 </Text>
-                {legacyReservedPan ? (
+                {legacyUnassignedPan ? (
                   <Text selectable size="sm" style={{ color: theme.danger }}>
-                    PAN 0 is reserved · repair or delete this profile
+                    PAN 0 is used for unassigned devices · repair or delete this
+                    profile
                   </Text>
                 ) : null}
               </VStack>
@@ -234,10 +236,11 @@ export function NetworkDeviceSection({
               paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
             }}
           >
-            {legacyReservedPan ? (
+            {legacyUnassignedPan ? (
               <SettingInfoCard tone="error">
-                This legacy profile uses reserved PAN 0 and cannot accept device
-                assignments. Change it to PAN 1–65535 or delete it.
+                This legacy profile uses PAN 0, which Eight2Five treats as the
+                unassigned-device value. It cannot accept assignments. Change it
+                to PAN 1–65535 or delete it.
               </SettingInfoCard>
             ) : null}
             {section.devices.map((device, index) => {

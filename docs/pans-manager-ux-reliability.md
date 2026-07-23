@@ -9,8 +9,8 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 0 — Baseline, fixtures, observability | Complete (environment-limited) | Canonical location packets and deterministic 1/10 Hz notification source added. Device screenshots and a real tag capture are deferred because no device is available. |
 | 1 — App shell and navigation | Complete (device review pending) | Added a black safe-area scrim and toolbar for subapp routes, Gluestack Drawer navigation, focused toolbar action registration, home copy, PANS naming, and explicit map-label typography. |
 | 2 — Continuous discovery | Complete (device review pending) | Discovery now auto-starts after one permission flow, runs continuously, serializes rapid intent changes, and resumes after foregrounding. Obsolete duration settings were migrated out. |
-| 3 — Hardware-derived state | Complete (device review pending) | Device identity and cached profile membership now come from hardware label/PAN reads. Duplicate-PAN profiles surface as conflicts. Device-local nickname, notes, and profile selection were removed from UI and v2 exports. |
-| 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertical-only drag with source-sized preview, swipe-to-delete with confirmation, and hardware-safe PAN 0 unassignment added. |
+| 3 — Hardware-derived state | Complete (device review pending) | Device identity and cached profile membership now come from hardware label/PAN reads. Duplicate-PAN profiles surface as conflicts. Failed automatic inspections retry with bounded backoff. Device-local nickname, notes, and profile selection were removed from UI and v2 exports. |
+| 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertically constrained drag, swipe-to-delete with confirmation, and guarded PAN 0 unassignment using an explicitly documented Eight2Five convention. |
 | 5 — Form controls | Not started | |
 | 6 — Map behavior | Not started | |
 | 7 — Packet and live updates | Not started | |
@@ -23,7 +23,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Full `npm run validate` reached native tests and stopped because the local Swift toolchain cannot load `libncurses.so.6`.
 - The Android native test command cannot run because this environment has no Java runtime or `JAVA_HOME`.
 - No Android/iOS device or simulator is available through the mobile test service. Baseline screen captures, scan interaction captures, Android smoke testing, and a real tag packet capture therefore require a user-provided device/build.
-- The documented 18-byte position packet is represented by both four-zero-byte and nonzero-extension fixtures. The current decoder reproduces the trailing-byte diagnostic while preserving the canonical position prefix.
+- The observed 18-byte position packet is represented by both four-zero-byte and nonzero-extension fixtures. The official PANS BLE layout documents a 14-byte position frame; the additional four bytes remain an undocumented extension or padding. The current decoder reproduces the trailing-byte diagnostic while preserving the canonical position prefix.
 - Post-change targeted codec/parser/synthetic-source tests pass. The repository-wide TypeScript, lint, Syncpack, and Jest portions of `npm run validate` pass (`18` testbed suites / `79` tests, `22` shared-mobile suites / `97` tests, and `3` Expo PANS BLE API suites / `58` tests). Native validation remains blocked by the environment issues above.
 
 ## Evidence locations
@@ -36,7 +36,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 
 - `apps/testbed/app/(subapps)/_layout.tsx` keeps the home route outside the toolbar while applying `TestbedSubappShell` to every nested subapp route.
 - `apps/testbed/src/components/testbed-toolbar.tsx` scopes actions to focused routes and removes them on blur/unmount. Networks registers Scan and Map registers Settings.
-- `apps/testbed/src/components/TestbedSubappShell.tsx` uses the generated Gluestack Drawer with Home, a divider, and registered subapps only. Drawer rows expose labels, selected state, and 44-point minimum targets.
+- `apps/testbed/src/components/TestbedSubappShell.tsx` uses the generated Gluestack Drawer with Home, a divider, and registered subapps only. Drawer rows expose labels, selected state, and 44-point minimum targets. Top-level drawer destinations use route replacement so repeated selections do not accumulate duplicate history entries.
 - `apps/testbed/app/_layout.tsx` renders a visible light `StatusBar`; both home and subapp layouts draw black content behind transparent system-bar icons.
 - Source Sans 3 is loaded before routing and is now explicitly applied to `PansNetworkGrid` labels.
 - Official implementation references: <https://github.com/expo/expo/blob/main/docs/pages/tutorial/configuration.mdx> and <https://github.com/gluestack/gluestack-ui/blob/main/apps/website/app/ui/docs/components/drawer/index.mdx>.
@@ -55,20 +55,29 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 
 - Device display names now prefer `lastKnownConfig.label`, then the legacy hardware-label cache, then a stable node/transport identifier. Deprecated app nickname and notes columns remain readable for database compatibility but are no longer written or shown.
 - `resolveCachedProfileMatch` distinguishes unverified hardware PAN, no saved match, one exact match, and duplicate-PAN conflict. Provider refreshes reconcile the cached `networkId` from that result; stale local selections are cleared.
-- Available saved devices are inspected automatically once per discovery-presence window. Concurrent automatic and explicit inspections share one in-flight request.
+- Available saved devices are inspected automatically once per discovery-presence window. Concurrent automatic and explicit inspections share one in-flight request. A transient inspection failure clears the attempted marker and retries after exponential backoff from 1 to 30 seconds while the device remains available; retry state is cleared when the device disappears or the runtime changes.
 - Device settings now use Identity, Network, Node role and UWB, role-specific configuration, and Firmware and diagnostics categories. Network and map settings were reorganized and reuse `SettingHelp` / `SettingInfoCard` for hardware limits, coordinate semantics, update modes, timeouts, and firmware behavior.
 - Network export schema version 2 excludes device `networkId`, nickname, and notes. Export membership is recomputed from a unique hardware PAN match. Version 1 imports remain accepted, have deprecated local fields stripped, and derive membership after import.
-- Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`19` testbed suites / `86` tests, `24` shared-mobile suites / `108` tests, and `3` Expo PANS BLE API suites / `58` tests). Expo Doctor passed `21/21` for both apps and Expo dependency checks are current.
+- Phase verification at the time of the phase-3 commit: all TypeScript and lint workspaces, Syncpack, and Jest passed (`19` testbed suites / `86` tests, `24` shared-mobile suites / `108` tests, and `3` Expo PANS BLE API suites / `58` tests). Current repository-wide verification is recorded below because Expo patch recommendations have since changed.
 - Full `npm run validate` remains environment-limited at the unchanged iOS native test failure (`libncurses.so.6` missing). Android native tests remain blocked by missing Java/`JAVA_HOME`; `adb devices` reports no attached target, so Android UI smoke tests and screenshots are deferred.
 
 ## Phase 4 implementation notes
 
 - Networks and Devices now renders Unassigned Devices first, a divider, a Networks heading, then one-level network cards with a rail/elbow child connector. A shared `MANAGER_CARD_CONTENT_INSET` is applied to cards, rows, empty states, and the outer list so content never touches horizontal edges.
 - Offline rows use muted but accessible colors (`theme.textMuted` minimum) and the Lucide `BluetoothOff` icon; `SignalZero` is no longer used for offline state.
-- Dragging is vertically constrained: the preview keeps the measured source X and width, only Y follows the pointer, drop targets resolve from the preview midpoint, and invalid/cancelled drops animate back to the source. Only available, non-malformed Unassigned devices can be dragged.
+- Dragging is vertically constrained: the preview keeps the measured source X and width, only Y follows the pointer, drop targets resolve from the preview midpoint, and invalid/cancelled drops animate back to the source. The measured-start callback now uses the latest pointer Y and ignores a measurement that completes after the gesture has finalized, preventing a jump or ghost preview. Only available, non-malformed Unassigned devices can be dragged.
 - Swipe-left deletion uses RNGH `ReanimatedSwipeable` with a one-open-row registry and `Trash2`; every swipe action and every settings destructive action requires an explicit confirmation step.
-- Deleting a network removes the saved profile and its position logs (transactionally in SQLite) without touching hardware; devices re-derive to Unassigned from cached PAN data. Legacy PAN 0 profiles are repair-only: they show a reserved-PAN warning, cannot accept assignments, and PAN 0 hardware is always treated as unassigned.
-- Offline device deletion removes the saved record, snapshots, and position logs with no BLE call. Online unassignment verifies passive UWB before writing and verifying reserved PAN 0, persists the exact readback (including mismatch state) for retry, and only then reconciles the cached profile match.
+- Deleting a network removes the saved profile and its position logs (transactionally in SQLite) without touching hardware; devices re-derive to Unassigned from cached PAN data. Legacy PAN 0 profiles are repair-only because Eight2Five uses PAN 0 as its unassigned-device convention; they cannot accept assignments.
+- The convention is source-qualified rather than described as protocol-reserved: the MDEK1001 System User Manual 1.3 section 6.4.2 documents that removing a device returns it to the Unassigned Devices list, the Firmware API Guide documents PAN IDs only as unsigned 16-bit values, and Qorvo support identifies 0 as the PANS default PAN ID (<https://forum.qorvo.com/t/dwm1001-pans-custom-shell-output/6094/5>).
+- Offline device deletion removes the saved record, snapshots, and position logs with no BLE call. Online unassignment first verifies that the current hardware PAN uniquely matches the saved association, then verifies passive UWB before writing and reading back the app's PAN 0 convention. If the association no longer matches, no hardware write is attempted. Exact readback is persisted for retry and diagnostics before cached membership is reconciled.
 - RNGH reference: <https://docs.swmansion.com/react-native-gesture-handler/docs/components/reanimated_swipeable>.
-- Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `93` tests, `24` shared-mobile suites / `115` tests, and `3` Expo PANS BLE API suites / `58` tests). Expo Doctor passed `21/21` for both apps and Expo dependency checks are current.
-- Full `npm run validate` remains environment-limited at the unchanged iOS native test failure (`libncurses.so.6` missing). Android native tests remain blocked by missing Java/`JAVA_HOME`; `adb devices` reports no attached target, so Android UI smoke tests, screenshots, and hardware unassignment verification on real devices are deferred.
+- Phase verification at the time of the phase-4 commit: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `93` tests, `24` shared-mobile suites / `115` tests, and `3` Expo PANS BLE API suites / `58` tests). Current repository-wide verification is recorded below.
+- Android UI smoke tests, screenshots, and hardware unassignment verification on real devices remain deferred until a compatible development environment and attached device are available.
+
+## Post-review verification — 2026-07-23
+
+- Type checking, linting, Syncpack, and all JavaScript/TypeScript Jest suites pass.
+- Current Jest totals are `20` testbed suites / `94` tests, `24` shared-mobile suites / `116` tests, and `3` Expo PANS BLE API suites / `58` tests.
+- Full `npm run validate` reaches native testing and stops at the iOS module test because the `swift` executable is unavailable on this Ubuntu 26 environment. Android native tests and the later Expo checks are therefore not reached by that command.
+- Direct Expo Doctor and Expo install checks currently report only three SDK 56 patch-version recommendations in both apps: `expo` `56.0.16` → `~56.0.17`, `expo-dev-client` `56.0.23` → `~56.0.24`, and `expo-router` `56.2.15` → `~56.2.16`.
+- Java/`JAVA_HOME` availability and Android native tests remain unverified in this review run.
