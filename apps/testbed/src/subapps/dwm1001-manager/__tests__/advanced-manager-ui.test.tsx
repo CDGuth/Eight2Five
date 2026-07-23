@@ -140,6 +140,11 @@ describe("advanced DWM1001 manager UI", () => {
       ]);
     });
     expect(onViewportChange).toHaveBeenCalledTimes(1);
+    expect(onViewportChange.mock.calls[0][0]).toEqual({
+      centerXMeters: -2,
+      centerYMeters: 1,
+      metersPerPixel: 0.1,
+    });
     await act(async () => tree.unmount());
   });
 
