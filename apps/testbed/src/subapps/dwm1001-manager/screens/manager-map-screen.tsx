@@ -2,10 +2,24 @@ import React from "react";
 import { View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Settings2 } from "lucide-react-native";
-import { PansNetworkGrid } from "@eight2five/mobile/pans-manager";
-import type { PansGridPalette } from "@eight2five/mobile/pans-manager";
+import {
+  formatMapDistance,
+  PansNetworkGrid,
+} from "@eight2five/mobile/pans-manager";
+import type {
+  MapUnits,
+  PansGridObservedEdge,
+  PansGridPalette,
+} from "@eight2five/mobile/pans-manager";
 import { Button, ButtonIcon } from "@eight2five/ui/components/button";
-import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
+import { Text } from "@eight2five/ui/components/text";
+import { VStack } from "@eight2five/ui/components/vstack";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
 
 import { ManagerMapSettingsModal } from "../components/manager-map-settings-modal";
 import { usePansMapDataController } from "../manager-map-controller";
@@ -19,6 +33,23 @@ export function ManagerMapScreen({
   const theme = useEight2FiveTheme();
   const controller = usePansMapDataController(initialNetworkId);
   const stopTracking = controller.stopTracking;
+  const selectedNode = controller.selectedNodeId
+    ? controller.nodes.find((node) => node.id === controller.selectedNodeId)
+    : undefined;
+  const selectedDistances = selectedNode
+    ? controller.rangingEdges.filter((edge) =>
+        [edge.sourceId, edge.targetId].includes(selectedNode.id),
+      )
+    : [];
+  const selectedPositionText = selectedNode
+    ? `X ${formatMapDistance(
+        selectedNode.position.xMeters,
+        controller.mapUnits,
+      )} · Y ${formatMapDistance(
+        selectedNode.position.yMeters,
+        controller.mapUnits,
+      )}`
+    : undefined;
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const palette = React.useMemo<PansGridPalette>(
     () => ({
@@ -49,7 +80,7 @@ export function ManagerMapScreen({
         <ButtonIcon as={Settings2} style={{ color: theme.raw.white }} />
       </Button>
     ),
-    [theme.raw.white],
+    [setSettingsOpen, theme.raw.white],
   );
   useTestbedToolbarAction("pans-map-settings", settingsAction);
 
@@ -83,12 +114,59 @@ export function ManagerMapScreen({
         showGrid={controller.grid.showGrid}
         gridIntervalMeters={controller.grid.fixedIntervalMeters}
         showOrigin={controller.grid.showOrigin}
+        units={controller.mapUnits}
+        areaMode={controller.mapAreaMode}
+        areaBounds={controller.selectedAreaBounds}
         editMode={controller.editingEnabled}
         onLongPressCoordinate={(point) => {
           controller.setPendingAnchorCoordinate(point);
           setSettingsOpen(true);
         }}
       />
+      {selectedNode ? (
+        <VStack
+          testID="manager-map-selected-node-details"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: eight2FiveSpacing.sm,
+            left: eight2FiveSpacing.sm,
+            maxWidth: 280,
+            gap: 2,
+            paddingHorizontal: eight2FiveSpacing.sm,
+            paddingVertical: eight2FiveSpacing.xs,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: eight2FiveRadii.sm,
+            backgroundColor: theme.surfaceRaised,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              color: theme.text,
+              fontFamily: eight2FiveFonts.styleSemibold,
+            }}
+          >
+            {selectedNode.label ?? selectedNode.id}
+          </Text>
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            {selectedPositionText}
+          </Text>
+          {selectedDistances.map((edge) =>
+            edge.distanceMeters !== undefined ? (
+              <Text
+                key={`${edge.sourceId}:${edge.targetId}`}
+                selectable
+                size="sm"
+                style={{ color: theme.textMuted }}
+              >
+                {formatRangingEdge(edge, controller.mapUnits)}
+              </Text>
+            ) : null,
+          )}
+        </VStack>
+      ) : null}
       <ManagerMapSettingsModal
         controller={controller}
         isOpen={settingsOpen}
@@ -96,4 +174,14 @@ export function ManagerMapScreen({
       />
     </View>
   );
+}
+
+function formatRangingEdge(
+  edge: PansGridObservedEdge,
+  units: MapUnits,
+): string {
+  if (edge.distanceMeters === undefined) return "Range unavailable";
+  return `Range ${formatMapDistance(edge.distanceMeters, units)}${
+    edge.quality !== undefined ? ` · quality ${edge.quality}` : ""
+  }`;
 }

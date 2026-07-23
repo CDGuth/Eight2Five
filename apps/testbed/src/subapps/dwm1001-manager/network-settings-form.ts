@@ -1,6 +1,14 @@
-import type { ManagedNetworkSettings } from "@eight2five/mobile/pans-manager";
+import type { ManagedNetworkSettings } from "@eight2five/mobile/pans-manager/types";
+import {
+  convertMapInputText,
+  formatMapCoordinate,
+  mapUnitsToMeters,
+  type MapUnits,
+} from "@eight2five/mobile/pans-manager/map-units";
 
 export interface NetworkSettingsFormState {
+  mapUnits: ManagedNetworkSettings["mapUnits"];
+  mapAreaMode: ManagedNetworkSettings["mapAreaMode"];
   minXMeters: string;
   maxXMeters: string;
   minYMeters: string;
@@ -28,13 +36,43 @@ export function networkSettingsToForm(
   settings: ManagedNetworkSettings,
 ): NetworkSettingsFormState {
   return {
-    minXMeters: String(settings.coordinateBounds.minXMeters),
-    maxXMeters: String(settings.coordinateBounds.maxXMeters),
-    minYMeters: String(settings.coordinateBounds.minYMeters),
-    maxYMeters: String(settings.coordinateBounds.maxYMeters),
-    minZMeters: String(settings.coordinateBounds.minZMeters),
-    maxZMeters: String(settings.coordinateBounds.maxZMeters),
-    defaultAnchorHeightMeters: String(settings.defaultAnchorHeightMeters),
+    mapUnits: settings.mapUnits,
+    mapAreaMode: settings.mapAreaMode,
+    minXMeters: formatMapCoordinate(
+      settings.coordinateBounds.minXMeters,
+      settings.mapUnits,
+      6,
+    ),
+    maxXMeters: formatMapCoordinate(
+      settings.coordinateBounds.maxXMeters,
+      settings.mapUnits,
+      6,
+    ),
+    minYMeters: formatMapCoordinate(
+      settings.coordinateBounds.minYMeters,
+      settings.mapUnits,
+      6,
+    ),
+    maxYMeters: formatMapCoordinate(
+      settings.coordinateBounds.maxYMeters,
+      settings.mapUnits,
+      6,
+    ),
+    minZMeters: formatMapCoordinate(
+      settings.coordinateBounds.minZMeters,
+      settings.mapUnits,
+      6,
+    ),
+    maxZMeters: formatMapCoordinate(
+      settings.coordinateBounds.maxZMeters,
+      settings.mapUnits,
+      6,
+    ),
+    defaultAnchorHeightMeters: formatMapCoordinate(
+      settings.defaultAnchorHeightMeters,
+      settings.mapUnits,
+      6,
+    ),
     staleDeviceTimeoutSeconds: String(settings.staleDeviceTimeoutMs / 1_000),
     movingUpdateRateMs: String(settings.defaultTagMode.movingUpdateRateMs),
     stationaryUpdateRateMs: String(
@@ -55,13 +93,16 @@ export function parseNetworkSettingsForm(
   form: NetworkSettingsFormState,
 ): NetworkSettingsFormResult {
   const numeric = {
-    minX: parseFinite(form.minXMeters),
-    maxX: parseFinite(form.maxXMeters),
-    minY: parseFinite(form.minYMeters),
-    maxY: parseFinite(form.maxYMeters),
-    minZ: parseFinite(form.minZMeters),
-    maxZ: parseFinite(form.maxZMeters),
-    anchorHeight: parseFinite(form.defaultAnchorHeightMeters),
+    minX: parseMapDistance(form.minXMeters, form.mapUnits),
+    maxX: parseMapDistance(form.maxXMeters, form.mapUnits),
+    minY: parseMapDistance(form.minYMeters, form.mapUnits),
+    maxY: parseMapDistance(form.maxYMeters, form.mapUnits),
+    minZ: parseMapDistance(form.minZMeters, form.mapUnits),
+    maxZ: parseMapDistance(form.maxZMeters, form.mapUnits),
+    anchorHeight: parseMapDistance(
+      form.defaultAnchorHeightMeters,
+      form.mapUnits,
+    ),
     staleSeconds: parseFinite(form.staleDeviceTimeoutSeconds),
     movingRate: parseFinite(form.movingUpdateRateMs),
     stationaryRate: parseFinite(form.stationaryUpdateRateMs),
@@ -109,6 +150,8 @@ export function parseNetworkSettingsForm(
 
   return {
     settings: {
+      mapUnits: form.mapUnits,
+      mapAreaMode: form.mapAreaMode,
       coordinateBounds: {
         minXMeters: values.minX,
         maxXMeters: values.maxX,
@@ -132,6 +175,34 @@ export function parseNetworkSettingsForm(
       positionLogMaxSamples: values.maxSamples,
     },
   };
+}
+
+export function convertNetworkSettingsFormUnits(
+  form: NetworkSettingsFormState,
+  mapUnits: MapUnits,
+): NetworkSettingsFormState {
+  if (form.mapUnits === mapUnits) return form;
+  const convert = (value: string) =>
+    convertMapInputText(value, form.mapUnits, mapUnits, 12);
+  return {
+    ...form,
+    mapUnits,
+    minXMeters: convert(form.minXMeters),
+    maxXMeters: convert(form.maxXMeters),
+    minYMeters: convert(form.minYMeters),
+    maxYMeters: convert(form.maxYMeters),
+    minZMeters: convert(form.minZMeters),
+    maxZMeters: convert(form.maxZMeters),
+    defaultAnchorHeightMeters: convert(form.defaultAnchorHeightMeters),
+  };
+}
+
+function parseMapDistance(value: string, units: MapUnits): number | undefined {
+  const parsed = parseFinite(value);
+  return parsed === undefined
+    ? undefined
+    : Math.round(mapUnitsToMeters(parsed, units) * 1_000_000_000) /
+        1_000_000_000;
 }
 
 function parseFinite(value: string): number | undefined {

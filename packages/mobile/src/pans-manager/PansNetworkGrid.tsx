@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Text as NativeText,
   View,
   type LayoutChangeEvent,
   type StyleProp,
@@ -16,14 +17,23 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import {
+  buildConsolidatedBoundsPath,
   buildConsolidatedGridPath,
   chooseGridInterval,
   DEFAULT_GRID_VIEWPORT,
   normalizeGridViewport,
+  unionGridBounds,
+  type GridBounds,
   type GridPoint,
   type GridSize,
   type GridViewport,
 } from "./pans-network-grid-math";
+import {
+  formatMapCoordinate,
+  formatMapDistance,
+  type MapAreaMode,
+  type MapUnits,
+} from "./map-units";
 
 export type PansGridNodeStatus = "normal" | "warning" | "error" | "offline";
 
@@ -63,6 +73,8 @@ export interface PansGridNode {
 export interface PansGridObservedEdge {
   sourceId: string;
   targetId: string;
+  distanceMeters?: number;
+  quality?: number;
 }
 
 export interface PansNetworkGridProps {
@@ -81,6 +93,9 @@ export interface PansNetworkGridProps {
   showGrid?: boolean;
   gridIntervalMeters?: number;
   showOrigin?: boolean;
+  units?: MapUnits;
+  areaMode?: MapAreaMode;
+  areaBounds?: readonly GridBounds[];
   editMode?: boolean;
   onLongPressCoordinate?(point: GridPoint): void;
   /** Legacy fixed-height compatibility. Omit to fill the available flex space. */
@@ -105,6 +120,9 @@ export function PansNetworkGrid({
   showGrid = true,
   gridIntervalMeters,
   showOrigin = false,
+  units = "metric",
+  areaMode = "infinite",
+  areaBounds = [],
   editMode = false,
   onLongPressCoordinate,
   height,
@@ -129,11 +147,21 @@ export function PansNetworkGrid({
   const internalMetersPerPixel = useSharedValue(initialViewport.metersPerPixel);
   const canvasSize = useSharedValue<GridSize>({ width: 0, height: 0 });
   const gestureActive = useSharedValue(false);
+  const pinchInitialized = useSharedValue(false);
   const camera = externalCamera ?? {
     centerX: internalCenterX,
     centerY: internalCenterY,
     metersPerPixel: internalMetersPerPixel,
   };
+
+  const boundedArea = React.useMemo(
+    () => (areaMode === "bounded" ? unionGridBounds(areaBounds) : undefined),
+    [areaBounds, areaMode],
+  );
+  const boundedMinX = boundedArea?.minXMeters;
+  const boundedMaxX = boundedArea?.maxXMeters;
+  const boundedMinY = boundedArea?.minYMeters;
+  const boundedMaxY = boundedArea?.maxYMeters;
 
   const controlledCenterX = controlledViewport?.centerXMeters;
   const controlledCenterY = controlledViewport?.centerYMeters;
@@ -198,10 +226,20 @@ export function PansNetworkGrid({
       panStartScale.value = camera.metersPerPixel.value;
     })
     .onUpdate((event) => {
-      camera.centerX.value =
-        panStartX.value - event.translationX * panStartScale.value;
-      camera.centerY.value =
-        panStartY.value + event.translationY * panStartScale.value;
+      const nextX = panStartX.value - event.translationX * panStartScale.value;
+      const nextY = panStartY.value + event.translationY * panStartScale.value;
+      camera.centerX.value = clampCameraAxis(
+        nextX,
+        boundedMinX,
+        boundedMaxX,
+        (canvasSize.value.width * camera.metersPerPixel.value) / 2,
+      );
+      camera.centerY.value = clampCameraAxis(
+        nextY,
+        boundedMinY,
+        boundedMaxY,
+        (canvasSize.value.height * camera.metersPerPixel.value) / 2,
+      );
     })
     .onEnd(() => {
       runOnJS(commitViewport)(
@@ -216,33 +254,48 @@ export function PansNetworkGrid({
 
   const pinch = Gesture.Pinch()
     .withTestId(`${testID}-pinch-gesture`)
-    .onStart((event) => {
+    .onStart(() => {
       gestureActive.value = true;
-      pinchStartScale.value = camera.metersPerPixel.value;
-      pinchWorldX.value =
-        camera.centerX.value +
-        (event.focalX - canvasSize.value.width / 2) *
-          camera.metersPerPixel.value;
-      pinchWorldY.value =
-        camera.centerY.value -
-        (event.focalY - canvasSize.value.height / 2) *
-          camera.metersPerPixel.value;
+      pinchInitialized.value = false;
     })
     .onUpdate((event) => {
+      if (event.numberOfPointers < 2) return;
+      const safeScale = Math.max(event.scale, 0.000001);
+      if (!pinchInitialized.value) {
+        pinchStartScale.value = camera.metersPerPixel.value * safeScale;
+        pinchWorldX.value =
+          camera.centerX.value +
+          (event.focalX - canvasSize.value.width / 2) *
+            camera.metersPerPixel.value;
+        pinchWorldY.value =
+          camera.centerY.value -
+          (event.focalY - canvasSize.value.height / 2) *
+            camera.metersPerPixel.value;
+        pinchInitialized.value = true;
+      }
       const nextScale = Math.min(
         10_000,
-        Math.max(
-          0.0001,
-          pinchStartScale.value / Math.max(event.scale, 0.000001),
-        ),
+        Math.max(0.0001, pinchStartScale.value / safeScale),
       );
       camera.metersPerPixel.value = nextScale;
-      camera.centerX.value =
+      const nextX =
         pinchWorldX.value -
         (event.focalX - canvasSize.value.width / 2) * nextScale;
-      camera.centerY.value =
+      const nextY =
         pinchWorldY.value +
         (event.focalY - canvasSize.value.height / 2) * nextScale;
+      camera.centerX.value = clampCameraAxis(
+        nextX,
+        boundedMinX,
+        boundedMaxX,
+        (canvasSize.value.width * nextScale) / 2,
+      );
+      camera.centerY.value = clampCameraAxis(
+        nextY,
+        boundedMinY,
+        boundedMaxY,
+        (canvasSize.value.height * nextScale) / 2,
+      );
     })
     .onEnd(() => {
       runOnJS(commitViewport)(
@@ -252,6 +305,7 @@ export function PansNetworkGrid({
       );
     })
     .onFinalize(() => {
+      pinchInitialized.value = false;
       gestureActive.value = false;
     });
 
@@ -330,6 +384,12 @@ export function PansNetworkGrid({
     { translateY: -camera.centerY.value },
   ]);
   const gridStrokeWidth = useDerivedValue(() => camera.metersPerPixel.value);
+  const axisStrokeWidth = useDerivedValue(
+    () => camera.metersPerPixel.value * 2,
+  );
+  const boundaryStrokeWidth = useDerivedValue(
+    () => camera.metersPerPixel.value * 2,
+  );
   const edgeStrokeWidth = useDerivedValue(
     () => camera.metersPerPixel.value * 2,
   );
@@ -343,9 +403,28 @@ export function PansNetworkGrid({
     () =>
       buildConsolidatedGridPath(committedViewport, size, interval, {
         showGrid,
+        showOrigin: false,
+      }),
+    [committedViewport, interval, showGrid, size],
+  );
+  const originPath = React.useMemo(
+    () =>
+      buildConsolidatedGridPath(committedViewport, size, interval, {
+        showGrid: false,
         showOrigin,
       }),
-    [committedViewport, interval, showGrid, showOrigin, size],
+    [committedViewport, interval, showOrigin, size],
+  );
+  const boundsPath = React.useMemo(
+    () => buildConsolidatedBoundsPath(areaBounds),
+    [areaBounds],
+  );
+  const axisTickLabels = React.useMemo(
+    () =>
+      showOrigin
+        ? buildAxisTickLabels(committedViewport, size, interval, units)
+        : [],
+    [committedViewport, interval, showOrigin, size, units],
   );
   const edgeTargets = React.useMemo(() => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -412,6 +491,22 @@ export function PansNetworkGrid({
                 strokeWidth={gridStrokeWidth}
               />
             ) : null}
+            {originPath ? (
+              <Path
+                path={originPath}
+                color={palette.label}
+                style="stroke"
+                strokeWidth={axisStrokeWidth}
+              />
+            ) : null}
+            {boundsPath ? (
+              <Path
+                path={boundsPath}
+                color={palette.warning}
+                style="stroke"
+                strokeWidth={boundaryStrokeWidth}
+              />
+            ) : null}
             {edgeTargets.length ? (
               <Path
                 path={edgePath}
@@ -444,6 +539,36 @@ export function PansNetworkGrid({
               />
             ))
           : null}
+        {axisTickLabels.map((tick) => (
+          <GridAxisTickLabel
+            key={tick.key}
+            point={tick.point}
+            label={tick.label}
+            axis={tick.axis}
+            camera={camera}
+            canvasSize={canvasSize}
+            gestureActive={gestureActive}
+            color={palette.label}
+            fontFamily={labelFontFamily}
+          />
+        ))}
+        <NativeText
+          testID={`${testID}-scale-indicator`}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 12,
+            bottom: 10,
+            color: palette.label,
+            fontFamily: labelFontFamily,
+            fontSize: 12,
+            backgroundColor: palette.background,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+          }}
+        >
+          {formatMapDistance(interval, units)} grid
+        </NativeText>
       </View>
     </GestureDetector>
   );
@@ -566,6 +691,144 @@ const GridNodeLabel = React.memo(function GridNodeLabel({
     </Animated.Text>
   );
 });
+
+interface GridAxisTick {
+  key: string;
+  point: GridPoint;
+  label: string;
+  axis: "x" | "y";
+}
+
+function buildAxisTickLabels(
+  viewport: GridViewport,
+  size: GridSize,
+  intervalMeters: number,
+  units: MapUnits,
+): GridAxisTick[] {
+  if (
+    size.width <= 0 ||
+    size.height <= 0 ||
+    !Number.isFinite(intervalMeters) ||
+    intervalMeters <= 0
+  )
+    return [];
+  const halfWidth = (size.width * viewport.metersPerPixel) / 2;
+  const halfHeight = (size.height * viewport.metersPerPixel) / 2;
+  const minX = viewport.centerXMeters - halfWidth;
+  const maxX = viewport.centerXMeters + halfWidth;
+  const minY = viewport.centerYMeters - halfHeight;
+  const maxY = viewport.centerYMeters + halfHeight;
+  const ticks: GridAxisTick[] = [];
+  const maximumTicks = 80;
+
+  if (minY <= 0 && maxY >= 0) {
+    for (
+      let x = Math.ceil(minX / intervalMeters) * intervalMeters;
+      x <= maxX && ticks.length < maximumTicks;
+      x += intervalMeters
+    ) {
+      ticks.push({
+        key: `x:${x}`,
+        point: { xMeters: x, yMeters: 0 },
+        label: formatMapCoordinate(x, units, 3),
+        axis: "x",
+      });
+    }
+  }
+  if (minX <= 0 && maxX >= 0) {
+    for (
+      let y = Math.ceil(minY / intervalMeters) * intervalMeters;
+      y <= maxY && ticks.length < maximumTicks;
+      y += intervalMeters
+    ) {
+      if (Math.abs(y) < intervalMeters * 1e-9) continue;
+      ticks.push({
+        key: `y:${y}`,
+        point: { xMeters: 0, yMeters: y },
+        label: formatMapCoordinate(y, units, 3),
+        axis: "y",
+      });
+    }
+  }
+  return ticks;
+}
+
+const GridAxisTickLabel = React.memo(function GridAxisTickLabel({
+  point,
+  label,
+  axis,
+  camera,
+  canvasSize,
+  gestureActive,
+  color,
+  fontFamily,
+}: {
+  point: GridPoint;
+  label: string;
+  axis: "x" | "y";
+  camera: PansGridCameraSharedValues;
+  canvasSize: SharedValue<GridSize>;
+  gestureActive: SharedValue<boolean>;
+  color: string;
+  fontFamily: string;
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: gestureActive.value ? 0 : 0.75,
+    transform: [
+      {
+        translateX:
+          canvasSize.value.width / 2 +
+          (point.xMeters - camera.centerX.value) / camera.metersPerPixel.value +
+          (axis === "y" ? 5 : -8),
+      },
+      {
+        translateY:
+          canvasSize.value.height / 2 -
+          (point.yMeters - camera.centerY.value) / camera.metersPerPixel.value +
+          (axis === "x" ? 5 : -8),
+      },
+    ],
+  }));
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          color,
+          fontSize: 10,
+          fontFamily,
+        },
+        animatedStyle,
+      ]}
+    >
+      {label}
+    </Animated.Text>
+  );
+});
+
+function clampCameraAxis(
+  center: number,
+  minimum: number | undefined,
+  maximum: number | undefined,
+  halfVisibleSpan: number,
+): number {
+  "worklet";
+  if (
+    minimum === undefined ||
+    maximum === undefined ||
+    !Number.isFinite(minimum) ||
+    !Number.isFinite(maximum) ||
+    minimum >= maximum
+  )
+    return center;
+  const minimumCenter = minimum + halfVisibleSpan;
+  const maximumCenter = maximum - halfVisibleSpan;
+  if (minimumCenter > maximumCenter) return (minimum + maximum) / 2;
+  return Math.min(maximumCenter, Math.max(minimumCenter, center));
+}
 
 function nodeColor(node: PansGridNode, palette: PansGridPalette): string {
   if (node.status === "error") return palette.error;

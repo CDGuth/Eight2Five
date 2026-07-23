@@ -246,6 +246,85 @@ export function buildConsolidatedGridPath(
   return segments.join(" ");
 }
 
+export function buildConsolidatedBoundsPath(
+  boundsList: readonly GridBounds[],
+): string {
+  return boundsList
+    .filter(isValidGridBounds)
+    .map(
+      (bounds) =>
+        `M ${cleanGridNumber(bounds.minXMeters)} ${cleanGridNumber(
+          bounds.minYMeters,
+        )} L ${cleanGridNumber(bounds.maxXMeters)} ${cleanGridNumber(
+          bounds.minYMeters,
+        )} L ${cleanGridNumber(bounds.maxXMeters)} ${cleanGridNumber(
+          bounds.maxYMeters,
+        )} L ${cleanGridNumber(bounds.minXMeters)} ${cleanGridNumber(
+          bounds.maxYMeters,
+        )} Z`,
+    )
+    .join(" ");
+}
+
+export function unionGridBounds(
+  boundsList: readonly GridBounds[],
+): GridBounds | undefined {
+  const valid = boundsList.filter(isValidGridBounds);
+  if (!valid.length) return undefined;
+  return valid.reduce<GridBounds>(
+    (union, bounds) => ({
+      minXMeters: Math.min(union.minXMeters, bounds.minXMeters),
+      maxXMeters: Math.max(union.maxXMeters, bounds.maxXMeters),
+      minYMeters: Math.min(union.minYMeters, bounds.minYMeters),
+      maxYMeters: Math.max(union.maxYMeters, bounds.maxYMeters),
+    }),
+    { ...valid[0] },
+  );
+}
+
+export function clampGridViewportToBounds(
+  viewport: GridViewport,
+  size: GridSize,
+  bounds: GridBounds | undefined,
+): GridViewport {
+  const normalized = normalizeGridViewport(viewport);
+  if (
+    !bounds ||
+    !isValidGridBounds(bounds) ||
+    size.width <= 0 ||
+    size.height <= 0
+  )
+    return normalized;
+  const halfWidth = (size.width * normalized.metersPerPixel) / 2;
+  const halfHeight = (size.height * normalized.metersPerPixel) / 2;
+  return {
+    ...normalized,
+    centerXMeters: clampViewportAxis(
+      normalized.centerXMeters,
+      bounds.minXMeters,
+      bounds.maxXMeters,
+      halfWidth,
+    ),
+    centerYMeters: clampViewportAxis(
+      normalized.centerYMeters,
+      bounds.minYMeters,
+      bounds.maxYMeters,
+      halfHeight,
+    ),
+  };
+}
+
+export function isValidGridBounds(bounds: GridBounds): boolean {
+  return (
+    Number.isFinite(bounds.minXMeters) &&
+    Number.isFinite(bounds.maxXMeters) &&
+    Number.isFinite(bounds.minYMeters) &&
+    Number.isFinite(bounds.maxYMeters) &&
+    bounds.minXMeters < bounds.maxXMeters &&
+    bounds.minYMeters < bounds.maxYMeters
+  );
+}
+
 export function buildConsolidatedEdgePath(
   pointsById: ReadonlyMap<string, GridPoint>,
   edges: readonly { sourceId: string; targetId: string }[],
@@ -259,6 +338,18 @@ export function buildConsolidatedEdgePath(
     })
     .filter(Boolean)
     .join(" ");
+}
+
+function clampViewportAxis(
+  center: number,
+  minimum: number,
+  maximum: number,
+  halfVisibleSpan: number,
+): number {
+  const minimumCenter = minimum + halfVisibleSpan;
+  const maximumCenter = maximum - halfVisibleSpan;
+  if (minimumCenter > maximumCenter) return (minimum + maximum) / 2;
+  return Math.min(maximumCenter, Math.max(minimumCenter, center));
 }
 
 function cleanGridNumber(value: number): number {

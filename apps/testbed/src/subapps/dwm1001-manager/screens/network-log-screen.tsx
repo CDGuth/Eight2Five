@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import {
+  formatMapDistance,
   getDeviceDisplayName,
   type PansPositionStreamService,
   type PositionLogSample,
@@ -296,8 +297,10 @@ export function NetworkLogScreen() {
               size="xs"
               style={{ color: theme.text, fontFamily: "monospace" }}
             >
-              {sample.sequence}: {sample.xMeters.toFixed(3)},{" "}
-              {sample.yMeters.toFixed(3)}, {sample.zMeters.toFixed(3)} m ·
+              {sample.sequence}: X{" "}
+              {formatMapDistance(sample.xMeters, network.settings.mapUnits)}, Y{" "}
+              {formatMapDistance(sample.yMeters, network.settings.mapUnits)}, Z{" "}
+              {formatMapDistance(sample.zMeters, network.settings.mapUnits)} ·
               anchors {sample.anchorCount}
               {sample.eventMarker ? ` · ${sample.eventMarker}` : ""}
             </Text>

@@ -19,4 +19,21 @@ describe("PANS manager settings compatibility", () => {
     expect(manager).not.toHaveProperty("discoveryScanDurationMs");
     expect(network).not.toHaveProperty("scanDurationMs");
   });
+
+  test("defaults and validates map display settings for older records", () => {
+    expect(
+      normalizeManagedNetworkSettings({
+        ...DEFAULT_MANAGED_NETWORK_SETTINGS,
+        mapUnits: undefined,
+        mapAreaMode: undefined,
+      } as never),
+    ).toMatchObject({ mapUnits: "metric", mapAreaMode: "infinite" });
+    expect(
+      normalizeManagedNetworkSettings({
+        ...DEFAULT_MANAGED_NETWORK_SETTINGS,
+        mapUnits: "invalid",
+        mapAreaMode: "invalid",
+      } as never),
+    ).toMatchObject({ mapUnits: "metric", mapAreaMode: "infinite" });
+  });
 });

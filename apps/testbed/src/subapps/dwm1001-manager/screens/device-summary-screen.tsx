@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  formatMapDistance,
   formatPanId,
   getDeviceDisplayName,
   getNetworkDisplayName,
@@ -29,6 +30,10 @@ export function DeviceSummaryScreen() {
   const device = useManagedDevice(deviceId);
   const cachedPanId = device?.lastKnownConfig?.panId;
   const profileMatch = resolveCachedProfileMatch(manager.networks, cachedPanId);
+  const displayNetwork = device?.networkId
+    ? manager.networks.find((network) => network.id === device.networkId)
+    : undefined;
+  const displayUnits = displayNetwork?.settings.mapUnits ?? "metric";
   const matchingProfiles = profileMatch.matchingNetworkIds
     .map((networkId) =>
       manager.networks.find((network) => network.id === networkId),
@@ -132,7 +137,7 @@ export function DeviceSummaryScreen() {
         />
         <KeyValue
           label="Saved position"
-          value={formatSavedPosition(device.lastKnownConfig)}
+          value={formatSavedPosition(device.lastKnownConfig, displayUnits)}
         />
         <KeyValue
           label="Last seen"
@@ -307,7 +312,14 @@ function formatSavedPosition(
   config:
     | import("@eight2five/mobile/pans-manager").ManagedDeviceConfig
     | undefined,
+  units: "metric" | "imperial",
 ): string {
   if (config?.role !== "anchor" || !config.position) return "None";
-  return `${config.position.xMeters} m, ${config.position.yMeters} m, ${config.position.zMeters} m`;
+  return `${formatMapDistance(
+    config.position.xMeters,
+    units,
+  )}, ${formatMapDistance(config.position.yMeters, units)}, ${formatMapDistance(
+    config.position.zMeters,
+    units,
+  )}`;
 }

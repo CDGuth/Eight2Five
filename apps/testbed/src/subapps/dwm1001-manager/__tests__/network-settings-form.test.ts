@@ -1,9 +1,12 @@
 import {
+  convertNetworkSettingsFormUnits,
   networkSettingsToForm,
   parseNetworkSettingsForm,
 } from "../network-settings-form";
 
 const DEFAULT_MANAGED_NETWORK_SETTINGS = {
+  mapUnits: "metric" as const,
+  mapAreaMode: "infinite" as const,
   coordinateBounds: {
     minXMeters: -1_000,
     maxXMeters: 1_000,
@@ -38,6 +41,22 @@ describe("network settings form", () => {
         ...DEFAULT_MANAGED_NETWORK_SETTINGS,
         staleDeviceTimeoutMs: 12_500,
         autoConnect: true,
+      },
+    });
+  });
+
+  test("converts coordinate inputs without changing physical bounds", () => {
+    const metric = networkSettingsToForm(DEFAULT_MANAGED_NETWORK_SETTINGS);
+    const imperial = convertNetworkSettingsFormUnits(metric, "imperial");
+    expect(imperial.mapUnits).toBe("imperial");
+    expect(Number(imperial.defaultAnchorHeightMeters)).toBeCloseTo(
+      2 / 0.3048,
+      5,
+    );
+    expect(parseNetworkSettingsForm(imperial)).toEqual({
+      settings: {
+        ...DEFAULT_MANAGED_NETWORK_SETTINGS,
+        mapUnits: "imperial",
       },
     });
   });

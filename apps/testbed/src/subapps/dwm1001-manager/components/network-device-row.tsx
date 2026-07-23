@@ -7,6 +7,7 @@ import type {
   PansInspectionResult,
 } from "@eight2five/mobile/pans-manager";
 import {
+  formatMapDistance,
   formatPanId,
   getNetworkDisplayName,
 } from "@eight2five/mobile/pans-manager";
@@ -406,7 +407,10 @@ function DeviceDetails({
         <TagModeRows config={config} />
         <DetailRow
           label="Anchor saved position"
-          value={formatAnchorPosition(config)}
+          value={formatAnchorPosition(
+            config,
+            network?.settings.mapUnits ?? "metric",
+          )}
         />
       </DetailSection>
 
@@ -563,10 +567,14 @@ function formatMilliseconds(value: number | undefined): string | undefined {
 
 function formatAnchorPosition(
   config: ManagedDeviceConfig | undefined,
+  units: ManagedNetwork["settings"]["mapUnits"],
 ): string | undefined {
   if (config?.role !== "anchor" || !config.position) return undefined;
   const { xMeters, yMeters, zMeters, quality } = config.position;
-  return `${xMeters}, ${yMeters}, ${zMeters} m · quality ${quality}`;
+  return `${formatMapDistance(xMeters, units)}, ${formatMapDistance(
+    yMeters,
+    units,
+  )}, ${formatMapDistance(zMeters, units)} · quality ${quality}`;
 }
 
 function formatPanStatus(

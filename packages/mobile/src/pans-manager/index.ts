@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./errors";
 export * from "./validation";
 export * from "./display";
+export * from "./map-units";
 export * from "./device-sections";
 export * from "./profile-matching";
 export * from "./device-discovery";

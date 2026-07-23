@@ -5,8 +5,11 @@ import type {
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import {
+  convertMapInputText,
   formatPanId,
   getNetworkDisplayName,
+  mapUnitAbbreviation,
+  mapUnitsToMeters,
   resolveCachedProfileMatch,
 } from "@eight2five/mobile/pans-manager";
 import {
@@ -74,6 +77,11 @@ export function DeviceSettingsModal({
   const manager = usePansManager();
   const [baseline, setBaseline] = React.useState<DeviceSettingsFormValues>();
   const [form, setForm] = React.useState<DeviceSettingsFormValues>();
+  const [positionInputs, setPositionInputs] = React.useState<PositionInputs>({
+    x: "",
+    y: "",
+    z: "",
+  });
   const inspectionAttempted = React.useRef(false);
   const [inspecting, setInspecting] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -91,15 +99,27 @@ export function DeviceSettingsModal({
     if (!isOpen || !device || loadedDeviceId.current === device.id) return;
     loadedDeviceId.current = device.id;
     const initial = deviceSettingsFormFrom(device, discovery?.name);
+    const initialUnits =
+      (device.networkId
+        ? manager.networks.find((network) => network.id === device.networkId)
+            ?.settings.mapUnits
+        : undefined) ?? "metric";
     setBaseline(initial);
     setForm(initial);
+    setPositionInputs(positionInputsFromForm(initial, initialUnits));
     inspectionAttempted.current = false;
     setInspectionError(undefined);
     setError(undefined);
     setConfigurationResult(undefined);
     setAdvancedOpen(false);
     setConfirmingDestructiveAction(false);
-  }, [destructiveActionRequested, device, discovery?.name, isOpen]);
+  }, [
+    destructiveActionRequested,
+    device,
+    discovery?.name,
+    isOpen,
+    manager.networks,
+  ]);
 
   React.useEffect(() => {
     if (!isOpen) loadedDeviceId.current = undefined;
@@ -143,6 +163,11 @@ export function DeviceSettingsModal({
 
   if (!device || !form || !baseline) return null;
 
+  const displayNetwork = device.networkId
+    ? manager.networks.find((network) => network.id === device.networkId)
+    : undefined;
+  const mapUnits = displayNetwork?.settings.mapUnits ?? "metric";
+  const coordinateUnit = mapUnitAbbreviation(mapUnits);
   const hardwareEditable = available && !inspecting;
   const roleBaselineAvailable = baseline.role !== undefined;
   const roleFieldsEditable =
@@ -155,8 +180,19 @@ export function DeviceSettingsModal({
       manager.networks.find((network) => network.id === networkId),
     )
     .filter((network) => network !== undefined);
+  const formWithDisplayPosition =
+    form.role === "anchor"
+      ? {
+          ...form,
+          positionX: positionInputToCanonical(positionInputs.x, mapUnits),
+          positionY: positionInputToCanonical(positionInputs.y, mapUnits),
+          positionZ: positionInputToCanonical(positionInputs.z, mapUnits),
+        }
+      : form;
   const anchorPositionErrors =
-    form.role === "anchor" ? validateAnchorPositionFields(form) : {};
+    form.role === "anchor"
+      ? validateAnchorPositionFields(formWithDisplayPosition)
+      : {};
   const hasAnchorPositionErrors =
     Object.values(anchorPositionErrors).some(Boolean);
 
@@ -169,7 +205,10 @@ export function DeviceSettingsModal({
     setError(undefined);
     setConfigurationResult(undefined);
     try {
-      const diff = buildDeviceConfigurationDiff(baseline, form);
+      const diff = buildDeviceConfigurationDiff(
+        baseline,
+        formWithDisplayPosition,
+      );
       const failures: string[] = [];
       if (Object.keys(diff.hardwareChanges).length) {
         if (!available) {
@@ -185,7 +224,7 @@ export function DeviceSettingsModal({
             setConfigurationResult(result);
             if (result.inspected) {
               const mergedForm = mergeInspectionIntoDeviceSettingsForm(
-                form,
+                formWithDisplayPosition,
                 result.inspected,
               );
               let mergedBaseline = mergeInspectionIntoDeviceSettingsForm(
@@ -201,14 +240,15 @@ export function DeviceSettingsModal({
               ) {
                 mergedBaseline = {
                   ...mergedBaseline,
-                  positionX: form.positionX!,
-                  positionY: form.positionY!,
-                  positionZ: form.positionZ!,
-                  positionQuality: form.positionQuality!,
+                  positionX: formWithDisplayPosition.positionX!,
+                  positionY: formWithDisplayPosition.positionY!,
+                  positionZ: formWithDisplayPosition.positionZ!,
+                  positionQuality: formWithDisplayPosition.positionQuality!,
                 };
               }
               setForm(mergedForm);
               setBaseline(mergedBaseline);
+              setPositionInputs(positionInputsFromForm(mergedForm, mapUnits));
             }
             if (result.error)
               failures.push(
@@ -431,31 +471,32 @@ export function DeviceSettingsModal({
                 disabled={!roleFieldsEditable}
               />
               <SettingHelp title="Initiator and coordinates">
-                A network requires an initiator anchor. X, Y, and Z are meters
-                in the network coordinate system. Quality is optional from 1 to
-                100 and defaults to 100.
+                A network requires an initiator anchor. X and Y are horizontal
+                coordinates from the network origin. Z is height. Display input
+                is converted to canonical meters before writing. Quality is
+                optional from 1 to 100 and defaults to 100.
               </SettingHelp>
               <HStack style={{ gap: eight2FiveSpacing.sm }}>
                 <TextField
-                  label="X"
-                  value={form.positionX ?? ""}
+                  label={`X (${coordinateUnit})`}
+                  value={positionInputs.x}
                   placeholder="Required"
-                  helper="Meters from the network origin."
+                  helper={`Horizontal ${coordinateUnit} from the network origin.`}
                   error={anchorPositionErrors.positionX}
-                  onChangeText={(positionX) =>
-                    setForm((current) => ({ ...current!, positionX }))
+                  onChangeText={(x) =>
+                    setPositionInputs((current) => ({ ...current, x }))
                   }
                   disabled={!roleFieldsEditable}
                   compact
                 />
                 <TextField
-                  label="Y"
-                  value={form.positionY ?? ""}
+                  label={`Y (${coordinateUnit})`}
+                  value={positionInputs.y}
                   placeholder="Required"
-                  helper="Meters from the network origin."
+                  helper={`Horizontal ${coordinateUnit} from the network origin.`}
                   error={anchorPositionErrors.positionY}
-                  onChangeText={(positionY) =>
-                    setForm((current) => ({ ...current!, positionY }))
+                  onChangeText={(y) =>
+                    setPositionInputs((current) => ({ ...current, y }))
                   }
                   disabled={!roleFieldsEditable}
                   compact
@@ -463,13 +504,13 @@ export function DeviceSettingsModal({
               </HStack>
               <HStack style={{ gap: eight2FiveSpacing.sm }}>
                 <TextField
-                  label="Z"
-                  value={form.positionZ ?? ""}
+                  label={`Z (${coordinateUnit})`}
+                  value={positionInputs.z}
                   placeholder="Required"
-                  helper="Anchor height in meters."
+                  helper={`Anchor height in ${mapUnits === "imperial" ? "feet" : "meters"}.`}
                   error={anchorPositionErrors.positionZ}
-                  onChangeText={(positionZ) =>
-                    setForm((current) => ({ ...current!, positionZ }))
+                  onChangeText={(z) =>
+                    setPositionInputs((current) => ({ ...current, z }))
                   }
                   disabled={!roleFieldsEditable}
                   compact
@@ -911,6 +952,35 @@ function ResultText({
       {message}
     </Text>
   );
+}
+
+interface PositionInputs {
+  x: string;
+  y: string;
+  z: string;
+}
+
+function positionInputsFromForm(
+  form: DeviceSettingsFormValues,
+  units: "metric" | "imperial",
+): PositionInputs {
+  return {
+    x: convertMapInputText(form.positionX ?? "", "metric", units, 9),
+    y: convertMapInputText(form.positionY ?? "", "metric", units, 9),
+    z: convertMapInputText(form.positionZ ?? "", "metric", units, 9),
+  };
+}
+
+function positionInputToCanonical(
+  value: string,
+  units: "metric" | "imperial",
+): string {
+  const text = value.trim();
+  if (!text) return "";
+  const parsed = Number(text);
+  return Number.isFinite(parsed)
+    ? String(mapUnitsToMeters(parsed, units))
+    : value;
 }
 
 function formatRate(value: number | undefined): string {

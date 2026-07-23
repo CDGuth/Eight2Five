@@ -13,6 +13,7 @@ import type {
   PansUwbMode,
 } from "expo-pans-ble-api";
 import type { ManagerErrorCode } from "./errors";
+import type { MapAreaMode, MapUnits } from "./map-units";
 
 export type PansPosition = ExpoPansPosition;
 
@@ -35,6 +36,8 @@ export interface DefaultTagModeSettings {
 }
 
 export interface ManagedNetworkSettings {
+  mapUnits: MapUnits;
+  mapAreaMode: MapAreaMode;
   coordinateBounds: CoordinateBounds;
   defaultAnchorHeightMeters: number;
   staleDeviceTimeoutMs: number;
@@ -45,6 +48,8 @@ export interface ManagedNetworkSettings {
 }
 
 export const DEFAULT_MANAGED_NETWORK_SETTINGS: ManagedNetworkSettings = {
+  mapUnits: "metric",
+  mapAreaMode: "infinite",
   coordinateBounds: {
     minXMeters: -1_000,
     maxXMeters: 1_000,
@@ -411,6 +416,13 @@ export function normalizeManagedNetworkSettings(
     ...(settings ?? {}),
   } as Partial<ManagedNetworkSettings> & Record<string, unknown>;
   delete compatible.scanDurationMs;
+  if (compatible.mapUnits !== "metric" && compatible.mapUnits !== "imperial")
+    delete compatible.mapUnits;
+  if (
+    compatible.mapAreaMode !== "infinite" &&
+    compatible.mapAreaMode !== "bounded"
+  )
+    delete compatible.mapAreaMode;
   return {
     ...DEFAULT_MANAGED_NETWORK_SETTINGS,
     ...compatible,

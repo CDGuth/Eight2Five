@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   DEFAULT_MANAGED_NETWORK_SETTINGS,
   formatPanId,
+  mapUnitAbbreviation,
 } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -21,6 +22,7 @@ import {
 } from "../components/manager-ui";
 import { SettingHelp } from "../components/setting-help";
 import {
+  convertNetworkSettingsFormUnits,
   networkSettingsToForm,
   parseNetworkSettingsForm,
 } from "../network-settings-form";
@@ -45,6 +47,7 @@ export function NetworkSettingsScreen() {
   const [message, setMessage] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const coordinateUnit = mapUnitAbbreviation(settingsForm.mapUnits);
   const loadedNetworkId = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
@@ -139,8 +142,42 @@ export function NetworkSettingsScreen() {
       </SectionCard>
 
       <SectionCard title="Map and coordinate system">
+        <SelectField
+          testID="network-map-units-select"
+          label="Display units"
+          value={settingsForm.mapUnits}
+          onChange={(value) =>
+            setSettingsForm((current) =>
+              convertNetworkSettingsFormUnits(
+                current,
+                value as "metric" | "imperial",
+              ),
+            )
+          }
+          choices={[
+            { label: "Metric (meters)", value: "metric" },
+            { label: "Imperial (feet)", value: "imperial" },
+          ]}
+          helper="Coordinates remain stored in meters; this controls display and input conversion."
+        />
+        <SelectField
+          testID="network-map-area-mode-select"
+          label="Map area"
+          value={settingsForm.mapAreaMode}
+          onChange={(value) =>
+            setSettingsForm((current) => ({
+              ...current,
+              mapAreaMode: value as "infinite" | "bounded",
+            }))
+          }
+          choices={[
+            { label: "Infinite canvas", value: "infinite" },
+            { label: "Bounded area", value: "bounded" },
+          ]}
+          helper="Bounded mode draws and constrains navigation to the saved X/Y rectangle."
+        />
         <TextField
-          label="Minimum X (meters)"
+          label={`Minimum X (${coordinateUnit})`}
           value={settingsForm.minXMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, minXMeters: value }))
@@ -148,7 +185,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Maximum X (meters)"
+          label={`Maximum X (${coordinateUnit})`}
           value={settingsForm.maxXMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, maxXMeters: value }))
@@ -156,7 +193,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Minimum Y (meters)"
+          label={`Minimum Y (${coordinateUnit})`}
           value={settingsForm.minYMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, minYMeters: value }))
@@ -164,7 +201,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Maximum Y (meters)"
+          label={`Maximum Y (${coordinateUnit})`}
           value={settingsForm.maxYMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, maxYMeters: value }))
@@ -172,7 +209,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Minimum Z (meters)"
+          label={`Minimum Z (${coordinateUnit})`}
           value={settingsForm.minZMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, minZMeters: value }))
@@ -180,7 +217,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Maximum Z (meters)"
+          label={`Maximum Z (${coordinateUnit})`}
           value={settingsForm.maxZMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({ ...current, maxZMeters: value }))
@@ -188,7 +225,7 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <TextField
-          label="Default anchor height (meters)"
+          label={`Default anchor height (${coordinateUnit})`}
           value={settingsForm.defaultAnchorHeightMeters}
           onChangeText={(value) =>
             setSettingsForm((current) => ({
@@ -199,9 +236,11 @@ export function NetworkSettingsScreen() {
           keyboardType="numbers-and-punctuation"
         />
         <SettingHelp title="Coordinates and bounds">
-          X and Y are horizontal meters from the network origin. Z is height in
-          meters. Bounds define the expected map area; they do not discard nodes
-          outside the rectangle.
+          X and Y are horizontal coordinates from the network origin. Z is
+          height. Values are converted at the UI boundary and stored in meters.
+          Bounds remain saved in both area modes; bounded mode draws the
+          rectangle and constrains camera panning, while nodes outside it remain
+          available to diagnostics and exports.
         </SettingHelp>
       </SectionCard>
 

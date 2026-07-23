@@ -132,7 +132,14 @@ describe("manager map data helpers", () => {
         },
       ],
     );
-    expect(edges).toEqual([{ sourceId: "tag", targetId: "anchor-ab" }]);
+    expect(edges).toEqual([
+      {
+        sourceId: "tag",
+        targetId: "anchor-ab",
+        distanceMeters: 2,
+        quality: 90,
+      },
+    ]);
   });
 
   test("clears or retains cached positions without fabricating samples", () => {

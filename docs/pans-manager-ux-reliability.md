@@ -12,7 +12,7 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 | 3 — Hardware-derived state | Complete (device review pending) | Device identity and cached profile membership now come from hardware label/PAN reads. Duplicate-PAN profiles surface as conflicts. Failed automatic inspections retry with bounded backoff. Device-local nickname, notes, and profile selection were removed from UI and v2 exports. |
 | 4 — Hierarchy and deletion | Complete (device review pending) | Unassigned/Networks hierarchy with child rails, shared card insets, offline BluetoothOff styling, vertically constrained drag, swipe-to-delete with confirmation, and guarded unassignment using the PANS default PAN ID 0. |
 | 5 — Form controls | Complete (device review pending) | Manager selects now use an anchored popover rather than an action sheet. Anchor quality is optional and defaults to 100, with field-level validation and help text. |
-| 6 — Map behavior | Not started | |
+| 6 — Map behavior | Complete (device review pending) | Added persisted metric/imperial display units, infinite/bounded map modes, bounded-area rendering and camera constraints, origin axes and labels, scale readout, unit-aware editors/details, exact origin reset, and guarded two-pointer pinch focal handling. |
 | 7 — Packet and live updates | Not started | |
 | 8 — Integration | Not started | |
 
@@ -82,6 +82,17 @@ Branch: `feature/testbed-pans-manager-ux-reliability`
 - Anchor coordinates and quality surface field-specific validation and explanatory help. Invalid fields disable the relevant save/write action rather than relying only on a generic submission error.
 - Phase verification: all TypeScript and lint workspaces, Syncpack, and Jest passed (`20` testbed suites / `96` tests, `24` shared-mobile suites / `116` tests, and `3` Expo PANS BLE API suites / `58` tests).
 - Popover placement, keyboard interaction, screen-reader focus, and nested-modal behavior still require physical Android/iOS review.
+
+## Phase 6 implementation notes
+
+- Network settings now persist `mapUnits` (`metric` or `imperial`) and `mapAreaMode` (`infinite` or `bounded`). Existing records and exports normalize to metric/infinite without changing canonical coordinate storage.
+- Coordinates, bounds, anchor editors, node details, log samples, ranging readouts, grid labels, and the scale indicator convert only at the display/input boundary. Stored positions and PANS writes remain meters.
+- Bounded networks draw their saved X/Y rectangles. When every selected network is bounded, pan and pinch camera movement is constrained to the union of the selected rectangles; mixed or infinite selections retain an infinite camera while still showing bounded-network outlines.
+- Origin axes are rendered separately from ordinary grid lines, so disabling the grid does not hide the X/Y origin. Axis tick labels use the selected units.
+- Reset camera continues to write the exact default viewport centered at `(0, 0)`, independent of bounded-area clamping applied only to user gestures.
+- Pinch handling no longer reads focal coordinates during gesture start. Updates with fewer than two pointers are ignored; the first valid two-pointer update establishes the focal world coordinate without a camera jump.
+- Phase verification: all TypeScript and lint workspaces and Jest passed (`20` testbed suites / `98` tests, `25` shared-mobile suites / `120` tests, and `3` Expo PANS BLE API suites / `58` tests).
+- Gesture feel, boundary behavior on unusually small rectangles, text density at extreme zoom, and physical-device accessibility remain deferred to Android/iOS review.
 
 ## Post-review verification — 2026-07-23
 

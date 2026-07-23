@@ -188,6 +188,8 @@ function controllerFixture(): PansMapDataController {
         name: "Network",
         panId: 1,
         settings: {
+          mapUnits: "metric",
+          mapAreaMode: "infinite",
           coordinateBounds: {
             minXMeters: -1,
             maxXMeters: 1,
@@ -231,6 +233,11 @@ function controllerFixture(): PansMapDataController {
     setVisibility: jest.fn(),
     grid: { showGrid: true, showOrigin: true },
     setGrid: jest.fn(),
+    mapUnits: "metric",
+    mapAreaMode: "infinite",
+    selectedAreaBounds: [],
+    setMapUnits: jest.fn(),
+    setMapAreaMode: jest.fn(),
     gridSize: { width: 320, height: 640 },
     setGridSize: jest.fn(),
     viewport: { centerXMeters: 0, centerYMeters: 0, metersPerPixel: 0.1 },

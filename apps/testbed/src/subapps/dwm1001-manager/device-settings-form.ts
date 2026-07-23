@@ -162,7 +162,7 @@ export function validateAnchorPositionFields(
     const text = value?.trim() ?? "";
     if (text === "") errors[field] = "Required when writing a position.";
     else if (!Number.isFinite(Number(text)))
-      errors[field] = "Enter a finite number in meters.";
+      errors[field] = "Enter a finite coordinate.";
   }
 
   if (qualityText !== "") {

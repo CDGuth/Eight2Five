@@ -29,8 +29,14 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 import {
+  formatMapCoordinate,
+  formatMapDistance,
   getDeviceDisplayName,
   getNetworkDisplayName,
+  mapUnitsToMeters,
+  mapUnitAbbreviation,
+  type GridBounds,
+  type MapUnits,
 } from "@eight2five/mobile/pans-manager";
 
 import type {
@@ -54,6 +60,7 @@ export function ManagerMapSettingsModal({
 }) {
   const theme = useEight2FiveTheme();
   const pending = controller.pendingAnchorEdit;
+  const gridIntervalChoices = getGridIntervalChoices(controller.mapUnits);
 
   const trackingActive =
     controller.trackingStatus === "running" ||
@@ -185,18 +192,37 @@ export function ManagerMapSettingsModal({
 
           <SettingsSection title="Units and coordinate system">
             <SelectField
+              testID="map-units-select"
+              label="Display units"
+              value={controller.mapUnits}
+              choices={[
+                { label: "Metric (meters)", value: "metric" },
+                { label: "Imperial (feet)", value: "imperial" },
+              ]}
+              onChange={(value) =>
+                void controller.setMapUnits(value as "metric" | "imperial")
+              }
+              helper="Coordinates remain stored in meters and are converted only for display and input."
+            />
+            <SelectField
+              testID="map-area-mode-select"
+              label="Map area"
+              value={controller.mapAreaMode}
+              choices={[
+                { label: "Infinite canvas", value: "infinite" },
+                { label: "Bounded area", value: "bounded" },
+              ]}
+              onChange={(value) =>
+                void controller.setMapAreaMode(value as "infinite" | "bounded")
+              }
+              helper="The setting is applied to every currently selected network."
+            />
+            <SelectField
               testID="map-grid-interval-select"
               label="Grid interval"
               value={String(controller.grid.fixedIntervalMeters ?? "automatic")}
               placeholder="Automatic"
-              choices={[
-                { label: "Automatic", value: "automatic" },
-                { label: "0.1 m", value: "0.1" },
-                { label: "0.5 m", value: "0.5" },
-                { label: "1 m", value: "1" },
-                { label: "5 m", value: "5" },
-                { label: "10 m", value: "10" },
-              ]}
+              choices={gridIntervalChoices}
               onChange={(value) =>
                 controller.setGrid({
                   fixedIntervalMeters:
@@ -212,10 +238,23 @@ export function ManagerMapSettingsModal({
           </SettingsSection>
 
           <SettingsSection title="Area and bounds">
+            {controller.selectedAreaBounds.length ? (
+              controller.selectedAreaBounds.map((bounds, index) => (
+                <KeyValue
+                  key={`${bounds.minXMeters}:${bounds.maxXMeters}:${bounds.minYMeters}:${bounds.maxYMeters}:${index}`}
+                  label={`Bounded area ${index + 1}`}
+                  value={formatBounds(bounds, controller.mapUnits)}
+                />
+              ))
+            ) : (
+              <Text selectable size="sm" style={{ color: theme.textMuted }}>
+                No selected network is currently using bounded-area mode.
+              </Text>
+            )}
             <SettingHelp title="Map bounds">
-              Each network profile supplies minimum and maximum X and Y values
-              in meters. Bounds describe the expected field area; out-of-bounds
-              devices remain visible.
+              Each network profile stores minimum and maximum X and Y values in
+              meters. Bounded mode draws the rectangle and constrains camera
+              navigation; device data outside the rectangle is not discarded.
             </SettingHelp>
           </SettingsSection>
 
@@ -340,7 +379,7 @@ export function ManagerMapSettingsModal({
             />
             {pending ? (
               <AnchorEditConfirmation
-                key={`${pending.anchorId}:${pending.coordinate.xMeters}:${pending.coordinate.yMeters}`}
+                key={`${pending.anchorId}:${pending.coordinate.xMeters}:${pending.coordinate.yMeters}:${controller.mapUnits}`}
                 controller={controller}
                 pending={pending}
                 trackingActive={trackingActive}
@@ -368,7 +407,10 @@ function AnchorEditConfirmation({
   trackingActive: boolean;
 }) {
   const theme = useEight2FiveTheme();
-  const [zMeters, setZMeters] = React.useState(String(pending.zMeters));
+  const unit = mapUnitAbbreviation(controller.mapUnits);
+  const [zMeters, setZMeters] = React.useState(
+    formatMapCoordinate(pending.zMeters, controller.mapUnits, 6),
+  );
   const [quality, setQuality] = React.useState(
     pending.quality === 100 ? "" : String(pending.quality),
   );
@@ -395,15 +437,15 @@ function AnchorEditConfirmation({
         Confirm anchor position
       </Heading>
       <Text selectable style={{ color: theme.text }}>
-        X {pending.coordinate.xMeters.toFixed(3)} m · Y{" "}
-        {pending.coordinate.yMeters.toFixed(3)} m
+        X {formatMapDistance(pending.coordinate.xMeters, controller.mapUnits)} ·
+        Y {formatMapDistance(pending.coordinate.yMeters, controller.mapUnits)}
       </Text>
       <NumericField
         testID="map-anchor-z-input"
-        label="Z (m)"
+        label={`Z (${unit})`}
         value={zMeters}
         onChange={setZMeters}
-        helper="Anchor height in meters."
+        helper={`Anchor height in ${controller.mapUnits === "imperial" ? "feet" : "meters"}.`}
         error={zError}
       />
       <NumericField
@@ -425,7 +467,10 @@ function AnchorEditConfirmation({
           testID="map-write-anchor-position"
           isDisabled={trackingActive || Boolean(zError || qualityError)}
           onPress={() =>
-            void controller.savePendingAnchorEdit(Number(zText), qualityValue)
+            void controller.savePendingAnchorEdit(
+              mapUnitsToMeters(Number(zText), controller.mapUnits),
+              qualityValue,
+            )
           }
         />
         <MapButton
@@ -583,6 +628,30 @@ function KeyValue({ label, value }: { label: string; value: string }) {
       </Text>
     </HStack>
   );
+}
+
+function getGridIntervalChoices(units: MapUnits) {
+  const valuesMeters =
+    units === "imperial"
+      ? [0.3048, 1.524, 3.048, 7.62, 15.24]
+      : [0.1, 0.5, 1, 5, 10];
+  return [
+    { label: "Automatic", value: "automatic" },
+    ...valuesMeters.map((valueMeters) => ({
+      label: formatMapDistance(valueMeters, units),
+      value: String(valueMeters),
+    })),
+  ];
+}
+
+function formatBounds(bounds: GridBounds, units: MapUnits): string {
+  return `X ${formatMapDistance(bounds.minXMeters, units)} to ${formatMapDistance(
+    bounds.maxXMeters,
+    units,
+  )} · Y ${formatMapDistance(bounds.minYMeters, units)} to ${formatMapDistance(
+    bounds.maxYMeters,
+    units,
+  )}`;
 }
 
 function MapButton({

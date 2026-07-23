@@ -1,14 +1,17 @@
 import {
   applyGridCameraTransform,
+  buildConsolidatedBoundsPath,
   buildConsolidatedEdgePath,
   buildConsolidatedGridPath,
   boundsForPoints,
   chooseGridInterval,
+  clampGridViewportToBounds,
   fitGridBounds,
   gridCameraTransform,
   normalizeGridViewport,
   panGridViewport,
   screenToWorld,
+  unionGridBounds,
   worldToScreen,
   zoomGridViewport,
 } from "../pans-network-grid-math";
@@ -100,6 +103,44 @@ describe("PansNetworkGrid math", () => {
         metersPerPixel: Number.MAX_VALUE,
       }).metersPerPixel,
     ).toBe(10_000);
+  });
+
+  test("builds and unions bounded-area rectangles and clamps camera centers", () => {
+    const bounds = [
+      { minXMeters: -10, maxXMeters: 10, minYMeters: -5, maxYMeters: 5 },
+      { minXMeters: 20, maxXMeters: 30, minYMeters: -2, maxYMeters: 8 },
+    ];
+    expect(unionGridBounds(bounds)).toEqual({
+      minXMeters: -10,
+      maxXMeters: 30,
+      minYMeters: -5,
+      maxYMeters: 8,
+    });
+    expect(buildConsolidatedBoundsPath(bounds)).toContain(
+      "M -10 -5 L 10 -5 L 10 5 L -10 5 Z",
+    );
+    expect(
+      clampGridViewportToBounds(
+        { centerXMeters: 100, centerYMeters: -100, metersPerPixel: 0.1 },
+        { width: 100, height: 50 },
+        bounds[0],
+      ),
+    ).toEqual({
+      centerXMeters: 5,
+      centerYMeters: -2.5,
+      metersPerPixel: 0.1,
+    });
+    expect(
+      clampGridViewportToBounds(
+        { centerXMeters: 9, centerYMeters: 4, metersPerPixel: 1 },
+        { width: 100, height: 100 },
+        bounds[0],
+      ),
+    ).toEqual({
+      centerXMeters: 0,
+      centerYMeters: 0,
+      metersPerPixel: 1,
+    });
   });
 
   test("consolidates grid, origin, and resolved edges into path strings", () => {

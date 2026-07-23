@@ -2,12 +2,16 @@ import React from "react";
 import {
   boundsForPoints,
   DEFAULT_GRID_VIEWPORT,
+  DEFAULT_MANAGED_NETWORK_SETTINGS,
   fitGridBounds,
   getDeviceDisplayName,
   normalizeGridViewport,
+  type GridBounds,
   type GridPoint,
   type GridSize,
   type GridViewport,
+  type MapAreaMode,
+  type MapUnits,
   type ManagedDevice,
   type ManagedNetwork,
   type ObservedPansTopology,
@@ -71,6 +75,11 @@ export interface PansMapDataController {
   ): void;
   grid: PansMapGridOptions;
   setGrid(options: Partial<PansMapGridOptions>): void;
+  mapUnits: MapUnits;
+  mapAreaMode: MapAreaMode;
+  selectedAreaBounds: GridBounds[];
+  setMapUnits(units: MapUnits): Promise<void>;
+  setMapAreaMode(mode: MapAreaMode): Promise<void>;
   gridSize: GridSize;
   setGridSize(size: GridSize): void;
   viewport: GridViewport;
@@ -233,6 +242,28 @@ export function usePansMapDataController(
   const selectedNetworks = React.useMemo(
     () => networks.filter((network) => selectedNetworkIds.has(network.id)),
     [networks, selectedNetworkIds],
+  );
+  const mapUnits =
+    selectedNetworks[0]?.settings.mapUnits ??
+    DEFAULT_MANAGED_NETWORK_SETTINGS.mapUnits;
+  const mapAreaMode =
+    selectedNetworks.length > 0 &&
+    selectedNetworks.every(
+      (network) => network.settings.mapAreaMode === "bounded",
+    )
+      ? "bounded"
+      : "infinite";
+  const selectedAreaBounds = React.useMemo(
+    () =>
+      selectedNetworks
+        .filter((network) => network.settings.mapAreaMode === "bounded")
+        .map((network) => ({
+          minXMeters: network.settings.coordinateBounds.minXMeters,
+          maxXMeters: network.settings.coordinateBounds.maxXMeters,
+          minYMeters: network.settings.coordinateBounds.minYMeters,
+          maxYMeters: network.settings.coordinateBounds.maxYMeters,
+        })),
+    [selectedNetworks],
   );
   const anchors = React.useMemo(
     () =>
@@ -550,6 +581,22 @@ export function usePansMapDataController(
     setLastKnownTagPositions(lastKnownRef.current);
   }, []);
 
+  const updateSelectedNetworkMapSetting = React.useCallback(
+    async (
+      setting: "mapUnits" | "mapAreaMode",
+      value: MapUnits | MapAreaMode,
+    ) => {
+      for (const network of selectedNetworks) {
+        await manager.saveNetwork({
+          ...network,
+          settings: { ...network.settings, [setting]: value },
+          updatedAt: Date.now(),
+        });
+      }
+    },
+    [manager, selectedNetworks],
+  );
+
   return {
     networks,
     devices,
@@ -570,6 +617,13 @@ export function usePansMapDataController(
     grid,
     setGrid: (options) =>
       setGridState((current) => ({ ...current, ...options })),
+    mapUnits,
+    mapAreaMode,
+    selectedAreaBounds,
+    setMapUnits: async (units) =>
+      await updateSelectedNetworkMapSetting("mapUnits", units),
+    setMapAreaMode: async (mode) =>
+      await updateSelectedNetworkMapSetting("mapAreaMode", mode),
     gridSize,
     setGridSize,
     viewport,
@@ -756,7 +810,14 @@ export function resolveRangingEdges(
       anchorsByNodeId.get(normalizeNodeId(distance.nodeId.toString(16)));
     if (!anchor || targets.has(anchor.id)) return [];
     targets.add(anchor.id);
-    return [{ sourceId: tagId, targetId: anchor.id }];
+    return [
+      {
+        sourceId: tagId,
+        targetId: anchor.id,
+        distanceMeters: distance.distanceMeters,
+        quality: distance.quality,
+      },
+    ];
   });
 }
 

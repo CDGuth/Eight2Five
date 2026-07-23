@@ -73,7 +73,7 @@ describe("device settings form", () => {
         positionQuality: "101",
       }),
     ).toEqual({
-      positionX: "Enter a finite number in meters.",
+      positionX: "Enter a finite coordinate.",
       positionY: "Required when writing a position.",
       positionQuality:
         "Enter an integer from 1 to 100, or leave blank for 100.",

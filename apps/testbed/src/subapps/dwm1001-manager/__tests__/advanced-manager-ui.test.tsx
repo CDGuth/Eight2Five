@@ -137,6 +137,80 @@ describe("advanced DWM1001 manager UI", () => {
     await act(async () => tree.unmount());
   });
 
+  test("ignores one-pointer pinch updates until a two-pointer focal point is valid", async () => {
+    const onViewportChange = jest.fn();
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansNetworkGrid
+          testID="pinch-grid"
+          palette={{
+            background: "background",
+            grid: "grid",
+            anchor: "anchor",
+            tag: "tag",
+            initiator: "initiator",
+            selected: "selected",
+            offline: "offline",
+            warning: "warning",
+            error: "error",
+            label: "label",
+            edge: "edge",
+          }}
+          nodes={[]}
+          onViewportChange={onViewportChange}
+        />,
+      );
+    });
+    act(() => {
+      fireGestureHandler(getByGestureTestId("pinch-grid-pinch-gesture"), [
+        {
+          state: State.BEGAN,
+          numberOfPointers: 1,
+          focalX: 0,
+          focalY: 0,
+          scale: 1,
+        },
+        {
+          state: State.ACTIVE,
+          numberOfPointers: 1,
+          focalX: 0,
+          focalY: 0,
+          scale: 1.5,
+        },
+        {
+          state: State.ACTIVE,
+          numberOfPointers: 2,
+          focalX: 0,
+          focalY: 0,
+          scale: 1,
+        },
+        {
+          state: State.ACTIVE,
+          numberOfPointers: 2,
+          focalX: 0,
+          focalY: 0,
+          scale: 2,
+        },
+        {
+          state: State.END,
+          numberOfPointers: 2,
+          focalX: 0,
+          focalY: 0,
+          scale: 2,
+        },
+      ]);
+    });
+
+    expect(onViewportChange).toHaveBeenCalledTimes(1);
+    expect(onViewportChange.mock.calls[0][0]).toEqual({
+      centerXMeters: 0,
+      centerYMeters: 0,
+      metersPerPixel: 0.05,
+    });
+    await act(async () => tree.unmount());
+  });
+
   test("keeps firmware execution hidden behind the disabled flag", () => {
     expect(isDwm1001FirmwareRouteEnabled).toBe(false);
   });

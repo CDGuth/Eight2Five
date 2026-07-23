@@ -299,6 +299,12 @@ function validateNetworkSettings(value: unknown): void {
       tag.movingUpdateRateMs,
       tag.stationaryUpdateRateMs,
     ].every(isFiniteNumber) ||
+    (value.mapUnits !== undefined &&
+      value.mapUnits !== "metric" &&
+      value.mapUnits !== "imperial") ||
+    (value.mapAreaMode !== undefined &&
+      value.mapAreaMode !== "infinite" &&
+      value.mapAreaMode !== "bounded") ||
     typeof value.autoConnect !== "boolean" ||
     typeof tag.locationEngineEnabled !== "boolean" ||
     typeof tag.lowPowerModeEnabled !== "boolean" ||
