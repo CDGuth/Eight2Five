@@ -101,6 +101,50 @@ describe("NetworksDevicesScreen", () => {
     await act(async () => tree.unmount());
   });
 
+  test("handles sustained discovery updates without a maximum-depth warning", async () => {
+    const harness = createRuntime();
+    const consoleError = jest.spyOn(console, "error").mockImplementation();
+    let tree!: TestRenderer.ReactTestRenderer;
+    try {
+      await act(async () => {
+        tree = TestRenderer.create(
+          toolbarHarness(
+            <PansManagerProvider createRuntime={async () => harness.runtime}>
+              <NetworksDevicesScreen />
+            </PansManagerProvider>,
+          ),
+        );
+        await flushPromises();
+      });
+
+      for (let update = 1; update <= 60; update += 1) {
+        await act(async () => {
+          harness.emitDiscoveries([
+            {
+              ...discovery("transport-live"),
+              rssi: -60 - (update % 10),
+              lastSeenAt: update,
+            },
+          ]);
+          await flushPromises();
+        });
+      }
+
+      expect(
+        consoleError.mock.calls.some((call) =>
+          call.some(
+            (argument) =>
+              typeof argument === "string" &&
+              argument.includes("Maximum update depth exceeded"),
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+      if (tree) await act(async () => tree.unmount());
+    }
+  });
+
   test("renders a compact initialization error and retries", async () => {
     const runtime = createRuntime().runtime;
     const createRuntimeFactory = jest

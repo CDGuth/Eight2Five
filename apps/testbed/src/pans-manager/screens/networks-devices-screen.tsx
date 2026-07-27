@@ -423,14 +423,15 @@ export function NetworksDevicesScreen() {
           discovery.transportDeviceId === selectedDevice.transportDeviceId,
       )
     : undefined;
+  const { initialization, discoveryState, startDiscovery, stopDiscovery } =
+    manager;
   const scanAction = React.useMemo(() => {
-    const loading = manager.initialization === "initializing";
+    const loading = initialization === "initializing";
     const active =
-      manager.discoveryState === "starting" ||
-      manager.discoveryState === "scanning";
-    const stopping = manager.discoveryState === "stopping";
+      discoveryState === "starting" || discoveryState === "scanning";
+    const stopping = discoveryState === "stopping";
     const busy = loading || active || stopping;
-    return manager.initialization !== "error" ? (
+    return initialization !== "error" ? (
       <Button
         testID="scan-control"
         variant="link"
@@ -451,8 +452,8 @@ export function NetworksDevicesScreen() {
           selected: active,
         }}
         onPress={() => {
-          if (active) void manager.stopDiscovery();
-          else void manager.startDiscovery();
+          if (active) void stopDiscovery();
+          else void startDiscovery();
         }}
         className="min-h-11 rounded-lg px-4 data-[active=true]:bg-white/10"
         style={{
@@ -467,7 +468,13 @@ export function NetworksDevicesScreen() {
         )}
       </Button>
     ) : null;
-  }, [manager, theme.raw.white]);
+  }, [
+    discoveryState,
+    initialization,
+    startDiscovery,
+    stopDiscovery,
+    theme.raw.white,
+  ]);
   useTestbedToolbarAction("pans-discovery-scan", scanAction);
 
   const renderSection = (
