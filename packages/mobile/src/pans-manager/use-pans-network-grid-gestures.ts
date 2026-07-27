@@ -54,12 +54,12 @@ export function usePansNetworkGridGestures({
 }: UsePansNetworkGridGesturesOptions) {
   const gestureActive = useSharedValue(false);
   const panStartCenter = useSharedValue<GridPoint>({
-    xMeters: camera.centerX.value,
-    yMeters: camera.centerY.value,
+    xMeters: 0,
+    yMeters: 0,
   });
-  const panStartScale = useSharedValue(camera.metersPerPixel.value);
+  const panStartScale = useSharedValue(1);
   const pinchInitialized = useSharedValue(false);
-  const pinchStartScale = useSharedValue(camera.metersPerPixel.value);
+  const pinchStartScale = useSharedValue(1);
   const pinchWorldPoint = useSharedValue<GridPoint>({
     xMeters: 0,
     yMeters: 0,
