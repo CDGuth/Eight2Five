@@ -1,10 +1,10 @@
 import React from "react";
+import { Platform } from "react-native";
 import TestRenderer, { act } from "react-test-renderer";
 import * as Clipboard from "expo-clipboard";
 import type { PansManagerRepository } from "@eight2five/mobile/pans-manager";
 
 import expoPackage from "expo/package.json";
-import reactNativePackage from "react-native/package.json";
 import pansBleApiPackage from "../../../../../modules/expo-pans-ble-api/package.json";
 import mobilePackage from "../../../../../packages/mobile/package.json";
 import uiPackage from "../../../../../packages/ui/package.json";
@@ -16,6 +16,8 @@ import {
 import { ManagerInfoScreen } from "../screens/manager-info-screen";
 
 const BUILD_ID = "0123456789abcdef0123456789abcdef01234567";
+const reactNativeVersion = Platform.constants.reactNativeVersion;
+const reactNativeVersionString = `${reactNativeVersion.major}.${reactNativeVersion.minor}.${reactNativeVersion.patch}${reactNativeVersion.prerelease ? `-${reactNativeVersion.prerelease}` : ""}`;
 
 const mockExpoConfig: {
   name?: string;
@@ -83,7 +85,7 @@ describe("ManagerInfoScreen", () => {
     expect(findText(tree, "Expo SDK")).toBeTruthy();
     expect(findText(tree, expoPackage.version)).toBeTruthy();
     expect(findText(tree, "React Native")).toBeTruthy();
-    expect(findText(tree, reactNativePackage.version)).toBeTruthy();
+    expect(findText(tree, reactNativeVersionString)).toBeTruthy();
     expect(findText(tree, "PANS module build ID")).toBeTruthy();
     expect(findText(tree, "test-build")).toBeTruthy();
     expect(findText(tree, "Native module status")).toBeTruthy();
@@ -135,7 +137,7 @@ describe("ManagerInfoScreen", () => {
     expect(summary).toContain("EAS update ID: update-123");
     expect(summary).toContain("Update channel: preview");
     expect(summary).toContain(`Expo SDK: ${expoPackage.version}`);
-    expect(summary).toContain(`React Native: ${reactNativePackage.version}`);
+    expect(summary).toContain(`React Native: ${reactNativeVersionString}`);
     expect(summary).toContain("PANS module build ID: test-build");
     expect(summary).toContain(
       `expo-pans-ble-api: ${pansBleApiPackage.version}`,

@@ -6,14 +6,17 @@ interface RegisteredToolbarAction {
   content: React.ReactNode;
 }
 
-interface TestbedToolbarContextValue {
-  action?: RegisteredToolbarAction;
+interface TestbedToolbarRegistrationContextValue {
   registerAction(id: string, content: React.ReactNode): () => void;
 }
 
-const TestbedToolbarContext = React.createContext<TestbedToolbarContextValue>({
-  registerAction: () => () => undefined,
-});
+const TestbedToolbarRegistrationContext =
+  React.createContext<TestbedToolbarRegistrationContextValue>({
+    registerAction: () => () => undefined,
+  });
+const TestbedToolbarActionContext = React.createContext<
+  RegisteredToolbarAction | undefined
+>(undefined);
 
 export function TestbedToolbarActionProvider({
   children,
@@ -30,20 +33,22 @@ export function TestbedToolbarActionProvider({
     },
     [],
   );
-  const value = React.useMemo(
-    () => ({ action, registerAction }),
-    [action, registerAction],
+  const registrationValue = React.useMemo(
+    () => ({ registerAction }),
+    [registerAction],
   );
 
   return (
-    <TestbedToolbarContext.Provider value={value}>
-      {children}
-    </TestbedToolbarContext.Provider>
+    <TestbedToolbarRegistrationContext.Provider value={registrationValue}>
+      <TestbedToolbarActionContext.Provider value={action}>
+        {children}
+      </TestbedToolbarActionContext.Provider>
+    </TestbedToolbarRegistrationContext.Provider>
   );
 }
 
 export function TestbedToolbarActionSlot() {
-  const { action } = React.use(TestbedToolbarContext);
+  const action = React.use(TestbedToolbarActionContext);
   return <>{action?.content}</>;
 }
 
@@ -51,7 +56,7 @@ export function useTestbedToolbarAction(
   id: string,
   content: React.ReactNode,
 ): void {
-  const { registerAction } = React.use(TestbedToolbarContext);
+  const { registerAction } = React.use(TestbedToolbarRegistrationContext);
   useFocusEffect(
     React.useCallback(
       () => registerAction(id, content),

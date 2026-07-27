@@ -22,7 +22,6 @@ import {
 import { VStack } from "@eight2five/ui/components/vstack";
 
 import expoPackage from "expo/package.json";
-import reactNativePackage from "react-native/package.json";
 import pansBleApiPackage from "../../../../../modules/expo-pans-ble-api/package.json";
 import mobilePackage from "../../../../../packages/mobile/package.json";
 import uiPackage from "../../../../../packages/ui/package.json";
@@ -211,7 +210,7 @@ function buildInfoSections(manager: ManagerContextSlice): InfoSection[] {
     { label: "Expo SDK", value: expoPackage.version ?? UNAVAILABLE },
     {
       label: "React Native",
-      value: reactNativePackage.version ?? UNAVAILABLE,
+      value: formatReactNativeVersion(),
     },
     { label: "Platform", value: Platform.OS },
     { label: "OS version", value: String(Platform.Version) },
@@ -248,6 +247,12 @@ function buildInfoSections(manager: ManagerContextSlice): InfoSection[] {
     { title: "Runtime information", rows: runtimeRows },
     { title: "Package information", rows: packageRows },
   ];
+}
+
+function formatReactNativeVersion(): string {
+  const { major, minor, patch, prerelease } =
+    Platform.constants.reactNativeVersion;
+  return `${major}.${minor}.${patch}${prerelease ? `-${prerelease}` : ""}`;
 }
 
 function buildDiagnosticSummary(sections: InfoSection[]): string {

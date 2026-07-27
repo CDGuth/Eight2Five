@@ -17,6 +17,7 @@ const config: ExpoConfig = {
   owner: "cdguth",
   name: "Eight2Five Testbed",
   slug: "eight2five-testbed",
+  scheme: "eight2five-testbed",
   platforms: ["ios", "android"],
   version: "0.0.0",
   orientation: "portrait",

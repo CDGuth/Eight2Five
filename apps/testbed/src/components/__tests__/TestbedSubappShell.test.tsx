@@ -49,10 +49,9 @@ describe("TestbedShell", () => {
 });
 
 function ToolbarActionFixture() {
-  const action = React.useMemo(
-    () => <Text testID="fixture-toolbar-action">Action</Text>,
-    [],
+  useTestbedToolbarAction(
+    "fixture",
+    <Text testID="fixture-toolbar-action">Action</Text>,
   );
-  useTestbedToolbarAction("fixture", action);
   return null;
 }
