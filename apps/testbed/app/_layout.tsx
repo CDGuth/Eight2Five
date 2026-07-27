@@ -7,6 +7,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
 import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
+import { TestbedShell } from "../src/components/TestbedShell";
+import { PansManagerProvider } from "../src/pans-manager";
 import "../global.css";
 
 SplashScreen.setOptions({
@@ -28,12 +30,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000000" }}>
       <GluestackUIProvider mode="system">
         <SafeAreaProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: theme.background },
-            }}
-          />
+          <PansManagerProvider>
+            <TestbedShell>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: theme.background },
+                }}
+              />
+            </TestbedShell>
+          </PansManagerProvider>
           <StatusBar hidden={false} style="light" />
         </SafeAreaProvider>
       </GluestackUIProvider>

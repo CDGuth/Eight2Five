@@ -1,98 +1,50 @@
 import React from "react";
-import { act } from "react-test-renderer";
 import { Text } from "@eight2five/ui/components/text";
 
 import { renderWithAct } from "../../testUtils/renderWithAct";
-import { TestbedSubappShell } from "../TestbedSubappShell";
+import { TestbedShell } from "../TestbedShell";
 import { useTestbedToolbarAction } from "../testbed-toolbar";
-
-const mockReplace = jest.fn();
-let mockPathname = "/dwm1001-manager/networks-devices";
 
 jest.mock("expo-router", () => {
   const MockReact = jest.requireActual<typeof import("react")>("react");
   return {
     useFocusEffect: (callback: () => void | (() => void)) =>
       MockReact.useEffect(callback, [callback]),
-    usePathname: () => mockPathname,
-    useRouter: () => ({ replace: mockReplace }),
   };
 });
 
-jest.mock("@eight2five/ui/components/drawer", () => {
-  const MockReact = jest.requireActual<typeof import("react")>("react");
-  const { ScrollView, View } =
-    jest.requireActual<typeof import("react-native")>("react-native");
-  const Wrapper = ({ children, ...props }: any) =>
-    MockReact.createElement(View, props, children);
-  return {
-    Drawer: ({ children, ...props }: any) =>
-      MockReact.createElement(
-        View,
-        { testID: "mock-drawer", ...props },
-        children,
-      ),
-    DrawerBackdrop: Wrapper,
-    DrawerBody: ({ children, ...props }: any) =>
-      MockReact.createElement(ScrollView, props, children),
-    DrawerContent: Wrapper,
-  };
-});
-
-describe("TestbedSubappShell", () => {
-  beforeEach(() => {
-    mockPathname = "/dwm1001-manager/networks-devices";
-  });
-
-  test("renders the black system scrim, empty toolbar center, and focused action", () => {
+describe("TestbedShell", () => {
+  test("renders the black system scrim, toolbar, content, and focused action", () => {
     const tree = renderWithAct(
-      <TestbedSubappShell>
+      <TestbedShell>
+        <Text testID="fixture-content">Content</Text>
         <ToolbarActionFixture />
-      </TestbedSubappShell>,
+      </TestbedShell>,
     );
 
     expect(
       tree.root.findByProps({ testID: "testbed-status-bar-scrim" }).props.style,
     ).toMatchObject({ backgroundColor: "#000000" });
     expect(
-      tree.root.findByProps({ testID: "testbed-subapp-toolbar" }).props.style,
+      tree.root.findByProps({ testID: "testbed-toolbar" }).props.style,
     ).toMatchObject({ backgroundColor: "#000000" });
+    expect(tree.root.findByProps({ testID: "fixture-content" })).toBeTruthy();
     expect(
       tree.root.findByProps({ testID: "fixture-toolbar-action" }),
     ).toBeTruthy();
   });
 
-  test("opens the drawer and closes it after Home or subapp navigation", () => {
+  test("does not render the removed subapp menu", () => {
     const tree = renderWithAct(
-      <TestbedSubappShell>
+      <TestbedShell>
         <></>
-      </TestbedSubappShell>,
+      </TestbedShell>,
     );
-    const drawer = () => tree.root.findByProps({ testID: "mock-drawer" });
 
-    expect(drawer().props.isOpen).toBe(false);
-    act(() =>
-      tree.root.findByProps({ testID: "testbed-menu-button" }).props.onPress(),
-    );
-    expect(drawer().props.isOpen).toBe(true);
-    act(() =>
-      tree.root.findByProps({ testID: "testbed-drawer-home" }).props.onPress(),
-    );
-    expect(mockReplace).toHaveBeenLastCalledWith("/");
-    expect(drawer().props.isOpen).toBe(false);
-
-    act(() =>
-      tree.root.findByProps({ testID: "testbed-menu-button" }).props.onPress(),
-    );
-    const managerRow = tree.root.findByProps({
-      testID: "testbed-drawer-pans-network-manager",
-    });
-    expect(managerRow.props.accessibilityState).toEqual({ selected: true });
-    act(() => managerRow.props.onPress());
-    expect(mockReplace).toHaveBeenLastCalledWith(
-      "/(subapps)/dwm1001-manager/(tabs)/networks-devices",
-    );
-    expect(drawer().props.isOpen).toBe(false);
+    expect(() =>
+      tree.root.findByProps({ testID: "testbed-menu-button" }),
+    ).toThrow();
+    expect(() => tree.root.findByProps({ testID: "mock-drawer" })).toThrow();
   });
 });
 

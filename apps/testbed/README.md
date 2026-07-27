@@ -1,10 +1,12 @@
 # Eight2Five Testbed
 
-Expo Router host for isolated hardware and localization experiments.
+Expo Router hardware test application for the DWM1001 PANS network manager.
+The testbed opens directly into the manager; it no longer has a subapp registry,
+selection screen, or sidebar.
 
 ## PANS Network Manager
 
-The registered `PANS Network Manager` subapp can:
+The testbed can:
 
 - explicitly discover compatible PANS advertisements;
 - persist local network profiles and device metadata in SQLite;
@@ -19,19 +21,16 @@ encryption-key management, and auto-positioning remain unavailable pending
 documented BLE support and physical hardware qualification.
 
 The manager requires a custom development build because Expo Go cannot load
-`expo-pans-ble-api`. Opening the manager does not request Bluetooth permission,
-start scanning, connect, or write hardware. Those operations require explicit
-user actions.
+`expo-pans-ble-api`. Hardware operations require explicit user actions.
 
 ## Routing
 
-- Home route: `app/index.tsx`
-- Subapp registry: `src/subapps/index.ts`
-- Manager routes: `app/(subapps)/dwm1001-manager/`
-- Manager UI/provider: `src/subapps/dwm1001-manager/`
-
-Subapps use nested Expo Router stacks. Add new subapps to the registry rather
-than replacing the testbed home.
+- Entry redirect: `app/index.tsx`
+- Native tabs: `app/(tabs)/`
+- Device routes: `app/devices/[deviceId]/`
+- Network routes: `app/networks/`
+- Root manager provider and toolbar shell: `app/_layout.tsx`
+- Manager public entrypoint: `src/pans-manager/`
 
 ## Run
 

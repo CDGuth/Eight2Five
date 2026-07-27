@@ -1,31 +1,15 @@
-import React from "react";
-import { act } from "react-test-renderer";
-import { SubappCard } from "../SubappCard";
-import { renderWithAct } from "../../testUtils/renderWithAct";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-describe("SubappCard", () => {
-  it("shows title, badge, and triggers press", () => {
-    const onPress = jest.fn();
-    const tree = renderWithAct(
-      <SubappCard
-        title="Diagnostics"
-        description="Inspect beacon data"
-        badge="New"
-        onPress={onPress}
-      />,
+describe("testbed shell navigation", () => {
+  test("contains the toolbar action slot without drawer navigation", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../TestbedShell.tsx"),
+      "utf8",
     );
 
-    const badge = tree.root.findByProps({ children: "New" });
-    expect(badge).toBeTruthy();
-    expect(
-      tree.root.findByProps({ children: "Inspect beacon data" }),
-    ).toBeTruthy();
-    expect(
-      tree.root.findByProps({ testID: "subapp-divider-Diagnostics" }),
-    ).toBeTruthy();
-
-    const row = tree.root.findByProps({ testID: "subapp-card-Diagnostics" });
-    act(() => row.props.onPress());
-    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(source).toContain("TestbedToolbarActionSlot");
+    expect(source).not.toContain("Drawer");
+    expect(source).not.toContain("testbed-menu-button");
   });
 });
