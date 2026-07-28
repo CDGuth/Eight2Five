@@ -29,6 +29,10 @@ export interface StartPansPositionStreamOptions {
   onCounters?(counters: Readonly<PansPositionStreamCounters>): void;
 }
 
+/** Counter snapshots are diagnostic UI data, so notification-driven updates
+ * are coalesced to at most 4 Hz. The counters themselves remain synchronous. */
+export const POSITION_STREAM_COUNTER_PUBLICATION_INTERVAL_MS = 250;
+
 interface ActivePositionStream {
   token: symbol;
   session: PansLiveSession;
@@ -36,6 +40,7 @@ interface ActivePositionStream {
   options: StartPansPositionStreamOptions;
   counters: PansPositionStreamCounters;
   lastNativeSequence?: number;
+  counterPublicationTimer?: ReturnType<typeof setTimeout>;
 }
 
 interface DecodedLocationFrame {
@@ -84,14 +89,14 @@ export class PansPositionStreamService {
           counters,
         };
         this.active = active;
-        this.reportCounters(active);
+        this.publishCounters(active);
 
         if (session.requestMtu) {
           try {
             const negotiatedMtu = await session.requestMtu(247);
             if (negotiatedMtu !== undefined) {
               active.counters.negotiatedMtu = negotiatedMtu;
-              this.reportCounters(active);
+              this.publishCounters(active);
             }
           } catch (error) {
             options.onDiagnostic?.(
@@ -107,6 +112,7 @@ export class PansPositionStreamService {
           const data = await session.readLocationData();
           this.recordDecodedFrame(active, data);
           this.emit(active, data, "initial-read");
+          this.scheduleCounterPublication(active);
         } catch (error) {
           options.onDiagnostic?.(
             `Initial location read failed: ${normalizeManagerError(error).message}`,
@@ -141,7 +147,7 @@ export class PansPositionStreamService {
       normalizeTransportDeviceId(active.options.transportDeviceId)
     ) {
       active.counters.filteredDeviceNotifications += 1;
-      this.reportCounters(active);
+      this.scheduleCounterPublication(active);
       return;
     }
 
@@ -162,11 +168,11 @@ export class PansPositionStreamService {
       this.emit(active, data, "notification", event);
     } catch (error) {
       active.counters.decodeFailures += 1;
-      this.reportCounters(active);
       active.options.onDiagnostic?.(
         `Location notification decode failed: ${normalizeManagerError(error).message}`,
       );
     }
+    this.scheduleCounterPublication(active);
   }
 
   private recordDecodedFrame(
@@ -182,12 +188,12 @@ export class PansPositionStreamService {
     ) {
       active.counters.diagnosticFrames += 1;
     }
-    this.reportCounters(active);
   }
 
   private async stopActive(): Promise<void> {
     const active = this.active;
     if (!active) return;
+    this.publishCounters(active);
     this.active = undefined;
     try {
       active.subscription.remove();
@@ -242,7 +248,6 @@ export class PansPositionStreamService {
     )
       return;
     active.counters.emittedSamples += 1;
-    this.reportCounters(active);
     active.options.onSample({
       deviceId: active.options.deviceId,
       transportDeviceId: active.options.transportDeviceId,
@@ -264,7 +269,20 @@ export class PansPositionStreamService {
     });
   }
 
-  private reportCounters(active: ActivePositionStream): void {
+  private scheduleCounterPublication(active: ActivePositionStream): void {
+    if (!active.options.onCounters) return;
+    if (active.counterPublicationTimer) return;
+    active.counterPublicationTimer = setTimeout(() => {
+      active.counterPublicationTimer = undefined;
+      if (this.active?.token === active.token) this.publishCounters(active);
+    }, POSITION_STREAM_COUNTER_PUBLICATION_INTERVAL_MS);
+  }
+
+  private publishCounters(active: ActivePositionStream): void {
+    if (active.counterPublicationTimer) {
+      clearTimeout(active.counterPublicationTimer);
+      active.counterPublicationTimer = undefined;
+    }
     active.options.onCounters?.({ ...active.counters });
   }
 }

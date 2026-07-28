@@ -33,6 +33,7 @@ describe("SyntheticPansPositionNotificationSource", () => {
   );
 
   test("delivers a five-minute 10 Hz stream through decode and sample emission without loss", async () => {
+    jest.useFakeTimers();
     const source = new SyntheticPansPositionNotificationSource({
       rateHz: 10,
       transportDeviceId: "AA:BB:CC:DD:EE:FF",
@@ -68,6 +69,7 @@ describe("SyntheticPansPositionNotificationSource", () => {
         counterSnapshots.push({ emittedSamples: counters.emittedSamples }),
     });
     expect(source.emitForDuration(5 * 60_000)).toBe(3_000);
+    jest.advanceTimersByTime(250);
 
     expect(samples).toHaveLength(3_000);
     expect(samples[0]).toBe(0);
@@ -83,6 +85,7 @@ describe("SyntheticPansPositionNotificationSource", () => {
     });
     expect(counterSnapshots.at(-1)?.emittedSamples).toBe(3_000);
     await service.stop();
+    jest.useRealTimers();
   });
 
   test("stops delivering after a listener is removed", () => {

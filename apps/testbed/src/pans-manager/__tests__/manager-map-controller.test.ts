@@ -1,7 +1,12 @@
+import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
 import {
   DEFAULT_MANAGED_NETWORK_SETTINGS,
   type ManagedDevice,
   type ManagedNetwork,
+  type PansPositionStreamCounters,
+  type PansPositionStreamSample,
+  type StartPansPositionStreamOptions,
 } from "@eight2five/mobile/pans-manager";
 
 import {
@@ -11,10 +16,17 @@ import {
   removeCachedTagPosition,
   resolveRangingEdges,
   retainOnlyLiveTag,
+  usePansMapDataController,
+  type PansMapDataController,
   type PansMapVisibilityOptions,
 } from "../manager-map-controller";
 
+let mockManager: unknown;
+
 jest.mock("expo-pans-ble-api", () => ({}));
+jest.mock("../manager-context", () => ({
+  usePansManager: () => mockManager,
+}));
 
 const visibility: PansMapVisibilityOptions = {
   anchors: true,
@@ -151,6 +163,80 @@ describe("manager map data helpers", () => {
   });
 });
 
+describe("manager map tracking diagnostics", () => {
+  test("keeps exact map totals in refs and publishes React snapshots only while visible", async () => {
+    let controller!: PansMapDataController;
+    let streamOptions!: StartPansPositionStreamOptions;
+    const stream = {
+      start: jest.fn(async (options: StartPansPositionStreamOptions) => {
+        streamOptions = options;
+        options.onCounters?.(streamCounters(0));
+      }),
+      stop: jest.fn(async () => undefined),
+    };
+    const selectedNetwork = network("selected", 0x1234);
+    mockManager = {
+      networks: [selectedNetwork],
+      devices: [tag("tag", selectedNetwork.id)],
+      createPositionStream: jest.fn(() => stream),
+      saveNetwork: jest.fn(),
+      applyDeviceConfiguration: jest.fn(),
+      refreshTopology: jest.fn(),
+    };
+    const Harness = () => {
+      controller = usePansMapDataController();
+      return null;
+    };
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(Harness));
+    });
+    act(() => controller.setSelectedDirectTagId("tag"));
+    await act(async () => controller.startDirectTracking());
+
+    act(() => {
+      streamOptions.onSample(positionSample(1));
+      streamOptions.onSample(positionSample(2));
+    });
+    expect(controller.trackingCounters).toBeUndefined();
+
+    act(() => controller.setTrackingDiagnosticsVisible(true));
+    expect(controller.trackingCounters).toMatchObject({
+      notificationEvents: 0,
+      mapPositionUpdates: 2,
+    });
+
+    act(() => {
+      streamOptions.onSample(positionSample(3));
+      streamOptions.onSample(positionSample(4));
+      streamOptions.onSample(positionSample(5));
+    });
+    expect(controller.trackingCounters?.mapPositionUpdates).toBe(2);
+    act(() => streamOptions.onCounters?.(streamCounters(5)));
+    expect(controller.trackingCounters).toMatchObject({
+      notificationEvents: 5,
+      mapPositionUpdates: 5,
+    });
+
+    act(() => controller.setTrackingDiagnosticsVisible(false));
+    act(() => {
+      streamOptions.onSample(positionSample(6));
+      streamOptions.onCounters?.(streamCounters(6));
+    });
+    expect(controller.trackingCounters).toMatchObject({
+      notificationEvents: 5,
+      mapPositionUpdates: 5,
+    });
+    act(() => controller.setTrackingDiagnosticsVisible(true));
+    expect(controller.trackingCounters).toMatchObject({
+      notificationEvents: 6,
+      mapPositionUpdates: 6,
+    });
+
+    await act(async () => tree.unmount());
+  });
+});
+
 function network(id: string, panId: number): ManagedNetwork {
   return {
     id,
@@ -198,5 +284,39 @@ function tag(id: string, networkId: string): ManagedDevice {
     role: "tag",
     createdAt: 1,
     updatedAt: 1,
+  };
+}
+
+function streamCounters(total: number): PansPositionStreamCounters {
+  return {
+    notificationEvents: total,
+    matchingDeviceNotifications: total,
+    filteredDeviceNotifications: 0,
+    decodedFrames: total,
+    decodeFailures: 0,
+    positionFrames: total,
+    distanceFrames: 0,
+    diagnosticFrames: 0,
+    emittedSamples: total,
+    nativeSequenceDiscontinuities: 0,
+  };
+}
+
+function positionSample(sequence: number): PansPositionStreamSample {
+  return {
+    deviceId: "tag",
+    transportDeviceId: "transport-tag",
+    receivedAt: sequence,
+    source: "notification",
+    nativeSequence: sequence,
+    position: {
+      xMeters: sequence,
+      yMeters: sequence,
+      zMeters: 0,
+      quality: 100,
+    },
+    distances: [],
+    diagnostics: [],
+    decoderDiagnostics: [],
   };
 }

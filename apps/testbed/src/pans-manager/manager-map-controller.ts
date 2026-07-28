@@ -114,6 +114,7 @@ export interface PansMapDataController {
   trackingSource: "none" | "direct-ble";
   trackingDiagnostic?: string;
   trackingCounters?: PansMapPipelineCounters;
+  setTrackingDiagnosticsVisible(visible: boolean): void;
   selectedDirectTagId: string;
   setSelectedDirectTagId(deviceId: string): void;
   trackableTags: ManagedDevice[];
@@ -182,6 +183,11 @@ export function usePansMapDataController(
   const [trackingDiagnostic, setTrackingDiagnostic] = React.useState<string>();
   const [trackingCounters, setTrackingCounters] =
     React.useState<PansMapPipelineCounters>();
+  const trackingCountersRef = React.useRef<PansMapPipelineCounters | undefined>(
+    undefined,
+  );
+  const mapPositionUpdatesRef = React.useRef(0);
+  const trackingDiagnosticsVisibleRef = React.useRef(false);
   const trackingDiagnosticRef = React.useRef<string | undefined>(undefined);
   const [selectedDirectTagId, setSelectedDirectTagIdState] = React.useState("");
   const [activeTagId, setActiveTagId] = React.useState<string>();
@@ -347,6 +353,17 @@ export function usePansMapDataController(
     [gridSize, setViewport],
   );
 
+  const setTrackingDiagnosticsVisible = React.useCallback(
+    (visible: boolean) => {
+      trackingDiagnosticsVisibleRef.current = visible;
+      if (visible && mountedRef.current) {
+        const counters = trackingCountersRef.current;
+        setTrackingCounters(counters ? { ...counters } : undefined);
+      }
+    },
+    [],
+  );
+
   const stopTracking = React.useCallback(async () => {
     if (stopPromiseRef.current) return await stopPromiseRef.current;
     const operation = (async () => {
@@ -356,11 +373,11 @@ export function usePansMapDataController(
         return;
       }
       startRequestedRef.current = false;
-      streamRef.current = undefined;
       if (mountedRef.current) setTrackingStatus("stopping");
       await stream?.stop().catch((error) => {
         if (mountedRef.current) setTrackingDiagnostic(displayError(error));
       });
+      if (streamRef.current === stream) streamRef.current = undefined;
       if (!retainLastKnownRef.current && activeSampleTagIdRef.current) {
         lastKnownRef.current = removeCachedTagPosition(
           lastKnownRef.current,
@@ -407,7 +424,9 @@ export function usePansMapDataController(
     startRequestedRef.current = true;
     setTrackingStatus("starting");
     setTrackingDiagnostic(undefined);
-    setTrackingCounters(undefined);
+    trackingCountersRef.current = undefined;
+    mapPositionUpdatesRef.current = 0;
+    if (trackingDiagnosticsVisibleRef.current) setTrackingCounters(undefined);
     trackingDiagnosticRef.current = undefined;
     setActiveTagId(device.id);
     setSelectedNodeId(device.id);
@@ -420,16 +439,6 @@ export function usePansMapDataController(
         transportDeviceId: device.transportDeviceId,
         onSample: (sample) => {
           if (streamRef.current !== stream) return;
-          if (sample.position) {
-            setTrackingCounters((current) =>
-              current
-                ? {
-                    ...current,
-                    mapPositionUpdates: current.mapPositionUpdates + 1,
-                  }
-                : current,
-            );
-          }
           acceptDirectSample({
             sample,
             device,
@@ -460,13 +469,26 @@ export function usePansMapDataController(
             follow: followRef,
             camera,
           });
+          if (sample.position) {
+            mapPositionUpdatesRef.current += 1;
+            if (trackingCountersRef.current) {
+              trackingCountersRef.current = {
+                ...trackingCountersRef.current,
+                mapPositionUpdates: mapPositionUpdatesRef.current,
+              };
+            }
+          }
         },
         onCounters: (counters) => {
           if (streamRef.current !== stream) return;
-          setTrackingCounters((current) => ({
+          const snapshot = {
             ...counters,
-            mapPositionUpdates: current?.mapPositionUpdates ?? 0,
-          }));
+            mapPositionUpdates: mapPositionUpdatesRef.current,
+          };
+          trackingCountersRef.current = snapshot;
+          if (mountedRef.current && trackingDiagnosticsVisibleRef.current) {
+            setTrackingCounters(snapshot);
+          }
         },
         onDiagnostic: (message) => {
           if (streamRef.current === stream) {
@@ -694,6 +716,7 @@ export function usePansMapDataController(
         : "none",
     trackingDiagnostic,
     trackingCounters,
+    setTrackingDiagnosticsVisible,
     selectedDirectTagId,
     setSelectedDirectTagId: (deviceId) => {
       if (trackingStatus === "stopped" || trackingStatus === "error")

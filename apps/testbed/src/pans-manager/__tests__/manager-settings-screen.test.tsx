@@ -65,6 +65,12 @@ describe("ManagerSettingsScreen hydration", () => {
       await Promise.resolve();
     });
     expect(saveManagerSettings).toHaveBeenCalledWith(persisted);
+    expect(
+      findText(
+        tree,
+        "Settings saved. Restart the application to apply service timing changes.",
+      ),
+    ).toBeTruthy();
 
     await act(async () => tree.unmount());
   });

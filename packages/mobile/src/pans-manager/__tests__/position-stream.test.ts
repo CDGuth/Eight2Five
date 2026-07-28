@@ -71,6 +71,7 @@ describe("PansPositionStreamService", () => {
   });
 
   test("normalizes transport IDs, preserves native metadata, and reports stage counters", async () => {
+    jest.useFakeTimers();
     let listener!: (event: PansLocationNotification) => void;
     const readLocationData = jest.fn(async () => ({
       distances: [],
@@ -110,6 +111,7 @@ describe("PansPositionStreamService", () => {
       onSample: samples,
       onCounters: counters,
     });
+    expect(counters).toHaveBeenCalledTimes(2);
     listener({
       transportDeviceId: "aa-bb-cc-dd-ee-ff",
       payload: [1, 2],
@@ -124,6 +126,32 @@ describe("PansPositionStreamService", () => {
       monotonicTimestampMs: 1235.5,
       payloadLength: 2,
     });
+
+    // All exact increments are synchronous, including several increments for
+    // each notification, while publication remains coalesced at 4 Hz.
+    expect(service.counters).toMatchObject({
+      notificationEvents: 2,
+      matchingDeviceNotifications: 2,
+      decodedFrames: 3,
+      positionFrames: 2,
+      emittedSamples: 2,
+      nativeSequenceDiscontinuities: 1,
+    });
+    expect(counters).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(249);
+    expect(counters).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(1);
+    expect(counters).toHaveBeenCalledTimes(3);
+    listener({ transportDeviceId: "other-device", payload: [5] });
+    expect(service.counters).toMatchObject({
+      notificationEvents: 3,
+      matchingDeviceNotifications: 2,
+      filteredDeviceNotifications: 1,
+    });
+    jest.advanceTimersByTime(249);
+    expect(counters).toHaveBeenCalledTimes(3);
+    jest.advanceTimersByTime(1);
+    expect(counters).toHaveBeenCalledTimes(4);
 
     expect(normalizeTransportDeviceId("aa-bb-cc-dd-ee-ff")).toBe(
       "AABBCCDDEEFF",
@@ -145,8 +173,9 @@ describe("PansPositionStreamService", () => {
     );
     expect(counters).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        notificationEvents: 2,
+        notificationEvents: 3,
         matchingDeviceNotifications: 2,
+        filteredDeviceNotifications: 1,
         decodedFrames: 3,
         positionFrames: 2,
         emittedSamples: 2,
@@ -156,6 +185,10 @@ describe("PansPositionStreamService", () => {
     );
 
     await service.stop();
+    expect(counters).toHaveBeenCalledTimes(5);
+    jest.runOnlyPendingTimers();
+    expect(counters).toHaveBeenCalledTimes(5);
+    jest.useRealTimers();
   });
 
   test("cleans up when notification subscription is rejected", async () => {

@@ -69,7 +69,7 @@ export function ManagerSettingsScreen() {
         positionLogFlushSize: values[3],
       });
       setMessage(
-        "Settings saved. Reopen the manager to apply service timing changes.",
+        "Settings saved. Restart the application to apply service timing changes.",
       );
     } catch (saveError) {
       setError(displayError(saveError));

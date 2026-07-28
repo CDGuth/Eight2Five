@@ -307,6 +307,8 @@ export function NetworkDeviceRow({
   );
 }
 
+export const MemoizedNetworkDeviceRow = React.memo(NetworkDeviceRow);
+
 function profileStatusLabel(device: DisplayDevice): string {
   const offline = device.available ? "" : "Offline · cached hardware state · ";
   if (device.status === "pan-conflict")

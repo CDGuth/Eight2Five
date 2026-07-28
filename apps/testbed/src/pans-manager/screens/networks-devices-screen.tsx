@@ -1,4 +1,5 @@
 import React from "react";
+import { useWindowDimensions } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
   selectNetworkDeviceSections,
@@ -58,6 +59,7 @@ type DropAssignmentStatus =
 
 export function NetworksDevicesScreen() {
   const theme = useEight2FiveTheme();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const manager = usePansManager();
   const [selectedNetworkId, setSelectedNetworkId] = React.useState<string>();
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string>();
@@ -204,7 +206,13 @@ export function NetworksDevicesScreen() {
   React.useEffect(() => {
     const frame = requestAnimationFrame(measureDropZones);
     return () => cancelAnimationFrame(frame);
-  }, [expandedSections, measureDropZones, sections]);
+  }, [
+    expandedDevices,
+    expandedSections,
+    measureDropZones,
+    windowHeight,
+    windowWidth,
+  ]);
 
   const finishDrag = React.useCallback(() => {
     activeDragRef.current = undefined;
@@ -248,6 +256,9 @@ export function NetworksDevicesScreen() {
     },
     [measureDropZones, updateHover],
   );
+  const handleListScroll = React.useCallback(() => {
+    if (activeDragRef.current) measureDropZones();
+  }, [measureDropZones]);
 
   const runDropAssignment = React.useCallback(
     async (request: DropAssignmentRequest) => {
@@ -362,6 +373,26 @@ export function NetworksDevicesScreen() {
     void runDropAssignment(assignmentStatus.retry);
   }, [assignmentStatus, runDropAssignment]);
   const assignmentInFlight = assignmentStatus?.kind === "progress";
+  const listExtraData = React.useMemo(
+    () => ({
+      activeDragDeviceKey,
+      assignmentInFlight,
+      displayedEmptyMessage,
+      displayedSnapshots,
+      expandedDevices,
+      expandedSections,
+      hoveredNetworkId,
+    }),
+    [
+      activeDragDeviceKey,
+      assignmentInFlight,
+      displayedEmptyMessage,
+      displayedSnapshots,
+      expandedDevices,
+      expandedSections,
+      hoveredNetworkId,
+    ],
+  );
   const setDeviceExpanded = React.useCallback(
     (key: string, expanded: boolean) => {
       setExpandedDevices((current) =>
@@ -543,14 +574,8 @@ export function NetworksDevicesScreen() {
         <FlatList
           testID="network-device-sections"
           data={networkSections}
-          keyExtractor={(section) => section.key}
-          extraData={`${Array.from(expandedSections)
-            .sort()
-            .join("|")}::${Array.from(expandedDevices).sort().join("|")}::${
-            displayedEmptyMessage ?? ""
-          }::${hoveredNetworkId ?? ""}::${activeDragDeviceKey ?? ""}::${
-            assignmentStatus?.kind ?? ""
-          }`}
+          keyExtractor={sectionKeyExtractor}
+          extraData={listExtraData}
           contentContainerStyle={{
             paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
             paddingBottom: eight2FiveSpacing.xxl,
@@ -558,7 +583,7 @@ export function NetworksDevicesScreen() {
           keyboardShouldPersistTaps="handled"
           scrollEnabled={!activeDragDeviceKey && !assignmentInFlight}
           scrollEventThrottle={32}
-          onScroll={measureDropZones}
+          onScroll={handleListScroll}
           ListHeaderComponent={
             <VStack>
               {unassignedSection
@@ -624,6 +649,10 @@ export function NetworksDevicesScreen() {
       </VStack>
     </SafeAreaView>
   );
+}
+
+function sectionKeyExtractor(section: NetworkDeviceSectionModel): string {
+  return section.key;
 }
 
 function DropStatus({

@@ -33,6 +33,8 @@ export function ManagerMapScreen({
   const theme = useEight2FiveTheme();
   const controller = usePansMapDataController(initialNetworkId);
   const stopTracking = controller.stopTracking;
+  const setTrackingDiagnosticsVisible =
+    controller.setTrackingDiagnosticsVisible;
   const selectedNode = controller.selectedNodeId
     ? controller.nodes.find((node) => node.id === controller.selectedNodeId)
     : undefined;
@@ -83,6 +85,11 @@ export function ManagerMapScreen({
     [setSettingsOpen, theme.raw.white],
   );
   useTestbedToolbarAction("pans-map-settings", settingsAction);
+
+  React.useEffect(() => {
+    setTrackingDiagnosticsVisible(settingsOpen);
+    return () => setTrackingDiagnosticsVisible(false);
+  }, [setTrackingDiagnosticsVisible, settingsOpen]);
 
   useFocusEffect(
     React.useCallback(
@@ -167,11 +174,13 @@ export function ManagerMapScreen({
           )}
         </VStack>
       ) : null}
-      <ManagerMapSettingsModal
-        controller={controller}
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      {settingsOpen ? (
+        <ManagerMapSettingsModal
+          controller={controller}
+          isOpen
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }

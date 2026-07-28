@@ -9,6 +9,7 @@ import { Switch } from "@eight2five/ui/components/switch";
 import type { PansMapDataController } from "../manager-map-controller";
 import { SelectField } from "../components/manager-ui";
 import { ManagerMapScreen } from "../screens/manager-map-screen";
+import { ManagerMapSettingsModal } from "../components/manager-map-settings-modal";
 import {
   TestbedToolbarActionProvider,
   TestbedToolbarActionSlot,
@@ -86,6 +87,7 @@ describe("ManagerMapScreen", () => {
 
   test("keeps local modal state through a rerender and exposes network and visibility actions", async () => {
     const tree = await renderScreen();
+    expect(tree.root.findAllByType(ManagerMapSettingsModal)).toHaveLength(0);
     act(() =>
       tree.root
         .findByProps({ testID: "manager-map-settings-button" })
@@ -95,6 +97,10 @@ describe("ManagerMapScreen", () => {
       tree.root.findByProps({ testID: "manager-map-settings-modal-root" }).props
         .isOpen,
     ).toBe(true);
+    expect(
+      mockController.setTrackingDiagnosticsVisible,
+    ).toHaveBeenLastCalledWith(true);
+    expect(tree.root.findAllByType(ManagerMapSettingsModal)).toHaveLength(1);
 
     await act(async () => tree.update(mapScreenElement()));
     expect(
@@ -126,6 +132,15 @@ describe("ManagerMapScreen", () => {
         "Multiple networks are overlaid using their saved coordinates. The app does not automatically align independent coordinate systems.",
       ),
     ).toBe(true);
+    act(() =>
+      tree.root
+        .findByProps({ testID: "manager-map-settings-modal-root" })
+        .props.onClose(),
+    );
+    expect(tree.root.findAllByType(ManagerMapSettingsModal)).toHaveLength(0);
+    expect(
+      mockController.setTrackingDiagnosticsVisible,
+    ).toHaveBeenLastCalledWith(false);
     await act(async () => tree.unmount());
   });
 
@@ -315,6 +330,7 @@ function controllerFixture(): PansMapDataController {
     savePendingAnchorEdit: jest.fn(),
     trackingStatus: "stopped",
     trackingSource: "none",
+    setTrackingDiagnosticsVisible: jest.fn(),
     selectedDirectTagId: "tag",
     setSelectedDirectTagId: jest.fn(),
     trackableTags: [],

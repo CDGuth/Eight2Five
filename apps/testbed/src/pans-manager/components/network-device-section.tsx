@@ -337,6 +337,8 @@ export function NetworkDeviceSection({
   );
 }
 
+export const MemoizedNetworkDeviceSection = React.memo(NetworkDeviceSection);
+
 function ChildRail({ isLast }: { isLast: boolean }) {
   const theme = useEight2FiveTheme();
   const left = eight2FiveSpacing.sm;

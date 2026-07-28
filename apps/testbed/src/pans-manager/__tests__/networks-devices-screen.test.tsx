@@ -145,6 +145,69 @@ describe("NetworksDevicesScreen", () => {
     }
   });
 
+  test("remeasures drop zones for active drag events, not noisy discovery updates", async () => {
+    const network = savedNetwork();
+    const harness = createRuntime({
+      networks: [network],
+      discoveries: [discovery("transport-live")],
+    });
+    const tree = await renderNetworkScreen(harness, {
+      [network.id]: [0, 100, 300, 60],
+    });
+    const measure = jest.fn();
+    const section = tree.root
+      .findAllByType(NetworkDeviceSection)
+      .find((node) => node.props.section.network?.id === network.id);
+    act(() => section?.props.onRegisterDropZone(network.id, measure));
+    expect(measure).toHaveBeenCalledTimes(1);
+
+    for (let update = 1; update <= 12; update += 1) {
+      await act(async () => {
+        harness.emitDiscoveries([
+          discovery("transport-live", {
+            rssi: -60 - update,
+            lastSeenAt: 10 + update,
+            stale: update % 3 === 0,
+          }),
+        ]);
+        await flushPromises();
+      });
+    }
+    expect(measure).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      harness.emitDiscoveries([discovery("transport-live")]);
+      await flushPromises();
+    });
+    const callbacks = dragCallbacksFor(tree, "discovery:transport-live");
+    act(() =>
+      callbacks.onDragStart(dragEvent("discovery:transport-live", 20, 40)),
+    );
+    const afterStart = measure.mock.calls.length;
+
+    act(() =>
+      callbacks.onDragMove(dragEvent("discovery:transport-live", 40, 120)),
+    );
+    expect(measure.mock.calls.length).toBeGreaterThanOrEqual(afterStart + 1);
+
+    const afterMove = measure.mock.calls.length;
+    act(() => {
+      const list = tree.root
+        .findAllByProps({ testID: "network-device-sections" })
+        .find((node) => typeof node.props.onScroll === "function");
+      list?.props.onScroll({ nativeEvent: {} });
+    });
+    expect(measure.mock.calls.length).toBeGreaterThan(afterMove);
+
+    act(() =>
+      callbacks.onDragEnd({
+        ...dragEvent("discovery:transport-live", 400, 400),
+        cancelled: true,
+      }),
+    );
+    await act(async () => tree.unmount());
+  });
+
   test("renders a compact initialization error and retries", async () => {
     const runtime = createRuntime().runtime;
     const createRuntimeFactory = jest
@@ -206,8 +269,8 @@ describe("NetworksDevicesScreen", () => {
       tree.root.findByProps({ testID: `network-card-${network.id}` }),
     ).toBeTruthy();
     expect(
-      tree.root.findByProps({ testID: `device-offline-${device.id}` }),
-    ).toBeTruthy();
+      tree.root.findAllByProps({ testID: `device-offline-${device.id}` }),
+    ).toHaveLength(0);
     expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
       false,
     );
@@ -215,7 +278,7 @@ describe("NetworksDevicesScreen", () => {
       tree.root.findAllByProps({
         testID: `device-settings-device:${device.id}`,
       }),
-    ).not.toHaveLength(0);
+    ).toHaveLength(0);
     expect(
       tree.root.findAllByProps({ testID: `refresh-device-${device.id}` }),
     ).toHaveLength(0);
@@ -234,8 +297,8 @@ describe("NetworksDevicesScreen", () => {
       false,
     );
 
+    await expandNetworkSection(tree, network.id);
     await act(async () => {
-      pressTestId(tree, `section-toggle-network:${network.id}`);
       pressTestId(tree, `device-toggle-device:${device.id}`);
     });
     expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
@@ -254,11 +317,14 @@ describe("NetworksDevicesScreen", () => {
       await flushPromises();
       await flushPromises();
     });
+    await flushDeferredAnimation();
     expect(
       tree.root.findByProps({ testID: "device-settings-modal-root" }),
     ).toBeTruthy();
     expect(harness.inspectAndCache).not.toHaveBeenCalled();
 
+    const inspectionsBeforeDiscovery =
+      harness.inspectAndCache.mock.calls.length;
     await act(async () => {
       harness.emitDiscoveries([discovery(device.transportDeviceId)]);
       await flushPromises();
@@ -269,20 +335,26 @@ describe("NetworksDevicesScreen", () => {
     expect(expansionState(tree, `device-toggle-device:${device.id}`)).toBe(
       true,
     );
-    expect(harness.inspectAndCache).toHaveBeenCalledTimes(1);
+    expect(harness.inspectAndCache.mock.calls.length).toBeGreaterThan(
+      inspectionsBeforeDiscovery,
+    );
     expect(harness.inspectAndCache).toHaveBeenCalledWith(device.id);
 
+    const inspectionsBeforeRefresh = harness.inspectAndCache.mock.calls.length;
     await act(async () => {
       pressTestId(tree, `refresh-device-${device.id}`);
       await flushPromises();
     });
     expect(harness.inspectAndCache).toHaveBeenCalledWith(device.id);
-    expect(harness.inspectAndCache).toHaveBeenCalledTimes(2);
+    expect(harness.inspectAndCache).toHaveBeenCalledTimes(
+      inspectionsBeforeRefresh + 1,
+    );
     expect(findTextPrefix(tree, "Refreshed ")).toBeTruthy();
     await act(async () => tree.unmount());
   });
 
-  test("characterizes current accordion behavior: collapsed network rows remain mounted", async () => {
+  test("lazy-mounts network rows while expanded and unmounts them after collapse", async () => {
+    jest.useFakeTimers();
     const network = savedNetwork();
     const device = savedDevice(network.id);
     const harness = createRuntime({ networks: [network], devices: [device] });
@@ -295,12 +367,41 @@ describe("NetworksDevicesScreen", () => {
       tree.root.findAllByProps({
         testID: `device-settings-device:${device.id}`,
       }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
+    ).toHaveLength(0);
+
+    await expandNetworkSection(tree, network.id);
+    expect(
+      tree.root.findAllByProps({
+        testID: `device-settings-device:${device.id}`,
+      }),
     ).not.toHaveLength(0);
     expect(
       tree.root.findAllByProps({ testID: "network-device-child-rail" }),
     ).not.toHaveLength(0);
 
+    await act(async () => {
+      pressTestId(tree, `section-toggle-network:${network.id}`);
+    });
+    expect(
+      tree.root.findAllByProps({
+        testID: `device-settings-device:${device.id}`,
+      }),
+    ).not.toHaveLength(0);
+    act(() => jest.advanceTimersByTime(300));
+    expect(
+      tree.root.findAllByProps({
+        testID: `device-settings-device:${device.id}`,
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
+    ).toHaveLength(0);
+
     await act(async () => tree.unmount());
+    jest.useRealTimers();
   });
 
   test("opens, saves, and closes cached settings for a saved offline device without inspection", async () => {
@@ -308,6 +409,7 @@ describe("NetworksDevicesScreen", () => {
     const device = savedDevice(network.id);
     const harness = createRuntime({ networks: [network], devices: [device] });
     const tree = await renderNetworkScreen(harness);
+    await expandNetworkSection(tree, network.id);
 
     await act(async () => {
       pressTestId(tree, `device-settings-device:${device.id}`);
@@ -343,6 +445,7 @@ describe("NetworksDevicesScreen", () => {
       discoveries: [discovery(device.transportDeviceId)],
     });
     const tree = await renderNetworkScreen(harness);
+    await expandNetworkSection(tree, network.id);
     const inspectionsBeforeOpening = harness.inspectAndCache.mock.calls.length;
 
     await act(async () => {
@@ -350,6 +453,7 @@ describe("NetworksDevicesScreen", () => {
       await flushPromises();
       await flushPromises();
     });
+    await flushDeferredAnimation();
 
     expect(tree.root.findByType(DeviceSettingsModal).props).toMatchObject({
       device: expect.objectContaining({ id: device.id }),
@@ -449,6 +553,10 @@ describe("NetworksDevicesScreen", () => {
       await flushPromises();
     });
     await act(async () => {
+      pressTestId(tree, `section-toggle-network:${alpha.id}`);
+      await flushPromises();
+    });
+    await act(async () => {
       pressTestId(tree, `device-toggle-device:${device.id}`);
     });
 
@@ -485,6 +593,7 @@ describe("NetworksDevicesScreen", () => {
     const device = savedDevice(network.id);
     const harness = createRuntime({ networks: [network], devices: [device] });
     const tree = await renderNetworkScreen(harness);
+    await expandNetworkSection(tree, network.id);
     const deviceSwipe = swipeHost(tree, `device:${device.id}`);
     const networkSwipe = swipeHost(tree, `network:${network.id}`);
 
@@ -514,6 +623,7 @@ describe("NetworksDevicesScreen", () => {
     const device = savedDevice(network.id);
     const harness = createRuntime({ networks: [network], devices: [device] });
     const tree = await renderNetworkScreen(harness);
+    await expandNetworkSection(tree, network.id);
 
     await act(async () => {
       await pressTestId(tree, `swipe-delete-action-device:${device.id}`);
@@ -1215,6 +1325,17 @@ function toolbarHarness(children: React.ReactNode) {
   );
 }
 
+async function expandNetworkSection(
+  tree: TestRenderer.ReactTestRenderer,
+  networkId: string,
+) {
+  if (expansionState(tree, `section-toggle-network:${networkId}`)) return;
+  await act(async () => {
+    pressTestId(tree, `section-toggle-network:${networkId}`);
+    await flushPromises();
+  });
+}
+
 function expansionState(
   tree: TestRenderer.ReactTestRenderer,
   testID: string,
@@ -1280,4 +1401,15 @@ async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+}
+
+async function flushAnimationFrame() {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
+async function flushDeferredAnimation() {
+  await act(async () => {
+    await flushAnimationFrame();
+    await flushPromises();
+  });
 }

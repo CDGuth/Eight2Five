@@ -41,6 +41,7 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
+import { AnimatedHeight } from "@eight2five/ui/components/accordion";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 
 import {
@@ -134,31 +135,39 @@ export function DeviceSettingsModal({
       available,
       inspectionAttempted.current,
     );
-    inspectionAttempted.current = true;
     if (!shouldInspect) return;
-    setInspecting(true);
-    setInspectionError(undefined);
-    inspectDevice(deviceId)
-      .then((inspection) => {
-        if (loadedDeviceId.current !== deviceId) return;
-        setForm((current) =>
-          current
-            ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
-            : current,
-        );
-        setBaseline((current) =>
-          current
-            ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
-            : current,
-        );
-      })
-      .catch((inspectError) => {
-        if (loadedDeviceId.current === deviceId)
-          setInspectionError(displayError(inspectError));
-      })
-      .finally(() => {
-        if (loadedDeviceId.current === deviceId) setInspecting(false);
-      });
+    inspectionAttempted.current = true;
+    let inspectionStarted = false;
+    const frame = requestAnimationFrame(() => {
+      inspectionStarted = true;
+      setInspecting(true);
+      setInspectionError(undefined);
+      inspectDevice(deviceId)
+        .then((inspection) => {
+          if (loadedDeviceId.current !== deviceId) return;
+          setForm((current) =>
+            current
+              ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
+              : current,
+          );
+          setBaseline((current) =>
+            current
+              ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
+              : current,
+          );
+        })
+        .catch((inspectError) => {
+          if (loadedDeviceId.current === deviceId)
+            setInspectionError(displayError(inspectError));
+        })
+        .finally(() => {
+          if (loadedDeviceId.current === deviceId) setInspecting(false);
+        });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (!inspectionStarted) inspectionAttempted.current = false;
+    };
   }, [available, deviceId, inspectDevice, isOpen]);
 
   if (!device || !form || !baseline) return null;
@@ -639,7 +648,7 @@ export function DeviceSettingsModal({
               style={{ color: theme.icon }}
             />
           </Button>
-          {advancedOpen ? (
+          <AnimatedHeight isExpanded={advancedOpen} duration={200}>
             <FormSection title="Firmware and diagnostics">
               <SelectField
                 label="Selected firmware slot"
@@ -696,7 +705,7 @@ export function DeviceSettingsModal({
                 }
               />
             </FormSection>
-          ) : null}
+          </AnimatedHeight>
 
           <FormSection title="Destructive actions">
             <SettingInfoCard tone="warning">
