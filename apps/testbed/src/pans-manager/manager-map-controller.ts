@@ -153,7 +153,7 @@ export function usePansMapDataController(
 ): PansMapDataController {
   const networks = useManagedNetworks();
   const devices = useManagedDevices();
-  const { saveNetwork } = useRepositoryNetworkActions();
+  const { updateNetworkMapSettings } = useRepositoryNetworkActions();
   const { applyConfiguration: applyDeviceConfiguration } =
     useDeviceConfigurationActions();
   const { createPositionStream, refreshTopology } = usePositionLogActions();
@@ -641,15 +641,12 @@ export function usePansMapDataController(
       setting: "mapUnits" | "mapAreaMode",
       value: MapUnits | MapAreaMode,
     ) => {
-      for (const network of selectedNetworks) {
-        await saveNetwork({
-          ...network,
-          settings: { ...network.settings, [setting]: value },
-          updatedAt: Date.now(),
-        });
-      }
+      await updateNetworkMapSettings(
+        selectedNetworks.map((network) => network.id),
+        { [setting]: value },
+      );
     },
-    [saveNetwork, selectedNetworks],
+    [selectedNetworks, updateNetworkMapSettings],
   );
   const selectAllNetworks = React.useCallback(
     () => setSelectedNetworkIds(new Set(networks.map((network) => network.id))),

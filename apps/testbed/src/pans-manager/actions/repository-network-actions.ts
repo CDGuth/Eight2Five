@@ -9,6 +9,7 @@ export function useRepositoryNetworkActions() {
       refresh: actions.refreshPersisted,
       createNetwork: actions.createNetwork,
       saveNetwork: actions.saveNetwork,
+      updateNetworkMapSettings: actions.updateNetworkMapSettings,
       saveNetworkLocalDetails: actions.saveNetworkLocalDetails,
       deleteNetwork: actions.deleteNetwork,
       importNetwork: actions.importNetwork,

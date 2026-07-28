@@ -46,6 +46,10 @@ describe("PANS manager SQLite migration", () => {
     expect(sql).toContain(
       "json_remove(value_json, '$.discoveryScanDurationMs')",
     );
+    expect(sql).toContain("idx_pans_snapshots_device_latest");
+    expect(sql).toContain(
+      "pans_device_snapshots(device_id, captured_at DESC, id DESC)",
+    );
   });
 
   test("removes obsolete scan durations from an existing version-one database", async () => {
@@ -70,6 +74,32 @@ describe("PANS manager SQLite migration", () => {
     expect(database.runAsync).toHaveBeenCalledWith(
       expect.stringContaining("pans_schema_migrations"),
       [2, expect.any(Number)],
+    );
+    expect(sql).toContain("PRAGMA user_version = 3");
+  });
+
+  test("adds the latest-snapshot index when upgrading a version-two database", async () => {
+    const executed: string[] = [];
+    const database = {
+      execAsync: jest.fn(async (sql: string) => {
+        executed.push(sql);
+      }),
+      getFirstAsync: jest.fn(async () => ({ user_version: 2 })),
+      runAsync: jest.fn(async () => ({ lastInsertRowId: 1, changes: 1 })),
+      withTransactionAsync: jest.fn(
+        async (task: () => Promise<void>) => await task(),
+      ),
+    } as unknown as SQLiteDatabase;
+
+    await migratePansManagerDatabase(database);
+
+    const sql = executed.join("\n");
+    expect(sql).not.toContain("json_remove");
+    expect(sql).toContain("idx_pans_snapshots_device_latest");
+    expect(sql).toContain("PRAGMA user_version = 3");
+    expect(database.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("pans_schema_migrations"),
+      [3, expect.any(Number)],
     );
   });
 });

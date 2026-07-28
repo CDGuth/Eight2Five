@@ -72,6 +72,7 @@ import { createDefaultPansManagerRuntime } from "./runtime/default-runtime";
 import {
   autoInspectionRetryDelay,
   availableDiscoveryTransportIds,
+  INSPECTION_COOLDOWN_MS,
 } from "./runtime/auto-inspection";
 
 export type ManagerStepStatus = "checking" | "opening" | "ready" | "error";
@@ -187,6 +188,12 @@ export interface PansManagerContextValue {
   assignDiscoveries(networkId: string, ids: string[]): Promise<void>;
   createNetwork(input: NetworkCreationInput): Promise<NetworkCreationResult>;
   saveNetwork(network: ManagedNetwork): Promise<void>;
+  updateNetworkMapSettings(
+    networkIds: string[],
+    settings: Partial<
+      Pick<ManagedNetwork["settings"], "mapUnits" | "mapAreaMode">
+    >,
+  ): Promise<void>;
   saveNetworkLocalDetails(input: {
     networkId: string;
     name: string;
@@ -195,7 +202,10 @@ export interface PansManagerContextValue {
   deleteNetwork(networkId: string): Promise<void>;
   deleteOfflineDevice(deviceId: string): Promise<void>;
   unassignOnlineDevice(deviceId: string): Promise<PansConfigurationResult>;
-  inspectDevice(deviceId: string): Promise<PansInspectionResult>;
+  inspectDevice(
+    deviceId: string,
+    force?: boolean,
+  ): Promise<PansInspectionResult>;
   inspectDiagnostics(deviceId: string): Promise<PansDiagnosticsResult>;
   configureDevice(
     deviceId: string,
@@ -250,6 +260,7 @@ const actionKeys = [
   "assignDiscoveries",
   "createNetwork",
   "saveNetwork",
+  "updateNetworkMapSettings",
   "saveNetworkLocalDetails",
   "deleteNetwork",
   "deleteOfflineDevice",
@@ -369,6 +380,12 @@ export function PansManagerProvider({
   const inspectionPromisesRef = React.useRef(
     new Map<string, Promise<PansInspectionResult>>(),
   );
+  const inspectionCacheRef = React.useRef(
+    new Map<
+      string,
+      { inspection: PansInspectionResult; completedAt: number }
+    >(),
+  );
 
   React.useEffect(() => {
     discoveryStore.setList(discoveries);
@@ -416,13 +433,22 @@ export function PansManagerProvider({
       nextNetworks,
       storedDevices,
     );
+    const snapshots = await loadLatestDeviceSnapshots(
+      runtime.repository,
+      nextDevices,
+    );
+    const settings = managerSettingsWithDefaults(savedSettings);
+    persistedStore.replace({
+      networks: nextNetworks,
+      devices: nextDevices,
+      snapshots,
+      settings,
+    });
     setNetworks(nextNetworks);
     setDevices(nextDevices);
-    setDeviceSnapshots(
-      await loadLatestDeviceSnapshots(runtime.repository, nextDevices),
-    );
-    setManagerSettings(managerSettingsWithDefaults(savedSettings));
-  }, [runtime]);
+    setDeviceSnapshots(snapshots);
+    setManagerSettings(settings);
+  }, [persistedStore, runtime]);
 
   React.useEffect(() => {
     let active = true;
@@ -453,19 +479,37 @@ export function PansManagerProvider({
           storedDevices,
         );
         if (!active) return await closeOpenedRuntime();
-        const savedSnapshots = await loadLatestDeviceSnapshots(
-          created.repository,
-          savedDevices,
-        );
-        if (!active) return await closeOpenedRuntime();
-        setRuntime(created);
         setNetworks(savedNetworks);
         setDevices(savedDevices);
-        setDeviceSnapshots(savedSnapshots);
-        setManagerSettings(managerSettingsWithDefaults(storedSettings));
+        const settings = managerSettingsWithDefaults(storedSettings);
+        setManagerSettings(settings);
+        persistedStore.replace({
+          networks: savedNetworks,
+          devices: savedDevices,
+          snapshots: {},
+          settings,
+        });
+        setRuntime(created);
         setPermission(created.discovery.getPermissionStatus());
         setDiscoveryDiagnostics(created.discovery.getDiagnostics());
         setInitialization("ready");
+        let savedSnapshots: Record<string, DeviceConfigurationSnapshot>;
+        try {
+          savedSnapshots = await loadLatestDeviceSnapshots(
+            created.repository,
+            savedDevices,
+          );
+        } catch (error) {
+          if (active) {
+            setInitializationError(
+              `Saved device snapshots could not be loaded: ${displayError(error)}`,
+            );
+          }
+          return;
+        }
+        if (!active) return await closeOpenedRuntime();
+        persistedStore.upsertSnapshots(Object.values(savedSnapshots));
+        setDeviceSnapshots(savedSnapshots);
       })
       .catch((error) => {
         if (!active) return;
@@ -478,7 +522,7 @@ export function PansManagerProvider({
       active = false;
       void closeOpenedRuntime();
     };
-  }, [createRuntime, runtimeAttempt]);
+  }, [createRuntime, persistedStore, runtimeAttempt]);
 
   React.useEffect(() => {
     const generation = ++autoInspectionRuntimeGenerationRef.current;
@@ -488,6 +532,7 @@ export function PansManagerProvider({
     for (const timer of retryTimers.values()) clearTimeout(timer);
     retryTimers.clear();
     inspectionPromisesRef.current.clear();
+    inspectionCacheRef.current.clear();
     return () => {
       if (autoInspectionRuntimeGenerationRef.current === generation)
         autoInspectionRuntimeGenerationRef.current += 1;
@@ -643,6 +688,50 @@ export function PansManagerProvider({
     setSelectedDiscoveryIds(new Set());
   }, [runtime]);
 
+  const publishDevice = React.useCallback(
+    async (deviceId: string, canonical?: ManagedDevice) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      let device = canonical ?? (await runtime.repository.getDevice(deviceId));
+      const snapshotPromise =
+        runtime.repository.getLatestDeviceSnapshot(deviceId);
+      if (!device) {
+        persistedStore.removeDevice(deviceId);
+        setDevices((current) => current.filter((item) => item.id !== deviceId));
+        setDeviceSnapshots((current) => removeRecordKey(current, deviceId));
+        return;
+      }
+      const reconciled = reconcileDeviceCachedProfileMatch(
+        device,
+        networks,
+        Date.now(),
+      );
+      if (reconciled !== device) {
+        device = reconciled.networkId
+          ? await runtime.repository.associateDevice({
+              networkId: reconciled.networkId,
+              deviceId,
+              associatedAt: reconciled.updatedAt,
+            })
+          : device.networkId
+            ? await runtime.repository.dissociateDevice(
+                device.networkId,
+                deviceId,
+                reconciled.updatedAt,
+              )
+            : reconciled;
+      }
+      const snapshot = await snapshotPromise;
+      persistedStore.upsertDeviceWithSnapshot(device, snapshot);
+      setDevices((current) => upsertRecord(current, device));
+      setDeviceSnapshots((current) =>
+        snapshot
+          ? { ...current, [deviceId]: snapshot }
+          : removeRecordKey(current, deviceId),
+      );
+    },
+    [networks, persistedStore, runtime],
+  );
+
   const persistDiscovery = React.useCallback(
     async (discovery: DiscoveredDeviceSnapshot) => {
       if (!runtime) throw new Error("Manager is not ready.");
@@ -650,11 +739,12 @@ export function PansManagerProvider({
         (item) => item.transportDeviceId === discovery.transportDeviceId,
       );
       const device = deviceFromDiscovery(discovery, existing);
-      await runtime.repository.saveDevice(device);
-      await refreshPersisted();
-      return device;
+      const saved = await runtime.repository.saveDevice(device);
+      persistedStore.upsertDevice(saved);
+      setDevices((current) => upsertRecord(current, saved));
+      return saved;
     },
-    [devices, refreshPersisted, runtime],
+    [devices, persistedStore, runtime],
   );
 
   const assignDiscoveries = React.useCallback(
@@ -671,6 +761,12 @@ export function PansManagerProvider({
             deviceId: device.id,
             targetNetworkId: networkId,
           });
+        if (assignment.device)
+          await publishDevice(assignment.device.id, assignment.device);
+        if (assignment.network) {
+          persistedStore.upsertNetwork(assignment.network);
+          setNetworks((current) => upsertRecord(current, assignment.network!));
+        }
         if (assignment.outcome !== "assigned") {
           throw new Error(
             assignment.error?.message ?? "Network profile assignment failed.",
@@ -678,9 +774,8 @@ export function PansManagerProvider({
         }
       }
       setSelectedDiscoveryIds(new Set());
-      await refreshPersisted();
     },
-    [discoveries, persistDiscovery, refreshPersisted, runtime],
+    [discoveries, persistDiscovery, persistedStore, publishDevice, runtime],
   );
 
   const createNetwork = React.useCallback(
@@ -704,7 +799,9 @@ export function PansManagerProvider({
         lastOpenedAt: now,
       };
       // Persist the profile before touching hardware so partial commissioning is recoverable.
-      await runtime.repository.saveNetwork(network);
+      const savedNetwork = await runtime.repository.saveNetwork(network);
+      persistedStore.upsertNetwork(savedNetwork);
+      setNetworks((current) => upsertRecord(current, savedNetwork));
       const configurations: PansConfigurationResult[] = [];
       for (const discovery of input.discoveries) {
         const device = await persistDiscovery(discovery);
@@ -726,21 +823,19 @@ export function PansManagerProvider({
             },
           },
         );
+        if (assignment.device)
+          await publishDevice(assignment.device.id, assignment.device);
       }
       setSelectedDiscoveryIds(new Set());
-      await refreshPersisted();
-      return { network, configurations };
+      return { network: savedNetwork, configurations };
     },
-    [networks, persistDiscovery, refreshPersisted, runtime],
+    [networks, persistDiscovery, persistedStore, publishDevice, runtime],
   );
 
   const saveNetwork = React.useCallback(
     async (network: ManagedNetwork) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      const [latest, existing] = await Promise.all([
-        runtime.repository.getNetwork(network.id),
-        runtime.repository.listNetworks(),
-      ]);
+      const latest = await runtime.repository.getNetwork(network.id);
       if (!latest) throw new Error("Network profile not found.");
       assertNetworkProfilePanId(latest.panId);
       if (network.panId !== latest.panId) {
@@ -750,32 +845,55 @@ export function PansManagerProvider({
       }
       assertUniqueName(
         network.name.trim(),
-        existing.map((item) => item.name),
+        networks.map((item) => item.name),
         latest.name,
       );
-      await runtime.repository.saveNetwork({
+      const saved = await runtime.repository.saveNetwork({
         ...latest,
         ...network,
         name: network.name.trim(),
         panId: latest.panId,
       });
-      await refreshPersisted();
+      persistedStore.upsertNetwork(saved);
+      setNetworks((current) => upsertRecord(current, saved));
     },
-    [refreshPersisted, runtime],
+    [networks, persistedStore, runtime],
+  );
+
+  const updateNetworkMapSettings = React.useCallback(
+    async (
+      networkIds: string[],
+      settings: Partial<
+        Pick<ManagedNetwork["settings"], "mapUnits" | "mapAreaMode">
+      >,
+    ) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      const selected = new Set(networkIds);
+      const now = Date.now();
+      const updates = networks
+        .filter((network) => selected.has(network.id))
+        .map((network) => ({
+          ...network,
+          settings: { ...network.settings, ...settings },
+          updatedAt: now,
+        }));
+      if (!updates.length) return;
+      const saved = await runtime.repository.saveNetworks(updates);
+      persistedStore.upsertNetworks(saved);
+      setNetworks((current) => mergeRecords(current, saved));
+    },
+    [networks, persistedStore, runtime],
   );
 
   const saveNetworkLocalDetails = React.useCallback(
     async (input: { networkId: string; name: string; notes?: string }) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      const [latest, existing] = await Promise.all([
-        runtime.repository.getNetwork(input.networkId),
-        runtime.repository.listNetworks(),
-      ]);
+      const latest = await runtime.repository.getNetwork(input.networkId);
       if (!latest) throw new Error("Network profile not found.");
       const name = input.name.trim();
       assertUniqueName(
         name,
-        existing.map((item) => item.name),
+        networks.map((item) => item.name),
         latest.name,
       );
       const saved: ManagedNetwork = {
@@ -786,20 +904,31 @@ export function PansManagerProvider({
           : {}),
         updatedAt: Date.now(),
       };
-      await runtime.repository.saveNetwork(saved);
-      await refreshPersisted();
-      return saved;
+      const canonical = await runtime.repository.saveNetwork(saved);
+      persistedStore.upsertNetwork(canonical);
+      setNetworks((current) => upsertRecord(current, canonical));
+      return canonical;
     },
-    [refreshPersisted, runtime],
+    [networks, persistedStore, runtime],
   );
 
   const deleteNetwork = React.useCallback(
     async (networkId: string) => {
       if (!runtime) throw new Error("Manager is not ready.");
+      const affectedIds = devices
+        .filter((device) => device.networkId === networkId)
+        .map((device) => device.id);
       await runtime.repository.deleteNetwork(networkId);
-      await refreshPersisted();
+      const affectedDevices = (
+        await Promise.all(
+          affectedIds.map((deviceId) => runtime.repository.getDevice(deviceId)),
+        )
+      ).filter((device): device is ManagedDevice => device !== undefined);
+      persistedStore.removeNetwork(networkId, affectedDevices);
+      setNetworks((current) => current.filter((item) => item.id !== networkId));
+      setDevices((current) => mergeRecords(current, affectedDevices));
     },
-    [refreshPersisted, runtime],
+    [devices, persistedStore, runtime],
   );
 
   const deleteOfflineDevice = React.useCallback(
@@ -818,9 +947,11 @@ export function PansManagerProvider({
         );
       }
       await runtime.repository.deleteDevice(deviceId);
-      await refreshPersisted();
+      persistedStore.removeDevice(deviceId);
+      setDevices((current) => current.filter((item) => item.id !== deviceId));
+      setDeviceSnapshots((current) => removeRecordKey(current, deviceId));
     },
-    [discoveries, refreshPersisted, runtime],
+    [discoveries, persistedStore, runtime],
   );
 
   const unassignOnlineDevice = React.useCallback(
@@ -840,21 +971,33 @@ export function PansManagerProvider({
       }
       const result =
         await runtime.configuration.unassignDeviceHardware(deviceId);
-      await refreshPersisted();
+      await publishDevice(deviceId);
       return result;
     },
-    [discoveries, refreshPersisted, runtime],
+    [discoveries, publishDevice, runtime],
   );
 
   const inspectDevice = React.useCallback(
-    async (deviceId: string) => {
+    async (deviceId: string, force = false) => {
       if (!runtime) throw new Error("Manager is not ready.");
       const inFlight = inspectionPromisesRef.current.get(deviceId);
       if (inFlight) return await inFlight;
+      const cached = inspectionCacheRef.current.get(deviceId);
+      if (
+        !force &&
+        cached &&
+        Date.now() - cached.completedAt < INSPECTION_COOLDOWN_MS
+      )
+        return cached.inspection;
+      inspectionCacheRef.current.delete(deviceId);
       const inspectionPromise = (async () => {
         const inspection =
           await runtime.configuration.inspectAndCache(deviceId);
-        await refreshPersisted();
+        await publishDevice(deviceId);
+        inspectionCacheRef.current.set(deviceId, {
+          inspection,
+          completedAt: Date.now(),
+        });
         return inspection;
       })();
       inspectionPromisesRef.current.set(deviceId, inspectionPromise);
@@ -865,7 +1008,7 @@ export function PansManagerProvider({
           inspectionPromisesRef.current.delete(deviceId);
       }
     },
-    [refreshPersisted, runtime],
+    [publishDevice, runtime],
   );
 
   React.useEffect(() => {
@@ -954,10 +1097,10 @@ export function PansManagerProvider({
         deviceId,
         config,
       );
-      await refreshPersisted();
+      await publishDevice(deviceId);
       return result;
     },
-    [refreshPersisted, runtime],
+    [publishDevice, runtime],
   );
 
   const applyDeviceConfiguration = React.useCallback(
@@ -970,10 +1113,10 @@ export function PansManagerProvider({
         deviceId,
         hardwareChanges,
       );
-      await refreshPersisted();
+      await publishDevice(deviceId);
       return result;
     },
-    [refreshPersisted, runtime],
+    [publishDevice, runtime],
   );
 
   const assignDeviceToNetworkProfile = React.useCallback(
@@ -981,10 +1124,15 @@ export function PansManagerProvider({
       if (!runtime) throw new Error("Manager is not ready.");
       const result =
         await runtime.commissioning.assignDeviceToNetworkProfile(input);
-      await refreshPersisted();
+      if (result.device) await publishDevice(result.device.id, result.device);
+      else await publishDevice(input.deviceId);
+      if (result.network) {
+        persistedStore.upsertNetwork(result.network);
+        setNetworks((current) => upsertRecord(current, result.network!));
+      }
       return result;
     },
-    [refreshPersisted, runtime],
+    [persistedStore, publishDevice, runtime],
   );
 
   const migrateNetworkProfilePan = React.useCallback(
@@ -992,10 +1140,16 @@ export function PansManagerProvider({
       if (!runtime) throw new Error("Manager is not ready.");
       const result =
         await runtime.commissioning.migrateNetworkProfilePan(input);
-      await refreshPersisted();
+      if (result.network) {
+        persistedStore.upsertNetwork(result.network);
+        setNetworks((current) => upsertRecord(current, result.network!));
+      }
+      await Promise.all(
+        result.deviceResults.map((item) => publishDevice(item.deviceId)),
+      );
       return result;
     },
-    [refreshPersisted, runtime],
+    [persistedStore, publishDevice, runtime],
   );
 
   const disconnectDevice = React.useCallback(
@@ -1038,10 +1192,11 @@ export function PansManagerProvider({
   const saveManagerSettings = React.useCallback(
     async (settings: PansManagerSettings) => {
       if (!runtime) throw new Error("Manager is not ready.");
-      await runtime.repository.saveSettings(settings);
-      setManagerSettings(settings);
+      const saved = await runtime.repository.saveSettings(settings);
+      persistedStore.upsertSettings(saved);
+      setManagerSettings(saved);
     },
-    [runtime],
+    [persistedStore, runtime],
   );
 
   const refreshTopology = React.useCallback(
@@ -1161,6 +1316,7 @@ export function PansManagerProvider({
       assignDiscoveries,
       createNetwork,
       saveNetwork,
+      updateNetworkMapSettings,
       saveNetworkLocalDetails,
       deleteNetwork,
       deleteOfflineDevice,
@@ -1212,6 +1368,7 @@ export function PansManagerProvider({
       assignDiscoveries,
       createNetwork,
       saveNetwork,
+      updateNetworkMapSettings,
       saveNetworkLocalDetails,
       deleteNetwork,
       deleteOfflineDevice,
@@ -1482,18 +1639,12 @@ async function loadLatestDeviceSnapshots(
   repository: PansManagerRepository,
   devices: ManagedDevice[],
 ): Promise<Record<string, DeviceConfigurationSnapshot>> {
-  const snapshots = await Promise.all(
-    devices.map(
-      async (device) =>
-        [
-          device.id,
-          await repository.getLatestDeviceSnapshot(device.id),
-        ] as const,
-    ),
+  const snapshots = await repository.getLatestDeviceSnapshots(
+    devices.map((device) => device.id),
   );
   return Object.fromEntries(
-    snapshots.filter(
-      (entry): entry is readonly [string, DeviceConfigurationSnapshot] =>
+    Object.entries(snapshots).filter(
+      (entry): entry is [string, DeviceConfigurationSnapshot] =>
         entry[1] !== undefined,
     ),
   );
@@ -1505,30 +1656,50 @@ async function reconcileCachedProfileMatches(
   devices: ManagedDevice[],
 ): Promise<ManagedDevice[]> {
   const updatedAt = Date.now();
-  let changed = false;
-  await Promise.all(
+  const reconciled = await Promise.all(
     devices.map(async (device) => {
-      const reconciled = reconcileDeviceCachedProfileMatch(
+      const next = reconcileDeviceCachedProfileMatch(
         device,
         networks,
         updatedAt,
       );
-      if (reconciled === device) return;
-      changed = true;
-      if (reconciled.networkId) {
-        await repository.associateDevice({
-          networkId: reconciled.networkId,
+      if (next === device) return device;
+      if (next.networkId) {
+        return await repository.associateDevice({
+          networkId: next.networkId,
           deviceId: device.id,
           associatedAt: updatedAt,
         });
       } else if (device.networkId) {
-        await repository.dissociateDevice(
+        return await repository.dissociateDevice(
           device.networkId,
           device.id,
           updatedAt,
         );
       }
+      return next;
     }),
   );
-  return changed ? await repository.listDevices() : devices;
+  return reconciled;
+}
+
+function upsertRecord<T extends { id: string }>(records: T[], record: T): T[] {
+  const index = records.findIndex((item) => item.id === record.id);
+  return index < 0
+    ? [...records, record]
+    : records.map((item, itemIndex) => (itemIndex === index ? record : item));
+}
+
+function mergeRecords<T extends { id: string }>(
+  records: T[],
+  incoming: T[],
+): T[] {
+  return incoming.reduce(upsertRecord, records);
+}
+
+function removeRecordKey<T>(record: Record<string, T>, id: string) {
+  if (!(id in record)) return record;
+  const next = { ...record };
+  delete next[id];
+  return next;
 }

@@ -36,6 +36,10 @@ function reconcile<T extends { id: string }>(previous: T[], incoming: T[]) {
     : next;
 }
 
+function reconcileOne<T extends object>(previous: T | undefined, incoming: T) {
+  return previous && shallowEqual(previous, incoming) ? previous : incoming;
+}
+
 export class PansPersistedStore {
   private listeners = new Set<Listener>();
   private networks: ManagedNetwork[] = [];
@@ -100,8 +104,141 @@ export class PansPersistedStore {
     for (const listener of this.listeners) listener();
   }
 
-  setSettings(settings: PansManagerSettings) {
-    if (this.settings && shallowEqual(this.settings, settings)) return;
+  upsertNetwork(network: ManagedNetwork) {
+    this.upsertNetworks([network]);
+  }
+
+  upsertNetworks(incoming: ManagedNetwork[]) {
+    const byId = new Map(incoming.map((item) => [item.id, item]));
+    const retained = this.networks.map((item) => {
+      const next = byId.get(item.id);
+      if (!next) return item;
+      byId.delete(item.id);
+      return reconcileOne(item, next);
+    });
+    this.publish({ networks: [...retained, ...byId.values()] });
+  }
+
+  removeNetwork(id: string, affectedDevices: ManagedDevice[] = []) {
+    this.publish({
+      networks: this.networks.filter((item) => item.id !== id),
+      devices: reconcile(
+        this.devices,
+        mergeById(this.devices, affectedDevices),
+      ),
+    });
+  }
+
+  upsertDevice(device: ManagedDevice, snapshot?: DeviceConfigurationSnapshot) {
+    const index = this.devices.findIndex((item) => item.id === device.id);
+    const old = index < 0 ? undefined : this.devices[index];
+    const canonical = reconcileOne(old, device);
+    const devices =
+      index < 0
+        ? [...this.devices, canonical]
+        : canonical === old
+          ? this.devices
+          : this.devices.map((item, itemIndex) =>
+              itemIndex === index ? canonical : item,
+            );
+    this.publish({
+      devices,
+      ...(snapshot ? { snapshots: [snapshot] } : {}),
+    });
+  }
+
+  upsertDeviceWithSnapshot(
+    device: ManagedDevice,
+    snapshot: DeviceConfigurationSnapshot | undefined,
+  ) {
+    const index = this.devices.findIndex((item) => item.id === device.id);
+    const old = index < 0 ? undefined : this.devices[index];
+    const canonical = reconcileOne(old, device);
+    const devices =
+      index < 0
+        ? [...this.devices, canonical]
+        : canonical === old
+          ? this.devices
+          : this.devices.map((item, itemIndex) =>
+              itemIndex === index ? canonical : item,
+            );
+    this.publish({
+      devices,
+      ...(snapshot
+        ? { snapshots: [snapshot] }
+        : { removeSnapshotIds: [device.id] }),
+    });
+  }
+
+  upsertDevices(devices: ManagedDevice[]) {
+    const next = reconcile(this.devices, mergeById(this.devices, devices));
+    this.publish({ devices: next });
+  }
+
+  removeDevice(id: string) {
+    this.publish({
+      devices: this.devices.filter((item) => item.id !== id),
+      removeSnapshotIds: [id],
+    });
+  }
+
+  upsertSnapshot(snapshot: DeviceConfigurationSnapshot) {
+    this.upsertSnapshots([snapshot]);
+  }
+
+  upsertSnapshots(snapshots: DeviceConfigurationSnapshot[]) {
+    this.publish({ snapshots });
+  }
+
+  removeSnapshot(deviceId: string) {
+    this.publish({ removeSnapshotIds: [deviceId] });
+  }
+
+  upsertSettings(settings: PansManagerSettings) {
+    this.publish({ settings });
+  }
+
+  removeSettings() {
+    this.publish({ clearSettings: true });
+  }
+
+  private publish(input: {
+    networks?: ManagedNetwork[];
+    devices?: ManagedDevice[];
+    snapshots?: DeviceConfigurationSnapshot[];
+    removeSnapshotIds?: string[];
+    settings?: PansManagerSettings;
+    clearSettings?: boolean;
+  }) {
+    const networks = input.networks ?? this.networks;
+    const devices = input.devices ?? this.devices;
+    let snapshots = this.snapshots;
+    if (input.snapshots?.length || input.removeSnapshotIds?.length) {
+      const next = { ...snapshots };
+      for (const snapshot of input.snapshots ?? []) {
+        next[snapshot.deviceId] = reconcileOne(
+          next[snapshot.deviceId],
+          snapshot,
+        );
+      }
+      for (const id of input.removeSnapshotIds ?? []) delete next[id];
+      snapshots = this.reconcileSnapshots(next);
+    }
+    const settings = input.clearSettings
+      ? undefined
+      : input.settings
+        ? reconcileOne(this.settings, input.settings)
+        : this.settings;
+    if (
+      networks === this.networks &&
+      devices === this.devices &&
+      snapshots === this.snapshots &&
+      settings === this.settings
+    )
+      return;
+    this.networks = networks;
+    this.devices = devices;
+    this.snapshots = snapshots;
     this.settings = settings;
     for (const listener of this.listeners) listener();
   }
@@ -121,6 +258,11 @@ export class PansPersistedStore {
       ? this.snapshots
       : next;
   }
+}
+
+function mergeById<T extends { id: string }>(previous: T[], incoming: T[]) {
+  const incomingIds = new Set(incoming.map((item) => item.id));
+  return [...previous.filter((item) => !incomingIds.has(item.id)), ...incoming];
 }
 
 export const PersistedStoreContext =

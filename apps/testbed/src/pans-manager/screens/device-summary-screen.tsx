@@ -69,7 +69,7 @@ export function DeviceSummaryScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      setInspection(await inspectDevice(device.id));
+      setInspection(await inspectDevice(device.id, true));
     } catch (inspectError) {
       setError(displayError(inspectError));
     } finally {

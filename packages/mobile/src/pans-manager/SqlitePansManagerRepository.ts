@@ -18,7 +18,7 @@ import {
 } from "./types";
 
 export const PANS_MANAGER_DB_NAME = "eight2five-pans-manager.db";
-export const PANS_MANAGER_SCHEMA_VERSION = 2;
+export const PANS_MANAGER_SCHEMA_VERSION = 3;
 
 export interface OpenPansManagerRepositoryResult {
   repository: SqlitePansManagerRepository;
@@ -178,6 +178,19 @@ export async function migratePansManagerDatabase(
       await db.execAsync("PRAGMA user_version = 2;");
     });
   }
+  if (current < 3) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_pans_snapshots_device_latest
+          ON pans_device_snapshots(device_id, captured_at DESC, id DESC);
+      `);
+      await db.runAsync(
+        "INSERT OR REPLACE INTO pans_schema_migrations (version, applied_at) VALUES (?, ?)",
+        [3, Date.now()],
+      );
+      await db.execAsync("PRAGMA user_version = 3;");
+    });
+  }
   await db.execAsync("PRAGMA foreign_keys = ON;");
 }
 
@@ -206,7 +219,29 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
     );
   }
 
-  async saveNetwork(network: ManagedNetwork): Promise<void> {
+  async saveNetwork(network: ManagedNetwork): Promise<ManagedNetwork> {
+    return (await this.saveNetworks([network]))[0];
+  }
+
+  async saveNetworks(networks: ManagedNetwork[]): Promise<ManagedNetwork[]> {
+    if (!networks.length) return [];
+    let persisted: ManagedNetwork[] = [];
+    await this.db.withTransactionAsync(async () => {
+      for (const network of networks) await this.writeNetwork(network);
+      for (const network of networks) {
+        persisted.push(
+          this.requirePersisted(
+            await this.getNetwork(network.id),
+            "network",
+            network.id,
+          ),
+        );
+      }
+    });
+    return persisted;
+  }
+
+  private async writeNetwork(network: ManagedNetwork): Promise<void> {
     await this.db.runAsync(
       `INSERT INTO pans_networks
        (id, name, pan_id, settings_json, notes, created_at, updated_at, last_opened_at)
@@ -253,7 +288,7 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
     );
   }
 
-  async saveDevice(device: ManagedDevice): Promise<void> {
+  async saveDevice(device: ManagedDevice): Promise<ManagedDevice> {
     await this.db.runAsync(
       `INSERT INTO pans_devices
        (id, network_id, transport_device_id, mac_address, node_id_hex, nickname, label,
@@ -280,6 +315,11 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
         device.updatedAt,
       ],
     );
+    return this.requirePersisted(
+      await this.getDevice(device.id),
+      "device",
+      device.id,
+    );
   }
 
   async deleteDevice(id: string): Promise<void> {
@@ -301,7 +341,9 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
     ).map(toDevice);
   }
 
-  async associateDevice(association: NetworkDeviceAssociation): Promise<void> {
+  async associateDevice(
+    association: NetworkDeviceAssociation,
+  ): Promise<ManagedDevice> {
     await this.requireAssociationRecords(
       association.networkId,
       association.deviceId,
@@ -311,13 +353,18 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
       "UPDATE pans_devices SET network_id = ?, updated_at = ? WHERE id = ?",
       [association.networkId, association.associatedAt, association.deviceId],
     );
+    return this.requirePersisted(
+      await this.getDevice(association.deviceId),
+      "device",
+      association.deviceId,
+    );
   }
 
   async dissociateDevice(
     networkId: string,
     deviceId: string,
     dissociatedAt = Date.now(),
-  ): Promise<void> {
+  ): Promise<ManagedDevice> {
     const device = await this.requireAssociationRecords(
       networkId,
       deviceId,
@@ -333,6 +380,11 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
     await this.db.runAsync(
       "UPDATE pans_devices SET network_id = NULL, updated_at = ? WHERE id = ? AND network_id = ?",
       [dissociatedAt, deviceId, networkId],
+    );
+    return this.requirePersisted(
+      await this.getDevice(deviceId),
+      "device",
+      deviceId,
     );
   }
 
@@ -374,18 +426,21 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
       : undefined;
   }
 
-  async saveSettings(settings: PansManagerSettings): Promise<void> {
+  async saveSettings(
+    settings: PansManagerSettings,
+  ): Promise<PansManagerSettings> {
     await this.db.runAsync(
       `INSERT INTO pans_manager_settings (singleton_id, value_json) VALUES (?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET value_json=excluded.value_json`,
       [1, stringifyJson(normalizePansManagerSettings(settings))],
     );
+    return this.requirePersisted(await this.getSettings(), "settings", "1");
   }
 
   async saveDeviceSnapshot(
     snapshot: DeviceConfigurationSnapshot,
-  ): Promise<void> {
-    await this.db.runAsync(
+  ): Promise<DeviceConfigurationSnapshot> {
+    const result = await this.db.runAsync(
       `INSERT INTO pans_device_snapshots (device_id, captured_at, config_json, inspection_json)
        VALUES (?, ?, ?, ?)`,
       [
@@ -395,19 +450,53 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
         json(snapshot.inspection),
       ],
     );
+    return this.requirePersisted(
+      optionalMap(
+        await this.db.getFirstAsync<Row>(
+          "SELECT * FROM pans_device_snapshots WHERE id = ?",
+          [result.lastInsertRowId],
+        ),
+        toSnapshot,
+      ),
+      "device snapshot",
+      String(result.lastInsertRowId),
+    );
+  }
+
+  async getLatestDeviceSnapshots(
+    deviceIds: string[],
+  ): Promise<Record<string, DeviceConfigurationSnapshot | undefined>> {
+    const uniqueDeviceIds = [...new Set(deviceIds)];
+    const result: Record<string, DeviceConfigurationSnapshot | undefined> =
+      Object.create(null) as Record<
+        string,
+        DeviceConfigurationSnapshot | undefined
+      >;
+    for (const deviceId of uniqueDeviceIds) result[deviceId] = undefined;
+    if (!uniqueDeviceIds.length) return result;
+
+    const placeholders = uniqueDeviceIds.map(() => "?").join(", ");
+    const rows = await this.db.getAllAsync<Row>(
+      `SELECT * FROM (
+         SELECT *, ROW_NUMBER() OVER (
+           PARTITION BY device_id ORDER BY captured_at DESC, id DESC
+         ) AS latest_rank
+         FROM pans_device_snapshots
+         WHERE device_id IN (${placeholders})
+       ) WHERE latest_rank = 1`,
+      uniqueDeviceIds,
+    );
+    for (const row of rows) {
+      const snapshot = toSnapshot(row);
+      result[snapshot.deviceId] = snapshot;
+    }
+    return result;
   }
 
   async getLatestDeviceSnapshot(
     deviceId: string,
   ): Promise<DeviceConfigurationSnapshot | undefined> {
-    return optionalMap(
-      await this.db.getFirstAsync<Row>(
-        `SELECT * FROM pans_device_snapshots WHERE device_id = ?
-         ORDER BY captured_at DESC, id DESC LIMIT 1`,
-        [deviceId],
-      ),
-      toSnapshot,
-    );
+    return (await this.getLatestDeviceSnapshots([deviceId]))[deviceId];
   }
 
   async listDeviceSnapshots(
@@ -583,6 +672,19 @@ export class SqlitePansManagerRepository implements PansManagerRepository {
         [sessionId],
       )
     ).map(toLogSample);
+  }
+
+  private requirePersisted<T>(
+    value: T | undefined,
+    entity: string,
+    id: string,
+  ): T {
+    if (value !== undefined) return value;
+    throw new ManagerError(
+      "STORAGE_FAILURE",
+      `The persisted ${entity} could not be read back.`,
+      { operation: `read persisted ${entity}`, deviceId: id },
+    );
   }
 }
 

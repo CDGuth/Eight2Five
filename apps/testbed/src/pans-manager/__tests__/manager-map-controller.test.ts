@@ -166,6 +166,38 @@ describe("manager map data helpers", () => {
 });
 
 describe("manager map tracking diagnostics", () => {
+  test("updates five selected network map settings in one action", async () => {
+    let controller!: PansMapDataController;
+    const updateNetworkMapSettings = jest.fn().mockResolvedValue(undefined);
+    mockManager = {
+      networks: Array.from({ length: 5 }, (_, index) =>
+        network(`network-${index}`, index + 1),
+      ),
+      devices: [],
+      updateNetworkMapSettings,
+      applyDeviceConfiguration: jest.fn(),
+      createPositionStream: jest.fn(),
+      refreshTopology: jest.fn(),
+    };
+    const Harness = () => {
+      controller = usePansMapDataController();
+      return null;
+    };
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(Harness));
+    });
+
+    await act(async () => controller.setMapUnits("imperial"));
+
+    expect(updateNetworkMapSettings).toHaveBeenCalledTimes(1);
+    expect(updateNetworkMapSettings).toHaveBeenCalledWith(
+      ["network-0", "network-1", "network-2", "network-3", "network-4"],
+      { mapUnits: "imperial" },
+    );
+    await act(async () => tree.unmount());
+  });
+
   test("keeps exact map totals in refs and publishes React snapshots only while visible", async () => {
     let controller!: PansMapDataController;
     let streamOptions!: StartPansPositionStreamOptions;

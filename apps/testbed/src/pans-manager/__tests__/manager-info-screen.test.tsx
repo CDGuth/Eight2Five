@@ -201,6 +201,7 @@ function readyRuntime(
     listNetworks: jest.fn().mockResolvedValue([]),
     listDevices: jest.fn().mockResolvedValue([]),
     getSettings: jest.fn().mockResolvedValue(undefined),
+    getLatestDeviceSnapshots: jest.fn().mockResolvedValue({}),
     getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
   } as unknown as PansManagerRepository;
   return Promise.resolve({

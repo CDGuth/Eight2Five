@@ -11,6 +11,10 @@ import type {
   PositionLogSample,
   PositionLogSession,
 } from "./types";
+import {
+  normalizeManagedNetworkSettings,
+  normalizePansManagerSettings,
+} from "./types";
 
 export class InMemoryPansManagerRepository implements PansManagerRepository {
   private readonly networks = new Map<string, ManagedNetwork>();
@@ -32,8 +36,18 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
     return maybeClone(this.networks.get(id));
   }
 
-  async saveNetwork(network: ManagedNetwork): Promise<void> {
-    this.networks.set(network.id, clone(network));
+  async saveNetwork(network: ManagedNetwork): Promise<ManagedNetwork> {
+    return (await this.saveNetworks([network]))[0];
+  }
+
+  async saveNetworks(networks: ManagedNetwork[]): Promise<ManagedNetwork[]> {
+    const staged = new Map(this.networks);
+    for (const network of networks) {
+      staged.set(network.id, canonicalNetwork(network, staged.get(network.id)));
+    }
+    for (const { id } of networks)
+      this.networks.set(id, clone(staged.get(id)!));
+    return networks.map(({ id }) => clone(staged.get(id)!));
   }
 
   async deleteNetwork(id: string): Promise<void> {
@@ -55,8 +69,13 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
     return maybeClone(this.devices.get(deviceId));
   }
 
-  async saveDevice(device: ManagedDevice): Promise<void> {
-    this.devices.set(device.id, clone(device));
+  async saveDevice(device: ManagedDevice): Promise<ManagedDevice> {
+    const persisted = clone({
+      ...device,
+      createdAt: this.devices.get(device.id)?.createdAt ?? device.createdAt,
+    });
+    this.devices.set(device.id, clone(persisted));
+    return clone(persisted);
   }
 
   async deleteDevice(deviceId: string): Promise<void> {
@@ -72,7 +91,9 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
       .map(clone);
   }
 
-  async associateDevice(association: NetworkDeviceAssociation): Promise<void> {
+  async associateDevice(
+    association: NetworkDeviceAssociation,
+  ): Promise<ManagedDevice> {
     const device = this.devices.get(association.deviceId);
     if (!device) {
       throw new ManagerError(
@@ -88,18 +109,20 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
         { deviceId: association.deviceId, operation: "associate device" },
       );
     }
-    this.devices.set(association.deviceId, {
+    const persisted = {
       ...device,
       networkId: association.networkId,
       updatedAt: association.associatedAt,
-    });
+    };
+    this.devices.set(association.deviceId, clone(persisted));
+    return clone(persisted);
   }
 
   async dissociateDevice(
     networkId: string,
     deviceId: string,
     dissociatedAt = Date.now(),
-  ): Promise<void> {
+  ): Promise<ManagedDevice> {
     const device = this.devices.get(deviceId);
     if (!device) {
       throw new ManagerError(
@@ -116,31 +139,55 @@ export class InMemoryPansManagerRepository implements PansManagerRepository {
       );
     }
     const { networkId: _networkId, ...unassigned } = device;
-    this.devices.set(deviceId, { ...unassigned, updatedAt: dissociatedAt });
+    const persisted = { ...unassigned, updatedAt: dissociatedAt };
+    this.devices.set(deviceId, clone(persisted));
+    return clone(persisted);
   }
 
   async getSettings(): Promise<PansManagerSettings | undefined> {
     return maybeClone(this.settings);
   }
 
-  async saveSettings(settings: PansManagerSettings): Promise<void> {
-    this.settings = clone(settings);
+  async saveSettings(
+    settings: PansManagerSettings,
+  ): Promise<PansManagerSettings> {
+    const persisted = clone(normalizePansManagerSettings(settings));
+    this.settings = clone(persisted);
+    return clone(persisted);
   }
 
   async saveDeviceSnapshot(
     snapshot: DeviceConfigurationSnapshot,
-  ): Promise<void> {
+  ): Promise<DeviceConfigurationSnapshot> {
+    const persisted = clone(snapshot);
     const existing = this.snapshots.get(snapshot.deviceId) ?? [];
-    existing.push(clone(snapshot));
+    existing.push(clone(persisted));
     existing.sort((left, right) => left.capturedAt - right.capturedAt);
     this.snapshots.set(snapshot.deviceId, existing);
+    return clone(persisted);
+  }
+
+  async getLatestDeviceSnapshots(
+    deviceIds: string[],
+  ): Promise<Record<string, DeviceConfigurationSnapshot | undefined>> {
+    const result: Record<string, DeviceConfigurationSnapshot | undefined> =
+      Object.create(null) as Record<
+        string,
+        DeviceConfigurationSnapshot | undefined
+      >;
+    for (const deviceId of deviceIds) {
+      const entries = this.snapshots.get(deviceId);
+      result[deviceId] = entries?.length
+        ? clone(entries[entries.length - 1])
+        : undefined;
+    }
+    return result;
   }
 
   async getLatestDeviceSnapshot(
     deviceId: string,
   ): Promise<DeviceConfigurationSnapshot | undefined> {
-    const entries = this.snapshots.get(deviceId);
-    return entries?.length ? clone(entries[entries.length - 1]) : undefined;
+    return (await this.getLatestDeviceSnapshots([deviceId]))[deviceId];
   }
 
   async listDeviceSnapshots(
@@ -238,4 +285,15 @@ function sorted<T>(values: Iterable<T>, key: (value: T) => string): T[] {
   return Array.from(values).sort((left, right) =>
     key(left).localeCompare(key(right)),
   );
+}
+
+function canonicalNetwork(
+  network: ManagedNetwork,
+  existing: ManagedNetwork | undefined,
+): ManagedNetwork {
+  return clone({
+    ...network,
+    settings: normalizeManagedNetworkSettings(network.settings),
+    createdAt: existing?.createdAt ?? network.createdAt,
+  });
 }

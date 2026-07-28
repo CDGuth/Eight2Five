@@ -43,17 +43,15 @@ export class PansNetworkExportService {
             .networkId === networkId,
       )
       .map(exportableDevice);
-    const configurations = (
-      await Promise.all(
-        devices.map(
-          async (device) =>
-            await this.repository.getLatestDeviceSnapshot(device.id),
-        ),
-      )
-    ).filter(
-      (snapshot): snapshot is DeviceConfigurationSnapshot =>
-        snapshot !== undefined,
+    const latestSnapshots = await this.repository.getLatestDeviceSnapshots(
+      devices.map((device) => device.id),
     );
+    const configurations = devices
+      .map((device) => latestSnapshots[device.id])
+      .filter(
+        (snapshot): snapshot is DeviceConfigurationSnapshot =>
+          snapshot !== undefined,
+      );
     return {
       schema: "eight2five.pans-network",
       version: PANS_NETWORK_EXPORT_VERSION,

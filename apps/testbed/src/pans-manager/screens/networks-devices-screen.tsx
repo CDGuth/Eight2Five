@@ -538,7 +538,7 @@ export function NetworksDevicesScreen() {
         setSelectedNetworkId(networkId);
       }}
       onOpenDeviceSettings={openDeviceSettings}
-      onRefreshDevice={inspectDevice}
+      onRefreshDevice={(deviceId) => inspectDevice(deviceId, true)}
       onRequestDeviceDelete={requestDeviceDelete}
       swipeRegistry={swipeRegistry}
       dragEnabled={!assignmentInFlight}

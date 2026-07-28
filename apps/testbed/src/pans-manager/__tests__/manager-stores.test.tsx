@@ -1,9 +1,11 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import type {
+  ManagedNetwork,
   DiscoveredDeviceSnapshot,
   DisplayDevice,
 } from "@eight2five/mobile/pans-manager";
+import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
 
 import {
   DiscoveryStoreContext,
@@ -14,6 +16,7 @@ import {
   networkDeviceRowPropsEqual,
   type NetworkDeviceRowProps,
 } from "../components/network-device-row";
+import { PansPersistedStore } from "../stores/persisted-store";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 
@@ -64,6 +67,43 @@ describe("PansDiscoveryStore", () => {
     });
     expect(renders).toBe(initialRenders);
     await act(async () => tree.unmount());
+  });
+});
+
+describe("PansPersistedStore", () => {
+  it("upserts a network batch atomically while preserving unchanged identities", () => {
+    const store = new PansPersistedStore();
+    const listener = jest.fn();
+    const networks = Array.from(
+      { length: 5 },
+      (_, index): ManagedNetwork => ({
+        id: `network-${index}`,
+        name: `Network ${index}`,
+        panId: index,
+        settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    );
+    store.replace({
+      networks,
+      devices: [],
+      snapshots: {},
+      settings: undefined,
+    });
+    store.subscribe(listener);
+
+    store.upsertNetworks(
+      networks.map((network, index) =>
+        index === 2
+          ? { ...network, name: "Changed", updatedAt: 2 }
+          : { ...network },
+      ),
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getNetworks()[0]).toBe(networks[0]);
+    expect(store.getNetworks()[2]).not.toBe(networks[2]);
   });
 });
 

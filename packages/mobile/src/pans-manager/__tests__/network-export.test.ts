@@ -27,6 +27,13 @@ describe("PansNetworkExportService", () => {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+    await source.saveDeviceSnapshot({
+      deviceId: "device",
+      capturedAt: timestamp,
+      config: anchorConfig(0x1234, "Hardware label"),
+    });
+    const bulkLatest = jest.spyOn(source, "getLatestDeviceSnapshots");
+    const singleLatest = jest.spyOn(source, "getLatestDeviceSnapshot");
     const exporter = new PansNetworkExportService(source, () => timestamp);
     const json = await exporter.exportNetworkJson("network");
     const parsed = JSON.parse(json);
@@ -35,6 +42,10 @@ describe("PansNetworkExportService", () => {
     expect(parsed.devices[0]).not.toHaveProperty("networkId");
     expect(parsed.devices[0]).not.toHaveProperty("nickname");
     expect(parsed.devices[0]).not.toHaveProperty("notes");
+    expect(parsed.configurations).toHaveLength(1);
+    expect(bulkLatest).toHaveBeenCalledTimes(1);
+    expect(bulkLatest).toHaveBeenCalledWith(["device"]);
+    expect(singleLatest).not.toHaveBeenCalled();
     expect(json.toLowerCase()).not.toContain("password");
     const csv = await exporter.exportNetworkCsv("network");
     expect(csv).toContain("network_id,network_name,pan_id,device_id");

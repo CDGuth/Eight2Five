@@ -344,7 +344,26 @@ describe("PansManagerProvider", () => {
           updatedAt: 1,
         },
       ]),
+      getDevice: jest.fn().mockResolvedValue({
+        id: "managed-1",
+        transportDeviceId: "transport-1",
+        createdAt: 1,
+        updatedAt: 10,
+      }),
       getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshots: jest.fn().mockResolvedValue({
+        "managed-1": {
+          deviceId: "managed-1",
+          capturedAt: 10,
+          config: {
+            role: "anchor",
+            uwbMode: "active",
+            ledEnabled: true,
+            firmwareUpdateEnabled: false,
+            initiatorEnabled: false,
+          },
+        },
+      }),
       getLatestDeviceSnapshot: jest.fn().mockResolvedValue({
         deviceId: "managed-1",
         capturedAt: 10,
@@ -384,8 +403,103 @@ describe("PansManagerProvider", () => {
 
     expect(inspectAndCache).toHaveBeenCalledWith("managed-1");
     expect(runtime.configuration.inspect).not.toHaveBeenCalled();
-    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(2);
-    expect(runtime.repository.getLatestDeviceSnapshot).toHaveBeenCalledTimes(2);
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(1);
+    expect(runtime.repository.getDevice).toHaveBeenCalledTimes(1);
+    expect(runtime.repository.getLatestDeviceSnapshot).toHaveBeenCalledTimes(1);
+    await act(async () => tree.unmount());
+  });
+
+  it("uses one bulk snapshot query at startup", async () => {
+    const device: ManagedDevice = {
+      id: "managed-1",
+      transportDeviceId: "transport-1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const getLatestDeviceSnapshots = jest.fn().mockResolvedValue({});
+    const getLatestDeviceSnapshot = jest.fn().mockResolvedValue(undefined);
+    const runtime = createRuntimeValue({
+      repository: {
+        listNetworks: jest.fn().mockResolvedValue([]),
+        listDevices: jest.fn().mockResolvedValue([device]),
+        getSettings: jest.fn().mockResolvedValue(undefined),
+        getLatestDeviceSnapshots,
+        getLatestDeviceSnapshot,
+      } as unknown as PansManagerRepository,
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <ProviderHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    expect(getLatestDeviceSnapshots).toHaveBeenCalledTimes(1);
+    expect(getLatestDeviceSnapshots).toHaveBeenCalledWith(["managed-1"]);
+    expect(getLatestDeviceSnapshot).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it("caches defaults, lets force bypass cooldown, and leaves failures uncached", async () => {
+    const device: ManagedDevice = {
+      id: "managed-1",
+      transportDeviceId: "transport-1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const inspection = {
+      deviceId: device.id,
+      transportDeviceId: device.transportDeviceId,
+      inspectedAt: 10,
+      operationMode: { role: "anchor" },
+      warnings: [],
+    } as unknown as PansInspectionResult;
+    const inspectAndCache = jest.fn().mockResolvedValue(inspection);
+    const runtime = createRuntimeValue({
+      repository: {
+        listNetworks: jest.fn().mockResolvedValue([]),
+        listDevices: jest.fn().mockResolvedValue([device]),
+        getDevice: jest.fn().mockResolvedValue(device),
+        getSettings: jest.fn().mockResolvedValue(undefined),
+        getLatestDeviceSnapshots: jest.fn().mockResolvedValue({}),
+        getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PansManagerRepository,
+      configuration: {
+        ...createRuntimeValue().configuration,
+        inspectAndCache,
+      },
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <InspectionHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await tree.root.findByProps({ testID: "inspect-device" }).props.onPress();
+      await tree.root.findByProps({ testID: "inspect-device" }).props.onPress();
+      await tree.root
+        .findByProps({ testID: "force-inspect-device" })
+        .props.onPress();
+    });
+    expect(inspectAndCache).toHaveBeenCalledTimes(2);
+    inspectAndCache.mockRejectedValueOnce(new Error("inspection failed"));
+    await act(async () => {
+      await expect(
+        tree.root
+          .findByProps({ testID: "force-inspect-device" })
+          .props.onPress(),
+      ).rejects.toThrow("inspection failed");
+      await tree.root.findByProps({ testID: "inspect-device" }).props.onPress();
+    });
+    expect(inspectAndCache).toHaveBeenCalledTimes(4);
     await act(async () => tree.unmount());
   });
 
@@ -419,6 +533,7 @@ describe("PansManagerProvider", () => {
     const repository = {
       listNetworks: jest.fn().mockResolvedValue([]),
       listDevices: jest.fn().mockResolvedValue([device]),
+      getDevice: jest.fn().mockResolvedValue(device),
       getSettings: jest.fn().mockResolvedValue(undefined),
       getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
     } as unknown as PansManagerRepository;
@@ -525,6 +640,7 @@ describe("PansManagerProvider", () => {
     const repository = {
       listNetworks: jest.fn(async () => [network]),
       listDevices: jest.fn(async () => [storedDevice]),
+      getDevice: jest.fn(async () => storedDevice),
       saveDevice: jest.fn(async (device) => {
         storedDevice = device;
       }),
@@ -537,6 +653,7 @@ describe("PansManagerProvider", () => {
             networkId: association.networkId,
             updatedAt: association.associatedAt,
           };
+          return storedDevice;
         },
       ),
       getSettings: jest.fn().mockResolvedValue(undefined),
@@ -629,6 +746,7 @@ describe("PansManagerProvider", () => {
       const repository = {
         listNetworks: jest.fn().mockResolvedValue([]),
         listDevices: jest.fn().mockResolvedValue([device]),
+        getDevice: jest.fn().mockResolvedValue(device),
         getSettings: jest.fn().mockResolvedValue(undefined),
         getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
       } as unknown as PansManagerRepository;
@@ -740,8 +858,8 @@ describe("PansManagerProvider", () => {
       targetPanId: 2,
       operationId: "migration",
     });
-    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(3);
-    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(3);
+    expect(runtime.repository.listNetworks).toHaveBeenCalledTimes(1);
+    expect(runtime.repository.listDevices).toHaveBeenCalledTimes(1);
     await act(async () => tree.unmount());
   });
 
@@ -782,6 +900,7 @@ describe("PansManagerProvider", () => {
       getNetwork: jest.fn(async () => savedNetwork),
       saveNetwork: jest.fn(async (network) => {
         savedNetwork = network;
+        return savedNetwork;
       }),
       listDevices: jest.fn().mockResolvedValue([]),
       getSettings: jest.fn().mockResolvedValue(undefined),
@@ -903,6 +1022,7 @@ describe("PansManagerProvider", () => {
         const updated = { ...storedDevice };
         delete updated.networkId;
         storedDevice = updated;
+        return storedDevice;
       }),
     } as unknown as PansManagerRepository;
     const unassignDeviceHardware = jest.fn(async () => {
@@ -914,6 +1034,11 @@ describe("PansManagerProvider", () => {
           uwbMode: "passive",
         },
       };
+      storedDevice = await repository.dissociateDevice(
+        "profile",
+        "device",
+        Date.now(),
+      );
       return {
         deviceId: "device",
         transportDeviceId: "transport-device",
@@ -1095,12 +1220,20 @@ function DiagnosticsHarness() {
 function InspectionHarness() {
   const manager = usePansManager();
   return (
-    <Button
-      testID="inspect-device"
-      onPress={() => manager.inspectDevice("managed-1")}
-    >
-      <ButtonText>Inspect device</ButtonText>
-    </Button>
+    <>
+      <Button
+        testID="inspect-device"
+        onPress={() => manager.inspectDevice("managed-1")}
+      >
+        <ButtonText>Inspect device</ButtonText>
+      </Button>
+      <Button
+        testID="force-inspect-device"
+        onPress={() => manager.inspectDevice("managed-1", true)}
+      >
+        <ButtonText>Force inspect device</ButtonText>
+      </Button>
+    </>
   );
 }
 
@@ -1211,12 +1344,18 @@ function createRuntimeValue(
   const repository = {
     listNetworks: jest.fn().mockResolvedValue([]),
     listDevices: jest.fn().mockResolvedValue([]),
+    getDevice: jest.fn().mockResolvedValue(undefined),
     getSettings: jest.fn().mockResolvedValue(undefined),
     getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
-    saveSettings: jest.fn().mockResolvedValue(undefined),
+    getLatestDeviceSnapshots: jest.fn().mockResolvedValue({}),
+    saveSettings: jest.fn(async (settings) => settings),
   } as unknown as PansManagerRepository;
+  const { repository: repositoryOverride, ...runtimeOverrides } = overrides;
   return {
-    repository,
+    repository: {
+      ...repository,
+      ...repositoryOverride,
+    },
     discovery: {
       isScanning: false,
       state: "idle",
@@ -1271,7 +1410,7 @@ function createRuntimeValue(
       importNetwork: jest.fn(),
     },
     closeStorage: jest.fn().mockResolvedValue(undefined),
-    ...overrides,
+    ...runtimeOverrides,
   };
 }
 

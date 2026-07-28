@@ -436,7 +436,7 @@ describe("NetworksDevicesScreen", () => {
     await act(async () => tree.unmount());
   });
 
-  test("inspects, saves a hardware edit, and closes settings for a saved online device", async () => {
+  test("shares one auto/modal inspection, saves a hardware edit, and closes settings", async () => {
     const network = savedNetwork();
     const device = savedDevice(network.id);
     const harness = createRuntime({
@@ -461,7 +461,7 @@ describe("NetworksDevicesScreen", () => {
       isOpen: true,
     });
     expect(harness.inspectAndCache).toHaveBeenCalledTimes(
-      inspectionsBeforeOpening + 1,
+      inspectionsBeforeOpening,
     );
     expect(harness.inspectAndCache).toHaveBeenLastCalledWith(device.id);
 
@@ -939,10 +939,15 @@ function createRuntime(
       });
     }),
     listDevices: jest.fn(async () => [...devices]),
+    getDevice: jest.fn(async (deviceId: string) =>
+      devices.find((device) => device.id === deviceId),
+    ),
     getSettings: jest.fn().mockResolvedValue(undefined),
+    getLatestDeviceSnapshots: jest.fn().mockResolvedValue({}),
     getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
     saveDevice: jest.fn(async (device: ManagedDevice) => {
       devices = [...devices.filter((item) => item.id !== device.id), device];
+      return device;
     }),
     deleteDevice: jest.fn(async (deviceId: string) => {
       devices = devices.filter((device) => device.id !== deviceId);
@@ -960,6 +965,7 @@ function createRuntime(
               }
             : device,
         );
+        return devices.find((device) => device.id === association.deviceId)!;
       },
     ),
     dissociateDevice: jest.fn(
@@ -971,6 +977,7 @@ function createRuntime(
           delete updated.networkId;
           return updated;
         });
+        return devices.find((device) => device.id === deviceId)!;
       },
     ),
   } as unknown as jest.Mocked<PansManagerRepository>;
@@ -1030,6 +1037,10 @@ function createRuntime(
       return {
         deviceId: input.deviceId,
         targetNetworkId: input.targetNetworkId,
+        device: devices.find((device) => device.id === input.deviceId),
+        network: networks.find(
+          (network) => network.id === input.targetNetworkId,
+        ),
         ...configured,
       } as AssignDeviceToNetworkProfileResult;
     },
