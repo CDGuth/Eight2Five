@@ -5,6 +5,7 @@ import { Text } from "@eight2five/ui/components/text";
 import type {
   DiscoveredDeviceSnapshot,
   ManagedDevice,
+  PansInspectionResult,
   PansManagerRepository,
 } from "@eight2five/mobile/pans-manager";
 import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager/types";
@@ -337,6 +338,102 @@ describe("PansManagerProvider", () => {
     expect(runtime.configuration.inspect).not.toHaveBeenCalled();
     expect(runtime.repository.listDevices).toHaveBeenCalledTimes(2);
     expect(runtime.repository.getLatestDeviceSnapshot).toHaveBeenCalledTimes(2);
+    await act(async () => tree.unmount());
+  });
+
+  it("shares an in-flight inspection between automatic and manual requests", async () => {
+    const device: ManagedDevice = {
+      id: "managed-1",
+      transportDeviceId: "transport-1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const inspection: PansInspectionResult = {
+      deviceId: "managed-1",
+      transportDeviceId: "transport-1",
+      inspectedAt: 10,
+      operationMode: {
+        role: "anchor",
+        uwbMode: "active",
+        selectedFirmware: 1,
+        accelerometerEnabled: false,
+        ledEnabled: true,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: false,
+        lowPowerModeEnabled: false,
+        locationEngineEnabled: false,
+        raw: [0, 0],
+      },
+      warnings: [],
+    };
+    const inspectionDeferred = createDeferred<typeof inspection>();
+    const inspectAndCache = jest.fn(() => inspectionDeferred.promise);
+    const repository = {
+      listNetworks: jest.fn().mockResolvedValue([]),
+      listDevices: jest.fn().mockResolvedValue([device]),
+      getSettings: jest.fn().mockResolvedValue(undefined),
+      getLatestDeviceSnapshot: jest.fn().mockResolvedValue(undefined),
+    } as unknown as PansManagerRepository;
+    let discoveryListener:
+      | ((snapshots: DiscoveredDeviceSnapshot[]) => void)
+      | undefined;
+    const discovery: DiscoveredDeviceSnapshot = {
+      transportDeviceId: "transport-1",
+      rssi: -50,
+      lastSeenAt: 10,
+      compatibility: "compatible",
+    };
+    const runtime = createRuntimeValue({
+      repository,
+      configuration: {
+        inspect: jest.fn(),
+        inspectAndCache,
+        configureDevice: jest.fn(),
+        applyConfigurationDiff: jest.fn(),
+        assignPanId: jest.fn(),
+        unassignDeviceHardware: jest.fn(),
+      },
+    });
+    runtime.discovery.subscribe = jest.fn((listener) => {
+      discoveryListener = listener;
+      listener([discovery]);
+      return { remove: jest.fn() };
+    });
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <InspectionHarness />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(inspectAndCache).toHaveBeenCalledTimes(1);
+
+    let manualInspection!: Promise<typeof inspection>;
+    await act(async () => {
+      manualInspection = tree.root
+        .findByProps({
+          testID: "inspect-device",
+        })
+        .props.onPress();
+      await flushPromises();
+    });
+    expect(inspectAndCache).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      inspectionDeferred.resolve(inspection);
+      await expect(manualInspection).resolves.toBe(inspection);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      discoveryListener?.([{ ...discovery, lastSeenAt: 20 }]);
+      await flushPromises();
+    });
+    expect(inspectAndCache).toHaveBeenCalledTimes(1);
     await act(async () => tree.unmount());
   });
 

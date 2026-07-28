@@ -282,6 +282,104 @@ describe("NetworksDevicesScreen", () => {
     await act(async () => tree.unmount());
   });
 
+  test("characterizes current accordion behavior: collapsed network rows remain mounted", async () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const harness = createRuntime({ networks: [network], devices: [device] });
+    const tree = await renderNetworkScreen(harness);
+
+    expect(expansionState(tree, `section-toggle-network:${network.id}`)).toBe(
+      false,
+    );
+    expect(
+      tree.root.findAllByProps({
+        testID: `device-settings-device:${device.id}`,
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
+    ).not.toHaveLength(0);
+
+    await act(async () => tree.unmount());
+  });
+
+  test("opens, saves, and closes cached settings for a saved offline device without inspection", async () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const harness = createRuntime({ networks: [network], devices: [device] });
+    const tree = await renderNetworkScreen(harness);
+
+    await act(async () => {
+      pressTestId(tree, `device-settings-device:${device.id}`);
+      await flushPromises();
+    });
+
+    expect(tree.root.findByType(DeviceSettingsModal).props).toMatchObject({
+      device: expect.objectContaining({ id: device.id }),
+      available: false,
+      isOpen: true,
+    });
+    expect(harness.inspectAndCache).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pressTestId(tree, "save-device-settings");
+      await flushPromises();
+    });
+    expect(harness.applyConfigurationDiff).not.toHaveBeenCalled();
+
+    act(() => tree.root.findByType(DeviceSettingsModal).props.onClose());
+    expect(
+      tree.root.findAllByProps({ testID: "device-settings-modal-root" }),
+    ).toHaveLength(0);
+    await act(async () => tree.unmount());
+  });
+
+  test("inspects, saves a hardware edit, and closes settings for a saved online device", async () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const harness = createRuntime({
+      networks: [network],
+      devices: [device],
+      discoveries: [discovery(device.transportDeviceId)],
+    });
+    const tree = await renderNetworkScreen(harness);
+    const inspectionsBeforeOpening = harness.inspectAndCache.mock.calls.length;
+
+    await act(async () => {
+      pressTestId(tree, `device-settings-device:${device.id}`);
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tree.root.findByType(DeviceSettingsModal).props).toMatchObject({
+      device: expect.objectContaining({ id: device.id }),
+      available: true,
+      isOpen: true,
+    });
+    expect(harness.inspectAndCache).toHaveBeenCalledTimes(
+      inspectionsBeforeOpening + 1,
+    );
+    expect(harness.inspectAndCache).toHaveBeenLastCalledWith(device.id);
+
+    act(() =>
+      changeTextTestId(tree, "device-hardware-label-input", "Renamed anchor"),
+    );
+    await act(async () => {
+      pressTestId(tree, "save-device-settings");
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(harness.applyConfigurationDiff).toHaveBeenCalledWith(device.id, {
+      label: "Renamed anchor",
+    });
+
+    act(() => tree.root.findByType(DeviceSettingsModal).props.onClose());
+    expect(
+      tree.root.findAllByProps({ testID: "device-settings-modal-root" }),
+    ).toHaveLength(0);
+    await act(async () => tree.unmount());
+  });
+
   test("persists a discovery-only row only when Settings is pressed", async () => {
     const discovered = discovery("transport-new");
     const harness = createRuntime({ discoveries: [discovered] });
@@ -317,6 +415,15 @@ describe("NetworksDevicesScreen", () => {
     ).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     expect(harness.inspectAndCache).toHaveBeenCalledWith(persisted.id);
+    await act(async () => {
+      pressTestId(tree, "save-device-settings");
+      await flushPromises();
+    });
+    expect(harness.applyConfigurationDiff).not.toHaveBeenCalled();
+    act(() => tree.root.findByType(DeviceSettingsModal).props.onClose());
+    expect(
+      tree.root.findAllByProps({ testID: "device-settings-modal-root" }),
+    ).toHaveLength(0);
     await act(async () => tree.unmount());
   });
 
@@ -759,6 +866,13 @@ function createRuntime(
   } as unknown as jest.Mocked<PansManagerRepository>;
   const inspection = inspectionResult();
   const inspectAndCache = jest.fn().mockResolvedValue(inspection);
+  const applyConfigurationDiff = jest.fn().mockResolvedValue({
+    deviceId: "device-1",
+    transportDeviceId: "transport-1",
+    outcome: "verified",
+    writes: [],
+    warnings: [],
+  });
   const unassignDeviceHardware = jest.fn().mockResolvedValue({
     deviceId: "device-1",
     transportDeviceId: "transport-1",
@@ -845,7 +959,7 @@ function createRuntime(
       inspect: jest.fn(),
       inspectAndCache,
       configureDevice: jest.fn(),
-      applyConfigurationDiff: jest.fn(),
+      applyConfigurationDiff,
       assignPanId: jest.fn(),
       unassignDeviceHardware,
     },
@@ -872,6 +986,7 @@ function createRuntime(
     runtime,
     repository,
     inspectAndCache,
+    applyConfigurationDiff,
     unassignDeviceHardware,
     assignDeviceToNetworkProfile,
     getDevices: () => [...devices],
@@ -1039,8 +1154,48 @@ function pressTestId(tree: TestRenderer.ReactTestRenderer, testID: string) {
   const target = tree.root
     .findAllByProps({ testID })
     .find((node) => typeof node.props.onPress === "function");
-  if (!target) throw new Error(`No pressable found for ${testID}`);
-  return target.props.onPress();
+  if (target) return target.props.onPress();
+  const portalTarget = findModalElementProps(tree, testID, "onPress");
+  if (!portalTarget) throw new Error(`No pressable found for ${testID}`);
+  return portalTarget.onPress();
+}
+
+function changeTextTestId(
+  tree: TestRenderer.ReactTestRenderer,
+  testID: string,
+  value: string,
+) {
+  const target = tree.root
+    .findAllByProps({ testID })
+    .find((node) => typeof node.props.onChangeText === "function");
+  if (target) return target.props.onChangeText(value);
+  const portalTarget = findModalElementProps(tree, testID, "onChangeText");
+  if (!portalTarget) throw new Error(`No text input found for ${testID}`);
+  return portalTarget.onChangeText(value);
+}
+
+function findModalElementProps(
+  tree: TestRenderer.ReactTestRenderer,
+  testID: string,
+  handler: "onPress" | "onChangeText",
+): Record<string, any> | undefined {
+  const modal = tree.root.findByProps({ testID: "device-settings-modal-root" });
+  const visit = (value: React.ReactNode): Record<string, any> | undefined => {
+    if (!React.isValidElement(value)) return undefined;
+    const props = value.props as Record<string, any>;
+    if (props.testID === testID && typeof props[handler] === "function")
+      return props;
+    for (const child of React.Children.toArray(props.children)) {
+      const found = visit(child);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  for (const child of React.Children.toArray(modal.props.children)) {
+    const found = visit(child);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function swipeHost(tree: TestRenderer.ReactTestRenderer, rowKey: string) {

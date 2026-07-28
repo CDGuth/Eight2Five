@@ -7,6 +7,7 @@ import { Checkbox } from "@eight2five/ui/components/checkbox";
 import { Switch } from "@eight2five/ui/components/switch";
 
 import type { PansMapDataController } from "../manager-map-controller";
+import { SelectField } from "../components/manager-ui";
 import { ManagerMapScreen } from "../screens/manager-map-screen";
 import {
   TestbedToolbarActionProvider,
@@ -125,6 +126,55 @@ describe("ManagerMapScreen", () => {
         "Multiple networks are overlaid using their saved coordinates. The app does not automatically align independent coordinate systems.",
       ),
     ).toBe(true);
+    await act(async () => tree.unmount());
+  });
+
+  test("routes map setting changes through the controller contract for all selected networks", async () => {
+    const secondNetwork = {
+      ...mockController.networks[0],
+      id: "network-2",
+      name: "Network 2",
+      panId: 2,
+    };
+    mockController.networks = [...mockController.networks, secondNetwork];
+    mockController.selectedNetworkIds = new Set(["network", "network-2"]);
+    const tree = await renderScreen();
+
+    act(() =>
+      tree.root
+        .findByProps({ testID: "manager-map-settings-button" })
+        .props.onPress(),
+    );
+    expect(
+      tree.root
+        .findAllByType(Checkbox)
+        .filter((checkbox) =>
+          ["network", "network-2"].includes(checkbox.props.value),
+        )
+        .every((checkbox) => checkbox.props.isChecked),
+    ).toBe(true);
+
+    act(() =>
+      tree.root
+        .findAllByType(SelectField)
+        .find((field) => field.props.testID === "map-units-select")
+        ?.props.onChange("imperial"),
+    );
+    expect(mockController.setMapUnits).toHaveBeenCalledTimes(1);
+    expect(mockController.setMapUnits).toHaveBeenCalledWith("imperial");
+
+    act(() =>
+      tree.root
+        .findAllByType(SelectField)
+        .find((field) => field.props.testID === "map-area-mode-select")
+        ?.props.onChange("bounded"),
+    );
+    expect(mockController.setMapAreaMode).toHaveBeenCalledTimes(1);
+    expect(mockController.setMapAreaMode).toHaveBeenCalledWith("bounded");
+    expect([...mockController.selectedNetworkIds]).toEqual([
+      "network",
+      "network-2",
+    ]);
     await act(async () => tree.unmount());
   });
 

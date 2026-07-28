@@ -1,4 +1,5 @@
 import React from "react";
+import { DEFAULT_PANS_MANAGER_SETTINGS } from "@eight2five/mobile/pans-manager";
 
 import { usePansManager } from "../manager-context";
 import { displayError } from "../manager-utils";
@@ -10,16 +11,9 @@ import {
   TextField,
 } from "../components/manager-ui";
 
-const FALLBACKS = {
-  discoveryStaleAfterMs: 10_000,
-  connectionTimeoutMs: 10_000,
-  positionLogMemoryCap: 1_000,
-  positionLogFlushSize: 100,
-};
-
 export function ManagerSettingsScreen() {
   const manager = usePansManager();
-  const settings = manager.managerSettings ?? FALLBACKS;
+  const settings = manager.managerSettings ?? DEFAULT_PANS_MANAGER_SETTINGS;
   const [stale, setStale] = React.useState(
     String(settings.discoveryStaleAfterMs),
   );
@@ -34,8 +28,28 @@ export function ManagerSettingsScreen() {
   );
   const [message, setMessage] = React.useState<string>();
   const [error, setError] = React.useState<string>();
+  const isPristine = React.useRef(true);
+  const isHydrated = manager.managerSettings !== undefined;
+
+  React.useEffect(() => {
+    if (!manager.managerSettings || !isPristine.current) return;
+
+    setStale(String(manager.managerSettings.discoveryStaleAfterMs));
+    setTimeout(String(manager.managerSettings.connectionTimeoutMs));
+    setMemoryCap(String(manager.managerSettings.positionLogMemoryCap));
+    setFlushSize(String(manager.managerSettings.positionLogFlushSize));
+  }, [manager.managerSettings]);
+
+  const edit =
+    (setter: React.Dispatch<React.SetStateAction<string>>) =>
+    (value: string) => {
+      isPristine.current = false;
+      setter(value);
+    };
 
   const save = async () => {
+    if (!isHydrated) return;
+
     setError(undefined);
     setMessage(undefined);
     const values = [stale, timeout, memoryCap, flushSize].map(Number);
@@ -66,30 +80,51 @@ export function ManagerSettingsScreen() {
     <ManagerScreen>
       <SectionCard title="Manager behavior">
         <TextField
+          testID="manager-settings-discovery-stale"
           label="Discovery stale after (ms)"
           value={stale}
-          onChangeText={setStale}
+          onChangeText={edit(setStale)}
           keyboardType="number-pad"
+          editable={isHydrated}
+          accessibilityState={{ disabled: !isHydrated }}
         />
         <TextField
+          testID="manager-settings-connection-timeout"
           label="Connection timeout (ms)"
           value={timeout}
-          onChangeText={setTimeout}
+          onChangeText={edit(setTimeout)}
           keyboardType="number-pad"
+          editable={isHydrated}
+          accessibilityState={{ disabled: !isHydrated }}
         />
         <TextField
+          testID="manager-settings-position-memory-cap"
           label="Position log memory cap"
           value={memoryCap}
-          onChangeText={setMemoryCap}
+          onChangeText={edit(setMemoryCap)}
           keyboardType="number-pad"
+          editable={isHydrated}
+          accessibilityState={{ disabled: !isHydrated }}
         />
         <TextField
+          testID="manager-settings-position-flush-size"
           label="Position log flush size"
           value={flushSize}
-          onChangeText={setFlushSize}
+          onChangeText={edit(setFlushSize)}
           keyboardType="number-pad"
+          editable={isHydrated}
+          accessibilityState={{ disabled: !isHydrated }}
         />
-        <ManagerButton label="Save settings" onPress={() => void save()} />
+        {!isHydrated ? (
+          <StatePanel state="loading" message="Loading manager settings…" />
+        ) : null}
+        <ManagerButton
+          testID="manager-settings-save"
+          label="Save settings"
+          loading={!isHydrated}
+          isDisabled={!isHydrated}
+          onPress={() => void save()}
+        />
         {message ? <StatePanel state="success" message={message} /> : null}
         {error ? <StatePanel state="error" message={error} /> : null}
       </SectionCard>
