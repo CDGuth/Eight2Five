@@ -1,25 +1,23 @@
 # @eight2five/mobile
 
-Shared mobile logic for the Expo apps in this monorepo.
+Shared DWM1001/PANS manager logic and mobile dependencies for the Expo apps in this monorepo.
 
 ## Key areas
 
-- `src/localization`: filters, field models, and MFASA localization
-- `src/hooks`: source-agnostic scanner integration
-- `src/providers`: PANS BLE observation and provisioning helpers
-- `src/pans-manager`: persistent DWM1001 manager domain services
+- `src/pans-manager`: discovery, sessions, configuration, commissioning,
+  persistence, topology, diagnostics, position streaming/logging, and map
+  rendering
 
 ## PANS manager architecture
 
-The manager package separates UI-independent workflows from the native BLE
-transport:
+The manager package separates UI-independent workflows from native PANS BLE GATT access:
 
 ```text
-testbed routes and components
+map, logging, and manager UI
         ↓
 pans-manager repositories and services
         ↓
-PANS session/provisioning boundaries
+PANS manager sessions and services
         ↓
 expo-pans-ble-api
 ```
@@ -35,6 +33,18 @@ It provides:
 - live position streaming and buffered CSV/JSON logs; and
 - Skia grid rendering and coordinate transforms.
 
+## Position data flow
+
+```text
+PANS BLE discovery/configuration
+  → PANS location notifications
+  → DWM1001 internal UWB position/ranges
+  → PansPositionStreamService
+  → map/logging UI
+```
+
+BLE is the discovery, configuration, and location-frame transport. Position and anchor-range values originate from the DWM1001/PANS network's internal UWB processing, not from BLE discovery signal strength. `PansPositionStreamService` owns the live session, decodes initial reads and notifications, and emits samples for display or logging.
+
 `deviceId` is local manager identity. `transportDeviceId` is the canonical BLE
 transport identity; a MAC address is optional and must not be assumed on iOS.
 
@@ -43,13 +53,9 @@ Firmware execution is disabled by
 reset, encryption, and auto-positioning are not exposed until their BLE
 behavior is documented and hardware-qualified.
 
-## Existing provisioning helpers
-
-- `configureTag()` / `setupTag()`
-- `configureAnchorNode()` / `setupAnchorNode()`
-- `readTagOperationMode()` / `readAnchorOperationMode()`
-- `observeTagAnchors()` / `readAnchorNeighbors()`
-- field commissioning and anchor reconciliation helpers
+The public package surface is intentionally limited to `@eight2five/mobile` and
+`@eight2five/mobile/pans-manager`; internal service files are not exported as
+deep-import targets.
 
 ## Verification
 

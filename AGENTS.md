@@ -1,18 +1,18 @@
 # Eight2Five Monorepo
 
-Expo-based React Native monorepo for tracking marching band performers through trilateration via stationary BLE and UWB beacons.
+Expo-based React Native monorepo for managing DWM1001/PANS networks and displaying UWB-derived performer positions.
 
 ## Architecture & Boundaries
 - **`apps/mobile`**: Main React Native application used on the field.
-- **`apps/testbed`**: Sandbox app to validate localization algorithms (MFASA, path-loss models) and new features independent of the main app.
-- **`packages/mobile`** (`@eight2five/mobile`): Shared mobile logic provider. Includes localization (Kalman filter, MFASA optimizer), hooks, utils, and mobile dependency surface shared by the Expo apps.
+- **`apps/testbed`**: DWM1001/PANS network-manager and hardware-validation app.
+- **`packages/mobile`** (`@eight2five/mobile`): Shared PANS manager services, persistence, position streaming, map components, utilities, and mobile dependency surface.
 - **`packages/ui`** (`@eight2five/ui`): Shared gluestack-ui v5 component package consumed by Expo apps. Keep generated UI components and shared presentation primitives here rather than duplicating app-local UI code.
-- **`modules/expo-kbeaconpro`**: Native Expo module wrapping KBeaconPro SDKs (BLE).
-- **`modules/expo-pans-ble-api`**: Native Expo module for DWM1001/PANS interaction (UWB).
+- **`modules/expo-pans-ble-api`**: Native Expo module for DWM1001/PANS BLE GATT discovery, configuration, and location-frame notifications.
 
-## Core Concepts
-- **`useBeaconScanner`**: The source-agnostic integration hook. **UI components must consume this**, not transport-specific providers.
-- Data Flow: `Provider Source → Parser/Adapter → Filter & Model → MFASA Optimizer → UI`. Keep side-by-side KBeacon BLE and PANS UWB support unless told otherwise.
+## Position Data Boundary
+- BLE discovers and configures PANS nodes and transports PANS location frames. BLE discovery RSSI is device telemetry, not a positioning input.
+- DWM1001/PANS firmware performs UWB ranging and position calculation internally; the app consumes the resulting positions and anchor ranges.
+- Data flow: `PANS BLE discovery/configuration → PANS location notifications → DWM1001 internal UWB position/ranges → PansPositionStreamService → map/logging UI`.
 
 ## UI System
 - **gluestack-ui v5** is the active UI system for shared app components. Some local agent skills may still reference gluestack-ui v4; they can be useful for general patterns, but always verify setup, APIs, styling-engine guidance, and generated component conventions against the official v5 documentation before making gluestack changes.

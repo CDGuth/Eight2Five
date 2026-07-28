@@ -48,10 +48,6 @@ yarn-error.*
 # generated native folders
 **/ios
 **/android
-!modules/expo-kbeaconpro/ios
-!modules/expo-kbeaconpro/ios/**
-!modules/expo-kbeaconpro/android
-!modules/expo-kbeaconpro/android/**
 !modules/expo-pans-ble-api/ios
 !modules/expo-pans-ble-api/ios/**
 !modules/expo-pans-ble-api/android
@@ -62,7 +58,6 @@ modules/expo-pans-ble-api/android-core/.gradle/
 
 # gradle
 *.gradle
-!modules/expo-kbeaconpro/android/build.gradle
 !modules/expo-pans-ble-api/android/build.gradle
 coverage/clover.xml
 

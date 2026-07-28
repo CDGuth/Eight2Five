@@ -1,12 +1,14 @@
 import {
   DEFAULT_MANAGED_NETWORK_SETTINGS,
   type ManagedNetwork,
-} from "@eight2five/mobile/pans-manager/types";
+} from "@eight2five/mobile/pans-manager";
 
 import {
   reviewNetworkEdit,
   stablePanMigrationOperationId,
 } from "../network-edit-form";
+
+jest.mock("expo-pans-ble-api", () => ({}));
 
 describe("network edit review", () => {
   test("parses hexadecimal PAN and creates the required confirmation summary", () => {

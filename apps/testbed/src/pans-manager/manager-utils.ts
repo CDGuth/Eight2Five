@@ -3,7 +3,7 @@ import type {
   ManagedDevice,
   ManagedDeviceConfig,
 } from "@eight2five/mobile/pans-manager";
-import { deviceFromDiscovery as mergeDeviceFromDiscovery } from "@eight2five/mobile/pans-manager/device-discovery";
+import { deviceFromDiscovery as mergeDeviceFromDiscovery } from "@eight2five/mobile/pans-manager";
 
 export function createManagerId(prefix: string): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();

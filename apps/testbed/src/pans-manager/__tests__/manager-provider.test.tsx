@@ -8,7 +8,7 @@ import type {
   PansInspectionResult,
   PansManagerRepository,
 } from "@eight2five/mobile/pans-manager";
-import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager/types";
+import { DEFAULT_MANAGED_NETWORK_SETTINGS } from "@eight2five/mobile/pans-manager";
 
 import {
   PansManagerProvider,
@@ -17,6 +17,8 @@ import {
   usePansDiscovery,
   usePansManager,
 } from "../manager-context";
+
+jest.mock("expo-pans-ble-api", () => ({}));
 
 describe("PansManagerProvider", () => {
   it("requests permission once, auto-starts, and allows immediate stop/start", async () => {

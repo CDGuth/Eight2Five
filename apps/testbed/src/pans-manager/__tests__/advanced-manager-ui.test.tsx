@@ -5,7 +5,7 @@ import {
   fireGestureHandler,
   getByGestureTestId,
 } from "react-native-gesture-handler/jest-utils";
-import { PansNetworkGrid } from "@eight2five/mobile/pans-manager/PansNetworkGrid";
+import { PansNetworkGrid } from "@eight2five/mobile/pans-manager";
 
 import { BatchResults } from "../components/batch-results";
 import { isDwm1001FirmwareRouteEnabled } from "../manager-flags";

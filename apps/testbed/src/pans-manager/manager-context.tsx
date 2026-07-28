@@ -41,8 +41,8 @@ import type {
 import {
   assertNetworkProfilePanId,
   assertUniqueName,
-} from "@eight2five/mobile/pans-manager/validation";
-import { reconcileDeviceCachedProfileMatch } from "@eight2five/mobile/pans-manager/profile-matching";
+  reconcileDeviceCachedProfileMatch,
+} from "@eight2five/mobile/pans-manager";
 
 import {
   createManagerId,

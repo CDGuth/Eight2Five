@@ -4,6 +4,8 @@ import {
   parseNetworkSettingsForm,
 } from "../network-settings-form";
 
+jest.mock("expo-pans-ble-api", () => ({}));
+
 const DEFAULT_MANAGED_NETWORK_SETTINGS = {
   mapUnits: "metric" as const,
   mapAreaMode: "infinite" as const,

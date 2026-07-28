@@ -1,10 +1,10 @@
-import type { ManagedNetworkSettings } from "@eight2five/mobile/pans-manager/types";
 import {
   convertMapInputText,
   formatMapCoordinate,
   mapUnitsToMeters,
+  type ManagedNetworkSettings,
   type MapUnits,
-} from "@eight2five/mobile/pans-manager/map-units";
+} from "@eight2five/mobile/pans-manager";
 
 export interface NetworkSettingsFormState {
   mapUnits: ManagedNetworkSettings["mapUnits"];

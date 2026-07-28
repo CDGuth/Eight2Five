@@ -63,17 +63,13 @@ counters without treating host-dependent wall-clock time as a correctness gate.
 
 ## Legacy-consumer audit at baseline
 
-No application under `apps/mobile` or `apps/testbed` imports or invokes the
-generic localization stack. Its references are confined to its own shared-package
-implementation, tests, barrel exports, and stale documentation/tooling:
+No application under `apps/mobile` or `apps/testbed` imported or invoked the
+removed solver/scanner stack. Its references were confined to its own
+shared-package implementation, tests, barrel exports, and stale tooling.
 
-- `LocalizationEngine`, `MFASAOptimizer`, `useBeaconScanner`, `BeaconSource`,
-  `PansBleSource`, `PansProvisioning`, and field configuration types have no app
-  call sites.
-- Legacy `PansProvisioning` configuration, inspection, topology, and live-frame
-  operations are covered by active services under `packages/mobile/src/pans-manager`.
-  Field-anchor reconciliation exists only to support the dead generic field model.
-- KBeacon, Kalman, path-loss, and RSSI-distance references are documentation,
-  Swift editor stubs, Syncpack/gitignore entries, or archived research.
+- Configuration, inspection, topology, and live-frame operations are covered by
+  active services under `packages/mobile/src/pans-manager`.
+- The obsolete generic field model, distance solver, scanner abstraction, native
+  editor stubs, configuration exceptions, and archived research were removed.
 - RSSI in `PansDiscoveryService`, native `expo-pans-ble-api`, and testbed signal
   indicators is active discovery telemetry and is deliberately retained.

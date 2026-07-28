@@ -1,8 +1,8 @@
-import type { ManagedNetwork } from "@eight2five/mobile/pans-manager/types";
 import {
   assertNetworkProfilePanId,
   parsePanId,
-} from "@eight2five/mobile/pans-manager/validation";
+  type ManagedNetwork,
+} from "@eight2five/mobile/pans-manager";
 
 export interface PanMigrationConfirmation {
   oldPanId: number;

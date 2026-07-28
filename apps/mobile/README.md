@@ -1,6 +1,6 @@
 ## Eight2Five App
 
-Primary production client for performer localization.
+Primary production client for displaying performer positions supplied by a DWM1001/PANS network.
 
 ### Routing
 - Uses Expo Router for file-based navigation.
@@ -19,9 +19,10 @@ npm run ios:mobile        # run on iOS simulator/device
 Preferred from repo root:
 
 ```bash
-npm run validate:core
 npm run validate
 ```
+
+The root command includes JavaScript and native PANS tests and therefore requires the documented Swift and Android/Gradle toolchains. Run supported checks separately when a native toolchain is unavailable.
 
 Workspace-scoped checks:
 
@@ -35,17 +36,23 @@ npm run test --workspace apps/mobile
 - Config: [app.config.ts](app.config.ts)
 - Router entry: [index.tsx](index.tsx)
 - Assets resolved from [../../assets](../../assets)
-- Native KBeaconPro plugin: [../../modules/expo-kbeaconpro](../../modules/expo-kbeaconpro)
 - Native PANS BLE plugin: [../../modules/expo-pans-ble-api](../../modules/expo-pans-ble-api)
-- Shared mobile localization stack: [../../packages/mobile](../../packages/mobile)
+- Shared PANS manager and position-stream services: [../../packages/mobile](../../packages/mobile)
 
-### Provider model
-- The shared scanner hook now supports source injection through provider abstractions.
-- Default behavior is now automatic dual-source mode (`kbeacon` + `pans-ble`) without app-config setup.
-- You can still override in code using `useBeaconScanner({ sourceKind: "kbeacon" | "pans-ble" | "auto" })`.
+### Position data
+
+```text
+PANS BLE discovery/configuration
+  → PANS location notifications
+  → DWM1001 internal UWB position/ranges
+  → PansPositionStreamService
+  → map/logging UI
+```
+
+BLE handles discovery, configuration, and location-frame transport. The DWM1001/PANS network calculates positions and anchor ranges from UWB measurements; BLE discovery signal strength is not used to position performers.
 
 ### Build
-Use EAS (local or cloud) from this directory:
+The custom PANS module requires a development build; Expo Go is not supported. Use EAS (local or cloud) from this directory:
 ```bash
 cd apps/mobile
 npm ci
