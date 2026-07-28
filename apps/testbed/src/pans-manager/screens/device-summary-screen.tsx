@@ -12,7 +12,12 @@ import { Text } from "@eight2five/ui/components/text";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
 
-import { useManagedDevice, usePansManager } from "../manager-context";
+import {
+  useDiscoveredDevice,
+  useManagedDevice,
+  useManagedNetworks,
+} from "../manager-context";
+import { useDeviceConfigurationActions } from "../actions/device-configuration-actions";
 import { displayError, formatRelativeTime } from "../manager-utils";
 import {
   KeyValue,
@@ -26,24 +31,25 @@ export function DeviceSummaryScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
   const router = useRouter();
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
   const device = useManagedDevice(deviceId);
+  const networks = useManagedNetworks();
+  const discovery = useDiscoveredDevice(device?.transportDeviceId ?? "");
+  const {
+    inspect: inspectDevice,
+    unassignOnline: unassignOnlineDevice,
+    deleteOffline: deleteOfflineDevice,
+    disconnect: disconnectDevice,
+  } = useDeviceConfigurationActions();
   const cachedPanId = device?.lastKnownConfig?.panId;
-  const profileMatch = resolveCachedProfileMatch(manager.networks, cachedPanId);
+  const profileMatch = resolveCachedProfileMatch(networks, cachedPanId);
   const displayNetwork = device?.networkId
-    ? manager.networks.find((network) => network.id === device.networkId)
+    ? networks.find((network) => network.id === device.networkId)
     : undefined;
   const displayUnits = displayNetwork?.settings.mapUnits ?? "metric";
   const matchingProfiles = profileMatch.matchingNetworkIds
-    .map((networkId) =>
-      manager.networks.find((network) => network.id === networkId),
-    )
+    .map((networkId) => networks.find((network) => network.id === networkId))
     .filter((network) => network !== undefined);
-  const available = manager.discoveries.some(
-    (discovery) =>
-      discovery.transportDeviceId === device?.transportDeviceId &&
-      discovery.stale !== true,
-  );
+  const available = discovery?.stale !== true && discovery !== undefined;
   const [inspection, setInspection] = React.useState<PansInspectionResult>();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string>();
@@ -63,7 +69,7 @@ export function DeviceSummaryScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      setInspection(await manager.inspectDevice(device.id));
+      setInspection(await inspectDevice(device.id));
     } catch (inspectError) {
       setError(displayError(inspectError));
     } finally {
@@ -75,7 +81,7 @@ export function DeviceSummaryScreen() {
     setError(undefined);
     try {
       if (available) {
-        const result = await manager.unassignOnlineDevice(device.id);
+        const result = await unassignOnlineDevice(device.id);
         if (result.error) {
           setError(
             `${result.error.message} ${result.writes
@@ -86,7 +92,7 @@ export function DeviceSummaryScreen() {
         }
         setConfirmingDestructiveAction(false);
       } else {
-        await manager.deleteOfflineDevice(device.id);
+        await deleteOfflineDevice(device.id);
         router.replace("/(tabs)/networks-devices" as never);
       }
     } catch (destructiveError) {
@@ -248,7 +254,7 @@ export function DeviceSummaryScreen() {
           <ManagerButton
             label="Disconnect"
             variant="ghost"
-            onPress={() => void manager.disconnectDevice(device.id)}
+            onPress={() => void disconnectDevice(device.id)}
           />
         </VStack>
       </SectionCard>

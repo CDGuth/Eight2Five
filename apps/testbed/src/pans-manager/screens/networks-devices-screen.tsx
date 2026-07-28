@@ -30,7 +30,19 @@ import {
   type ManagerSwipeRegistryCallbacks,
 } from "../components/manager-swipe-to-delete";
 import { DeviceSettingsModal } from "../device-settings-modal";
-import { usePansManager } from "../manager-context";
+import {
+  useDiscoveredDevice,
+  useDiscoveryActions,
+  useDiscoveryStatus,
+  useManagedDevice,
+  useManagedDevices,
+  useManagedDeviceSnapshots,
+  useManagedNetwork,
+  useManagedNetworks,
+  useManagerReadiness,
+  usePansDiscoveryList,
+} from "../manager-context";
+import { useDeviceConfigurationActions } from "../actions/device-configuration-actions";
 import { displayError } from "../manager-utils";
 import { NetworkEditModal } from "../network-edit-modal";
 import { useTestbedToolbarAction } from "../../components/testbed-toolbar";
@@ -60,7 +72,19 @@ type DropAssignmentStatus =
 export function NetworksDevicesScreen() {
   const theme = useEight2FiveTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const devices = useManagedDevices();
+  const discoveries = usePansDiscoveryList();
+  const deviceSnapshots = useManagedDeviceSnapshots();
+  const readiness = useManagerReadiness();
+  const discoveryStatus = useDiscoveryStatus();
+  const {
+    start: startDiscovery,
+    stop: stopDiscovery,
+    persist,
+  } = useDiscoveryActions();
+  const { assignToNetwork, inspect: inspectDevice } =
+    useDeviceConfigurationActions();
   const [selectedNetworkId, setSelectedNetworkId] = React.useState<string>();
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string>();
   const [
@@ -72,13 +96,8 @@ export function NetworksDevicesScreen() {
     setNetworkDestructiveActionRequested,
   ] = React.useState(false);
   const liveSections = React.useMemo(
-    () =>
-      selectNetworkDeviceSections(
-        manager.networks,
-        manager.devices,
-        manager.discoveries,
-      ),
-    [manager.networks, manager.devices, manager.discoveries],
+    () => selectNetworkDeviceSections(networks, devices, discoveries),
+    [networks, devices, discoveries],
   );
   const [expandedSections, setExpandedSections] = React.useState<Set<string>>(
     () => new Set(["unassigned"]),
@@ -94,7 +113,7 @@ export function NetworksDevicesScreen() {
   const [assignmentStatus, setAssignmentStatus] =
     React.useState<DropAssignmentStatus>();
   const liveSectionsRef = React.useRef(liveSections);
-  const snapshotsRef = React.useRef(manager.deviceSnapshots);
+  const snapshotsRef = React.useRef(deviceSnapshots);
   const emptyMessageRef = React.useRef<string | undefined>(undefined);
   const expandedSectionsRef = React.useRef(expandedSections);
   const activeDragRef = React.useRef<
@@ -114,20 +133,19 @@ export function NetworksDevicesScreen() {
     (section) => section.devices.length > 0,
   );
   const emptyMessage =
-    manager.initialization === "ready" && !hasDeviceRows
-      ? manager.isScanning
+    readiness.initialization === "ready" && !hasDeviceRows
+      ? discoveryStatus.isScanning
         ? "Scanning…"
         : "No devices"
       : undefined;
   React.useEffect(() => {
     liveSectionsRef.current = liveSections;
-    snapshotsRef.current = manager.deviceSnapshots;
+    snapshotsRef.current = deviceSnapshots;
     expandedSectionsRef.current = expandedSections;
     emptyMessageRef.current = emptyMessage;
-  }, [emptyMessage, expandedSections, liveSections, manager.deviceSnapshots]);
+  }, [deviceSnapshots, emptyMessage, expandedSections, liveSections]);
   const sections = frozenDisplay?.sections ?? liveSections;
-  const displayedSnapshots =
-    frozenDisplay?.snapshots ?? manager.deviceSnapshots;
+  const displayedSnapshots = frozenDisplay?.snapshots ?? deviceSnapshots;
   const displayedEmptyMessage = frozenDisplay
     ? frozenDisplay.emptyMessage
     : emptyMessage;
@@ -277,12 +295,12 @@ export function NetworksDevicesScreen() {
           const discovery = request.device.discovery;
           if (!discovery)
             throw new Error("Device discovery is no longer available.");
-          const persisted = await manager.persistDiscovery(discovery);
+          const persisted = await persist(discovery);
           persistedDeviceId = persisted.id;
           stage = "assigning";
           setAssignmentStatus({ kind: "progress", message: "Assigning…" });
         }
-        const result = await manager.assignDeviceToNetworkProfile({
+        const result = await assignToNetwork({
           deviceId: persistedDeviceId,
           targetNetworkId: request.targetNetworkId,
         });
@@ -318,7 +336,7 @@ export function NetworksDevicesScreen() {
         finishDrag();
       }
     },
-    [finishDrag, manager],
+    [assignToNetwork, finishDrag, persist],
   );
   const handleDragEnd = React.useCallback(
     (event: NetworkDeviceDragEvent) => {
@@ -423,15 +441,13 @@ export function NetworksDevicesScreen() {
     async (device: DisplayDevice) => {
       const saved =
         device.savedDevice ??
-        (device.discovery
-          ? await manager.persistDiscovery(device.discovery)
-          : undefined);
+        (device.discovery ? await persist(device.discovery) : undefined);
       if (!saved) throw new Error("Device discovery is unavailable.");
       setSelectedNetworkId(undefined);
       setDeviceDestructiveActionRequested(false);
       setSelectedDeviceId(saved.id);
     },
-    [manager],
+    [persist],
   );
   const requestDeviceDelete = React.useCallback((device: DisplayDevice) => {
     if (!device.savedDevice) return;
@@ -445,17 +461,13 @@ export function NetworksDevicesScreen() {
     setSelectedNetworkId(networkId);
   }, []);
 
-  const selectedDevice = manager.devices.find(
-    (device) => device.id === selectedDeviceId,
+  const selectedDevice = useManagedDevice(selectedDeviceId ?? "");
+  const selectedDiscovery = useDiscoveredDevice(
+    selectedDevice?.transportDeviceId ?? "",
   );
-  const selectedDiscovery = selectedDevice
-    ? manager.discoveries.find(
-        (discovery) =>
-          discovery.transportDeviceId === selectedDevice.transportDeviceId,
-      )
-    : undefined;
-  const { initialization, discoveryState, startDiscovery, stopDiscovery } =
-    manager;
+  const selectedNetwork = useManagedNetwork(selectedNetworkId ?? "").network;
+  const initialization = readiness.initialization;
+  const discoveryState = discoveryStatus.state;
   const scanAction = React.useMemo(() => {
     const loading = initialization === "initializing";
     const active =
@@ -526,7 +538,7 @@ export function NetworksDevicesScreen() {
         setSelectedNetworkId(networkId);
       }}
       onOpenDeviceSettings={openDeviceSettings}
-      onRefreshDevice={manager.inspectDevice}
+      onRefreshDevice={inspectDevice}
       onRequestDeviceDelete={requestDeviceDelete}
       swipeRegistry={swipeRegistry}
       dragEnabled={!assignmentInFlight}
@@ -547,17 +559,17 @@ export function NetworksDevicesScreen() {
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <VStack className="flex-1">
-        {manager.initializationError ? (
+        {readiness.error ? (
           <InlineError
             testID="initialization-error"
-            message={manager.initializationError}
-            onRetry={manager.retryInitialization}
+            message={readiness.error}
+            onRetry={readiness.retry}
           />
         ) : null}
-        {manager.discoveryError ? (
+        {discoveryStatus.error ? (
           <InlineError
             testID="discovery-error"
-            message={manager.discoveryError}
+            message={discoveryStatus.error}
           />
         ) : null}
         {assignmentStatus ? (
@@ -625,9 +637,7 @@ export function NetworksDevicesScreen() {
           }
         />
         <NetworkEditModal
-          network={manager.networks.find(
-            (network) => network.id === selectedNetworkId,
-          )}
+          network={selectedNetwork}
           isOpen={selectedNetworkId !== undefined}
           destructiveActionRequested={networkDestructiveActionRequested}
           onClose={() => {

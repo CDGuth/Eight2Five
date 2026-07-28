@@ -21,11 +21,13 @@ import {
   type PansMapVisibilityOptions,
 } from "../manager-map-controller";
 
-let mockManager: unknown;
+let mockManager: any;
 
 jest.mock("expo-pans-ble-api", () => ({}));
 jest.mock("../manager-context", () => ({
-  usePansManager: () => mockManager,
+  useManagedNetworks: () => mockManager.networks,
+  useManagedDevices: () => mockManager.devices,
+  usePansActions: () => mockManager,
 }));
 
 const visibility: PansMapVisibilityOptions = {

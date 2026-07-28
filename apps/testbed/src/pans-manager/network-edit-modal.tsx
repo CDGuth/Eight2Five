@@ -43,7 +43,13 @@ import {
 import { VStack } from "@eight2five/ui/components/vstack";
 import { Info, X } from "lucide-react-native";
 
-import { usePansManager } from "./manager-context";
+import {
+  useManagedDevices,
+  useManagedNetworks,
+  usePansDiscoveryList,
+} from "./manager-context";
+import { useRepositoryNetworkActions } from "./actions/repository-network-actions";
+import { useDeviceConfigurationActions } from "./actions/device-configuration-actions";
 import { displayError } from "./manager-utils";
 import {
   reviewNetworkEdit,
@@ -65,7 +71,12 @@ export function NetworkEditModal({
   onClose,
 }: NetworkEditModalProps) {
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const devices = useManagedDevices();
+  const discoveries = usePansDiscoveryList();
+  const { saveNetworkLocalDetails, deleteNetwork: deleteNetworkProfile } =
+    useRepositoryNetworkActions();
+  const { migrateNetworkPan } = useDeviceConfigurationActions();
   const [name, setName] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [panInput, setPanInput] = React.useState("");
@@ -105,11 +116,9 @@ export function NetworkEditModal({
 
   if (!network) return null;
 
-  const members = manager.devices.filter(
-    (device) => device.networkId === network.id,
-  );
+  const members = devices.filter((device) => device.networkId === network.id);
   const availableCount = members.filter((device) =>
-    manager.discoveries.some(
+    discoveries.some(
       (discovery) =>
         discovery.transportDeviceId === device.transportDeviceId &&
         !discovery.stale,
@@ -127,11 +136,11 @@ export function NetworkEditModal({
       const review = reviewNetworkEdit(
         network,
         panInput,
-        manager.networks,
+        networks,
         members.length,
         availableCount,
       );
-      await manager.saveNetworkLocalDetails({
+      await saveNetworkLocalDetails({
         networkId: network.id,
         name,
         notes,
@@ -162,7 +171,7 @@ export function NetworkEditModal({
     const controller = new AbortController();
     abortController.current = controller;
     try {
-      const nextResult = await manager.migrateNetworkProfilePan({
+      const nextResult = await migrateNetworkPan({
         networkId: network.id,
         targetPanId,
         operationId,
@@ -185,7 +194,7 @@ export function NetworkEditModal({
     setDeleting(true);
     setError(undefined);
     try {
-      await manager.deleteNetwork(network.id);
+      await deleteNetworkProfile(network.id);
       onClose();
     } catch (deleteError) {
       setError(displayError(deleteError));

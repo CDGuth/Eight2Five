@@ -3,7 +3,7 @@ import TestRenderer, { act } from "react-test-renderer";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 
 import { DeviceSettingsModal } from "../device-settings-modal";
-import { usePansManager } from "../manager-context";
+import { useManagedNetworks } from "../manager-context";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 jest.mock("@eight2five/ui/components/modal", () => {
@@ -24,22 +24,26 @@ jest.mock("@eight2five/ui/components/modal", () => {
   };
 });
 jest.mock("../manager-context", () => ({
-  usePansManager: jest.fn(),
+  useManagedNetworks: jest.fn(),
+  usePansActions: jest.fn(),
 }));
 
-const mockUsePansManager = jest.mocked(usePansManager);
+const mockUseManagedNetworks = jest.mocked(useManagedNetworks);
+const mockUsePansActions = jest.mocked(
+  jest.requireMock("../manager-context").usePansActions,
+);
 const inspectDevice = jest.fn(() => new Promise<never>(() => {}));
 
 describe("DeviceSettingsModal lazy behavior", () => {
   beforeEach(() => {
     inspectDevice.mockClear();
-    mockUsePansManager.mockReturnValue({
-      networks: [],
+    mockUseManagedNetworks.mockReturnValue([]);
+    mockUsePansActions.mockReturnValue({
       inspectDevice,
       applyDeviceConfiguration: jest.fn(),
       deleteOfflineDevice: jest.fn(),
       unassignOnlineDevice: jest.fn(),
-    } as unknown as ReturnType<typeof usePansManager>);
+    });
   });
 
   test("defers and deduplicates online inspection until the first frame", async () => {

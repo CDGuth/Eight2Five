@@ -52,7 +52,8 @@ import {
   validateAnchorPositionFields,
   type DeviceSettingsFormValues,
 } from "./device-settings-form";
-import { usePansManager } from "./manager-context";
+import { useManagedNetworks } from "./manager-context";
+import { useDeviceConfigurationActions } from "./actions/device-configuration-actions";
 import { displayError } from "./manager-utils";
 import { SelectField } from "./components/manager-ui";
 import { SettingHelp, SettingInfoCard } from "./components/setting-help";
@@ -75,7 +76,13 @@ export function DeviceSettingsModal({
   onClose,
 }: DeviceSettingsModalProps) {
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const {
+    inspect: inspectDevice,
+    applyConfiguration: applyDeviceConfiguration,
+    deleteOffline: deleteOfflineDevice,
+    unassignOnline: unassignOnlineDevice,
+  } = useDeviceConfigurationActions();
   const [baseline, setBaseline] = React.useState<DeviceSettingsFormValues>();
   const [form, setForm] = React.useState<DeviceSettingsFormValues>();
   const [positionInputs, setPositionInputs] = React.useState<PositionInputs>({
@@ -102,8 +109,8 @@ export function DeviceSettingsModal({
     const initial = deviceSettingsFormFrom(device, discovery?.name);
     const initialUnits =
       (device.networkId
-        ? manager.networks.find((network) => network.id === device.networkId)
-            ?.settings.mapUnits
+        ? networks.find((network) => network.id === device.networkId)?.settings
+            .mapUnits
         : undefined) ?? "metric";
     setBaseline(initial);
     setForm(initial);
@@ -114,19 +121,12 @@ export function DeviceSettingsModal({
     setConfigurationResult(undefined);
     setAdvancedOpen(false);
     setConfirmingDestructiveAction(false);
-  }, [
-    destructiveActionRequested,
-    device,
-    discovery?.name,
-    isOpen,
-    manager.networks,
-  ]);
+  }, [destructiveActionRequested, device, discovery?.name, isOpen, networks]);
 
   React.useEffect(() => {
     if (!isOpen) loadedDeviceId.current = undefined;
   }, [isOpen]);
 
-  const inspectDevice = manager.inspectDevice;
   const deviceId = device?.id;
   React.useEffect(() => {
     if (!deviceId || !isOpen || inspectionAttempted.current) return;
@@ -173,7 +173,7 @@ export function DeviceSettingsModal({
   if (!device || !form || !baseline) return null;
 
   const displayNetwork = device.networkId
-    ? manager.networks.find((network) => network.id === device.networkId)
+    ? networks.find((network) => network.id === device.networkId)
     : undefined;
   const mapUnits = displayNetwork?.settings.mapUnits ?? "metric";
   const coordinateUnit = mapUnitAbbreviation(mapUnits);
@@ -181,13 +181,11 @@ export function DeviceSettingsModal({
   const roleBaselineAvailable = baseline.role !== undefined;
   const roleFieldsEditable =
     hardwareEditable && baseline.role === form.role && form.role !== undefined;
-  const profileMatch = resolveCachedProfileMatch(manager.networks, form.panId);
+  const profileMatch = resolveCachedProfileMatch(networks, form.panId);
   const destructiveConfirmationVisible =
     confirmingDestructiveAction || destructiveActionRequested;
   const matchingProfiles = profileMatch.matchingNetworkIds
-    .map((networkId) =>
-      manager.networks.find((network) => network.id === networkId),
-    )
+    .map((networkId) => networks.find((network) => network.id === networkId))
     .filter((network) => network !== undefined);
   const formWithDisplayPosition =
     form.role === "anchor"
@@ -226,7 +224,7 @@ export function DeviceSettingsModal({
           );
         } else {
           try {
-            const result = await manager.applyDeviceConfiguration(
+            const result = await applyDeviceConfiguration(
               device.id,
               diff.hardwareChanges,
             );
@@ -283,11 +281,11 @@ export function DeviceSettingsModal({
     setConfigurationResult(undefined);
     try {
       if (!available) {
-        await manager.deleteOfflineDevice(device.id);
+        await deleteOfflineDevice(device.id);
         onClose();
         return;
       }
-      const result = await manager.unassignOnlineDevice(device.id);
+      const result = await unassignOnlineDevice(device.id);
       setConfigurationResult(result);
       if (result.error) {
         setError(result.error.message);

@@ -49,11 +49,32 @@ import {
   deviceFromDiscovery,
   displayError,
 } from "./manager-utils";
+import {
+  DiscoveryStoreContext,
+  PansDiscoveryStore,
+  useDiscoveryStatus,
+  usePansDiscoveryList,
+  useDiscoveredDevice,
+} from "./stores/discovery-store";
+import {
+  PersistedStoreContext,
+  PansPersistedStore,
+  useManagedDevice,
+  useManagedDevices,
+  useManagedDeviceSnapshots,
+  useManagedDeviceSnapshot,
+  useManagedNetwork,
+  useManagedNetworks,
+  useManagerSettings,
+} from "./stores/persisted-store";
+import { closePansManagerRuntime } from "./runtime/runtime-lifecycle";
+import { createDefaultPansManagerRuntime } from "./runtime/default-runtime";
+import {
+  autoInspectionRetryDelay,
+  availableDiscoveryTransportIds,
+} from "./runtime/auto-inspection";
 
 export type ManagerStepStatus = "checking" | "opening" | "ready" | "error";
-
-const AUTO_INSPECTION_RETRY_BASE_MS = 1_000;
-const AUTO_INSPECTION_RETRY_MAX_MS = 30_000;
 
 export interface ManagerPermissionStatus {
   bluetooth: "granted" | "denied" | "undetermined" | "unavailable";
@@ -139,7 +160,7 @@ export interface NetworkCreationResult {
   configurations: PansConfigurationResult[];
 }
 
-interface PansManagerContextValue {
+export interface PansManagerContextValue {
   initialization: "initializing" | "ready" | "error";
   moduleStatus: ManagerStepStatus;
   storageStatus: ManagerStepStatus;
@@ -217,6 +238,67 @@ const PansManagerContext = React.createContext<PansManagerContextValue | null>(
   null,
 );
 
+const actionKeys = [
+  "retryInitialization",
+  "refreshPersisted",
+  "toggleDiscoverySelection",
+  "clearDiscoverySelection",
+  "startDiscovery",
+  "stopDiscovery",
+  "clearDiscovery",
+  "persistDiscovery",
+  "assignDiscoveries",
+  "createNetwork",
+  "saveNetwork",
+  "saveNetworkLocalDetails",
+  "deleteNetwork",
+  "deleteOfflineDevice",
+  "unassignOnlineDevice",
+  "inspectDevice",
+  "inspectDiagnostics",
+  "configureDevice",
+  "applyDeviceConfiguration",
+  "assignDeviceToNetworkProfile",
+  "migrateNetworkProfilePan",
+  "disconnectDevice",
+  "exportNetworkJson",
+  "exportNetwork",
+  "importNetwork",
+  "saveManagerSettings",
+  "refreshTopology",
+  "createPositionStream",
+  "runBatch",
+  "startPositionLog",
+  "appendPositionSample",
+  "stopPositionLog",
+  "listPositionLogs",
+  "listPositionSamples",
+  "exportPositionLog",
+] as const satisfies readonly (keyof PansManagerContextValue)[];
+type PansActionKey = (typeof actionKeys)[number];
+export type PansActions = Pick<PansManagerContextValue, PansActionKey>;
+
+interface ReadinessValue {
+  initialization: PansManagerContextValue["initialization"];
+  moduleStatus: ManagerStepStatus;
+  storageStatus: ManagerStepStatus;
+  permission: ManagerPermissionStatus | undefined;
+  error?: string;
+  retry(): void;
+}
+const ReadinessContext = React.createContext<ReadinessValue | null>(null);
+const ActionsContext = React.createContext<PansActions | null>(null);
+const DiscoveryDiagnosticsContext = React.createContext<
+  PansDiscoveryDiagnostics | undefined
+>(undefined);
+interface DiscoverySelectionValue {
+  selectedIds: Set<string>;
+  toggle(id: string): void;
+  clear(): void;
+}
+const DiscoverySelectionContext =
+  React.createContext<DiscoverySelectionValue | null>(null);
+
 export interface PansManagerProviderProps {
   children: React.ReactNode;
   createRuntime?: PansManagerRuntimeFactory;
@@ -233,9 +315,11 @@ export interface PansManagerAppState {
 
 export function PansManagerProvider({
   children,
-  createRuntime = createDefaultRuntime,
+  createRuntime = createDefaultPansManagerRuntime,
   appState = AppState,
 }: PansManagerProviderProps) {
+  const [discoveryStore] = React.useState(() => new PansDiscoveryStore());
+  const [persistedStore] = React.useState(() => new PansPersistedStore());
   const [initialization, setInitialization] =
     React.useState<PansManagerContextValue["initialization"]>("initializing");
   const [moduleStatus, setModuleStatus] =
@@ -286,6 +370,32 @@ export function PansManagerProvider({
     new Map<string, Promise<PansInspectionResult>>(),
   );
 
+  React.useEffect(() => {
+    discoveryStore.setList(discoveries);
+  }, [discoveries, discoveryStore]);
+  React.useEffect(() => {
+    discoveryStore.updateStatus({
+      isScanning,
+      state: discoveryState,
+      desiredScanning,
+      error: discoveryError,
+    });
+  }, [
+    desiredScanning,
+    discoveryError,
+    discoveryState,
+    discoveryStore,
+    isScanning,
+  ]);
+  React.useEffect(() => {
+    persistedStore.replace({
+      networks,
+      devices,
+      snapshots: deviceSnapshots,
+      settings: managerSettings,
+    });
+  }, [deviceSnapshots, devices, managerSettings, networks, persistedStore]);
+
   const retryInitialization = React.useCallback(() => {
     setInitialization("initializing");
     setInitializationError(undefined);
@@ -320,14 +430,7 @@ export function PansManagerProvider({
     let closePromise: Promise<void> | undefined;
     const closeOpenedRuntime = () => {
       if (!opened) return Promise.resolve();
-      closePromise ??= (async () => {
-        await opened?.discovery.stop();
-        await Promise.allSettled([
-          opened?.logs.flush(),
-          opened?.sessions.closeAll(),
-        ]);
-        await opened?.closeStorage();
-      })();
+      closePromise ??= closePansManagerRuntime(opened);
       return closePromise;
     };
     createRuntime({
@@ -767,16 +870,7 @@ export function PansManagerProvider({
 
   React.useEffect(() => {
     if (!runtime) return;
-    const availableTransportIds = new Set(
-      discoveries
-        .filter(
-          (discovery) =>
-            discovery.stale !== true &&
-            discovery.compatibility !== "malformed" &&
-            discovery.transportDeviceId,
-        )
-        .map((discovery) => discovery.transportDeviceId),
-    );
+    const availableTransportIds = availableDiscoveryTransportIds(discoveries);
     const runtimeGeneration = autoInspectionRuntimeGenerationRef.current;
     const trackedDeviceIds = new Set([
       ...autoInspectedDeviceIdsRef.current,
@@ -820,10 +914,7 @@ export function PansManagerProvider({
             (autoInspectionFailureCountRef.current.get(device.id) ?? 0) + 1;
           autoInspectionFailureCountRef.current.set(device.id, failureCount);
           if (autoInspectionRetryTimersRef.current.has(device.id)) return;
-          const delayMs = Math.min(
-            AUTO_INSPECTION_RETRY_BASE_MS * 2 ** (failureCount - 1),
-            AUTO_INSPECTION_RETRY_MAX_MS,
-          );
+          const delayMs = autoInspectionRetryDelay(failureCount);
           const timer = setTimeout(() => {
             if (
               autoInspectionRuntimeGenerationRef.current !== runtimeGeneration
@@ -1149,13 +1240,75 @@ export function PansManagerProvider({
     ],
   );
 
+  const actionImplementationsRef = React.useRef(value);
+  React.useEffect(() => {
+    actionImplementationsRef.current = value;
+  }, [value]);
+  const [actions] = React.useState<PansActions>(
+    () =>
+      Object.fromEntries(
+        actionKeys.map((key) => [
+          key,
+          (...args: unknown[]) =>
+            (
+              actionImplementationsRef.current[key] as (
+                ...values: unknown[]
+              ) => unknown
+            )(...args),
+        ]),
+      ) as PansActions,
+  );
+  const readiness = React.useMemo<ReadinessValue>(
+    () => ({
+      initialization,
+      moduleStatus,
+      storageStatus,
+      permission,
+      error: initializationError,
+      retry: actions.retryInitialization,
+    }),
+    [
+      actions.retryInitialization,
+      initialization,
+      initializationError,
+      moduleStatus,
+      permission,
+      storageStatus,
+    ],
+  );
+  const selection = React.useMemo<DiscoverySelectionValue>(
+    () => ({
+      selectedIds: selectedDiscoveryIds,
+      toggle: actions.toggleDiscoverySelection,
+      clear: actions.clearDiscoverySelection,
+    }),
+    [
+      actions.clearDiscoverySelection,
+      actions.toggleDiscoverySelection,
+      selectedDiscoveryIds,
+    ],
+  );
+
   return (
-    <PansManagerContext.Provider value={value}>
-      {children}
-    </PansManagerContext.Provider>
+    <ReadinessContext.Provider value={readiness}>
+      <PersistedStoreContext.Provider value={persistedStore}>
+        <DiscoveryStoreContext.Provider value={discoveryStore}>
+          <DiscoveryDiagnosticsContext.Provider value={discoveryDiagnostics}>
+            <DiscoverySelectionContext.Provider value={selection}>
+              <ActionsContext.Provider value={actions}>
+                <PansManagerContext.Provider value={value}>
+                  {children}
+                </PansManagerContext.Provider>
+              </ActionsContext.Provider>
+            </DiscoverySelectionContext.Provider>
+          </DiscoveryDiagnosticsContext.Provider>
+        </DiscoveryStoreContext.Provider>
+      </PersistedStoreContext.Provider>
+    </ReadinessContext.Provider>
   );
 }
 
+/** @deprecated Compatibility facade for legacy tests. Production consumers should use focused selectors and usePansActions. */
 export function usePansManager(): PansManagerContextValue {
   const value = React.useContext(PansManagerContext);
   if (!value)
@@ -1163,129 +1316,119 @@ export function usePansManager(): PansManagerContextValue {
   return value;
 }
 
+export function usePansActions(): PansActions {
+  const actions = React.useContext(ActionsContext);
+  if (!actions)
+    throw new Error("usePansActions must be used inside PansManagerProvider.");
+  return actions;
+}
+
 export function useManagerReadiness() {
-  const manager = usePansManager();
-  return {
-    initialization: manager.initialization,
-    moduleStatus: manager.moduleStatus,
-    storageStatus: manager.storageStatus,
-    permission: manager.permission,
-    error: manager.initializationError,
-    retry: manager.retryInitialization,
-  };
+  const readiness = React.useContext(ReadinessContext);
+  if (!readiness)
+    throw new Error(
+      "useManagerReadiness must be used inside PansManagerProvider.",
+    );
+  return readiness;
+}
+
+/** Native discovery diagnostics without subscribing to discovery devices. */
+export function useManagerDiagnostics() {
+  return React.useContext(DiscoveryDiagnosticsContext);
+}
+
+/** Discovery selection state, kept separate from discovery list updates. */
+export function useDiscoverySelection() {
+  const selection = React.useContext(DiscoverySelectionContext);
+  if (!selection)
+    throw new Error(
+      "useDiscoverySelection must be used inside PansManagerProvider.",
+    );
+  return selection;
+}
+
+/** Stable discovery lifecycle and persistence controls. */
+export function useDiscoveryActions() {
+  const actions = usePansActions();
+  return React.useMemo(
+    () => ({
+      start: actions.startDiscovery,
+      stop: actions.stopDiscovery,
+      clear: actions.clearDiscovery,
+      persist: actions.persistDiscovery,
+      assign: actions.assignDiscoveries,
+    }),
+    [actions],
+  );
 }
 
 export function usePansDiscovery() {
-  const manager = usePansManager();
+  const discoveries = usePansDiscoveryList();
+  const status = useDiscoveryStatus();
+  const diagnostics = React.useContext(DiscoveryDiagnosticsContext);
+  const selection = React.useContext(DiscoverySelectionContext);
+  const actions = usePansActions();
+  if (!selection)
+    throw new Error(
+      "usePansDiscovery must be used inside PansManagerProvider.",
+    );
   return {
-    discoveries: manager.discoveries,
-    isScanning: manager.isScanning,
-    state: manager.discoveryState,
-    desiredScanning: manager.desiredScanning,
-    error: manager.discoveryError,
-    diagnostics: manager.discoveryDiagnostics,
-    selectedIds: manager.selectedDiscoveryIds,
-    toggleSelection: manager.toggleDiscoverySelection,
-    clearSelection: manager.clearDiscoverySelection,
-    start: manager.startDiscovery,
-    stop: manager.stopDiscovery,
-    clear: manager.clearDiscovery,
-    persist: manager.persistDiscovery,
-    assign: manager.assignDiscoveries,
+    discoveries,
+    isScanning: status.isScanning,
+    state: status.state,
+    desiredScanning: status.desiredScanning,
+    error: status.error,
+    diagnostics,
+    selectedIds: selection.selectedIds,
+    toggleSelection: selection.toggle,
+    clearSelection: selection.clear,
+    start: actions.startDiscovery,
+    stop: actions.stopDiscovery,
+    clear: actions.clearDiscovery,
+    persist: actions.persistDiscovery,
+    assign: actions.assignDiscoveries,
   };
 }
 
-export function useManagedNetwork(networkId: string) {
-  const manager = usePansManager();
-  return {
-    network: manager.networks.find((item) => item.id === networkId),
-    devices: manager.devices.filter((item) => item.networkId === networkId),
-  };
-}
-
-export function useManagedDevice(deviceId: string) {
-  const manager = usePansManager();
-  return manager.devices.find((item) => item.id === deviceId);
-}
+export {
+  usePansDiscoveryList,
+  useDiscoveredDevice,
+  useDiscoveryStatus,
+  useManagedNetworks,
+  useManagedDevices,
+  useManagerSettings,
+  useManagedNetwork,
+  useManagedDevice,
+  useManagedDeviceSnapshots,
+  useManagedDeviceSnapshot,
+};
 
 export function usePansBatchAndLogs() {
-  const manager = usePansManager();
-  return {
-    runBatch: manager.runBatch,
-    startLog: manager.startPositionLog,
-    appendSample: manager.appendPositionSample,
-    stopLog: manager.stopPositionLog,
-    listLogs: manager.listPositionLogs,
-    listSamples: manager.listPositionSamples,
-    exportLog: manager.exportPositionLog,
-    refresh: manager.refreshPersisted,
-  };
+  const actions = usePansActions();
+  return React.useMemo(
+    () => ({
+      runBatch: actions.runBatch,
+      startLog: actions.startPositionLog,
+      appendSample: actions.appendPositionSample,
+      stopLog: actions.stopPositionLog,
+      listLogs: actions.listPositionLogs,
+      listSamples: actions.listPositionSamples,
+      exportLog: actions.exportPositionLog,
+      refresh: actions.refreshPersisted,
+    }),
+    [actions],
+  );
 }
 
 export function usePansLiveNetwork() {
-  const manager = usePansManager();
-  return {
-    refreshTopology: manager.refreshTopology,
-    createPositionStream: manager.createPositionStream,
-  };
-}
-
-async function createDefaultRuntime(
-  reporter: RuntimeStatusReporter,
-): Promise<PansManagerRuntime> {
-  // Dynamic loading lets the route render a useful custom-dev-build error when
-  // the native module is absent, rather than touching native code in registry tests.
-  const manager = await import("@eight2five/mobile/pans-manager");
-  reporter.module("ready");
-  reporter.storage("opening");
-  const storage = await manager.openPansManagerRepository();
-  try {
-    await storage.repository.initialize();
-    reporter.storage("ready");
-    const settings = manager.normalizePansManagerSettings(
-      await storage.repository.getSettings(),
-    );
-    const discovery = new manager.PansDiscoveryService(undefined, {
-      staleAfterMs: settings.discoveryStaleAfterMs,
-    });
-    const sessions = new manager.PansDeviceSessionManager(
-      undefined,
-      settings.connectionTimeoutMs,
-    );
-    const logs = new manager.PansPositionLogService(storage.repository, {
-      memoryCap: settings.positionLogMemoryCap,
-      flushSize: settings.positionLogFlushSize,
-    });
-    const configuration = new manager.PansConfigurationService(
-      sessions,
-      storage.repository,
-    );
-    const batch = new manager.PansBatchOperationService(storage.repository);
-    return {
-      repository: storage.repository,
-      discovery,
-      sessions,
-      configuration,
-      commissioning: new manager.PansCommissioningService(
-        storage.repository,
-        configuration,
-        Date.now,
-        batch,
-      ),
-      diagnostics: new manager.PansDiagnosticsService(sessions),
-      batch,
-      logs,
-      topology: new manager.PansTopologyService(sessions),
-      createPositionStream: () =>
-        new manager.PansPositionStreamService(sessions),
-      networkExport: new manager.PansNetworkExportService(storage.repository),
-      closeStorage: storage.close,
-    };
-  } catch (error) {
-    reporter.storage("error");
-    await storage.close();
-    throw error;
-  }
+  const actions = usePansActions();
+  return React.useMemo(
+    () => ({
+      refreshTopology: actions.refreshTopology,
+      createPositionStream: actions.createPositionStream,
+    }),
+    [actions],
+  );
 }
 
 function permissionsGranted(status: ManagerPermissionStatus): boolean {

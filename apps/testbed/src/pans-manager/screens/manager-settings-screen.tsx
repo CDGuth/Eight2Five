@@ -1,7 +1,8 @@
 import React from "react";
 import { DEFAULT_PANS_MANAGER_SETTINGS } from "@eight2five/mobile/pans-manager";
 
-import { usePansManager } from "../manager-context";
+import { useManagerSettings } from "../manager-context";
+import { useRepositoryNetworkActions } from "../actions/repository-network-actions";
 import { displayError } from "../manager-utils";
 import {
   ManagerButton,
@@ -12,8 +13,9 @@ import {
 } from "../components/manager-ui";
 
 export function ManagerSettingsScreen() {
-  const manager = usePansManager();
-  const settings = manager.managerSettings ?? DEFAULT_PANS_MANAGER_SETTINGS;
+  const managerSettings = useManagerSettings();
+  const { saveManagerSettings } = useRepositoryNetworkActions();
+  const settings = managerSettings ?? DEFAULT_PANS_MANAGER_SETTINGS;
   const [stale, setStale] = React.useState(
     String(settings.discoveryStaleAfterMs),
   );
@@ -29,16 +31,16 @@ export function ManagerSettingsScreen() {
   const [message, setMessage] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const isPristine = React.useRef(true);
-  const isHydrated = manager.managerSettings !== undefined;
+  const isHydrated = managerSettings !== undefined;
 
   React.useEffect(() => {
-    if (!manager.managerSettings || !isPristine.current) return;
+    if (!managerSettings || !isPristine.current) return;
 
-    setStale(String(manager.managerSettings.discoveryStaleAfterMs));
-    setTimeout(String(manager.managerSettings.connectionTimeoutMs));
-    setMemoryCap(String(manager.managerSettings.positionLogMemoryCap));
-    setFlushSize(String(manager.managerSettings.positionLogFlushSize));
-  }, [manager.managerSettings]);
+    setStale(String(managerSettings.discoveryStaleAfterMs));
+    setTimeout(String(managerSettings.connectionTimeoutMs));
+    setMemoryCap(String(managerSettings.positionLogMemoryCap));
+    setFlushSize(String(managerSettings.positionLogFlushSize));
+  }, [managerSettings]);
 
   const edit =
     (setter: React.Dispatch<React.SetStateAction<string>>) =>
@@ -62,7 +64,7 @@ export function ManagerSettingsScreen() {
       return;
     }
     try {
-      await manager.saveManagerSettings({
+      await saveManagerSettings({
         discoveryStaleAfterMs: values[0],
         connectionTimeoutMs: values[1],
         positionLogMemoryCap: values[2],

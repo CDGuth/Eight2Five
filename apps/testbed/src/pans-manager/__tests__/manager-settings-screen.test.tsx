@@ -5,20 +5,21 @@ import {
   type PansManagerSettings,
 } from "@eight2five/mobile/pans-manager";
 
-import { usePansManager } from "../manager-context";
+import { useManagerSettings } from "../manager-context";
 import { ManagerSettingsScreen } from "../screens/manager-settings-screen";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 jest.mock("../manager-context", () => ({
-  usePansManager: jest.fn(),
+  useManagerSettings: jest.fn(),
+  usePansActions: () => ({ saveManagerSettings: mockSaveManagerSettings }),
 }));
 
-const mockUsePansManager = jest.mocked(usePansManager);
-const saveManagerSettings = jest.fn().mockResolvedValue(undefined);
+const mockUseManagerSettings = jest.mocked(useManagerSettings);
+const mockSaveManagerSettings = jest.fn().mockResolvedValue(undefined);
 
 describe("ManagerSettingsScreen hydration", () => {
   beforeEach(() => {
-    saveManagerSettings.mockClear();
+    mockSaveManagerSettings.mockClear();
     setManagerSettings(undefined);
   });
 
@@ -64,7 +65,7 @@ describe("ManagerSettingsScreen hydration", () => {
       button(tree).props.onPress();
       await Promise.resolve();
     });
-    expect(saveManagerSettings).toHaveBeenCalledWith(persisted);
+    expect(mockSaveManagerSettings).toHaveBeenCalledWith(persisted);
     expect(
       findText(
         tree,
@@ -93,10 +94,7 @@ describe("ManagerSettingsScreen hydration", () => {
 });
 
 function setManagerSettings(managerSettings: PansManagerSettings | undefined) {
-  mockUsePansManager.mockReturnValue({
-    managerSettings,
-    saveManagerSettings,
-  } as unknown as ReturnType<typeof usePansManager>);
+  mockUseManagerSettings.mockReturnValue(managerSettings);
 }
 
 async function renderScreen() {

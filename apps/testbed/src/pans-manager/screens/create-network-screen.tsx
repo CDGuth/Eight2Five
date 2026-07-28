@@ -4,7 +4,12 @@ import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
 
-import { usePansManager } from "../manager-context";
+import {
+  useDiscoverySelection,
+  useManagedNetworks,
+  usePansDiscoveryList,
+} from "../manager-context";
+import { useRepositoryNetworkActions } from "../actions/repository-network-actions";
 import { displayError } from "../manager-utils";
 import {
   ManagerButton,
@@ -17,10 +22,13 @@ import {
 export function CreateNetworkScreen() {
   const router = useRouter();
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const discoveries = usePansDiscoveryList();
+  const { selectedIds } = useDiscoverySelection();
+  const { createNetwork } = useRepositoryNetworkActions();
   const [name, setName] = React.useState("");
   const [panText, setPanText] = React.useState(() =>
-    formatPan(generatePan(manager.networks)),
+    formatPan(generatePan(networks)),
   );
   const [error, setError] = React.useState<string>();
   const [result, setResult] = React.useState<string>();
@@ -28,16 +36,16 @@ export function CreateNetworkScreen() {
   const [saving, setSaving] = React.useState(false);
 
   const parsedPan = parsePanInput(panText);
-  const duplicateName = manager.networks.some(
+  const duplicateName = networks.some(
     (network) =>
       network.name.trim().toLocaleLowerCase() ===
       name.trim().toLocaleLowerCase(),
   );
   const duplicatePan = Number.isInteger(parsedPan)
-    ? manager.networks.some((network) => network.panId === parsedPan)
+    ? networks.some((network) => network.panId === parsedPan)
     : false;
-  const selected = manager.discoveries.filter((item) =>
-    manager.selectedDiscoveryIds.has(item.transportDeviceId),
+  const selected = discoveries.filter((item) =>
+    selectedIds.has(item.transportDeviceId),
   );
 
   const save = async () => {
@@ -50,7 +58,7 @@ export function CreateNetworkScreen() {
     }
     setSaving(true);
     try {
-      const created = await manager.createNetwork({
+      const created = await createNetwork({
         name,
         panId: parsedPan,
         discoveries: selected,
@@ -113,7 +121,7 @@ export function CreateNetworkScreen() {
         <ManagerButton
           label="Generate another"
           variant="ghost"
-          onPress={() => setPanText(formatPan(generatePan(manager.networks)))}
+          onPress={() => setPanText(formatPan(generatePan(networks)))}
         />
       </SectionCard>
 

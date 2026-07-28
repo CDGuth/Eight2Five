@@ -26,7 +26,12 @@ import pansBleApiPackage from "../../../../../modules/expo-pans-ble-api/package.
 import mobilePackage from "../../../../../packages/mobile/package.json";
 import uiPackage from "../../../../../packages/ui/package.json";
 
-import { usePansManager } from "../manager-context";
+import { useManagerDiagnostics, useManagerReadiness } from "../manager-context";
+import type {
+  ManagerPermissionStatus,
+  ManagerStepStatus,
+} from "../manager-context";
+import type { PansDiscoveryDiagnostics } from "@eight2five/mobile/pans-manager";
 import { displayError } from "../manager-utils";
 
 declare const __DEV__: boolean;
@@ -44,19 +49,27 @@ interface InfoSection {
   rows: InfoRow[];
 }
 
-type ManagerContextSlice = Pick<
-  ReturnType<typeof usePansManager>,
-  "moduleStatus" | "storageStatus" | "permission" | "discoveryDiagnostics"
->;
+interface ManagerContextSlice {
+  moduleStatus: ManagerStepStatus;
+  storageStatus: ManagerStepStatus;
+  permission?: ManagerPermissionStatus;
+  discoveryDiagnostics?: PansDiscoveryDiagnostics;
+}
 
 export function ManagerInfoScreen() {
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const { moduleStatus, storageStatus, permission } = useManagerReadiness();
+  const discoveryDiagnostics = useManagerDiagnostics();
   const [feedback, setFeedback] = React.useState<{
     tone: "success" | "error";
     message: string;
   }>();
-  const sections = buildInfoSections(manager);
+  const sections = buildInfoSections({
+    moduleStatus,
+    storageStatus,
+    permission,
+    discoveryDiagnostics,
+  });
   const rows = sections.flatMap((section) => section.rows);
 
   const copySummary = async () => {

@@ -24,7 +24,10 @@ import {
 } from "@eight2five/mobile/pans-manager";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
-import { usePansManager } from "./manager-context";
+import { useManagedDevices, useManagedNetworks } from "./manager-context";
+import { useRepositoryNetworkActions } from "./actions/repository-network-actions";
+import { useDeviceConfigurationActions } from "./actions/device-configuration-actions";
+import { usePositionLogActions } from "./actions/position-log-actions";
 import { displayError } from "./manager-utils";
 
 export interface PansMapVisibilityOptions {
@@ -148,8 +151,12 @@ const DEFAULT_GRID: PansMapGridOptions = {
 export function usePansMapDataController(
   initialNetworkId?: string,
 ): PansMapDataController {
-  const manager = usePansManager();
-  const { networks, devices } = manager;
+  const networks = useManagedNetworks();
+  const devices = useManagedDevices();
+  const { saveNetwork } = useRepositoryNetworkActions();
+  const { applyConfiguration: applyDeviceConfiguration } =
+    useDeviceConfigurationActions();
+  const { createPositionStream, refreshTopology } = usePositionLogActions();
   const [selectedNetworkIds, setSelectedNetworkIds] = React.useState(
     () => new Set<string>(),
   );
@@ -209,7 +216,7 @@ export function usePansMapDataController(
     Record<string, ObservedPansTopology>
   >({});
   const streamRef = React.useRef<
-    ReturnType<typeof manager.createPositionStream> | undefined
+    ReturnType<typeof createPositionStream> | undefined
   >(undefined);
   const startRequestedRef = React.useRef(false);
   const stopPromiseRef = React.useRef<Promise<void> | undefined>(undefined);
@@ -430,9 +437,9 @@ export function usePansMapDataController(
     trackingDiagnosticRef.current = undefined;
     setActiveTagId(device.id);
     setSelectedNodeId(device.id);
-    let stream: ReturnType<typeof manager.createPositionStream> | undefined;
+    let stream: ReturnType<typeof createPositionStream> | undefined;
     try {
-      stream = manager.createPositionStream();
+      stream = createPositionStream();
       streamRef.current = stream;
       await stream.start({
         deviceId: device.id,
@@ -516,7 +523,7 @@ export function usePansMapDataController(
     devices,
     editingEnabled,
     liveTagPosition,
-    manager,
+    createPositionStream,
     selectedDirectTagId,
     trackingStatus,
   ]);
@@ -587,7 +594,7 @@ export function usePansMapDataController(
           "Enter a finite Z coordinate and an optional integer quality from 1 to 100.",
         );
       try {
-        const result = await manager.applyDeviceConfiguration(
+        const result = await applyDeviceConfiguration(
           pendingAnchorEdit.anchorId,
           {
             position: {
@@ -608,7 +615,7 @@ export function usePansMapDataController(
         setEditResult(displayError(error));
       }
     },
-    [manager, pendingAnchorEdit, trackingStatus],
+    [applyDeviceConfiguration, pendingAnchorEdit, trackingStatus],
   );
 
   const setFollow = React.useCallback((value: boolean) => {
@@ -635,78 +642,135 @@ export function usePansMapDataController(
       value: MapUnits | MapAreaMode,
     ) => {
       for (const network of selectedNetworks) {
-        await manager.saveNetwork({
+        await saveNetwork({
           ...network,
           settings: { ...network.settings, [setting]: value },
           updatedAt: Date.now(),
         });
       }
     },
-    [manager, selectedNetworks],
+    [saveNetwork, selectedNetworks],
   );
-
-  return {
-    networks,
-    devices,
-    selectedNetworkIds,
-    selectAllNetworks: () =>
-      setSelectedNetworkIds(new Set(networks.map((network) => network.id))),
-    clearAllNetworks: () => setSelectedNetworkIds(new Set()),
-    setNetworkVisible: (networkId, visible) =>
+  const selectAllNetworks = React.useCallback(
+    () => setSelectedNetworkIds(new Set(networks.map((network) => network.id))),
+    [networks],
+  );
+  const clearAllNetworks = React.useCallback(
+    () => setSelectedNetworkIds(new Set()),
+    [],
+  );
+  const setNetworkVisible = React.useCallback(
+    (networkId: string, visible: boolean) =>
       setSelectedNetworkIds((current) => {
         const next = new Set(current);
         if (visible) next.add(networkId);
         else next.delete(networkId);
         return next;
       }),
-    visibility,
-    setVisibility: (key, value) =>
-      setVisibilityState((current) => ({ ...current, [key]: value })),
-    grid,
-    setGrid: (options) =>
+    [],
+  );
+  const setVisibility = React.useCallback(
+    <K extends keyof PansMapVisibilityOptions>(
+      key: K,
+      value: PansMapVisibilityOptions[K],
+    ) => setVisibilityState((current) => ({ ...current, [key]: value })),
+    [],
+  );
+  const setGrid = React.useCallback(
+    (options: Partial<PansMapGridOptions>) =>
       setGridState((current) => ({ ...current, ...options })),
-    mapUnits,
-    mapAreaMode,
-    selectedAreaBounds,
-    setMapUnits: async (units) =>
-      await updateSelectedNetworkMapSetting("mapUnits", units),
-    setMapAreaMode: async (mode) =>
-      await updateSelectedNetworkMapSetting("mapAreaMode", mode),
-    gridSize,
-    setGridSize,
-    viewport,
-    camera,
-    setViewport,
-    fitVisible: () => fitNodes(nodes),
-    fitAnchors: () => fitNodes(anchors),
-    resetCamera: () => setViewport(DEFAULT_GRID_VIEWPORT),
-    nodes,
-    anchors,
-    rangingEdges: visibility.rangingLines ? rangingEdges : [],
-    topologyCache,
-    refreshNetworkTopology: async (networkId) => {
+    [],
+  );
+  const fitVisible = React.useCallback(
+    () => fitNodes(nodes),
+    [fitNodes, nodes],
+  );
+  const fitAnchors = React.useCallback(
+    () => fitNodes(anchors),
+    [anchors, fitNodes],
+  );
+  const resetCamera = React.useCallback(
+    () => setViewport(DEFAULT_GRID_VIEWPORT),
+    [setViewport],
+  );
+  const refreshNetworkTopology = React.useCallback(
+    async (networkId: string) => {
       if (
         trackingStatus === "running" ||
         trackingStatus === "starting" ||
         trackingStatus === "stopping"
       )
         return;
-      const topology = await manager.refreshTopology(networkId);
+      const topology = await refreshTopology(networkId);
       setTopologyCache((current) => ({ ...current, [networkId]: topology }));
     },
+    [refreshTopology, trackingStatus],
+  );
+  const selectAnchor = React.useCallback((anchorId: string | undefined) => {
+    setSelectedAnchorId(anchorId);
+    if (anchorId) setSelectedNodeId(anchorId);
+  }, []);
+  const cancelPendingAnchorEdit = React.useCallback(
+    () => setPendingAnchorEdit(undefined),
+    [],
+  );
+  const setMapUnits = React.useCallback(
+    async (units: MapUnits) =>
+      await updateSelectedNetworkMapSetting("mapUnits", units),
+    [updateSelectedNetworkMapSetting],
+  );
+  const setMapAreaMode = React.useCallback(
+    async (mode: MapAreaMode) =>
+      await updateSelectedNetworkMapSetting("mapAreaMode", mode),
+    [updateSelectedNetworkMapSetting],
+  );
+  const setSelectedDirectTagId = React.useCallback(
+    (deviceId: string) => {
+      if (trackingStatus === "stopped" || trackingStatus === "error")
+        setSelectedDirectTagIdState(deviceId);
+    },
+    [trackingStatus],
+  );
+
+  return {
+    networks,
+    devices,
+    selectedNetworkIds,
+    selectAllNetworks,
+    clearAllNetworks,
+    setNetworkVisible,
+    visibility,
+    setVisibility,
+    grid,
+    setGrid,
+    mapUnits,
+    mapAreaMode,
+    selectedAreaBounds,
+    setMapUnits,
+    setMapAreaMode,
+    gridSize,
+    setGridSize,
+    viewport,
+    camera,
+    setViewport,
+    fitVisible,
+    fitAnchors,
+    resetCamera,
+    nodes,
+    anchors,
+    rangingEdges: visibility.rangingLines ? rangingEdges : [],
+    topologyCache,
+    refreshNetworkTopology,
     selectedNodeId,
     setSelectedNodeId,
     selectedAnchorId,
-    setSelectedAnchorId: (anchorId) => {
-      setSelectedAnchorId(anchorId);
-      if (anchorId) setSelectedNodeId(anchorId);
-    },
+    setSelectedAnchorId: selectAnchor,
     editableAnchors,
     editingEnabled,
     setEditingEnabled,
     pendingAnchorEdit,
     setPendingAnchorCoordinate,
-    cancelPendingAnchorEdit: () => setPendingAnchorEdit(undefined),
+    cancelPendingAnchorEdit,
     savePendingAnchorEdit,
     editResult,
     trackingStatus,
@@ -718,10 +782,7 @@ export function usePansMapDataController(
     trackingCounters,
     setTrackingDiagnosticsVisible,
     selectedDirectTagId,
-    setSelectedDirectTagId: (deviceId) => {
-      if (trackingStatus === "stopped" || trackingStatus === "error")
-        setSelectedDirectTagIdState(deviceId);
-    },
+    setSelectedDirectTagId,
     trackableTags,
     follow,
     setFollow,

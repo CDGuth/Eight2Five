@@ -1,7 +1,7 @@
 import React from "react";
 import { useRouter } from "expo-router";
 
-import { usePansManager } from "../manager-context";
+import { useRepositoryNetworkActions } from "../actions/repository-network-actions";
 import { displayError } from "../manager-utils";
 import {
   ManagerButton,
@@ -13,7 +13,7 @@ import {
 
 export function ImportNetworkScreen() {
   const router = useRouter();
-  const manager = usePansManager();
+  const { importNetwork } = useRepositoryNetworkActions();
   const [json, setJson] = React.useState("");
   const [error, setError] = React.useState<string>();
   const [loading, setLoading] = React.useState(false);
@@ -22,7 +22,7 @@ export function ImportNetworkScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      await manager.importNetwork(json);
+      await importNetwork(json);
       router.replace("/(tabs)/networks-devices" as never);
     } catch (importError) {
       setError(displayError(importError));

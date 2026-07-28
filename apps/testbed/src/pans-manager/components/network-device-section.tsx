@@ -43,7 +43,7 @@ import {
 } from "./manager-swipe-to-delete";
 import { SettingInfoCard } from "./setting-help";
 import {
-  NetworkDeviceRow,
+  MemoizedNetworkDeviceRow,
   type NetworkDeviceRowDragCallbacks,
 } from "./network-device-row";
 
@@ -245,7 +245,7 @@ export function NetworkDeviceSection({
             ) : null}
             {section.devices.map((device, index) => {
               const row = (
-                <NetworkDeviceRow
+                <MemoizedNetworkDeviceRow
                   device={device}
                   network={section.network}
                   snapshot={

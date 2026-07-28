@@ -56,7 +56,7 @@ export interface NetworkDeviceRowDragCallbacks {
   onDragEnd(event: NetworkDeviceDragEvent): boolean;
 }
 
-interface NetworkDeviceRowProps {
+export interface NetworkDeviceRowProps {
   device: DisplayDevice;
   network?: ManagedNetwork;
   snapshot?: DeviceConfigurationSnapshot;
@@ -307,7 +307,30 @@ export function NetworkDeviceRow({
   );
 }
 
-export const MemoizedNetworkDeviceRow = React.memo(NetworkDeviceRow);
+export const networkDeviceRowPropsEqual = (
+  previous: NetworkDeviceRowProps,
+  next: NetworkDeviceRowProps,
+) =>
+  previous.device.key === next.device.key &&
+  previous.device.id === next.device.id &&
+  previous.device.displayName === next.device.displayName &&
+  previous.device.canonicalIdentifier === next.device.canonicalIdentifier &&
+  previous.device.status === next.device.status &&
+  previous.device.cachedPanId === next.device.cachedPanId &&
+  previous.device.available === next.device.available &&
+  previous.device.savedDevice === next.device.savedDevice &&
+  previous.device.discovery === next.device.discovery &&
+  previous.network === next.network &&
+  previous.snapshot === next.snapshot &&
+  previous.expanded === next.expanded &&
+  previous.interactionsDisabled === next.interactionsDisabled &&
+  previous.dragCallbacks === next.dragCallbacks &&
+  Boolean(previous.onRefresh) === Boolean(next.onRefresh);
+
+export const MemoizedNetworkDeviceRow = React.memo(
+  NetworkDeviceRow,
+  networkDeviceRowPropsEqual,
+);
 
 function profileStatusLabel(device: DisplayDevice): string {
   const offline = device.available ? "" : "Offline · cached hardware state · ";

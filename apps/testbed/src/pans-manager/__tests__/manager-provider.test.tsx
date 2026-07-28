@@ -14,13 +14,59 @@ import {
   PansManagerProvider,
   type PansManagerRuntime,
   useManagerReadiness,
+  useManagerSettings,
+  usePansActions,
   usePansDiscovery,
   usePansManager,
 } from "../manager-context";
+import { usePansMapDataController } from "../manager-map-controller";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 
 describe("PansManagerProvider", () => {
+  it("does not rerender a map controller for discovery-only emissions", async () => {
+    let emitDiscoveries!: (items: DiscoveredDeviceSnapshot[]) => void;
+    const renderProbe = jest.fn();
+    const runtime = makeRuntime({
+      subscribe: jest.fn((listener) => {
+        emitDiscoveries = listener;
+        listener([]);
+        return { remove: jest.fn() };
+      }),
+    });
+    function MapControllerProbe() {
+      usePansMapDataController();
+      renderProbe();
+      return null;
+    }
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <MapControllerProbe />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    const settledRenders = renderProbe.mock.calls.length;
+
+    for (let update = 0; update < 12; update += 1) {
+      await act(async () => {
+        emitDiscoveries([
+          {
+            transportDeviceId: "noisy-device",
+            rssi: -50 - update,
+            lastSeenAt: update,
+            compatibility: "compatible",
+          },
+        ]);
+      });
+    }
+
+    expect(renderProbe).toHaveBeenCalledTimes(settledRenders);
+    await act(async () => tree.unmount());
+  });
+
   it("requests permission once, auto-starts, and allows immediate stop/start", async () => {
     let permissionGranted = false;
     const requestPermissions = jest.fn().mockImplementation(async () => {
@@ -931,6 +977,82 @@ describe("PansManagerProvider", () => {
       expect.any(Number),
     );
     expect(deleteDevice).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it("keeps actions stable and readiness isolated across discovery and settings updates", async () => {
+    let discoveryListener:
+      | ((items: DiscoveredDeviceSnapshot[]) => void)
+      | undefined;
+    const runtime = createRuntimeValue();
+    runtime.discovery.subscribe = jest.fn((listener) => {
+      discoveryListener = listener;
+      listener([]);
+      return { remove: jest.fn() };
+    });
+    let readinessRenders = 0;
+    let settingsRenders = 0;
+    const actionSnapshots: unknown[] = [];
+    let latestActions: ReturnType<typeof usePansActions> | undefined;
+    function ReadinessProbe() {
+      useManagerReadiness();
+      React.useEffect(() => {
+        readinessRenders += 1;
+      });
+      return null;
+    }
+    function SettingsProbe() {
+      useManagerSettings();
+      React.useEffect(() => {
+        settingsRenders += 1;
+      });
+      return null;
+    }
+    function ActionsProbe() {
+      const actions = usePansActions();
+      React.useEffect(() => {
+        latestActions = actions;
+        actionSnapshots.push(actions);
+      }, [actions]);
+      return null;
+    }
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <PansManagerProvider createRuntime={async () => runtime}>
+          <ReadinessProbe />
+          <SettingsProbe />
+          <ActionsProbe />
+        </PansManagerProvider>,
+      );
+      await flushPromises();
+    });
+    const readyRenderCount = readinessRenders;
+    await act(async () => {
+      discoveryListener?.([
+        {
+          transportDeviceId: "advertisement",
+          rssi: -50,
+          lastSeenAt: 1,
+          compatibility: "compatible",
+        },
+      ]);
+    });
+    expect(readinessRenders).toBe(readyRenderCount);
+    const settingsBeforeSave = settingsRenders;
+    await act(async () => {
+      await latestActions?.saveManagerSettings({
+        discoveryStaleAfterMs: 20_000,
+        connectionTimeoutMs: 10_000,
+        positionLogMemoryCap: 1_000,
+        positionLogFlushSize: 100,
+      });
+    });
+    expect(settingsRenders).toBe(settingsBeforeSave + 1);
+    expect(readinessRenders).toBe(readyRenderCount);
+    expect(actionSnapshots.every((value) => value === actionSnapshots[0])).toBe(
+      true,
+    );
     await act(async () => tree.unmount());
   });
 });

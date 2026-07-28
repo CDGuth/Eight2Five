@@ -8,7 +8,8 @@ import {
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
-import { useManagedNetwork, usePansManager } from "../manager-context";
+import { useManagedNetwork, useManagedNetworks } from "../manager-context";
+import { useRepositoryNetworkActions } from "../actions/repository-network-actions";
 import { displayError } from "../manager-utils";
 import {
   ManagerButton,
@@ -31,7 +32,9 @@ export function NetworkSettingsScreen() {
   const { networkId } = useLocalSearchParams<{ networkId: string }>();
   const router = useRouter();
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const { saveNetwork, exportNetwork, deleteNetwork } =
+    useRepositoryNetworkActions();
   const { network } = useManagedNetwork(networkId);
   const [name, setName] = React.useState(network?.name ?? "");
   const [notes, setNotes] = React.useState(network?.notes ?? "");
@@ -70,7 +73,7 @@ export function NetworkSettingsScreen() {
     setError(undefined);
     if (!name.trim()) return setError("Name is required.");
     if (
-      manager.networks.some(
+      networks.some(
         (item) =>
           item.id !== network.id &&
           item.name.trim().toLowerCase() === name.trim().toLowerCase(),
@@ -80,7 +83,7 @@ export function NetworkSettingsScreen() {
     const parsedSettings = parseNetworkSettingsForm(settingsForm);
     if ("error" in parsedSettings) return setError(parsedSettings.error);
     try {
-      await manager.saveNetwork({
+      await saveNetwork({
         ...network,
         name: name.trim(),
         panId: network.panId,
@@ -96,7 +99,7 @@ export function NetworkSettingsScreen() {
 
   const exportProfile = async () => {
     try {
-      setExportJson(await manager.exportNetwork(network.id, exportFormat));
+      setExportJson(await exportNetwork(network.id, exportFormat));
     } catch (exportError) {
       setError(displayError(exportError));
     }
@@ -104,7 +107,7 @@ export function NetworkSettingsScreen() {
 
   const deleteProfile = async () => {
     try {
-      await manager.deleteNetwork(network.id);
+      await deleteNetwork(network.id);
       router.replace("/(tabs)/networks-devices" as never);
     } catch (deleteError) {
       setError(displayError(deleteError));

@@ -20,7 +20,10 @@ import {
   StatePanel,
   SwitchField,
 } from "../components/manager-ui";
-import { useManagedNetwork, usePansManager } from "../manager-context";
+import { useManagedNetwork, useManagedNetworks } from "../manager-context";
+import { useRepositoryNetworkActions } from "../actions/repository-network-actions";
+import { useDeviceConfigurationActions } from "../actions/device-configuration-actions";
+import { usePositionLogActions } from "../actions/position-log-actions";
 import {
   createManagerId,
   defaultConfigForDevice,
@@ -39,7 +42,11 @@ export function BatchConfigureScreen() {
     notes?: string;
   }>();
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
+  const networks = useManagedNetworks();
+  const { saveNetworkLocalDetails } = useRepositoryNetworkActions();
+  const { migrateNetworkPan, assignToNetwork, configure } =
+    useDeviceConfigurationActions();
+  const { runBatch } = usePositionLogActions();
   const { network, devices } = useManagedNetwork(params.networkId);
   const migration = params.migration === "1";
   const [selected, setSelected] = React.useState(
@@ -90,7 +97,7 @@ export function BatchConfigureScreen() {
       targetPanId <= 0xffff &&
       Number(params.oldPanId) === network.panId &&
       targetPanId !== network.panId &&
-      !manager.networks.some(
+      !networks.some(
         (item) =>
           item.id !== network.id &&
           item.name.trim().toLowerCase() === intendedName.toLowerCase(),
@@ -117,12 +124,12 @@ export function BatchConfigureScreen() {
     );
     try {
       if (migration) {
-        await manager.saveNetworkLocalDetails({
+        await saveNetworkLocalDetails({
           networkId: network.id,
           name: intendedName,
           notes: params.notes,
         });
-        const migrationResult = await manager.migrateNetworkProfilePan({
+        const migrationResult = await migrateNetworkPan({
           networkId: network.id,
           targetPanId,
           operationId: batchId.current,
@@ -141,7 +148,7 @@ export function BatchConfigureScreen() {
         setMessage(`PAN migration ${migrationResult.outcome}.`);
         return;
       }
-      const result = await manager.runBatch<PansConfigurationResult>({
+      const result = await runBatch<PansConfigurationResult>({
         id: batchId.current,
         type: "batch-configure",
         deviceIds: selectedDevices.map((device) => device.id),
@@ -164,7 +171,7 @@ export function BatchConfigureScreen() {
         },
         operation: async (deviceId) => {
           if (assignPan) {
-            const assignment = await manager.assignDeviceToNetworkProfile({
+            const assignment = await assignToNetwork({
               deviceId,
               targetNetworkId: network.id,
             });
@@ -184,7 +191,7 @@ export function BatchConfigureScreen() {
             led,
             initiatorId,
           });
-          const configured = await manager.configureDevice(deviceId, config);
+          const configured = await configure(deviceId, config);
           if (
             configured.outcome === "failure" ||
             configured.writes.some((write) => write.status !== "verified")

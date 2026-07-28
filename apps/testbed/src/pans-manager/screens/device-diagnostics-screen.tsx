@@ -4,7 +4,8 @@ import type { PansDiagnosticsResult } from "@eight2five/mobile/pans-manager";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveRadii, useEight2FiveTheme } from "@eight2five/ui/theme";
 
-import { useManagedDevice, usePansManager } from "../manager-context";
+import { useDiscoveredDevice, useManagedDevice } from "../manager-context";
+import { useDeviceConfigurationActions } from "../actions/device-configuration-actions";
 import { bytesToHex } from "../manager-utils";
 import {
   KeyValue,
@@ -17,11 +18,9 @@ import {
 export function DeviceDiagnosticsScreen() {
   const { deviceId } = useLocalSearchParams<{ deviceId: string }>();
   const theme = useEight2FiveTheme();
-  const manager = usePansManager();
   const device = useManagedDevice(deviceId);
-  const advertisement = manager.discoveries.find(
-    (item) => item.transportDeviceId === device?.transportDeviceId,
-  );
+  const advertisement = useDiscoveredDevice(device?.transportDeviceId ?? "");
+  const { inspectDiagnostics } = useDeviceConfigurationActions();
   const [diagnostics, setDiagnostics] = React.useState<PansDiagnosticsResult>();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string>();
@@ -38,7 +37,7 @@ export function DeviceDiagnosticsScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      setDiagnostics(await manager.inspectDiagnostics(device.id));
+      setDiagnostics(await inspectDiagnostics(device.id));
     } catch {
       setError(
         "Unable to read the required operation mode. Check the device connection and retry.",
