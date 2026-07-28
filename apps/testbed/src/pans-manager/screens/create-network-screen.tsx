@@ -18,6 +18,7 @@ import {
   StatePanel,
   TextField,
 } from "../components/manager-ui";
+import { formatPanInput, parsePanInput } from "../settings-definitions";
 
 export function CreateNetworkScreen() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export function CreateNetworkScreen() {
   const { createNetwork } = useRepositoryNetworkActions();
   const [name, setName] = React.useState("");
   const [panText, setPanText] = React.useState(() =>
-    formatPan(generatePan(networks)),
+    formatPanInput(generatePan(networks)),
   );
   const [error, setError] = React.useState<string>();
   const [result, setResult] = React.useState<string>();
@@ -41,9 +42,10 @@ export function CreateNetworkScreen() {
       network.name.trim().toLocaleLowerCase() ===
       name.trim().toLocaleLowerCase(),
   );
-  const duplicatePan = Number.isInteger(parsedPan)
-    ? networks.some((network) => network.panId === parsedPan)
-    : false;
+  const duplicatePan =
+    parsedPan !== undefined
+      ? networks.some((network) => network.panId === parsedPan)
+      : false;
   const selected = discoveries.filter((item) =>
     selectedIds.has(item.transportDeviceId),
   );
@@ -53,7 +55,7 @@ export function CreateNetworkScreen() {
     setResult(undefined);
     if (!name.trim()) return setError("Enter a network name.");
     if (duplicateName) return setError("That network name is already in use.");
-    if (!Number.isInteger(parsedPan) || parsedPan < 0 || parsedPan > 0xffff) {
+    if (parsedPan === undefined) {
       return setError("Network ID must be between 0 and 65535.");
     }
     setSaving(true);
@@ -69,7 +71,9 @@ export function CreateNetworkScreen() {
       if (failures.length) {
         setCreatedWithFailures(true);
         setResult(
-          `Network created. ${failures.length} device${failures.length === 1 ? "" : "s"} could not be assigned.`,
+          `Network created. ${failures.length} device${
+            failures.length === 1 ? "" : "s"
+          } could not be assigned.`,
         );
         return;
       }
@@ -121,7 +125,7 @@ export function CreateNetworkScreen() {
         <ManagerButton
           label="Generate another"
           variant="ghost"
-          onPress={() => setPanText(formatPan(generatePan(networks)))}
+          onPress={() => setPanText(formatPanInput(generatePan(networks)))}
         />
       </SectionCard>
 
@@ -151,16 +155,4 @@ function generatePan(networks: { panId: number }[]): number {
   do candidate = Math.floor(Math.random() * 0xfffe) + 1;
   while (used.has(candidate));
   return candidate;
-}
-
-function formatPan(value: number): string {
-  return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
-}
-
-function parsePanInput(value: string): number {
-  const text = value.trim();
-  if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text.slice(2), 16);
-  if (/^[0-9a-f]*[a-f][0-9a-f]*$/i.test(text)) return Number.parseInt(text, 16);
-  if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10);
-  return Number.NaN;
 }

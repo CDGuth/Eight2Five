@@ -24,6 +24,7 @@ import {
 import {
   NETWORK_DROP_AUTO_EXPAND_MS,
   NetworksDevicesScreen,
+  flattenNetworkDeviceRows,
 } from "../screens/networks-devices-screen";
 import {
   NETWORK_DEVICE_DRAG_LONG_PRESS_MS,
@@ -389,12 +390,6 @@ describe("NetworksDevicesScreen", () => {
       tree.root.findAllByProps({
         testID: `device-settings-device:${device.id}`,
       }),
-    ).not.toHaveLength(0);
-    act(() => jest.advanceTimersByTime(300));
-    expect(
-      tree.root.findAllByProps({
-        testID: `device-settings-device:${device.id}`,
-      }),
     ).toHaveLength(0);
     expect(
       tree.root.findAllByProps({ testID: "network-device-child-rail" }),
@@ -402,6 +397,95 @@ describe("NetworksDevicesScreen", () => {
 
     await act(async () => tree.unmount());
     jest.useRealTimers();
+  });
+
+  test("keeps large unassigned populations in virtualized rows", async () => {
+    const discoveries = Array.from({ length: 100 }, (_, index) =>
+      discovery(`transport-${index}`),
+    );
+    const tree = await renderNetworkScreen(createRuntime({ discoveries }));
+    const list = tree.root
+      .findAllByProps({ testID: "network-device-sections" })
+      .find((node) => Array.isArray(node.props.data));
+
+    expect(list?.props.data).toHaveLength(102);
+    const mounted = tree.root.findAll(
+      (node) =>
+        typeof node.props.testID === "string" &&
+        node.props.testID.startsWith("device-settings-discovery:"),
+    );
+    expect(mounted.length).toBeGreaterThan(0);
+    expect(mounted.length).toBeLessThan(discoveries.length);
+    await act(async () => tree.unmount());
+  });
+
+  test("omits collapsed device models and virtualizes expanded network populations", async () => {
+    const network = savedNetwork();
+    const devices = Array.from({ length: 100 }, (_, index) =>
+      savedDeviceForIndex(network.id, index),
+    );
+    const tree = await renderNetworkScreen(
+      createRuntime({ networks: [network], devices }),
+    );
+    const list = tree.root
+      .findAllByProps({ testID: "network-device-sections" })
+      .find((node) => Array.isArray(node.props.data));
+
+    expect(
+      list?.props.data.filter((row: { kind: string }) => row.kind === "device"),
+    ).toHaveLength(0);
+    await expandNetworkSection(tree, network.id);
+    const expandedList = tree.root
+      .findAllByProps({ testID: "network-device-sections" })
+      .find((node) => Array.isArray(node.props.data));
+    expect(
+      expandedList?.props.data.filter(
+        (row: { kind: string }) => row.kind === "device",
+      ),
+    ).toHaveLength(devices.length);
+    const mounted = tree.root.findAll(
+      (node) =>
+        typeof node.props.testID === "string" &&
+        node.props.testID.startsWith("device-settings-device:"),
+    );
+    expect(mounted.length).toBeGreaterThan(0);
+    expect(mounted.length).toBeLessThan(devices.length);
+    await act(async () => tree.unmount());
+  });
+
+  test("flattened row models insert devices only for expanded sections", () => {
+    const network = savedNetwork();
+    const device = savedDevice(network.id);
+    const section = {
+      key: `network:${network.id}`,
+      type: "network" as const,
+      network,
+      devices: [
+        {
+          key: `device:${device.id}`,
+          id: device.id,
+          displayName: device.nickname!,
+          canonicalIdentifier: device.transportDeviceId,
+          transportDeviceId: device.transportDeviceId,
+          status: "assigned-matching" as const,
+          cachedPanId: network.panId,
+          cachedProfileMatchStatus: "matched" as const,
+          matchingNetworkIds: [network.id],
+          available: false,
+          savedDevice: device,
+        },
+      ],
+    };
+    expect(
+      flattenNetworkDeviceRows([section], new Set()).some(
+        (row) => row.kind === "device",
+      ),
+    ).toBe(false);
+    expect(
+      flattenNetworkDeviceRows([section], new Set([section.key])).filter(
+        (row) => row.kind === "device",
+      ),
+    ).toHaveLength(1);
   });
 
   test("opens, saves, and closes cached settings for a saved offline device without inspection", async () => {
@@ -1163,6 +1247,16 @@ function savedDevice(networkId: string): ManagedDevice {
     },
     createdAt: 1,
     updatedAt: 1,
+  };
+}
+
+function savedDeviceForIndex(networkId: string, index: number): ManagedDevice {
+  const base = savedDevice(networkId);
+  return {
+    ...base,
+    id: `device-${index}`,
+    transportDeviceId: `transport-${index}`,
+    nickname: `Device ${index}`,
   };
 }
 

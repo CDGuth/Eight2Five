@@ -19,6 +19,10 @@ import {
   StatePanel,
   TextField,
 } from "../components/manager-ui";
+import {
+  EXPORT_FORMAT_CHOICES,
+  type ExportFormat,
+} from "../settings-definitions";
 import { useManagedNetwork, usePansLiveNetwork } from "../manager-context";
 import { displayError } from "../manager-utils";
 import { usePositionLogActions } from "../actions/position-log-actions";
@@ -74,7 +78,7 @@ export function NetworkLogScreen() {
   const [recent, setRecent] = React.useState<PositionLogSample[]>([]);
   const [counters, setCounters] =
     React.useState<PositionLogIngestionCounters>();
-  const [exportFormat, setExportFormat] = React.useState<"csv" | "json">("csv");
+  const [exportFormat, setExportFormat] = React.useState<ExportFormat>("csv");
   const [exportText, setExportText] = React.useState("");
   const [error, setError] = React.useState<string>();
   const errorRef = React.useRef<string | undefined>(undefined);
@@ -369,18 +373,17 @@ export function NetworkLogScreen() {
               value={selectedSessionId}
               onChange={(value) => void chooseSession(value)}
               choices={sessions.map((session) => ({
-                label: `${new Date(session.startedAt).toLocaleString()} · ${session.endedAt ? "closed" : "interrupted/open"}`,
+                label: `${new Date(session.startedAt).toLocaleString()} · ${
+                  session.endedAt ? "closed" : "interrupted/open"
+                }`,
                 value: session.id,
               }))}
             />
-            <SelectField
+            <SelectField<ExportFormat>
               label="Export format"
               value={exportFormat}
-              onChange={(value) => setExportFormat(value as "csv" | "json")}
-              choices={[
-                { label: "CSV", value: "csv" },
-                { label: "JSON", value: "json" },
-              ]}
+              onChange={setExportFormat}
+              choices={EXPORT_FORMAT_CHOICES}
             />
             <ManagerButton
               label="Generate selectable export"

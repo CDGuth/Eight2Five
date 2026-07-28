@@ -5,13 +5,11 @@ import type {
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import {
-  convertMapInputText,
-  formatPanId,
   getNetworkDisplayName,
   mapUnitAbbreviation,
-  mapUnitsToMeters,
   resolveCachedProfileMatch,
 } from "@eight2five/mobile/pans-manager";
+import { AnimatedHeight } from "@eight2five/ui/components/accordion";
 import {
   Button,
   ButtonIcon,
@@ -20,9 +18,7 @@ import {
 } from "@eight2five/ui/components/button";
 import { Divider } from "@eight2five/ui/components/divider";
 import { Heading } from "@eight2five/ui/components/heading";
-import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
-import { Input, InputField } from "@eight2five/ui/components/input";
 import {
   Modal,
   ModalBackdrop,
@@ -32,31 +28,26 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
-import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
+import { VStack } from "@eight2five/ui/components/vstack";
 import {
-  eight2FiveFonts,
   eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
-import { VStack } from "@eight2five/ui/components/vstack";
-import { AnimatedHeight } from "@eight2five/ui/components/accordion";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 
-import {
-  buildDeviceConfigurationDiff,
-  deviceSettingsFormFrom,
-  mergeInspectionIntoDeviceSettingsForm,
-  shouldAutoInspectDevice,
-  validateAnchorPositionFields,
-  type DeviceSettingsFormValues,
-} from "./device-settings-form";
-import { useManagedNetworks } from "./manager-context";
 import { useDeviceConfigurationActions } from "./actions/device-configuration-actions";
+import { AnchorConfigurationSection } from "./components/device-settings/anchor-configuration-section";
+import { DestructiveActionSection } from "./components/device-settings/destructive-action-section";
+import { FirmwareDiagnosticsSection } from "./components/device-settings/firmware-diagnostics-section";
+import { IdentitySection } from "./components/device-settings/identity-section";
+import { NetworkPanSection } from "./components/device-settings/network-pan-section";
+import { TagConfigurationSection } from "./components/device-settings/tag-configuration-section";
+import { shouldAutoInspectDevice } from "./device-settings-form";
+import { useDeviceSettingsDraft } from "./hooks/use-device-settings-draft";
+import { useManagedNetworks } from "./manager-context";
 import { displayError } from "./manager-utils";
-import { SelectField } from "./components/manager-ui";
-import { SettingHelp, SettingInfoCard } from "./components/setting-help";
 
 export interface DeviceSettingsModalProps {
   device?: ManagedDevice;
@@ -83,14 +74,16 @@ export function DeviceSettingsModal({
     deleteOffline: deleteOfflineDevice,
     unassignOnline: unassignOnlineDevice,
   } = useDeviceConfigurationActions();
-  const [baseline, setBaseline] = React.useState<DeviceSettingsFormValues>();
-  const [form, setForm] = React.useState<DeviceSettingsFormValues>();
-  const [positionInputs, setPositionInputs] = React.useState<PositionInputs>({
-    x: "",
-    y: "",
-    z: "",
+  const displayNetwork = device?.networkId
+    ? networks.find((network) => network.id === device.networkId)
+    : undefined;
+  const mapUnits = displayNetwork?.settings.mapUnits ?? "metric";
+  const draft = useDeviceSettingsDraft({
+    device,
+    advertisedName: discovery?.name,
+    isOpen,
+    mapUnits,
   });
-  const inspectionAttempted = React.useRef(false);
   const [inspecting, setInspecting] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [inspectionError, setInspectionError] = React.useState<string>();
@@ -101,41 +94,30 @@ export function DeviceSettingsModal({
   const [confirmingDestructiveAction, setConfirmingDestructiveAction] =
     React.useState(false);
   const [destructiveBusy, setDestructiveBusy] = React.useState(false);
-  const loadedDeviceId = React.useRef<string | undefined>(undefined);
+  const inspectionAttempted = React.useRef(false);
+  const activeDeviceId = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
-    if (!isOpen || !device || loadedDeviceId.current === device.id) return;
-    loadedDeviceId.current = device.id;
-    const initial = deviceSettingsFormFrom(device, discovery?.name);
-    const initialUnits =
-      (device.networkId
-        ? networks.find((network) => network.id === device.networkId)?.settings
-            .mapUnits
-        : undefined) ?? "metric";
-    setBaseline(initial);
-    setForm(initial);
-    setPositionInputs(positionInputsFromForm(initial, initialUnits));
+    if (!isOpen || !device || activeDeviceId.current === device.id) return;
+    activeDeviceId.current = device.id;
     inspectionAttempted.current = false;
     setInspectionError(undefined);
     setError(undefined);
     setConfigurationResult(undefined);
     setAdvancedOpen(false);
     setConfirmingDestructiveAction(false);
-  }, [destructiveActionRequested, device, discovery?.name, isOpen, networks]);
-
+  }, [device, destructiveActionRequested, isOpen]);
   React.useEffect(() => {
-    if (!isOpen) loadedDeviceId.current = undefined;
+    if (!isOpen) activeDeviceId.current = undefined;
   }, [isOpen]);
 
   const deviceId = device?.id;
   React.useEffect(() => {
-    if (!deviceId || !isOpen || inspectionAttempted.current) return;
-    const shouldInspect = shouldAutoInspectDevice(
-      isOpen,
-      available,
-      inspectionAttempted.current,
-    );
-    if (!shouldInspect) return;
+    if (
+      !deviceId ||
+      !shouldAutoInspectDevice(isOpen, available, inspectionAttempted.current)
+    )
+      return;
     inspectionAttempted.current = true;
     let inspectionStarted = false;
     const frame = requestAnimationFrame(() => {
@@ -143,139 +125,138 @@ export function DeviceSettingsModal({
       setInspecting(true);
       setInspectionError(undefined);
       inspectDevice(deviceId)
-        .then((inspection) => {
-          if (loadedDeviceId.current !== deviceId) return;
-          setForm((current) =>
-            current
-              ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
-              : current,
-          );
-          setBaseline((current) =>
-            current
-              ? mergeInspectionIntoDeviceSettingsForm(current, inspection)
-              : current,
-          );
-        })
-        .catch((inspectError) => {
-          if (loadedDeviceId.current === deviceId)
-            setInspectionError(displayError(inspectError));
+        .then(draft.mergeInspection)
+        .catch((cause) => {
+          if (activeDeviceId.current === deviceId)
+            setInspectionError(displayError(cause));
         })
         .finally(() => {
-          if (loadedDeviceId.current === deviceId) setInspecting(false);
+          if (activeDeviceId.current === deviceId) setInspecting(false);
         });
     });
     return () => {
       cancelAnimationFrame(frame);
       if (!inspectionStarted) inspectionAttempted.current = false;
     };
-  }, [available, deviceId, inspectDevice, isOpen]);
+  }, [available, deviceId, draft.mergeInspection, inspectDevice, isOpen]);
 
-  if (!device || !form || !baseline) return null;
+  const update = draft.updateField;
+  const updatePosition = draft.updatePosition;
+  const onHardwareLabelChange = React.useCallback(
+    (value: string) => update("hardwareLabel", value),
+    [update],
+  );
+  const onRoleChange = React.useCallback(
+    (value: "anchor" | "tag") => update("role", value),
+    [update],
+  );
+  const onUwbModeChange = React.useCallback(
+    (value: "active" | "passive" | "off") => update("uwbMode", value),
+    [update],
+  );
+  const onLedChange = React.useCallback(
+    (value: boolean) => update("ledEnabled", value),
+    [update],
+  );
+  const onInitiatorChange = React.useCallback(
+    (value: boolean) => update("initiatorEnabled", value),
+    [update],
+  );
+  const onQualityChange = React.useCallback(
+    (value: string) => update("positionQuality", value),
+    [update],
+  );
+  const onLocationEngineChange = React.useCallback(
+    (value: boolean) => update("locationEngineEnabled", value),
+    [update],
+  );
+  const onLowPowerChange = React.useCallback(
+    (value: boolean) => update("lowPowerModeEnabled", value),
+    [update],
+  );
+  const onStationaryChange = React.useCallback(
+    (value: boolean) => update("stationaryDetectionEnabled", value),
+    [update],
+  );
+  const onLocationDataModeChange = React.useCallback(
+    (value: 0 | 1 | 2) => update("locationDataMode", value),
+    [update],
+  );
+  const onFirmwareSlotChange = React.useCallback(
+    (value: 1 | 2) => update("selectedFirmware", value),
+    [update],
+  );
+  const onFirmwareUpdateChange = React.useCallback(
+    (value: boolean) => update("firmwareUpdateEnabled", value),
+    [update],
+  );
+  const onPositionXChange = React.useCallback(
+    (value: string) => updatePosition("x", value),
+    [updatePosition],
+  );
+  const onPositionYChange = React.useCallback(
+    (value: string) => updatePosition("y", value),
+    [updatePosition],
+  );
+  const onPositionZChange = React.useCallback(
+    (value: string) => updatePosition("z", value),
+    [updatePosition],
+  );
 
-  const displayNetwork = device.networkId
-    ? networks.find((network) => network.id === device.networkId)
-    : undefined;
-  const mapUnits = displayNetwork?.settings.mapUnits ?? "metric";
-  const coordinateUnit = mapUnitAbbreviation(mapUnits);
-  const hardwareEditable = available && !inspecting;
-  const roleBaselineAvailable = baseline.role !== undefined;
-  const roleFieldsEditable =
-    hardwareEditable && baseline.role === form.role && form.role !== undefined;
-  const profileMatch = resolveCachedProfileMatch(networks, form.panId);
-  const destructiveConfirmationVisible =
-    confirmingDestructiveAction || destructiveActionRequested;
-  const matchingProfiles = profileMatch.matchingNetworkIds
-    .map((networkId) => networks.find((network) => network.id === networkId))
-    .filter((network) => network !== undefined);
-  const formWithDisplayPosition =
-    form.role === "anchor"
-      ? {
-          ...form,
-          positionX: positionInputToCanonical(positionInputs.x, mapUnits),
-          positionY: positionInputToCanonical(positionInputs.y, mapUnits),
-          positionZ: positionInputToCanonical(positionInputs.z, mapUnits),
-        }
-      : form;
-  const anchorPositionErrors =
-    form.role === "anchor"
-      ? validateAnchorPositionFields(formWithDisplayPosition)
-      : {};
-  const hasAnchorPositionErrors =
-    Object.values(anchorPositionErrors).some(Boolean);
+  const profile = React.useMemo(() => {
+    const match = resolveCachedProfileMatch(networks, draft.form?.panId);
+    const matches = match.matchingNetworkIds
+      .map((id) => networks.find((network) => network.id === id))
+      .filter((network) => network !== undefined);
+    return {
+      status: match.status,
+      displayName: matches[0] ? getNetworkDisplayName(matches[0]) : undefined,
+      conflictNames: matches.map(getNetworkDisplayName),
+    };
+  }, [draft.form?.panId, networks]);
 
   const save = async () => {
-    if (hasAnchorPositionErrors) {
+    if (draft.hasErrors) {
       setError("Correct the highlighted anchor position fields before saving.");
       return;
     }
+    if (!device || !draft.diff) return;
     setSaving(true);
     setError(undefined);
     setConfigurationResult(undefined);
     try {
-      const diff = buildDeviceConfigurationDiff(
-        baseline,
-        formWithDisplayPosition,
-      );
       const failures: string[] = [];
-      if (Object.keys(diff.hardwareChanges).length) {
-        if (!available) {
+      if (Object.keys(draft.diff.hardwareChanges).length) {
+        if (!available)
           failures.push(
             "Hardware changes were not applied because the device is unavailable.",
           );
-        } else {
+        else
           try {
             const result = await applyDeviceConfiguration(
               device.id,
-              diff.hardwareChanges,
+              draft.diff.hardwareChanges,
             );
             setConfigurationResult(result);
-            if (result.inspected) {
-              const mergedForm = mergeInspectionIntoDeviceSettingsForm(
-                formWithDisplayPosition,
-                result.inspected,
-              );
-              let mergedBaseline = mergeInspectionIntoDeviceSettingsForm(
-                baseline,
-                result.inspected,
-              );
-              if (
-                result.writes.some(
-                  (write) =>
-                    write.field === "position" &&
-                    write.status === "written-unverified",
-                )
-              ) {
-                mergedBaseline = {
-                  ...mergedBaseline,
-                  positionX: formWithDisplayPosition.positionX!,
-                  positionY: formWithDisplayPosition.positionY!,
-                  positionZ: formWithDisplayPosition.positionZ!,
-                  positionQuality: formWithDisplayPosition.positionQuality!,
-                };
-              }
-              setForm(mergedForm);
-              setBaseline(mergedBaseline);
-              setPositionInputs(positionInputsFromForm(mergedForm, mapUnits));
-            }
+            draft.applySaveResult(result);
             if (result.error)
               failures.push(
-                result.error?.message ?? "Hardware configuration failed.",
+                result.error.message ?? "Hardware configuration failed.",
               );
-          } catch (hardwareError) {
-            failures.push(`Hardware: ${displayError(hardwareError)}`);
+          } catch (cause) {
+            failures.push(`Hardware: ${displayError(cause)}`);
           }
-        }
       }
-
       if (failures.length) setError(failures.join("\n"));
-    } catch (saveError) {
-      setError(displayError(saveError));
+    } catch (cause) {
+      setError(displayError(cause));
     } finally {
       setSaving(false);
     }
   };
 
-  const runDestructiveAction = async () => {
+  const runDestructiveAction = React.useCallback(async () => {
+    if (!device) return;
     setDestructiveBusy(true);
     setError(undefined);
     setConfigurationResult(undefined);
@@ -292,12 +273,33 @@ export function DeviceSettingsModal({
         return;
       }
       onClose();
-    } catch (destructiveError) {
-      setError(displayError(destructiveError));
+    } catch (cause) {
+      setError(displayError(cause));
     } finally {
       setDestructiveBusy(false);
     }
-  };
+  }, [available, deleteOfflineDevice, device, onClose, unassignOnlineDevice]);
+  const requestDestructive = React.useCallback(
+    () => setConfirmingDestructiveAction(true),
+    [],
+  );
+  const confirmDestructive = React.useCallback(() => {
+    void runDestructiveAction();
+  }, [runDestructiveAction]);
+  const cancelDestructive = React.useCallback(() => {
+    if (destructiveActionRequested) onClose();
+    else setConfirmingDestructiveAction(false);
+  }, [destructiveActionRequested, onClose]);
+
+  const form = draft.form;
+  const baseline = draft.baseline;
+  if (!device || !form || !baseline) return null;
+  const hardwareEditable = available && !inspecting;
+  const roleFieldsEditable =
+    hardwareEditable && baseline.role === form.role && form.role !== undefined;
+  const unavailableFieldsText = form.unavailableHardwareFields.length
+    ? form.unavailableHardwareFields.join(", ")
+    : "None";
 
   return (
     <Modal
@@ -319,7 +321,7 @@ export function DeviceSettingsModal({
         }}
       >
         <ModalHeader>
-          <VStack style={{ gap: two }}>
+          <VStack style={{ gap: 2 }}>
             <Heading size="lg" style={{ color: theme.text }}>
               Device settings
             </Heading>
@@ -344,301 +346,72 @@ export function DeviceSettingsModal({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: eight2FiveSpacing.lg }}
         >
-          <FormSection title="Identity">
-            <TextField
-              testID="device-hardware-label-input"
-              label={cachedFieldLabel("PANS hardware label", form, "label")}
-              value={form.hardwareLabel ?? ""}
-              placeholder={
-                form.hardwareLabel === undefined ? "Unavailable" : undefined
-              }
-              onChangeText={(hardwareLabel) =>
-                setForm((current) => ({ ...current!, hardwareLabel }))
-              }
-              disabled={!hardwareEditable || form.hardwareLabel === undefined}
-            />
-            <ReadOnlyRow
-              label="Read status"
-              value={
-                form.source === "actual"
-                  ? "Read from device"
-                  : available
-                    ? "Cached · hardware read pending"
-                    : "Cached · device offline"
-              }
-            />
-            <ReadOnlyRow
-              label="Advertised name"
-              value={form.advertisedName ?? "Unavailable"}
-            />
-            <SettingHelp title="Hardware label">
-              Up to 16 UTF-8 bytes. This changes the PANS device and is cached
-              only when the device is offline.
-            </SettingHelp>
-          </FormSection>
-
-          <FormSection title="Network">
-            <ReadOnlyRow
-              label={cachedFieldLabel("PANS Network ID", form, "panId")}
-              value={
-                form.panId === undefined
-                  ? "Unavailable"
-                  : formatPanId(form.panId)
-              }
-            />
-            <ReadOnlyRow
-              label="Cached profile match"
-              value={
-                profileMatch.status === "matched"
-                  ? getNetworkDisplayName(matchingProfiles[0])
-                  : profileMatch.status === "conflict"
-                    ? "Conflict · repair duplicate PAN profiles"
-                    : profileMatch.status === "unverified"
-                      ? "Unverified"
-                      : "Unassigned"
-              }
-            />
-            {profileMatch.status === "conflict" ? (
-              <SettingInfoCard
-                tone="error"
-                testID="device-pan-profile-conflict"
-              >
-                PAN {formatPanId(profileMatch.panId!)} matches multiple saved
-                profiles:{" "}
-                {matchingProfiles.map(getNetworkDisplayName).join(", ")}. Repair
-                the profiles before assigning this device.
-              </SettingInfoCard>
-            ) : null}
-            <SettingHelp title="PANS Network ID">
-              Hardware value from 0 to 65535. PAN 0 (0x0000) is the PANS default
-              PAN ID and is used for the unassigned-device state. The app
-              derives the cached profile match from this value; a local
-              selection never overrides hardware.
-            </SettingHelp>
-          </FormSection>
-
-          <FormSection title="Node role and UWB">
-            <SelectField
-              label="Role"
-              value={form.role}
-              choices={[
-                { label: "Tag", value: "tag" },
-                { label: "Anchor", value: "anchor" },
-              ]}
-              onChange={(role) =>
-                setForm((current) => ({
-                  ...current!,
-                  role: role as "anchor" | "tag",
-                }))
-              }
-              disabled={!hardwareEditable || !roleBaselineAvailable}
-            />
-            <SelectField
-              label="UWB mode"
-              value={form.uwbMode}
-              choices={[
-                { label: "Active", value: "active" },
-                { label: "Passive", value: "passive" },
-                { label: "Off", value: "off" },
-              ]}
-              onChange={(uwbMode) =>
-                setForm((current) => ({
-                  ...current!,
-                  uwbMode: uwbMode as "active" | "passive" | "off",
-                }))
-              }
-              disabled={!hardwareEditable || form.uwbMode === undefined}
-            />
-            <OptionalSwitch
-              label="LED"
-              value={form.ledEnabled}
-              onChange={(ledEnabled) =>
-                setForm((current) => ({ ...current!, ledEnabled }))
-              }
-              disabled={!hardwareEditable}
-            />
-            <SettingHelp title="Role and UWB mode">
-              Tags calculate positions when the location engine is enabled.
-              Anchors provide fixed coordinates. Active UWB participates in
-              ranging, passive listens without initiating, and off disables UWB.
-            </SettingHelp>
-          </FormSection>
-
+          <IdentitySection
+            testID="device-hardware-label-input"
+            hardwareLabel={form.hardwareLabel}
+            advertisedName={form.advertisedName}
+            source={form.source}
+            unavailableFields={form.unavailableHardwareFields}
+            available={available}
+            editable={hardwareEditable}
+            onChangeText={onHardwareLabelChange}
+          />
+          <NetworkPanSection
+            panId={form.panId}
+            source={form.source}
+            unavailableFields={form.unavailableHardwareFields}
+            profileStatus={profile.status}
+            profileDisplayName={profile.displayName}
+            conflictingProfileNames={profile.conflictNames}
+            role={form.role}
+            uwbMode={form.uwbMode}
+            ledEnabled={form.ledEnabled}
+            hardwareEditable={hardwareEditable}
+            roleBaselineAvailable={baseline.role !== undefined}
+            onRoleChange={onRoleChange}
+            onUwbModeChange={onUwbModeChange}
+            onLedEnabledChange={onLedChange}
+          />
           {form.role === "anchor" ? (
-            <FormSection title="Anchor configuration">
-              <OptionalSwitch
-                label="Initiator"
-                value={form.initiatorEnabled}
-                onChange={(initiatorEnabled) =>
-                  setForm((current) => ({
-                    ...current!,
-                    initiatorEnabled,
-                  }))
-                }
-                disabled={!roleFieldsEditable}
-              />
-              <SettingHelp title="Initiator and coordinates">
-                A network requires an initiator anchor. X and Y are horizontal
-                coordinates from the network origin. Z is height. Display input
-                is converted to canonical meters before writing. Quality is
-                optional from 1 to 100 and defaults to 100.
-              </SettingHelp>
-              <HStack style={{ gap: eight2FiveSpacing.sm }}>
-                <TextField
-                  label={`X (${coordinateUnit})`}
-                  value={positionInputs.x}
-                  placeholder="Required"
-                  helper={`Horizontal ${coordinateUnit} from the network origin.`}
-                  error={anchorPositionErrors.positionX}
-                  onChangeText={(x) =>
-                    setPositionInputs((current) => ({ ...current, x }))
-                  }
-                  disabled={!roleFieldsEditable}
-                  compact
-                />
-                <TextField
-                  label={`Y (${coordinateUnit})`}
-                  value={positionInputs.y}
-                  placeholder="Required"
-                  helper={`Horizontal ${coordinateUnit} from the network origin.`}
-                  error={anchorPositionErrors.positionY}
-                  onChangeText={(y) =>
-                    setPositionInputs((current) => ({ ...current, y }))
-                  }
-                  disabled={!roleFieldsEditable}
-                  compact
-                />
-              </HStack>
-              <HStack style={{ gap: eight2FiveSpacing.sm }}>
-                <TextField
-                  label={`Z (${coordinateUnit})`}
-                  value={positionInputs.z}
-                  placeholder="Required"
-                  helper={`Anchor height in ${mapUnits === "imperial" ? "feet" : "meters"}.`}
-                  error={anchorPositionErrors.positionZ}
-                  onChangeText={(z) =>
-                    setPositionInputs((current) => ({ ...current, z }))
-                  }
-                  disabled={!roleFieldsEditable}
-                  compact
-                />
-                <TextField
-                  label="Quality"
-                  value={form.positionQuality ?? ""}
-                  placeholder="100"
-                  helper="Optional integer from 1 to 100; blank uses 100."
-                  error={anchorPositionErrors.positionQuality}
-                  onChangeText={(positionQuality) =>
-                    setForm((current) => ({
-                      ...current!,
-                      positionQuality,
-                    }))
-                  }
-                  disabled={!roleFieldsEditable}
-                  compact
-                />
-              </HStack>
-              <Text selectable size="sm" style={{ color: theme.warning }}>
-                Anchor position is write-only. A successful write remains
-                unverified because PANS cannot read it back.
-              </Text>
-            </FormSection>
+            <AnchorConfigurationSection
+              initiatorEnabled={form.initiatorEnabled}
+              positionX={draft.positionInputs.x}
+              positionY={draft.positionInputs.y}
+              positionZ={draft.positionInputs.z}
+              positionQuality={form.positionQuality ?? ""}
+              coordinateUnit={mapUnitAbbreviation(mapUnits)}
+              imperial={mapUnits === "imperial"}
+              editable={roleFieldsEditable}
+              errors={draft.errors}
+              onInitiatorChange={onInitiatorChange}
+              onPositionXChange={onPositionXChange}
+              onPositionYChange={onPositionYChange}
+              onPositionZChange={onPositionZChange}
+              onPositionQualityChange={onQualityChange}
+            />
           ) : null}
-
           {form.role === "tag" ? (
-            <FormSection title="Tag configuration">
-              <OptionalSwitch
-                label="Location engine"
-                value={form.locationEngineEnabled}
-                onChange={(locationEngineEnabled) =>
-                  setForm((current) => ({
-                    ...current!,
-                    locationEngineEnabled,
-                  }))
-                }
-                disabled={!roleFieldsEditable}
-              />
-              <SettingHelp title="Tag update behavior">
-                The location engine calculates the tag position. Responsive mode
-                uses moving updates; stationary detection allows the slower
-                stationary rate. Rates are milliseconds and read-only here.
-              </SettingHelp>
-              <OptionalSwitch
-                label="Responsive mode"
-                value={
-                  form.lowPowerModeEnabled === undefined
-                    ? undefined
-                    : !form.lowPowerModeEnabled
-                }
-                onChange={(responsive) =>
-                  setForm((current) => ({
-                    ...current!,
-                    lowPowerModeEnabled: !responsive,
-                  }))
-                }
-                disabled={!roleFieldsEditable}
-              />
-              <OptionalSwitch
-                label="Stationary detection"
-                value={form.stationaryDetectionEnabled}
-                onChange={(stationaryDetectionEnabled) =>
-                  setForm((current) => ({
-                    ...current!,
-                    stationaryDetectionEnabled,
-                  }))
-                }
-                disabled={!roleFieldsEditable}
-              />
-              <SelectField
-                label={cachedFieldLabel(
-                  "Location-data mode",
-                  form,
-                  "locationDataMode",
-                )}
-                value={
-                  form.locationDataMode === undefined
-                    ? undefined
-                    : String(form.locationDataMode)
-                }
-                choices={[
-                  { label: "Position", value: "0" },
-                  { label: "Distances", value: "1" },
-                  { label: "Position + distances", value: "2" },
-                ]}
-                onChange={(locationDataMode) =>
-                  setForm((current) => ({
-                    ...current!,
-                    locationDataMode: Number(locationDataMode) as 0 | 1 | 2,
-                  }))
-                }
-                disabled={
-                  !roleFieldsEditable || form.locationDataMode === undefined
-                }
-              />
-              <ReadOnlyRow
-                label={cachedFieldLabel(
-                  "Moving update rate (read-only)",
-                  form,
-                  "updateRate",
-                )}
-                value={formatRate(form.movingUpdateRateMs)}
-              />
-              <ReadOnlyRow
-                label={cachedFieldLabel(
-                  "Stationary update rate (read-only)",
-                  form,
-                  "updateRate",
-                )}
-                value={formatRate(form.stationaryUpdateRateMs)}
-              />
-            </FormSection>
+            <TagConfigurationSection
+              locationEngineEnabled={form.locationEngineEnabled}
+              lowPowerModeEnabled={form.lowPowerModeEnabled}
+              stationaryDetectionEnabled={form.stationaryDetectionEnabled}
+              locationDataMode={form.locationDataMode}
+              movingUpdateRateMs={form.movingUpdateRateMs}
+              stationaryUpdateRateMs={form.stationaryUpdateRateMs}
+              source={form.source}
+              unavailableFields={form.unavailableHardwareFields}
+              editable={roleFieldsEditable}
+              onLocationEngineChange={onLocationEngineChange}
+              onLowPowerModeChange={onLowPowerChange}
+              onStationaryDetectionChange={onStationaryChange}
+              onLocationDataModeChange={onLocationDataModeChange}
+            />
           ) : null}
-
           <Button
             testID="toggle-device-advanced"
             variant="ghost"
             className="justify-between"
-            onPress={() => setAdvancedOpen((current) => !current)}
+            onPress={() => setAdvancedOpen((value) => !value)}
           >
             <ButtonText>Firmware and diagnostics</ButtonText>
             <ButtonIcon
@@ -647,123 +420,27 @@ export function DeviceSettingsModal({
             />
           </Button>
           <AnimatedHeight isExpanded={advancedOpen} duration={200}>
-            <FormSection title="Firmware and diagnostics">
-              <SelectField
-                label="Selected firmware slot"
-                value={
-                  form.selectedFirmware === undefined
-                    ? undefined
-                    : String(form.selectedFirmware)
-                }
-                choices={[
-                  { label: "Slot 1", value: "1" },
-                  { label: "Slot 2", value: "2" },
-                ]}
-                onChange={(slot) =>
-                  setForm((current) => ({
-                    ...current!,
-                    selectedFirmware: Number(slot) as 1 | 2,
-                  }))
-                }
-                disabled={
-                  !hardwareEditable || form.selectedFirmware === undefined
-                }
-              />
-              <OptionalSwitch
-                label="Firmware update participation"
-                value={form.firmwareUpdateEnabled}
-                onChange={(firmwareUpdateEnabled) =>
-                  setForm((current) => ({
-                    ...current!,
-                    firmwareUpdateEnabled,
-                  }))
-                }
-                disabled={!hardwareEditable}
-              />
-              <SettingHelp title="Firmware slot">
-                Selects boot slot 1 or 2 on hardware. Firmware-update
-                participation controls whether this node accepts the PANS update
-                workflow.
-              </SettingHelp>
-              <ReadOnlyRow label="Transport" value="BLE" />
-              <ReadOnlyRow
-                label="Transport ID"
-                value={device.transportDeviceId}
-              />
-              <ReadOnlyRow
-                label="Node ID"
-                value={device.nodeIdHex ?? "Unavailable"}
-              />
-              <ReadOnlyRow
-                label="Unavailable reads"
-                value={
-                  form.unavailableHardwareFields.length
-                    ? form.unavailableHardwareFields.join(", ")
-                    : "None"
-                }
-              />
-            </FormSection>
+            <FirmwareDiagnosticsSection
+              selectedFirmware={form.selectedFirmware}
+              firmwareUpdateEnabled={form.firmwareUpdateEnabled}
+              hardwareEditable={hardwareEditable}
+              transportDeviceId={device.transportDeviceId}
+              nodeIdHex={device.nodeIdHex}
+              unavailableFieldsText={unavailableFieldsText}
+              onSelectedFirmwareChange={onFirmwareSlotChange}
+              onFirmwareUpdateChange={onFirmwareUpdateChange}
+            />
           </AnimatedHeight>
-
-          <FormSection title="Destructive actions">
-            <SettingInfoCard tone="warning">
-              {available
-                ? "Unassigning writes passive UWB mode, verifies it, then restores and verifies the PANS default PAN ID 0 used for unassigned devices. The saved device record is kept for retry and diagnostics."
-                : "Deleting an offline device removes its saved phone record, snapshots, and position logs without contacting hardware. Rediscovery creates a new unassigned record."}
-            </SettingInfoCard>
-            {destructiveConfirmationVisible ? (
-              <VStack style={{ gap: eight2FiveSpacing.sm }}>
-                <Text
-                  selectable
-                  accessibilityRole="alert"
-                  style={{ color: theme.danger }}
-                >
-                  {available
-                    ? "Confirm hardware unassignment? UWB will be made passive before the PANS default PAN ID 0 is written."
-                    : "Confirm deletion of this saved phone record? This cannot be undone."}
-                </Text>
-                <HStack
-                  className="flex-wrap"
-                  style={{ gap: eight2FiveSpacing.sm }}
-                >
-                  <Button
-                    testID="confirm-device-destructive-action"
-                    variant="destructive"
-                    isDisabled={destructiveBusy}
-                    onPress={() => void runDestructiveAction()}
-                  >
-                    {destructiveBusy ? (
-                      <ButtonSpinner color={theme.raw.white} />
-                    ) : null}
-                    <ButtonText>
-                      {available ? "Unassign hardware" : "Delete saved device"}
-                    </ButtonText>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    isDisabled={destructiveBusy}
-                    onPress={() => {
-                      if (destructiveActionRequested) onClose();
-                      else setConfirmingDestructiveAction(false);
-                    }}
-                  >
-                    <ButtonText>Cancel</ButtonText>
-                  </Button>
-                </HStack>
-              </VStack>
-            ) : (
-              <Button
-                testID="request-device-destructive-action"
-                variant="destructive"
-                onPress={() => setConfirmingDestructiveAction(true)}
-              >
-                <ButtonText>
-                  {available ? "Unassign device" : "Delete saved device"}
-                </ButtonText>
-              </Button>
-            )}
-          </FormSection>
-
+          <DestructiveActionSection
+            available={available}
+            confirmationVisible={
+              confirmingDestructiveAction || destructiveActionRequested
+            }
+            busy={destructiveBusy}
+            onRequest={requestDestructive}
+            onConfirm={confirmDestructive}
+            onCancel={cancelDestructive}
+          />
           {inspectionError ? (
             <ResultText
               tone="warning"
@@ -771,16 +448,12 @@ export function DeviceSettingsModal({
             />
           ) : null}
           {configurationResult ? (
-            <VStack testID="device-configuration-results" style={{ gap: four }}>
+            <VStack testID="device-configuration-results" style={{ gap: 4 }}>
               {configurationResult.writes.map((write) => (
                 <ResultText
                   key={write.field}
                   tone={write.warning ? "warning" : "muted"}
-                  message={`${write.field}: ${write.status}${
-                    write.actual === undefined
-                      ? ""
-                      : ` · readback ${String(write.actual)}`
-                  }${write.warning ? ` — ${write.warning}` : ""}`}
+                  message={`${write.field}: ${write.status}${write.actual === undefined ? "" : ` · readback ${String(write.actual)}`}${write.warning ? ` — ${write.warning}` : ""}`}
                 />
               ))}
             </VStack>
@@ -794,7 +467,7 @@ export function DeviceSettingsModal({
           </Button>
           <Button
             testID="save-device-settings"
-            isDisabled={saving || hasAnchorPositionErrors}
+            isDisabled={saving || draft.hasErrors}
             onPress={() => void save()}
           >
             {saving ? <ButtonSpinner color={theme.raw.white} /> : null}
@@ -803,135 +476,6 @@ export function DeviceSettingsModal({
         </ModalFooter>
       </ModalContent>
     </Modal>
-  );
-}
-
-function FormSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <VStack style={{ gap: eight2FiveSpacing.md }}>
-      <Heading size="md" style={{ color: theme.text }}>
-        {title}
-      </Heading>
-      {children}
-    </VStack>
-  );
-}
-
-function TextField({
-  label,
-  compact,
-  disabled,
-  helper,
-  error,
-  ...props
-}: Omit<React.ComponentProps<typeof InputField>, "disabled"> & {
-  label: string;
-  compact?: boolean;
-  disabled?: boolean;
-  helper?: string;
-  error?: string;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <VStack className={compact ? "flex-1" : undefined} style={{ gap: four }}>
-      <FieldLabel>{label}</FieldLabel>
-      <Input
-        style={fieldStyle(theme)}
-        isDisabled={disabled}
-        isInvalid={Boolean(error)}
-      >
-        <InputField
-          {...props}
-          editable={!disabled && props.editable !== false}
-          style={[{ color: theme.text }, props.style]}
-        />
-      </Input>
-      {error ? (
-        <Text
-          selectable
-          size="sm"
-          accessibilityRole="alert"
-          style={{ color: theme.danger }}
-        >
-          {error}
-        </Text>
-      ) : helper ? (
-        <Text selectable size="sm" style={{ color: theme.textMuted }}>
-          {helper}
-        </Text>
-      ) : null}
-    </VStack>
-  );
-}
-
-function OptionalSwitch({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value?: boolean;
-  onChange(value: boolean): void;
-  disabled?: boolean;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <HStack
-      className="min-h-11 items-center justify-between"
-      style={{ gap: 16 }}
-    >
-      <FieldLabel>{label}</FieldLabel>
-      {value === undefined ? (
-        <Text selectable size="sm" style={{ color: theme.textMuted }}>
-          Unavailable
-        </Text>
-      ) : (
-        <Switch
-          value={value}
-          disabled={disabled}
-          onValueChange={onChange}
-          trackColor={{ false: theme.surfaceStrong, true: theme.accent }}
-        />
-      )}
-    </HStack>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  const theme = useEight2FiveTheme();
-  return (
-    <Text
-      style={{ color: theme.text, fontFamily: eight2FiveFonts.styleSemibold }}
-    >
-      {children}
-    </Text>
-  );
-}
-
-function ReadOnlyRow({ label, value }: { label: string; value: string }) {
-  const theme = useEight2FiveTheme();
-  return (
-    <HStack className="items-start justify-between" style={{ gap: 16 }}>
-      <Text size="sm" style={{ color: theme.textMuted }}>
-        {label}
-      </Text>
-      <Text
-        selectable
-        size="sm"
-        className="shrink text-right"
-        style={{ color: theme.text }}
-      >
-        {value}
-      </Text>
-    </HStack>
   );
 }
 
@@ -960,59 +504,3 @@ function ResultText({
     </Text>
   );
 }
-
-interface PositionInputs {
-  x: string;
-  y: string;
-  z: string;
-}
-
-function positionInputsFromForm(
-  form: DeviceSettingsFormValues,
-  units: "metric" | "imperial",
-): PositionInputs {
-  return {
-    x: convertMapInputText(form.positionX ?? "", "metric", units, 9),
-    y: convertMapInputText(form.positionY ?? "", "metric", units, 9),
-    z: convertMapInputText(form.positionZ ?? "", "metric", units, 9),
-  };
-}
-
-function positionInputToCanonical(
-  value: string,
-  units: "metric" | "imperial",
-): string {
-  const text = value.trim();
-  if (!text) return "";
-  const parsed = Number(text);
-  return Number.isFinite(parsed)
-    ? String(mapUnitsToMeters(parsed, units))
-    : value;
-}
-
-function formatRate(value: number | undefined): string {
-  return value === undefined ? "Unavailable" : `${value} ms`;
-}
-
-function cachedFieldLabel(
-  label: string,
-  form: DeviceSettingsFormValues,
-  field: string,
-): string {
-  return form.source === "actual" &&
-    form.unavailableHardwareFields.includes(field)
-    ? `${label} (cached; read unavailable)`
-    : label;
-}
-
-function fieldStyle(theme: ReturnType<typeof useEight2FiveTheme>) {
-  return {
-    minHeight: 44,
-    borderColor: theme.border,
-    borderRadius: eight2FiveRadii.sm,
-    backgroundColor: theme.surface,
-  };
-}
-
-const two = 2;
-const four = 4;

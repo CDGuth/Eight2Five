@@ -5,6 +5,12 @@ import type {
   ManagedDeviceConfig,
   PansInspectionResult,
 } from "@eight2five/mobile/pans-manager";
+import {
+  anchorCoordinateError,
+  anchorQualityError,
+  parseAnchorCoordinate,
+  parseAnchorQuality,
+} from "./settings-definitions";
 
 export interface DeviceSettingsFormValues {
   advertisedName?: string;
@@ -160,18 +166,12 @@ export function validateAnchorPositionFields(
 
   for (const [field, value] of coordinates) {
     const text = value?.trim() ?? "";
-    if (text === "") errors[field] = "Required when writing a position.";
-    else if (!Number.isFinite(Number(text)))
-      errors[field] = "Enter a finite coordinate.";
+    const error = anchorCoordinateError(text);
+    if (error) errors[field] = error;
   }
 
-  if (qualityText !== "") {
-    const quality = Number(qualityText);
-    if (!Number.isInteger(quality) || quality < 1 || quality > 100) {
-      errors.positionQuality =
-        "Enter an integer from 1 to 100, or leave blank for 100.";
-    }
-  }
+  const qualityError = anchorQualityError(qualityText);
+  if (qualityError) errors.positionQuality = qualityError;
 
   return errors;
 }
@@ -298,10 +298,10 @@ function parseChangedPosition(
   if (firstError) throw new Error(firstError);
 
   const position = {
-    xMeters: Number(currentCoordinateText[0]),
-    yMeters: Number(currentCoordinateText[1]),
-    zMeters: Number(currentCoordinateText[2]),
-    quality: currentQualityText === "" ? 100 : Number(currentQualityText),
+    xMeters: parseAnchorCoordinate(currentCoordinateText[0])!,
+    yMeters: parseAnchorCoordinate(currentCoordinateText[1])!,
+    zMeters: parseAnchorCoordinate(currentCoordinateText[2])!,
+    quality: parseAnchorQuality(currentQualityText)!,
   };
   const baselinePosition = parseComparablePosition(baseline);
   if (baselinePosition && valuesEqual(position, baselinePosition))

@@ -33,7 +33,6 @@ import {
   formatMapDistance,
   getDeviceDisplayName,
   getNetworkDisplayName,
-  mapUnitsToMeters,
   mapUnitAbbreviation,
   type GridBounds,
   type MapUnits,
@@ -45,6 +44,14 @@ import type {
 } from "../manager-map-controller";
 import { SelectField } from "./manager-ui";
 import { SettingHelp } from "./setting-help";
+import {
+  MAP_AREA_MODE_CHOICES,
+  MAP_UNIT_CHOICES,
+  anchorCoordinateError,
+  anchorQualityError,
+  parseAnchorCoordinate,
+  parseAnchorQuality,
+} from "../settings-definitions";
 
 const NETWORK_OVERLAY_NOTE =
   "Multiple networks are overlaid using their saved coordinates. The app does not automatically align independent coordinate systems.";
@@ -59,9 +66,6 @@ export function ManagerMapSettingsModal({
   onClose(): void;
 }) {
   const theme = useEight2FiveTheme();
-  const pending = controller.pendingAnchorEdit;
-  const gridIntervalChoices = getGridIntervalChoices(controller.mapUnits);
-
   const trackingActive =
     controller.trackingStatus === "running" ||
     controller.trackingStatus === "starting" ||
@@ -99,384 +103,550 @@ export function ManagerMapSettingsModal({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: eight2FiveSpacing.lg }}
         >
-          <SettingsSection title="Display">
-            <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
-              <MapButton
-                label="Select all"
-                testID="map-networks-select-all"
-                onPress={controller.selectAllNetworks}
-              />
-              <MapButton
-                label="Clear all"
-                variant="outline"
-                testID="map-networks-clear-all"
-                onPress={controller.clearAllNetworks}
-              />
-            </HStack>
-            {controller.networks.map((network) => (
-              <Checkbox
-                key={network.id}
-                testID={`map-network-${network.id}`}
-                value={network.id}
-                isChecked={controller.selectedNetworkIds.has(network.id)}
-                onChange={(checked) =>
-                  controller.setNetworkVisible(network.id, checked)
-                }
-              >
-                <CheckboxIndicator
-                  style={{
-                    borderColor: theme.border,
-                    backgroundColor: controller.selectedNetworkIds.has(
-                      network.id,
-                    )
-                      ? theme.accent
-                      : theme.surfaceRaised,
-                  }}
-                >
-                  <CheckboxIcon as={Check} style={{ color: theme.raw.white }} />
-                </CheckboxIndicator>
-                <CheckboxLabel style={{ color: theme.text }}>
-                  {getNetworkDisplayName(network)}
-                </CheckboxLabel>
-              </Checkbox>
-            ))}
-            <SettingHelp title="Network overlays">
-              {NETWORK_OVERLAY_NOTE}
-            </SettingHelp>
-            <VisibilitySwitch
-              label="Anchors"
-              option="anchors"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="Tags"
-              option="tags"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="Initiators"
-              option="initiators"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="Offline"
-              option="offline"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="Labels"
-              option="labels"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="PAN mismatch indicators"
-              option="panMismatchIndicators"
-              controller={controller}
-            />
-            <VisibilitySwitch
-              label="Ranging lines"
-              option="rangingLines"
-              controller={controller}
-            />
-            <SwitchRow
-              label="Grid"
-              value={controller.grid.showGrid}
-              onChange={(showGrid) => controller.setGrid({ showGrid })}
-            />
-            <SwitchRow
-              label="Origin and axes"
-              value={controller.grid.showOrigin}
-              onChange={(showOrigin) => controller.setGrid({ showOrigin })}
-            />
-          </SettingsSection>
-
-          <SettingsSection title="Units and coordinate system">
-            <SelectField
-              testID="map-units-select"
-              label="Display units"
-              value={controller.mapUnits}
-              choices={[
-                { label: "Metric (meters)", value: "metric" },
-                { label: "Imperial (feet)", value: "imperial" },
-              ]}
-              onChange={(value) =>
-                void controller.setMapUnits(value as "metric" | "imperial")
-              }
-              helper="Coordinates remain stored in meters and are converted only for display and input."
-            />
-            <SelectField
-              testID="map-area-mode-select"
-              label="Map area"
-              value={controller.mapAreaMode}
-              choices={[
-                { label: "Infinite canvas", value: "infinite" },
-                { label: "Bounded area", value: "bounded" },
-              ]}
-              onChange={(value) =>
-                void controller.setMapAreaMode(value as "infinite" | "bounded")
-              }
-              helper="The setting is applied to every currently selected network."
-            />
-            <SelectField
-              testID="map-grid-interval-select"
-              label="Grid interval"
-              value={String(controller.grid.fixedIntervalMeters ?? "automatic")}
-              placeholder="Automatic"
-              choices={gridIntervalChoices}
-              onChange={(value) =>
-                controller.setGrid({
-                  fixedIntervalMeters:
-                    value === "automatic" ? undefined : Number(value),
-                })
-              }
-            />
-            <SettingHelp title="Map coordinates">
-              PANS coordinates and saved bounds are stored in meters relative to
-              each network origin. Independent network coordinate systems are
-              overlaid without automatic alignment.
-            </SettingHelp>
-          </SettingsSection>
-
-          <SettingsSection title="Area and bounds">
-            {controller.selectedAreaBounds.length ? (
-              controller.selectedAreaBounds.map((bounds, index) => (
-                <KeyValue
-                  key={`${bounds.minXMeters}:${bounds.maxXMeters}:${bounds.minYMeters}:${bounds.maxYMeters}:${index}`}
-                  label={`Bounded area ${index + 1}`}
-                  value={formatBounds(bounds, controller.mapUnits)}
-                />
-              ))
-            ) : (
-              <Text selectable size="sm" style={{ color: theme.textMuted }}>
-                No selected network is currently using bounded-area mode.
-              </Text>
-            )}
-            <SettingHelp title="Map bounds">
-              Each network profile stores minimum and maximum X and Y values in
-              meters. Bounded mode draws the rectangle and constrains camera
-              navigation; device data outside the rectangle is not discarded.
-            </SettingHelp>
-          </SettingsSection>
-
-          <SettingsSection title="Camera">
-            <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
-              <MapButton
-                label="Fit visible"
-                testID="map-fit-visible"
-                onPress={controller.fitVisible}
-              />
-              <MapButton
-                label="Fit anchors"
-                variant="outline"
-                testID="map-fit-anchors"
-                onPress={controller.fitAnchors}
-              />
-              <MapButton
-                label="Reset camera"
-                variant="outline"
-                testID="map-reset-camera"
-                onPress={controller.resetCamera}
-              />
-            </HStack>
-          </SettingsSection>
-
-          <SettingsSection title="Tracking">
-            <KeyValue
-              label="Active source"
-              value={
-                controller.trackingSource === "direct-ble"
-                  ? "Direct BLE"
-                  : "None"
-              }
-            />
-            <KeyValue label="Status" value={controller.trackingStatus} />
-            <SelectField
-              testID="map-direct-tag-select"
-              label="Direct BLE tag"
-              value={controller.selectedDirectTagId}
-              placeholder="Select one saved tag"
-              disabled={trackingActive}
-              choices={controller.trackableTags.map((device) => ({
-                label: getDeviceDisplayName(device),
-                value: device.id,
-              }))}
-              onChange={controller.setSelectedDirectTagId}
-            />
-            <Text selectable size="sm" style={{ color: theme.textMuted }}>
-              {controller.proxyMessage}
-            </Text>
-            <SwitchRow
-              label="Follow active tag"
-              value={controller.follow}
-              onChange={controller.setFollow}
-            />
-            <SwitchRow
-              label="Retain last-known positions"
-              value={controller.retainLastKnown}
-              onChange={controller.setRetainLastKnown}
-            />
-            <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
-              {trackingActive ? (
-                <MapButton
-                  label="Stop tracking"
-                  variant="outline"
-                  testID="map-stop-tracking"
-                  onPress={() => void controller.stopTracking()}
-                />
-              ) : (
-                <MapButton
-                  label="Start direct tracking"
-                  testID="map-start-tracking"
-                  isDisabled={
-                    !controller.selectedDirectTagId || controller.editingEnabled
-                  }
-                  onPress={() => void controller.startDirectTracking()}
-                />
-              )}
-              <MapButton
-                label="Clear last-known"
-                variant="outline"
-                testID="map-clear-last-known"
-                onPress={controller.clearLastKnown}
-              />
-            </HStack>
-            {controller.trackingDiagnostic ? (
-              <Text selectable size="sm" style={{ color: theme.warning }}>
-                {controller.trackingDiagnostic}
-              </Text>
-            ) : null}
-          </SettingsSection>
-
+          <VisibilitySettingsSection
+            networks={controller.networks}
+            selectedNetworkIds={controller.selectedNetworkIds}
+            visibility={controller.visibility}
+            grid={controller.grid}
+            selectAllNetworks={controller.selectAllNetworks}
+            clearAllNetworks={controller.clearAllNetworks}
+            setNetworkVisible={controller.setNetworkVisible}
+            setVisibility={controller.setVisibility}
+            setGrid={controller.setGrid}
+          />
+          <UnitsCoordinateSettingsSection
+            mapUnits={controller.mapUnits}
+            mapAreaMode={controller.mapAreaMode}
+            grid={controller.grid}
+            selectedAreaBounds={controller.selectedAreaBounds}
+            setMapUnits={controller.setMapUnits}
+            setMapAreaMode={controller.setMapAreaMode}
+            setGrid={controller.setGrid}
+          />
+          <CameraSettingsSection
+            fitVisible={controller.fitVisible}
+            fitAnchors={controller.fitAnchors}
+            resetCamera={controller.resetCamera}
+          />
+          <TrackingSettingsSection
+            trackingSource={controller.trackingSource}
+            trackingStatus={controller.trackingStatus}
+            selectedDirectTagId={controller.selectedDirectTagId}
+            trackableTags={controller.trackableTags}
+            proxyMessage={controller.proxyMessage}
+            follow={controller.follow}
+            retainLastKnown={controller.retainLastKnown}
+            editingEnabled={controller.editingEnabled}
+            trackingDiagnostic={controller.trackingDiagnostic}
+            setSelectedDirectTagId={controller.setSelectedDirectTagId}
+            setFollow={controller.setFollow}
+            setRetainLastKnown={controller.setRetainLastKnown}
+            startDirectTracking={controller.startDirectTracking}
+            stopTracking={controller.stopTracking}
+            clearLastKnown={controller.clearLastKnown}
+          />
           {controller.trackingCounters ? (
-            <SettingsSection title="Live pipeline">
-              <KeyValue
-                label="Native notifications"
-                value={String(controller.trackingCounters.notificationEvents)}
-              />
-              <KeyValue
-                label="Matching device"
-                value={String(
-                  controller.trackingCounters.matchingDeviceNotifications,
-                )}
-              />
-              <KeyValue
-                label="Decoded frames"
-                value={String(controller.trackingCounters.decodedFrames)}
-              />
-              <KeyValue
-                label="Position frames"
-                value={String(controller.trackingCounters.positionFrames)}
-              />
-              <KeyValue
-                label="Map position updates"
-                value={String(controller.trackingCounters.mapPositionUpdates)}
-              />
-              <KeyValue
-                label="Decode failures"
-                value={String(controller.trackingCounters.decodeFailures)}
-              />
-              <KeyValue
-                label="Native sequence discontinuities"
-                value={String(
-                  controller.trackingCounters.nativeSequenceDiscontinuities,
-                )}
-              />
-              {controller.trackingCounters.negotiatedMtu !== undefined ? (
-                <KeyValue
-                  label="Negotiated MTU"
-                  value={String(controller.trackingCounters.negotiatedMtu)}
-                />
-              ) : null}
-              <SettingHelp title="Pipeline counters">
-                Counters separate native callbacks, device-ID filtering,
-                decoding, position-bearing frames, and SharedValue map updates.
-                A sequence discontinuity is diagnostic evidence, not proof of a
-                dropped frame, because the native sequence is process-wide.
-              </SettingHelp>
-            </SettingsSection>
+            <LiveDiagnosticsSettingsSection
+              counters={controller.trackingCounters}
+            />
           ) : null}
-
-          <SettingsSection title="Anchor editing">
-            <SwitchRow
-              label="Edit anchor position"
-              value={controller.editingEnabled}
-              disabled={trackingActive}
-              onChange={controller.setEditingEnabled}
+          {controller.editableAnchors.length ||
+          controller.editingEnabled ||
+          controller.pendingAnchorEdit ? (
+            <AnchorEditingSettingsSection
+              trackingActive={trackingActive}
+              editingEnabled={controller.editingEnabled}
+              selectedAnchorId={controller.selectedAnchorId}
+              editableAnchors={controller.editableAnchors}
+              pending={controller.pendingAnchorEdit}
+              editResult={controller.editResult}
+              mapUnits={controller.mapUnits}
+              setEditingEnabled={controller.setEditingEnabled}
+              setSelectedAnchorId={controller.setSelectedAnchorId}
+              savePendingAnchorEdit={controller.savePendingAnchorEdit}
+              cancelPendingAnchorEdit={controller.cancelPendingAnchorEdit}
+              onClose={onClose}
             />
-            <SelectField
-              testID="map-edit-anchor-select"
-              label="Saved anchor"
-              value={controller.selectedAnchorId ?? ""}
-              placeholder="Select an anchor"
-              disabled={trackingActive || !controller.editingEnabled}
-              choices={controller.editableAnchors.map((device) => ({
-                label: getDeviceDisplayName(device),
-                value: device.id,
-              }))}
-              onChange={controller.setSelectedAnchorId}
-            />
-            <MapButton
-              label="Close and place anchor"
-              variant="outline"
-              testID="map-place-anchor"
-              isDisabled={
-                trackingActive ||
-                !controller.editingEnabled ||
-                !controller.selectedAnchorId
-              }
-              onPress={onClose}
-            />
-            {pending ? (
-              <AnchorEditConfirmation
-                key={`${pending.anchorId}:${pending.coordinate.xMeters}:${pending.coordinate.yMeters}:${controller.mapUnits}`}
-                controller={controller}
-                pending={pending}
-                trackingActive={trackingActive}
-              />
-            ) : null}
-            {controller.editResult ? (
-              <Text selectable size="sm" style={{ color: theme.textMuted }}>
-                {controller.editResult}
-              </Text>
-            ) : null}
-          </SettingsSection>
+          ) : null}
         </ModalBody>
       </ModalContent>
     </Modal>
   );
 }
 
+export const VisibilitySettingsSection = React.memo(
+  function VisibilitySettingsSection({
+    networks,
+    selectedNetworkIds,
+    visibility,
+    grid,
+    selectAllNetworks,
+    clearAllNetworks,
+    setNetworkVisible,
+    setVisibility,
+    setGrid,
+  }: Pick<
+    PansMapDataController,
+    | "networks"
+    | "selectedNetworkIds"
+    | "visibility"
+    | "grid"
+    | "selectAllNetworks"
+    | "clearAllNetworks"
+    | "setNetworkVisible"
+    | "setVisibility"
+    | "setGrid"
+  >) {
+    const theme = useEight2FiveTheme();
+    const options: readonly [string, keyof PansMapVisibilityOptions][] = [
+      ["Anchors", "anchors"],
+      ["Tags", "tags"],
+      ["Initiators", "initiators"],
+      ["Offline", "offline"],
+      ["Labels", "labels"],
+      ["PAN mismatch indicators", "panMismatchIndicators"],
+      ["Ranging lines", "rangingLines"],
+    ];
+    return (
+      <SettingsSection title="Display">
+        <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
+          <MapButton
+            label="Select all"
+            testID="map-networks-select-all"
+            onPress={selectAllNetworks}
+          />
+          <MapButton
+            label="Clear all"
+            variant="outline"
+            testID="map-networks-clear-all"
+            onPress={clearAllNetworks}
+          />
+        </HStack>
+        {networks.map((network) => (
+          <Checkbox
+            key={network.id}
+            testID={`map-network-${network.id}`}
+            value={network.id}
+            isChecked={selectedNetworkIds.has(network.id)}
+            onChange={(checked) => setNetworkVisible(network.id, checked)}
+          >
+            <CheckboxIndicator
+              style={{
+                borderColor: theme.border,
+                backgroundColor: selectedNetworkIds.has(network.id)
+                  ? theme.accent
+                  : theme.surfaceRaised,
+              }}
+            >
+              <CheckboxIcon as={Check} style={{ color: theme.raw.white }} />
+            </CheckboxIndicator>
+            <CheckboxLabel style={{ color: theme.text }}>
+              {getNetworkDisplayName(network)}
+            </CheckboxLabel>
+          </Checkbox>
+        ))}
+        <SettingHelp title="Network overlays">
+          {NETWORK_OVERLAY_NOTE}
+        </SettingHelp>
+        {options.map(([label, option]) => (
+          <SwitchRow
+            key={option}
+            label={label}
+            value={visibility[option]}
+            onChange={(value) => setVisibility(option, value)}
+          />
+        ))}
+        <SwitchRow
+          label="Grid"
+          value={grid.showGrid}
+          onChange={(showGrid) => setGrid({ showGrid })}
+        />
+        <SwitchRow
+          label="Origin and axes"
+          value={grid.showOrigin}
+          onChange={(showOrigin) => setGrid({ showOrigin })}
+        />
+      </SettingsSection>
+    );
+  },
+);
+
+export const UnitsCoordinateSettingsSection = React.memo(
+  function UnitsCoordinateSettingsSection({
+    mapUnits,
+    mapAreaMode,
+    grid,
+    selectedAreaBounds,
+    setMapUnits,
+    setMapAreaMode,
+    setGrid,
+  }: Pick<
+    PansMapDataController,
+    | "mapUnits"
+    | "mapAreaMode"
+    | "grid"
+    | "selectedAreaBounds"
+    | "setMapUnits"
+    | "setMapAreaMode"
+    | "setGrid"
+  >) {
+    const theme = useEight2FiveTheme();
+    const gridIntervalChoices = getGridIntervalChoices(mapUnits);
+    return (
+      <>
+        <SettingsSection title="Units and coordinate system">
+          <SelectField
+            testID="map-units-select"
+            label="Display units"
+            value={mapUnits}
+            choices={MAP_UNIT_CHOICES}
+            onChange={setMapUnits}
+            helper="Coordinates remain stored in meters and are converted only for display and input."
+          />
+          <SelectField
+            testID="map-area-mode-select"
+            label="Map area"
+            value={mapAreaMode}
+            choices={MAP_AREA_MODE_CHOICES}
+            onChange={setMapAreaMode}
+            helper="The setting is applied to every currently selected network."
+          />
+          <SelectField
+            testID="map-grid-interval-select"
+            label="Grid interval"
+            value={String(grid.fixedIntervalMeters ?? "automatic")}
+            placeholder="Automatic"
+            choices={gridIntervalChoices}
+            onChange={(value) =>
+              setGrid({
+                fixedIntervalMeters:
+                  value === "automatic" ? undefined : Number(value),
+              })
+            }
+          />
+          <SettingHelp title="Map coordinates">
+            PANS coordinates and saved bounds are stored in meters relative to
+            each network origin. Independent network coordinate systems are
+            overlaid without automatic alignment.
+          </SettingHelp>
+        </SettingsSection>
+        <SettingsSection title="Area and bounds">
+          {selectedAreaBounds.length ? (
+            selectedAreaBounds.map((bounds, index) => (
+              <KeyValue
+                key={`${bounds.minXMeters}:${bounds.maxXMeters}:${bounds.minYMeters}:${bounds.maxYMeters}:${index}`}
+                label={`Bounded area ${index + 1}`}
+                value={formatBounds(bounds, mapUnits)}
+              />
+            ))
+          ) : (
+            <Text selectable size="sm" style={{ color: theme.textMuted }}>
+              No selected network is currently using bounded-area mode.
+            </Text>
+          )}
+          <SettingHelp title="Map bounds">
+            Each network profile stores minimum and maximum X and Y values in
+            meters. Bounded mode draws the rectangle and constrains camera
+            navigation; device data outside the rectangle is not discarded.
+          </SettingHelp>
+        </SettingsSection>
+      </>
+    );
+  },
+);
+
+export const CameraSettingsSection = React.memo(function CameraSettingsSection({
+  fitVisible,
+  fitAnchors,
+  resetCamera,
+}: Pick<PansMapDataController, "fitVisible" | "fitAnchors" | "resetCamera">) {
+  return (
+    <SettingsSection title="Camera">
+      <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
+        <MapButton
+          label="Fit visible"
+          testID="map-fit-visible"
+          onPress={fitVisible}
+        />
+        <MapButton
+          label="Fit anchors"
+          variant="outline"
+          testID="map-fit-anchors"
+          onPress={fitAnchors}
+        />
+        <MapButton
+          label="Reset camera"
+          variant="outline"
+          testID="map-reset-camera"
+          onPress={resetCamera}
+        />
+      </HStack>
+    </SettingsSection>
+  );
+});
+
+export const TrackingSettingsSection = React.memo(
+  function TrackingSettingsSection({
+    trackingSource,
+    trackingStatus,
+    selectedDirectTagId,
+    trackableTags,
+    proxyMessage,
+    follow,
+    retainLastKnown,
+    editingEnabled,
+    trackingDiagnostic,
+    setSelectedDirectTagId,
+    setFollow,
+    setRetainLastKnown,
+    startDirectTracking,
+    stopTracking,
+    clearLastKnown,
+  }: Pick<
+    PansMapDataController,
+    | "trackingSource"
+    | "trackingStatus"
+    | "selectedDirectTagId"
+    | "trackableTags"
+    | "proxyMessage"
+    | "follow"
+    | "retainLastKnown"
+    | "editingEnabled"
+    | "trackingDiagnostic"
+    | "setSelectedDirectTagId"
+    | "setFollow"
+    | "setRetainLastKnown"
+    | "startDirectTracking"
+    | "stopTracking"
+    | "clearLastKnown"
+  >) {
+    const theme = useEight2FiveTheme();
+    const active =
+      trackingStatus === "running" ||
+      trackingStatus === "starting" ||
+      trackingStatus === "stopping";
+    return (
+      <SettingsSection title="Tracking">
+        <KeyValue
+          label="Active source"
+          value={trackingSource === "direct-ble" ? "Direct BLE" : "None"}
+        />
+        <KeyValue label="Status" value={trackingStatus} />
+        <SelectField
+          testID="map-direct-tag-select"
+          label="Direct BLE tag"
+          value={selectedDirectTagId}
+          placeholder="Select one saved tag"
+          disabled={active}
+          choices={trackableTags.map((device) => ({
+            label: getDeviceDisplayName(device),
+            value: device.id,
+          }))}
+          onChange={setSelectedDirectTagId}
+        />
+        <Text selectable size="sm" style={{ color: theme.textMuted }}>
+          {proxyMessage}
+        </Text>
+        <SwitchRow
+          label="Follow active tag"
+          value={follow}
+          onChange={setFollow}
+        />
+        <SwitchRow
+          label="Retain last-known positions"
+          value={retainLastKnown}
+          onChange={setRetainLastKnown}
+        />
+        <HStack className="flex-wrap" style={{ gap: eight2FiveSpacing.sm }}>
+          {active ? (
+            <MapButton
+              label="Stop tracking"
+              variant="outline"
+              testID="map-stop-tracking"
+              onPress={stopTracking}
+            />
+          ) : (
+            <MapButton
+              label="Start direct tracking"
+              testID="map-start-tracking"
+              isDisabled={!selectedDirectTagId || editingEnabled}
+              onPress={startDirectTracking}
+            />
+          )}
+          <MapButton
+            label="Clear last-known"
+            variant="outline"
+            testID="map-clear-last-known"
+            onPress={clearLastKnown}
+          />
+        </HStack>
+        {trackingDiagnostic ? (
+          <Text selectable size="sm" style={{ color: theme.warning }}>
+            {trackingDiagnostic}
+          </Text>
+        ) : null}
+      </SettingsSection>
+    );
+  },
+);
+
+export const LiveDiagnosticsSettingsSection = React.memo(
+  function LiveDiagnosticsSettingsSection({
+    counters,
+  }: {
+    counters: NonNullable<PansMapDataController["trackingCounters"]>;
+  }) {
+    return (
+      <SettingsSection title="Live pipeline">
+        <KeyValue
+          label="Native notifications"
+          value={String(counters.notificationEvents)}
+        />
+        <KeyValue
+          label="Matching device"
+          value={String(counters.matchingDeviceNotifications)}
+        />
+        <KeyValue
+          label="Decoded frames"
+          value={String(counters.decodedFrames)}
+        />
+        <KeyValue
+          label="Position frames"
+          value={String(counters.positionFrames)}
+        />
+        <KeyValue
+          label="Map position updates"
+          value={String(counters.mapPositionUpdates)}
+        />
+        <KeyValue
+          label="Decode failures"
+          value={String(counters.decodeFailures)}
+        />
+        <KeyValue
+          label="Native sequence discontinuities"
+          value={String(counters.nativeSequenceDiscontinuities)}
+        />
+        {counters.negotiatedMtu !== undefined ? (
+          <KeyValue
+            label="Negotiated MTU"
+            value={String(counters.negotiatedMtu)}
+          />
+        ) : null}
+        <SettingHelp title="Pipeline counters">
+          Counters separate native callbacks, device-ID filtering, decoding,
+          position-bearing frames, and SharedValue map updates. A sequence
+          discontinuity is diagnostic evidence, not proof of a dropped frame,
+          because the native sequence is process-wide.
+        </SettingHelp>
+      </SettingsSection>
+    );
+  },
+);
+
+export const AnchorEditingSettingsSection = React.memo(
+  function AnchorEditingSettingsSection({
+    trackingActive,
+    editingEnabled,
+    selectedAnchorId,
+    editableAnchors,
+    pending,
+    editResult,
+    mapUnits,
+    setEditingEnabled,
+    setSelectedAnchorId,
+    savePendingAnchorEdit,
+    cancelPendingAnchorEdit,
+    onClose,
+  }: Pick<
+    PansMapDataController,
+    | "editingEnabled"
+    | "selectedAnchorId"
+    | "editableAnchors"
+    | "editResult"
+    | "mapUnits"
+    | "setEditingEnabled"
+    | "setSelectedAnchorId"
+    | "savePendingAnchorEdit"
+    | "cancelPendingAnchorEdit"
+  > & {
+    trackingActive: boolean;
+    pending: PansMapDataController["pendingAnchorEdit"];
+    onClose(): void;
+  }) {
+    const theme = useEight2FiveTheme();
+    return (
+      <SettingsSection title="Anchor editing">
+        <SwitchRow
+          label="Edit anchor position"
+          value={editingEnabled}
+          disabled={trackingActive}
+          onChange={setEditingEnabled}
+        />
+        <SelectField
+          testID="map-edit-anchor-select"
+          label="Saved anchor"
+          value={selectedAnchorId ?? ""}
+          placeholder="Select an anchor"
+          disabled={trackingActive || !editingEnabled}
+          choices={editableAnchors.map((device) => ({
+            label: getDeviceDisplayName(device),
+            value: device.id,
+          }))}
+          onChange={setSelectedAnchorId}
+        />
+        <MapButton
+          label="Close and place anchor"
+          variant="outline"
+          testID="map-place-anchor"
+          isDisabled={trackingActive || !editingEnabled || !selectedAnchorId}
+          onPress={onClose}
+        />
+        {pending ? (
+          <AnchorEditConfirmation
+            key={`${pending.anchorId}:${pending.coordinate.xMeters}:${pending.coordinate.yMeters}:${mapUnits}`}
+            pending={pending}
+            trackingActive={trackingActive}
+            mapUnits={mapUnits}
+            onSave={savePendingAnchorEdit}
+            onCancel={cancelPendingAnchorEdit}
+          />
+        ) : null}
+        {editResult ? (
+          <Text selectable size="sm" style={{ color: theme.textMuted }}>
+            {editResult}
+          </Text>
+        ) : null}
+      </SettingsSection>
+    );
+  },
+);
+
 function AnchorEditConfirmation({
-  controller,
   pending,
   trackingActive,
+  mapUnits,
+  onSave,
+  onCancel,
 }: {
-  controller: PansMapDataController;
   pending: NonNullable<PansMapDataController["pendingAnchorEdit"]>;
   trackingActive: boolean;
+  mapUnits: MapUnits;
+  onSave: PansMapDataController["savePendingAnchorEdit"];
+  onCancel: PansMapDataController["cancelPendingAnchorEdit"];
 }) {
   const theme = useEight2FiveTheme();
-  const unit = mapUnitAbbreviation(controller.mapUnits);
+  const unit = mapUnitAbbreviation(mapUnits);
   const [zMeters, setZMeters] = React.useState(
-    formatMapCoordinate(pending.zMeters, controller.mapUnits, 6),
+    formatMapCoordinate(pending.zMeters, mapUnits, 6),
   );
   const [quality, setQuality] = React.useState(
     pending.quality === 100 ? "" : String(pending.quality),
   );
   const zText = zMeters.trim();
   const qualityText = quality.trim();
-  const zError =
-    zText === ""
-      ? "Enter the anchor height."
-      : !Number.isFinite(Number(zText))
-        ? "Enter a finite number in meters."
-        : undefined;
-  const qualityValue = qualityText === "" ? undefined : Number(qualityText);
-  const qualityError =
-    qualityValue !== undefined &&
-    (!Number.isInteger(qualityValue) || qualityValue < 1 || qualityValue > 100)
-      ? "Enter an integer from 1 to 100, or leave blank for 100."
-      : undefined;
+  const zError = anchorCoordinateError(zText, "Enter the anchor height.");
+  const qualityValue = parseAnchorQuality(qualityText);
+  const qualityError = anchorQualityError(qualityText);
   return (
     <VStack
       testID="map-anchor-confirmation"
@@ -486,15 +656,17 @@ function AnchorEditConfirmation({
         Confirm anchor position
       </Heading>
       <Text selectable style={{ color: theme.text }}>
-        X {formatMapDistance(pending.coordinate.xMeters, controller.mapUnits)} ·
-        Y {formatMapDistance(pending.coordinate.yMeters, controller.mapUnits)}
+        X {formatMapDistance(pending.coordinate.xMeters, mapUnits)} · Y{" "}
+        {formatMapDistance(pending.coordinate.yMeters, mapUnits)}
       </Text>
       <NumericField
         testID="map-anchor-z-input"
         label={`Z (${unit})`}
         value={zMeters}
         onChange={setZMeters}
-        helper={`Anchor height in ${controller.mapUnits === "imperial" ? "feet" : "meters"}.`}
+        helper={`Anchor height in ${
+          mapUnits === "imperial" ? "feet" : "meters"
+        }.`}
         error={zError}
       />
       <NumericField
@@ -516,17 +688,10 @@ function AnchorEditConfirmation({
           testID="map-write-anchor-position"
           isDisabled={trackingActive || Boolean(zError || qualityError)}
           onPress={() =>
-            void controller.savePendingAnchorEdit(
-              mapUnitsToMeters(Number(zText), controller.mapUnits),
-              qualityValue,
-            )
+            void onSave(parseAnchorCoordinate(zText, mapUnits)!, qualityValue)
           }
         />
-        <MapButton
-          label="Cancel"
-          variant="outline"
-          onPress={controller.cancelPendingAnchorEdit}
-        />
+        <MapButton label="Cancel" variant="outline" onPress={onCancel} />
       </HStack>
     </VStack>
   );
@@ -547,24 +712,6 @@ function SettingsSection({
       </Heading>
       {children}
     </VStack>
-  );
-}
-
-function VisibilitySwitch({
-  label,
-  option,
-  controller,
-}: {
-  label: string;
-  option: keyof PansMapVisibilityOptions;
-  controller: PansMapDataController;
-}) {
-  return (
-    <SwitchRow
-      label={label}
-      value={controller.visibility[option]}
-      onChange={(value) => controller.setVisibility(option, value)}
-    />
   );
 }
 
@@ -694,13 +841,13 @@ function getGridIntervalChoices(units: MapUnits) {
 }
 
 function formatBounds(bounds: GridBounds, units: MapUnits): string {
-  return `X ${formatMapDistance(bounds.minXMeters, units)} to ${formatMapDistance(
-    bounds.maxXMeters,
+  return `X ${formatMapDistance(
+    bounds.minXMeters,
     units,
-  )} · Y ${formatMapDistance(bounds.minYMeters, units)} to ${formatMapDistance(
-    bounds.maxYMeters,
+  )} to ${formatMapDistance(bounds.maxXMeters, units)} · Y ${formatMapDistance(
+    bounds.minYMeters,
     units,
-  )}`;
+  )} to ${formatMapDistance(bounds.maxYMeters, units)}`;
 }
 
 function MapButton({

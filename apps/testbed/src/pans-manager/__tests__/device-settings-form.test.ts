@@ -11,6 +11,8 @@ import {
   validateAnchorPositionFields,
 } from "../device-settings-form";
 
+jest.mock("expo-pans-ble-api", () => ({}));
+
 describe("device settings form", () => {
   test("uses only hardware and advertised names", () => {
     const form = deviceSettingsFormFrom(

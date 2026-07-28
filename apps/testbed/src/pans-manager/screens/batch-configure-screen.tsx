@@ -248,7 +248,9 @@ export function BatchConfigureScreen() {
           <SwitchField
             key={device.id}
             label={getDeviceDisplayName(device)}
-            description={`${device.role ?? "unknown role"} · ${device.transportDeviceId}`}
+            description={`${device.role ?? "unknown role"} · ${
+              device.transportDeviceId
+            }`}
             value={selected.has(device.id)}
             disabled={running || migration || planLocked}
             onChange={(enabled) =>
@@ -276,11 +278,11 @@ export function BatchConfigureScreen() {
           onChange={setAssignPan}
           disabled={migration || running || planLocked}
         />
-        <SelectField
+        <SelectField<RoleAction>
           label="Role configuration"
           value={roleAction}
           onChange={(value) => {
-            if (!planLocked) setRoleAction(value as RoleAction);
+            if (!planLocked) setRoleAction(value);
           }}
           choices={[
             { label: "Keep current/default", value: "keep" },

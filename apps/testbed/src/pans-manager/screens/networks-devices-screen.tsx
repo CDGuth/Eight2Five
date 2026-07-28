@@ -6,6 +6,8 @@ import {
   type DeviceConfigurationSnapshot,
   type DisplayDevice,
   type NetworkDeviceSection as NetworkDeviceSectionModel,
+  type PansInspectionResult,
+  PANS_UNASSIGNED_PAN_ID,
 } from "@eight2five/mobile/pans-manager";
 import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { Divider } from "@eight2five/ui/components/divider";
@@ -23,7 +25,13 @@ import {
   type NetworkDropZone,
 } from "../components/network-device-drop";
 import type { NetworkDeviceDragEvent } from "../components/network-device-drag";
-import { NetworkDeviceSection } from "../components/network-device-section";
+import {
+  LegacyNetworkInfoRow,
+  MemoizedNetworkDeviceSection,
+  NetworkDeviceChildRow,
+  NetworkDeviceEmptyRow,
+} from "../components/network-device-section";
+import { MemoizedNetworkDeviceRow } from "../components/network-device-row";
 import { MANAGER_CARD_CONTENT_INSET } from "../components/manager-layout";
 import {
   ManagerSwipeToDelete,
@@ -59,6 +67,91 @@ interface DropAssignmentRequest {
   device: DisplayDevice;
   targetNetworkId: string;
   persistedDeviceId?: string;
+}
+
+export type NetworkDeviceListRow =
+  | {
+      key: "unassigned-header";
+      kind: "section-header";
+      section: NetworkDeviceSectionModel;
+    }
+  | {
+      key: string;
+      kind: "device";
+      section: NetworkDeviceSectionModel;
+      device: DisplayDevice;
+      isLast: boolean;
+    }
+  | { key: string; kind: "empty"; message: string; networkChild: boolean }
+  | { key: "networks-heading"; kind: "networks-heading" }
+  | { key: string; kind: "section-header"; section: NetworkDeviceSectionModel }
+  | { key: string; kind: "legacy-info" };
+
+export function flattenNetworkDeviceRows(
+  sections: readonly NetworkDeviceSectionModel[],
+  expandedSections: ReadonlySet<string>,
+  unassignedEmptyMessage?: string,
+): NetworkDeviceListRow[] {
+  const rows: NetworkDeviceListRow[] = [];
+  const unassigned = sections.find((section) => section.type === "unassigned");
+  if (unassigned) {
+    rows.push({
+      key: "unassigned-header",
+      kind: "section-header",
+      section: unassigned,
+    });
+    if (expandedSections.has(unassigned.key)) {
+      rows.push(
+        ...unassigned.devices.map((device, index) => ({
+          key: `row:${unassigned.key}:${device.key}`,
+          kind: "device" as const,
+          section: unassigned,
+          device,
+          isLast: index === unassigned.devices.length - 1,
+        })),
+      );
+      if (unassigned.devices.length === 0 && unassignedEmptyMessage) {
+        rows.push({
+          key: "empty:unassigned",
+          kind: "empty",
+          message: unassignedEmptyMessage,
+          networkChild: false,
+        });
+      }
+    }
+  }
+  rows.push({ key: "networks-heading", kind: "networks-heading" });
+  for (const section of sections) {
+    if (section.type !== "network") continue;
+    rows.push({
+      key: `header:${section.key}`,
+      kind: "section-header",
+      section,
+    });
+    if (!expandedSections.has(section.key)) continue;
+    if (section.network?.panId === PANS_UNASSIGNED_PAN_ID) {
+      rows.push({ key: `legacy:${section.key}`, kind: "legacy-info" });
+    }
+    if (section.devices.length === 0) {
+      rows.push({
+        key: `empty:${section.key}`,
+        kind: "empty",
+        message: "No devices match this network.",
+        networkChild: true,
+      });
+      continue;
+    }
+    rows.push(
+      ...section.devices.map((device, index) => ({
+        key: `row:${section.key}:${device.key}`,
+        kind: "device" as const,
+        section,
+        device,
+        isLast: index === section.devices.length - 1,
+      })),
+    );
+  }
+  return rows;
 }
 
 type DropAssignmentStatus =
@@ -149,11 +242,14 @@ export function NetworksDevicesScreen() {
   const displayedEmptyMessage = frozenDisplay
     ? frozenDisplay.emptyMessage
     : emptyMessage;
-  const unassignedSection = sections.find(
-    (section) => section.type === "unassigned",
-  );
-  const networkSections = sections.filter(
-    (section) => section.type === "network",
+  const listRows = React.useMemo(
+    () =>
+      flattenNetworkDeviceRows(
+        sections,
+        expandedSections,
+        displayedEmptyMessage,
+      ),
+    [displayedEmptyMessage, expandedSections, sections],
   );
 
   const setSectionExpanded = React.useCallback(
@@ -325,7 +421,9 @@ export function NetworksDevicesScreen() {
           message:
             stage === "persisting"
               ? `${displayError(error)} Device remains unassigned.`
-              : `${displayError(error)} Assignment status could not be confirmed. Hardware PAN or app association may have changed; the saved device record was retained.`,
+              : `${displayError(
+                  error,
+                )} Assignment status could not be confirmed. Hardware PAN or app association may have changed; the saved device record was retained.`,
           retry: {
             ...request,
             ...(persistedDeviceId ? { persistedDeviceId } : {}),
@@ -460,6 +558,11 @@ export function NetworksDevicesScreen() {
     setNetworkDestructiveActionRequested(true);
     setSelectedNetworkId(networkId);
   }, []);
+  const openNetworkSettings = React.useCallback((networkId: string) => {
+    setSelectedDeviceId(undefined);
+    setNetworkDestructiveActionRequested(false);
+    setSelectedNetworkId(networkId);
+  }, []);
 
   const selectedDevice = useManagedDevice(selectedDeviceId ?? "");
   const selectedDiscovery = useDiscoveredDevice(
@@ -520,37 +623,65 @@ export function NetworksDevicesScreen() {
   ]);
   useTestbedToolbarAction("pans-discovery-scan", scanAction);
 
-  const renderSection = (
-    item: NetworkDeviceSectionModel,
-    sectionEmptyMessage?: string,
-  ) => (
-    <NetworkDeviceSection
-      section={item}
-      expanded={expandedSections.has(item.key)}
-      onExpandedChange={(expanded) => setSectionExpanded(item.key, expanded)}
-      expandedDeviceKeys={expandedDevices}
-      onDeviceExpandedChange={setDeviceExpanded}
-      snapshots={displayedSnapshots}
-      emptyMessage={sectionEmptyMessage}
-      onEditNetwork={(networkId) => {
-        setSelectedDeviceId(undefined);
-        setNetworkDestructiveActionRequested(false);
-        setSelectedNetworkId(networkId);
-      }}
-      onOpenDeviceSettings={openDeviceSettings}
-      onRefreshDevice={(deviceId) => inspectDevice(deviceId, true)}
-      onRequestDeviceDelete={requestDeviceDelete}
-      swipeRegistry={swipeRegistry}
-      dragEnabled={!assignmentInFlight}
-      activeDragDeviceKey={activeDragDeviceKey}
-      interactionsDisabled={
-        activeDragDeviceKey !== undefined || assignmentInFlight
-      }
-      dragCallbacks={dragCallbacks}
-      hoveredNetworkId={hoveredNetworkId}
-      onRegisterDropZone={registerDropZone}
-      onDropZoneChange={updateDropZone}
-    />
+  const refreshDevice = React.useCallback(
+    (deviceId: string) => inspectDevice(deviceId, true),
+    [inspectDevice],
+  );
+  const renderListRow = React.useCallback(
+    ({ item }: { item: NetworkDeviceListRow }) => (
+      <MemoizedFlattenedListRow
+        row={item}
+        expanded={
+          item.kind === "section-header"
+            ? expandedSections.has(item.section.key)
+            : false
+        }
+        deviceExpanded={
+          item.kind === "device" ? expandedDevices.has(item.device.key) : false
+        }
+        snapshot={
+          item.kind === "device" && item.device.savedDevice
+            ? displayedSnapshots[item.device.savedDevice.id]
+            : undefined
+        }
+        interactionsDisabled={
+          activeDragDeviceKey !== undefined || assignmentInFlight
+        }
+        dragEnabled={!assignmentInFlight}
+        activeDragDeviceKey={activeDragDeviceKey}
+        hoveredNetworkId={hoveredNetworkId}
+        onSectionExpandedChange={setSectionExpanded}
+        onDeviceExpandedChange={setDeviceExpanded}
+        onEditNetwork={openNetworkSettings}
+        onOpenDeviceSettings={openDeviceSettings}
+        onRefreshDevice={refreshDevice}
+        onRequestDeviceDelete={requestDeviceDelete}
+        onRequestNetworkDelete={requestNetworkDelete}
+        swipeRegistry={swipeRegistry}
+        dragCallbacks={dragCallbacks}
+        onRegisterDropZone={registerDropZone}
+        onDropZoneChange={updateDropZone}
+      />
+    ),
+    [
+      activeDragDeviceKey,
+      assignmentInFlight,
+      displayedSnapshots,
+      dragCallbacks,
+      expandedDevices,
+      expandedSections,
+      hoveredNetworkId,
+      openDeviceSettings,
+      openNetworkSettings,
+      refreshDevice,
+      registerDropZone,
+      requestDeviceDelete,
+      requestNetworkDelete,
+      setDeviceExpanded,
+      setSectionExpanded,
+      swipeRegistry,
+      updateDropZone,
+    ],
   );
 
   return (
@@ -585,9 +716,12 @@ export function NetworksDevicesScreen() {
 
         <FlatList
           testID="network-device-sections"
-          data={networkSections}
-          keyExtractor={sectionKeyExtractor}
+          data={listRows}
+          keyExtractor={rowKeyExtractor}
           extraData={listExtraData}
+          initialNumToRender={12}
+          maxToRenderPerBatch={8}
+          windowSize={7}
           contentContainerStyle={{
             paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
             paddingBottom: eight2FiveSpacing.xxl,
@@ -596,45 +730,7 @@ export function NetworksDevicesScreen() {
           scrollEnabled={!activeDragDeviceKey && !assignmentInFlight}
           scrollEventThrottle={32}
           onScroll={handleListScroll}
-          ListHeaderComponent={
-            <VStack>
-              {unassignedSection
-                ? renderSection(unassignedSection, displayedEmptyMessage)
-                : null}
-              <Divider
-                testID="network-hierarchy-divider"
-                style={{
-                  backgroundColor: theme.border,
-                  marginVertical: eight2FiveSpacing.md,
-                }}
-              />
-              <Heading
-                testID="networks-heading"
-                size="lg"
-                style={{
-                  color: theme.text,
-                  paddingBottom: eight2FiveSpacing.md,
-                }}
-              >
-                Networks
-              </Heading>
-            </VStack>
-          }
-          renderItem={({ item }) =>
-            item.network ? (
-              <ManagerSwipeToDelete
-                rowKey={item.key}
-                label={item.network.name}
-                enabled={!assignmentInFlight && !activeDragDeviceKey}
-                registry={swipeRegistry}
-                onRequestDelete={() => requestNetworkDelete(item.network!.id)}
-              >
-                {renderSection(item)}
-              </ManagerSwipeToDelete>
-            ) : (
-              renderSection(item)
-            )
-          }
+          renderItem={renderListRow}
         />
         <NetworkEditModal
           network={selectedNetwork}
@@ -661,9 +757,172 @@ export function NetworksDevicesScreen() {
   );
 }
 
-function sectionKeyExtractor(section: NetworkDeviceSectionModel): string {
-  return section.key;
+function rowKeyExtractor(row: NetworkDeviceListRow): string {
+  return row.key;
 }
+
+interface FlattenedListRowProps {
+  row: NetworkDeviceListRow;
+  expanded: boolean;
+  deviceExpanded: boolean;
+  snapshot?: DeviceConfigurationSnapshot;
+  interactionsDisabled: boolean;
+  dragEnabled: boolean;
+  activeDragDeviceKey?: string;
+  hoveredNetworkId?: string;
+  onSectionExpandedChange(key: string, expanded: boolean): void;
+  onDeviceExpandedChange(key: string, expanded: boolean): void;
+  onEditNetwork(networkId: string): void;
+  onOpenDeviceSettings(device: DisplayDevice): Promise<void>;
+  onRefreshDevice(deviceId: string): Promise<PansInspectionResult>;
+  onRequestDeviceDelete(device: DisplayDevice): void;
+  onRequestNetworkDelete(networkId: string): void;
+  swipeRegistry: ManagerSwipeRegistryCallbacks;
+  dragCallbacks: {
+    onDragStart(event: NetworkDeviceDragEvent): void;
+    onDragMove(event: NetworkDeviceDragEvent): void;
+    onDragEnd(event: NetworkDeviceDragEvent): boolean;
+  };
+  onRegisterDropZone(networkId: string, measure: () => void): () => void;
+  onDropZoneChange(zone: NetworkDropZone): void;
+}
+
+function FlattenedListRow({
+  row,
+  expanded,
+  deviceExpanded,
+  snapshot,
+  interactionsDisabled,
+  dragEnabled,
+  activeDragDeviceKey,
+  hoveredNetworkId,
+  onSectionExpandedChange,
+  onDeviceExpandedChange,
+  onEditNetwork,
+  onOpenDeviceSettings,
+  onRefreshDevice,
+  onRequestDeviceDelete,
+  onRequestNetworkDelete,
+  swipeRegistry,
+  dragCallbacks,
+  onRegisterDropZone,
+  onDropZoneChange,
+}: FlattenedListRowProps) {
+  const theme = useEight2FiveTheme();
+  if (row.kind === "networks-heading") {
+    return (
+      <VStack>
+        <Divider
+          testID="network-hierarchy-divider"
+          style={{
+            backgroundColor: theme.border,
+            marginVertical: eight2FiveSpacing.md,
+          }}
+        />
+        <Heading
+          testID="networks-heading"
+          size="lg"
+          style={{ color: theme.text, paddingBottom: eight2FiveSpacing.md }}
+        >
+          Networks
+        </Heading>
+      </VStack>
+    );
+  }
+  if (row.kind === "legacy-info") return <LegacyNetworkInfoRow />;
+  if (row.kind === "empty") {
+    return (
+      <NetworkDeviceEmptyRow
+        message={row.message}
+        networkChild={row.networkChild}
+      />
+    );
+  }
+  if (row.kind === "section-header") {
+    const header = (
+      <MemoizedNetworkDeviceSection
+        section={row.section}
+        expanded={expanded}
+        onExpandedChange={(next) =>
+          onSectionExpandedChange(row.section.key, next)
+        }
+        onEditNetwork={row.section.network ? onEditNetwork : undefined}
+        interactionsDisabled={interactionsDisabled}
+        hoveredNetworkId={hoveredNetworkId}
+        onRegisterDropZone={onRegisterDropZone}
+        onDropZoneChange={onDropZoneChange}
+      />
+    );
+    if (!row.section.network) return header;
+    return (
+      <VStack style={{ marginBottom: expanded ? 0 : eight2FiveSpacing.md }}>
+        <ManagerSwipeToDelete
+          rowKey={row.section.key}
+          label={row.section.network.name}
+          enabled={!interactionsDisabled}
+          registry={swipeRegistry}
+          onRequestDelete={() =>
+            onRequestNetworkDelete(row.section.network!.id)
+          }
+        >
+          {header}
+        </ManagerSwipeToDelete>
+      </VStack>
+    );
+  }
+
+  const { device, section } = row;
+  const deviceRow = (
+    <MemoizedNetworkDeviceRow
+      device={device}
+      network={section.network}
+      snapshot={snapshot}
+      expanded={deviceExpanded}
+      onExpandedChange={(next) => onDeviceExpandedChange(device.key, next)}
+      onOpenSettings={() => onOpenDeviceSettings(device)}
+      onRefresh={
+        device.savedDevice && device.available
+          ? () => onRefreshDevice(device.savedDevice!.id)
+          : undefined
+      }
+      interactionsDisabled={interactionsDisabled}
+      dragCallbacks={
+        dragEnabled &&
+        (activeDragDeviceKey === undefined ||
+          activeDragDeviceKey === device.key) &&
+        section.type === "unassigned" &&
+        device.available &&
+        device.discovery?.compatibility !== "malformed"
+          ? dragCallbacks
+          : undefined
+      }
+    />
+  );
+  const swipeable = device.savedDevice ? (
+    <ManagerSwipeToDelete
+      rowKey={device.key}
+      label={device.displayName}
+      enabled={!interactionsDisabled}
+      registry={swipeRegistry}
+      onRequestDelete={() => onRequestDeviceDelete(device)}
+    >
+      {deviceRow}
+    </ManagerSwipeToDelete>
+  ) : (
+    deviceRow
+  );
+  return section.network ? (
+    <NetworkDeviceChildRow isLast={row.isLast}>
+      {swipeable}
+    </NetworkDeviceChildRow>
+  ) : (
+    <VStack style={{ paddingHorizontal: MANAGER_CARD_CONTENT_INSET }}>
+      {swipeable}
+    </VStack>
+  );
+}
+
+const MemoizedFlattenedListRow = React.memo(FlattenedListRow);
 
 function DropStatus({
   status,

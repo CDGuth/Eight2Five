@@ -305,12 +305,12 @@ export function TextField({
   );
 }
 
-export interface SelectChoice {
+export interface SelectChoice<T extends string = string> {
   label: string;
-  value: string;
+  value: T;
 }
 
-export function SelectField({
+export function SelectField<T extends string>({
   testID,
   label,
   value,
@@ -323,9 +323,9 @@ export function SelectField({
 }: {
   testID?: string;
   label: string;
-  value?: string;
-  choices: SelectChoice[];
-  onChange(value: string): void;
+  value?: T;
+  choices: readonly SelectChoice<T>[];
+  onChange(value: T): void;
   placeholder?: string;
   helper?: string;
   error?: string;

@@ -1,10 +1,6 @@
 import React from "react";
 import { View } from "react-native";
-import type {
-  DeviceConfigurationSnapshot,
-  NetworkDeviceSection as NetworkDeviceSectionModel,
-  PansInspectionResult,
-} from "@eight2five/mobile/pans-manager";
+import type { NetworkDeviceSection as NetworkDeviceSectionModel } from "@eight2five/mobile/pans-manager";
 import {
   formatPanId,
   getNetworkDisplayName,
@@ -12,7 +8,6 @@ import {
 } from "@eight2five/mobile/pans-manager";
 import {
   Accordion,
-  AccordionContent,
   AccordionHeader,
   AccordionIcon,
   AccordionItem,
@@ -20,7 +15,6 @@ import {
 } from "@eight2five/ui/components/accordion";
 import { Button, ButtonIcon } from "@eight2five/ui/components/button";
 import { Card } from "@eight2five/ui/components/card";
-import { Divider } from "@eight2five/ui/components/divider";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Text } from "@eight2five/ui/components/text";
 import {
@@ -37,37 +31,18 @@ import {
   MANAGER_CARD_CONTENT_INSET,
   MANAGER_CHILD_RAIL_WIDTH,
 } from "./manager-layout";
-import {
-  ManagerSwipeToDelete,
-  type ManagerSwipeRegistryCallbacks,
-} from "./manager-swipe-to-delete";
 import { SettingInfoCard } from "./setting-help";
-import {
-  MemoizedNetworkDeviceRow,
-  type NetworkDeviceRowDragCallbacks,
-} from "./network-device-row";
 
+/**
+ * A section header only. Device content is deliberately rendered by the
+ * screen's virtualized list, rather than being mapped from this component.
+ */
 export interface NetworkDeviceSectionProps {
   section: NetworkDeviceSectionModel;
   expanded: boolean;
   onExpandedChange(expanded: boolean): void;
-  expandedDeviceKeys: ReadonlySet<string>;
-  onDeviceExpandedChange(deviceKey: string, expanded: boolean): void;
-  snapshots: Readonly<Record<string, DeviceConfigurationSnapshot>>;
-  emptyMessage?: string;
   onEditNetwork?(networkId: string): void;
-  onOpenDeviceSettings(
-    device: NetworkDeviceSectionModel["devices"][number],
-  ): Promise<void>;
-  onRefreshDevice?(deviceId: string): Promise<PansInspectionResult>;
-  onRequestDeviceDelete?(
-    device: NetworkDeviceSectionModel["devices"][number],
-  ): void;
-  swipeRegistry: ManagerSwipeRegistryCallbacks;
-  dragEnabled: boolean;
-  activeDragDeviceKey?: string;
   interactionsDisabled: boolean;
-  dragCallbacks: NetworkDeviceRowDragCallbacks;
   hoveredNetworkId?: string;
   onRegisterDropZone?(networkId: string, measure: () => void): () => void;
   onDropZoneChange?(zone: NetworkDropZone): void;
@@ -77,19 +52,8 @@ export function NetworkDeviceSection({
   section,
   expanded,
   onExpandedChange,
-  expandedDeviceKeys,
-  onDeviceExpandedChange,
-  snapshots,
-  emptyMessage,
   onEditNetwork,
-  onOpenDeviceSettings,
-  onRefreshDevice,
-  onRequestDeviceDelete,
-  swipeRegistry,
-  dragEnabled,
-  activeDragDeviceKey,
   interactionsDisabled,
-  dragCallbacks,
   hoveredNetworkId,
   onRegisterDropZone,
   onDropZoneChange,
@@ -104,11 +68,6 @@ export function NetworkDeviceSection({
     section.devices.length === 1 ? "device" : "devices"
   }`;
   const legacyUnassignedPan = section.network?.panId === PANS_UNASSIGNED_PAN_ID;
-  const resolvedEmptyMessage =
-    emptyMessage ??
-    (section.network && section.devices.length === 0
-      ? "No devices match this network."
-      : undefined);
   const networkId = section.network?.id;
   const dropTargetNetworkId = legacyUnassignedPan ? undefined : networkId;
   const measureDropZone = React.useCallback(() => {
@@ -144,7 +103,7 @@ export function NetworkDeviceSection({
     return () => cancelAnimationFrame(frame);
   }, [dropTargetNetworkId, expanded, measureDropZone, section.devices.length]);
 
-  const accordion = (
+  const header = (
     <Accordion
       type="multiple"
       value={expanded ? [section.key] : []}
@@ -229,97 +188,11 @@ export function NetworkDeviceSection({
             ) : null}
           </HStack>
         </AccordionHeader>
-        <Divider style={{ backgroundColor: theme.border }} />
-        <AccordionContent className="p-0">
-          <VStack
-            style={{
-              paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
-            }}
-          >
-            {legacyUnassignedPan ? (
-              <SettingInfoCard tone="error">
-                This legacy profile uses PAN 0, the PANS default PAN ID used for
-                unassigned devices. It cannot accept assignments. Change it to
-                PAN 1–65535 or delete it.
-              </SettingInfoCard>
-            ) : null}
-            {section.devices.map((device, index) => {
-              const row = (
-                <MemoizedNetworkDeviceRow
-                  device={device}
-                  network={section.network}
-                  snapshot={
-                    device.savedDevice
-                      ? snapshots[device.savedDevice.id]
-                      : undefined
-                  }
-                  expanded={expandedDeviceKeys.has(device.key)}
-                  onExpandedChange={(next) =>
-                    onDeviceExpandedChange(device.key, next)
-                  }
-                  onOpenSettings={() => onOpenDeviceSettings(device)}
-                  onRefresh={
-                    device.savedDevice && device.available && onRefreshDevice
-                      ? async () =>
-                          await onRefreshDevice(device.savedDevice!.id)
-                      : undefined
-                  }
-                  interactionsDisabled={interactionsDisabled}
-                  dragCallbacks={
-                    dragEnabled &&
-                    (activeDragDeviceKey === undefined ||
-                      activeDragDeviceKey === device.key) &&
-                    section.type === "unassigned" &&
-                    device.available &&
-                    device.discovery?.compatibility !== "malformed"
-                      ? dragCallbacks
-                      : undefined
-                  }
-                />
-              );
-              const swipeable =
-                device.savedDevice && onRequestDeviceDelete ? (
-                  <ManagerSwipeToDelete
-                    rowKey={device.key}
-                    label={device.displayName}
-                    enabled={!interactionsDisabled}
-                    registry={swipeRegistry}
-                    onRequestDelete={() => onRequestDeviceDelete(device)}
-                  >
-                    {row}
-                  </ManagerSwipeToDelete>
-                ) : (
-                  row
-                );
-              return section.network ? (
-                <HStack key={device.key} className="items-stretch">
-                  <ChildRail isLast={index === section.devices.length - 1} />
-                  <VStack className="flex-1">{swipeable}</VStack>
-                </HStack>
-              ) : (
-                <React.Fragment key={device.key}>{swipeable}</React.Fragment>
-              );
-            })}
-            {section.devices.length === 0 && resolvedEmptyMessage ? (
-              <Text
-                testID="network-devices-empty"
-                selectable
-                style={{
-                  color: theme.textMuted,
-                  paddingVertical: eight2FiveSpacing.md,
-                  paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
-                }}
-              >
-                {resolvedEmptyMessage}
-              </Text>
-            ) : null}
-          </VStack>
-        </AccordionContent>
       </AccordionItem>
     </Accordion>
   );
 
-  if (!section.network) return accordion;
+  if (!section.network) return header;
   return (
     <Card
       testID={`network-card-${section.network.id}`}
@@ -329,15 +202,85 @@ export function NetworkDeviceSection({
         borderRadius: eight2FiveRadii.md,
         backgroundColor: theme.surfaceRaised,
         overflow: "hidden",
-        marginBottom: eight2FiveSpacing.md,
       }}
     >
-      {accordion}
+      {header}
     </Card>
   );
 }
 
 export const MemoizedNetworkDeviceSection = React.memo(NetworkDeviceSection);
+
+export function NetworkDeviceChildRow({
+  children,
+  isLast,
+}: {
+  children: React.ReactNode;
+  isLast: boolean;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <HStack
+      className="items-stretch"
+      style={{
+        paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
+        backgroundColor: theme.surfaceRaised,
+        marginBottom: isLast ? eight2FiveSpacing.md : 0,
+        borderBottomLeftRadius: isLast ? eight2FiveRadii.md : 0,
+        borderBottomRightRadius: isLast ? eight2FiveRadii.md : 0,
+      }}
+    >
+      <ChildRail isLast={isLast} />
+      <VStack className="flex-1">{children}</VStack>
+    </HStack>
+  );
+}
+
+export function LegacyNetworkInfoRow() {
+  const theme = useEight2FiveTheme();
+  return (
+    <VStack
+      style={{
+        paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
+        backgroundColor: theme.surfaceRaised,
+      }}
+    >
+      <SettingInfoCard tone="error">
+        This legacy profile uses PAN 0, the PANS default PAN ID used for
+        unassigned devices. It cannot accept assignments. Change it to PAN
+        1–65535 or delete it.
+      </SettingInfoCard>
+    </VStack>
+  );
+}
+
+export function NetworkDeviceEmptyRow({
+  message,
+  networkChild = false,
+}: {
+  message: string;
+  networkChild?: boolean;
+}) {
+  const theme = useEight2FiveTheme();
+  const content = (
+    <Text
+      testID="network-devices-empty"
+      selectable
+      style={{
+        color: theme.textMuted,
+        paddingVertical: eight2FiveSpacing.md,
+        paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
+      }}
+    >
+      {message}
+    </Text>
+  );
+  return networkChild ? (
+    <NetworkDeviceChildRow isLast>{content}</NetworkDeviceChildRow>
+  ) : (
+    content
+  );
+}
 
 function ChildRail({ isLast }: { isLast: boolean }) {
   const theme = useEight2FiveTheme();
