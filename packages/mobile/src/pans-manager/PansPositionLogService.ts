@@ -23,20 +23,88 @@ export interface AppendPositionSampleOptions {
   eventMarker?: string;
 }
 
+export interface PositionLogIngestionCounters {
+  readonly accepted: number;
+  readonly persisted: number;
+  readonly droppedBackpressure: number;
+  readonly droppedInvalid: number;
+  readonly queuedSamples: number;
+  readonly highWaterMark: number;
+  readonly flushes: number;
+  readonly flushFailures: number;
+  readonly lastError?: string;
+  readonly lastErrorAt?: number;
+}
+
+export type PositionLogIngestRejectionReason =
+  | "backpressure"
+  | "invalid"
+  | "closed"
+  | "unknown-session";
+
+export type PositionLogIngestResult =
+  | {
+      readonly accepted: true;
+      readonly sample: PositionLogSample;
+      readonly counters: PositionLogIngestionCounters;
+    }
+  | {
+      readonly accepted: false;
+      readonly reason: PositionLogIngestRejectionReason;
+      readonly error: ManagerError;
+      readonly counters: PositionLogIngestionCounters;
+    };
+
 export interface PansPositionLogServiceOptions {
   memoryCap?: number;
   flushSize?: number;
+  flushLatencyMs?: number;
   now?: () => number;
   createId?: () => string;
 }
 
+interface MutableCounters {
+  accepted: number;
+  persisted: number;
+  droppedBackpressure: number;
+  droppedInvalid: number;
+  queuedSamples: number;
+  highWaterMark: number;
+  flushes: number;
+  flushFailures: number;
+  lastError?: string;
+  lastErrorAt?: number;
+}
+
+interface SessionState {
+  session: PositionLogSession;
+  pending: PositionLogSample[];
+  inFlight?: PositionLogSample[];
+  flushPromise?: Promise<void>;
+  flushTimer?: ReturnType<typeof setTimeout>;
+  latencyFlushRequested?: boolean;
+  nextSequence: number;
+  accepting: boolean;
+  counters: MutableCounters;
+}
+
+const EMPTY_COUNTERS: PositionLogIngestionCounters = Object.freeze({
+  accepted: 0,
+  persisted: 0,
+  droppedBackpressure: 0,
+  droppedInvalid: 0,
+  queuedSamples: 0,
+  highWaterMark: 0,
+  flushes: 0,
+  flushFailures: 0,
+});
+
 export class PansPositionLogService {
-  private readonly buffers = new Map<string, PositionLogSample[]>();
-  private readonly sessions = new Map<string, PositionLogSession>();
-  private readonly nextSequences = new Map<string, number>();
-  private readonly operationTails = new Map<string, Promise<void>>();
+  private readonly states = new Map<string, SessionState>();
+  private readonly unknownSessionCounters = new Map<string, MutableCounters>();
   private readonly memoryCap: number;
   private readonly flushSize: number;
+  private readonly flushLatencyMs: number;
   private readonly now: () => number;
   private readonly createId: () => string;
 
@@ -49,6 +117,7 @@ export class PansPositionLogService {
       1,
       Math.min(options.flushSize ?? 100, this.memoryCap),
     );
+    this.flushLatencyMs = Math.max(1, options.flushLatencyMs ?? 1_000);
     this.now = options.now ?? Date.now;
     this.createId = options.createId ?? defaultId;
   }
@@ -66,10 +135,87 @@ export class PansPositionLogService {
       ...(options.metadata ? { metadata: options.metadata } : {}),
     };
     await this.repository.savePositionLogSession(session);
-    this.sessions.set(session.id, session);
-    this.buffers.set(session.id, []);
-    this.nextSequences.set(session.id, 0);
+    this.unknownSessionCounters.delete(session.id);
+    this.states.set(session.id, {
+      session,
+      pending: [],
+      nextSequence: 0,
+      accepting: true,
+      counters: { ...EMPTY_COUNTERS },
+    });
     return session;
+  }
+
+  /** Synchronous, allocation-bounded position stream hot path. */
+  ingestSample(
+    sessionId: string,
+    position: PansPosition,
+    options: AppendPositionSampleOptions,
+  ): PositionLogIngestResult {
+    const state = this.states.get(sessionId);
+    if (!state)
+      return this.rejectUnknown(
+        sessionId,
+        "The position log session does not exist.",
+      );
+    if (!state.accepting || state.session.endedAt !== undefined)
+      return this.reject(
+        state,
+        "closed",
+        "The position log session is already closed.",
+      );
+    if (!isValidLoggedPosition(position))
+      return this.reject(state, "invalid", "The position sample is invalid.");
+    if (state.counters.queuedSamples >= this.memoryCap) {
+      state.counters.droppedBackpressure += 1;
+      return {
+        accepted: false,
+        reason: "backpressure",
+        error: new ManagerError(
+          "STORAGE_FAILURE",
+          "The position log pending queue is full.",
+        ),
+        counters: snapshotCounters(state.counters),
+      };
+    }
+
+    const sequence = state.nextSequence;
+    const sample: PositionLogSample = {
+      sessionId,
+      sequence,
+      timestampMs: options.timestampMs ?? this.now(),
+      networkId: state.session.networkId,
+      panId: state.session.panId,
+      deviceId: state.session.deviceId,
+      ...(options.nodeId !== undefined ? { nodeId: options.nodeId } : {}),
+      ...(options.label !== undefined ? { label: options.label } : {}),
+      xMeters: position.xMeters,
+      yMeters: position.yMeters,
+      zMeters: position.zMeters,
+      quality: position.quality,
+      solver: options.solver,
+      anchorCount: options.anchorCount,
+      ...(options.distances ? { distances: options.distances } : {}),
+      ...(options.notes !== undefined ? { notes: options.notes } : {}),
+      ...(options.eventMarker !== undefined
+        ? { eventMarker: options.eventMarker }
+        : {}),
+    };
+    state.nextSequence += 1;
+    state.pending.push(sample);
+    state.counters.accepted += 1;
+    state.counters.queuedSamples += 1;
+    state.counters.highWaterMark = Math.max(
+      state.counters.highWaterMark,
+      state.counters.queuedSamples,
+    );
+    if (state.pending.length >= this.flushSize) this.requestFlush(state);
+    else this.ensureFlushTimer(state);
+    return {
+      accepted: true,
+      sample,
+      counters: snapshotCounters(state.counters),
+    };
   }
 
   async appendSample(
@@ -77,87 +223,45 @@ export class PansPositionLogService {
     position: PansPosition,
     options: AppendPositionSampleOptions,
   ): Promise<PositionLogSample> {
-    return await this.enqueue(sessionId, async () => {
-      validateLoggedPosition(position);
-      const session =
-        this.sessions.get(sessionId) ??
-        (await this.repository.getPositionLogSession(sessionId));
-      if (!session) {
-        throw new ManagerError(
-          "STORAGE_FAILURE",
-          "The position log session does not exist.",
-        );
-      }
-      if (session.endedAt !== undefined) {
-        throw new ManagerError(
-          "INVALID_CONFIGURATION",
-          "The position log session is already closed.",
-        );
-      }
-      this.sessions.set(sessionId, session);
-      let sequence = this.nextSequences.get(sessionId);
-      if (sequence === undefined) {
-        const persisted =
-          await this.repository.listPositionLogSamples(sessionId);
-        sequence = (persisted.at(-1)?.sequence ?? -1) + 1;
-      }
-      const sample: PositionLogSample = {
-        sessionId,
-        sequence,
-        timestampMs: options.timestampMs ?? this.now(),
-        networkId: session.networkId,
-        panId: session.panId,
-        deviceId: session.deviceId,
-        ...(options.nodeId !== undefined ? { nodeId: options.nodeId } : {}),
-        ...(options.label !== undefined ? { label: options.label } : {}),
-        xMeters: position.xMeters,
-        yMeters: position.yMeters,
-        zMeters: position.zMeters,
-        quality: position.quality,
-        solver: options.solver,
-        anchorCount: options.anchorCount,
-        ...(options.distances ? { distances: options.distances } : {}),
-        ...(options.notes !== undefined ? { notes: options.notes } : {}),
-        ...(options.eventMarker !== undefined
-          ? { eventMarker: options.eventMarker }
-          : {}),
-      };
-      this.nextSequences.set(sessionId, sequence + 1);
-      const buffer = this.buffers.get(sessionId) ?? [];
-      buffer.push(sample);
-      if (buffer.length > this.memoryCap)
-        buffer.splice(0, buffer.length - this.memoryCap);
-      this.buffers.set(sessionId, buffer);
-      if (buffer.length >= this.flushSize) await this.flushBuffer(sessionId);
-      return sample;
-    });
+    const result = this.ingestSample(sessionId, position, options);
+    if (!result.accepted) throw result.error;
+    return result.sample;
+  }
+
+  getIngestionCounters(sessionId: string): PositionLogIngestionCounters {
+    const state = this.states.get(sessionId);
+    const counters =
+      state?.counters ?? this.unknownSessionCounters.get(sessionId);
+    return counters ? snapshotCounters(counters) : EMPTY_COUNTERS;
   }
 
   async flush(sessionId?: string): Promise<void> {
-    const sessionIds = sessionId
-      ? [sessionId]
-      : Array.from(
-          new Set([...this.buffers.keys(), ...this.operationTails.keys()]),
-        );
-    for (const id of sessionIds) {
-      await this.enqueue(id, async () => await this.flushBuffer(id));
-    }
+    const states = sessionId
+      ? [this.states.get(sessionId)].filter(
+          (state): state is SessionState => state !== undefined,
+        )
+      : [...this.states.values()];
+    for (const state of states) await this.drain(state);
   }
 
   async stopSession(
     sessionId: string,
   ): Promise<PositionLogSession | undefined> {
-    return await this.enqueue(sessionId, async () => {
-      await this.flushBuffer(sessionId);
+    const state = this.states.get(sessionId);
+    if (!state) {
       const session = await this.repository.getPositionLogSession(sessionId);
-      if (!session) return undefined;
+      if (!session || session.endedAt !== undefined) return session;
       const finished = { ...session, endedAt: this.now() };
       await this.repository.savePositionLogSession(finished);
-      this.buffers.delete(sessionId);
-      this.sessions.delete(sessionId);
-      this.nextSequences.delete(sessionId);
       return finished;
-    });
+    }
+    state.accepting = false;
+    this.clearFlushTimer(state);
+    await this.drain(state);
+    const finished = { ...state.session, endedAt: this.now() };
+    await this.repository.savePositionLogSession(finished);
+    state.session = finished;
+    return finished;
   }
 
   async exportCsv(sessionId: string): Promise<string> {
@@ -205,40 +309,104 @@ export class PansPositionLogService {
     return JSON.stringify({ session, samples });
   }
 
-  private async flushBuffer(sessionId: string): Promise<void> {
-    const samples = this.buffers.get(sessionId) ?? [];
-    if (!samples.length) return;
-    // Detach first so samples received while storage is writing enter a fresh
-    // buffer and can never be cleared by this flush.
-    this.buffers.set(sessionId, []);
-    try {
-      await this.repository.appendPositionLogSamples(samples);
-    } catch (error) {
-      this.buffers.set(sessionId, [
-        ...samples,
-        ...(this.buffers.get(sessionId) ?? []),
-      ]);
-      throw error;
+  private reject(
+    state: SessionState,
+    reason: Exclude<PositionLogIngestRejectionReason, "backpressure">,
+    message: string,
+  ): PositionLogIngestResult {
+    state.counters.droppedInvalid += 1;
+    return {
+      accepted: false,
+      reason,
+      error: new ManagerError("INVALID_CONFIGURATION", message),
+      counters: snapshotCounters(state.counters),
+    };
+  }
+
+  private rejectUnknown(
+    sessionId: string,
+    message: string,
+  ): PositionLogIngestResult {
+    const counters = this.unknownSessionCounters.get(sessionId) ?? {
+      ...EMPTY_COUNTERS,
+    };
+    counters.droppedInvalid += 1;
+    this.unknownSessionCounters.set(sessionId, counters);
+    return {
+      accepted: false,
+      reason: "unknown-session",
+      error: new ManagerError("INVALID_CONFIGURATION", message),
+      counters: snapshotCounters(counters),
+    };
+  }
+
+  private requestFlush(state: SessionState): void {
+    const flush = this.startFlush(state);
+    if (flush) void flush.catch(() => undefined);
+  }
+
+  private startFlush(state: SessionState): Promise<void> | undefined {
+    if (state.flushPromise || !state.pending.length) return state.flushPromise;
+    this.clearFlushTimer(state);
+    const batch = state.pending.splice(0, this.flushSize);
+    state.inFlight = batch;
+    let succeeded = false;
+    const promise = this.repository.appendPositionLogSamples(batch).then(
+      () => {
+        succeeded = true;
+        state.counters.persisted += batch.length;
+        state.counters.queuedSamples -= batch.length;
+        state.counters.flushes += 1;
+        state.inFlight = undefined;
+      },
+      (error: unknown) => {
+        // No accepted work can exceed memoryCap (in-flight work counts toward
+        // queuedSamples), so prepending always remains bounded and ordered.
+        state.pending = [...batch, ...state.pending];
+        state.inFlight = undefined;
+        state.counters.flushFailures += 1;
+        state.counters.lastError = errorMessage(error);
+        state.counters.lastErrorAt = this.now();
+        throw error;
+      },
+    );
+    state.flushPromise = promise.finally(() => {
+      state.flushPromise = undefined;
+      if (
+        succeeded &&
+        (state.pending.length >= this.flushSize || state.latencyFlushRequested)
+      ) {
+        state.latencyFlushRequested = false;
+        this.requestFlush(state);
+      } else if (state.pending.length) {
+        state.latencyFlushRequested = false;
+        this.ensureFlushTimer(state);
+      }
+    });
+    return state.flushPromise;
+  }
+
+  private async drain(state: SessionState): Promise<void> {
+    this.clearFlushTimer(state);
+    while (state.counters.queuedSamples > 0) {
+      const flush = state.flushPromise ?? this.startFlush(state);
+      if (!flush) return;
+      await flush;
     }
   }
 
-  private async enqueue<T>(
-    sessionId: string,
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.operationTails.get(sessionId) ?? Promise.resolve();
-    const current = previous.catch(() => undefined).then(operation);
-    const tail = current.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.operationTails.set(sessionId, tail);
-    try {
-      return await current;
-    } finally {
-      if (this.operationTails.get(sessionId) === tail)
-        this.operationTails.delete(sessionId);
-    }
+  private ensureFlushTimer(state: SessionState): void {
+    if (state.flushTimer || !state.pending.length) return;
+    state.flushTimer = setTimeout(() => {
+      state.flushTimer = undefined;
+      if (state.flushPromise) state.latencyFlushRequested = true;
+      else this.requestFlush(state);
+    }, this.flushLatencyMs);
+  }
+
+  private clearFlushTimer(state: SessionState): void {
+    if (state.flushTimer) clearTimeout(state.flushTimer);
+    state.flushTimer = undefined;
   }
 }
 
@@ -247,20 +415,25 @@ export function csvCell(value: unknown): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function validateLoggedPosition(position: PansPosition): void {
-  if (
-    !Number.isFinite(position.xMeters) ||
-    !Number.isFinite(position.yMeters) ||
-    !Number.isFinite(position.zMeters) ||
-    !Number.isFinite(position.quality) ||
-    position.quality < 0 ||
-    position.quality > 100
-  ) {
-    throw new ManagerError(
-      "INVALID_CONFIGURATION",
-      "The position sample is invalid.",
-    );
-  }
+function isValidLoggedPosition(position: PansPosition): boolean {
+  return (
+    Number.isFinite(position.xMeters) &&
+    Number.isFinite(position.yMeters) &&
+    Number.isFinite(position.zMeters) &&
+    Number.isFinite(position.quality) &&
+    position.quality >= 0 &&
+    position.quality <= 100
+  );
+}
+
+function snapshotCounters(
+  counters: MutableCounters,
+): PositionLogIngestionCounters {
+  return Object.freeze({ ...counters });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function defaultId(): string {

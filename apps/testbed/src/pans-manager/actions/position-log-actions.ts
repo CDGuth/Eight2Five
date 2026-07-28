@@ -9,6 +9,8 @@ export function usePositionLogActions() {
       runBatch: actions.runBatch,
       startLog: actions.startPositionLog,
       appendSample: actions.appendPositionSample,
+      ingestSample: actions.ingestPositionSample,
+      getCounters: actions.getPositionLogCounters,
       stopLog: actions.stopPositionLog,
       listLogs: actions.listPositionLogs,
       listSamples: actions.listPositionSamples,

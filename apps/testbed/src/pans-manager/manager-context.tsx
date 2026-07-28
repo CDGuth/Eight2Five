@@ -34,6 +34,8 @@ import type {
   ObservedPansTopology,
   StartPositionLogOptions,
   AppendPositionSampleOptions,
+  PositionLogIngestResult,
+  PositionLogIngestionCounters,
   PositionLogSample,
   PositionLogSession,
   PansPosition,
@@ -124,6 +126,8 @@ export interface PansManagerRuntime {
     | "flush"
     | "startSession"
     | "appendSample"
+    | "ingestSample"
+    | "getIngestionCounters"
     | "stopSession"
     | "exportCsv"
     | "exportJson"
@@ -238,6 +242,12 @@ export interface PansManagerContextValue {
     position: PansPosition,
     options: AppendPositionSampleOptions,
   ): Promise<PositionLogSample>;
+  ingestPositionSample(
+    sessionId: string,
+    position: PansPosition,
+    options: AppendPositionSampleOptions,
+  ): PositionLogIngestResult;
+  getPositionLogCounters(sessionId: string): PositionLogIngestionCounters;
   stopPositionLog(sessionId: string): Promise<PositionLogSession | undefined>;
   listPositionLogs(networkId: string): Promise<PositionLogSession[]>;
   listPositionSamples(sessionId: string): Promise<PositionLogSample[]>;
@@ -281,6 +291,8 @@ const actionKeys = [
   "runBatch",
   "startPositionLog",
   "appendPositionSample",
+  "ingestPositionSample",
+  "getPositionLogCounters",
   "stopPositionLog",
   "listPositionLogs",
   "listPositionSamples",
@@ -1245,6 +1257,26 @@ export function PansManagerProvider({
     [runtime],
   );
 
+  const ingestPositionSample = React.useCallback(
+    (
+      sessionId: string,
+      position: PansPosition,
+      options: AppendPositionSampleOptions,
+    ) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return runtime.logs.ingestSample(sessionId, position, options);
+    },
+    [runtime],
+  );
+
+  const getPositionLogCounters = React.useCallback(
+    (sessionId: string) => {
+      if (!runtime) throw new Error("Manager is not ready.");
+      return runtime.logs.getIngestionCounters(sessionId);
+    },
+    [runtime],
+  );
+
   const stopPositionLog = React.useCallback(
     async (sessionId: string) => {
       if (!runtime) throw new Error("Manager is not ready.");
@@ -1338,6 +1370,8 @@ export function PansManagerProvider({
       runBatch,
       startPositionLog,
       appendPositionSample,
+      ingestPositionSample,
+      getPositionLogCounters,
       stopPositionLog,
       listPositionLogs,
       listPositionSamples,
@@ -1390,6 +1424,8 @@ export function PansManagerProvider({
       runBatch,
       startPositionLog,
       appendPositionSample,
+      ingestPositionSample,
+      getPositionLogCounters,
       stopPositionLog,
       listPositionLogs,
       listPositionSamples,
@@ -1567,6 +1603,8 @@ export function usePansBatchAndLogs() {
       runBatch: actions.runBatch,
       startLog: actions.startPositionLog,
       appendSample: actions.appendPositionSample,
+      ingestSample: actions.ingestPositionSample,
+      getCounters: actions.getPositionLogCounters,
       stopLog: actions.stopPositionLog,
       listLogs: actions.listPositionLogs,
       listSamples: actions.listPositionSamples,

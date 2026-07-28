@@ -1,10 +1,151 @@
 import type { PansApiError, PansBleDevice } from "expo-pans-ble-api";
 import type { PansDiscoveryGateway } from "../PansDiscoveryService";
-import { PansDiscoveryService } from "../PansDiscoveryService";
+import {
+  DEFAULT_PANS_DISCOVERY_PUBLICATION_INTERVAL_MS,
+  PansDiscoveryService,
+} from "../PansDiscoveryService";
 
 jest.mock("expo-pans-ble-api", () => ({}));
 
 describe("PansDiscoveryService", () => {
+  test("coalesces telemetry to 5 Hz while retaining the exact latest snapshot", () => {
+    jest.useFakeTimers();
+    let now = 1_000;
+    const service = new PansDiscoveryService(discoveryGateway(), {
+      now: () => now,
+      staleAfterMs: 10_000,
+    });
+    const listener = jest.fn();
+    service.subscribe(listener);
+
+    try {
+      service.receiveDevices([device({ rssi: -50, lastSeenMs: 1_000 })]);
+      expect(listener).toHaveBeenCalledTimes(2);
+
+      now = 1_050;
+      service.receiveDevices([device({ rssi: -51, lastSeenMs: 1_050 })]);
+      now = 1_100;
+      service.receiveDevices([device({ rssi: -52, lastSeenMs: 1_100 })]);
+
+      expect(listener).toHaveBeenCalledTimes(2);
+      expect(service.getSnapshots()[0]).toMatchObject({
+        rssi: -52,
+        lastSeenAt: 1_100,
+      });
+
+      jest.advanceTimersByTime(
+        DEFAULT_PANS_DISCOVERY_PUBLICATION_INTERVAL_MS - 51,
+      );
+      expect(listener).toHaveBeenCalledTimes(2);
+      now = 1_200;
+      jest.advanceTimersByTime(1);
+      expect(listener).toHaveBeenCalledTimes(3);
+      expect(listener.mock.calls[2]?.[0]?.[0]).toMatchObject({
+        rssi: -52,
+        lastSeenAt: 1_100,
+      });
+    } finally {
+      service.clear();
+      jest.useRealTimers();
+    }
+  });
+
+  test("publishes presence semantics immediately and cancels pending telemetry", () => {
+    jest.useFakeTimers();
+    let now = 1_000;
+    const service = new PansDiscoveryService(discoveryGateway(), {
+      now: () => now,
+      staleAfterMs: 10_000,
+    });
+    const listener = jest.fn();
+    service.subscribe(listener);
+
+    try {
+      service.receiveDevices([device()]);
+      now = 1_050;
+      service.receiveDevices([device({ rssi: -60, lastSeenMs: 1_050 })]);
+      now = 1_060;
+      service.receiveDevices([
+        device({
+          rssi: -61,
+          lastSeenMs: 1_060,
+          presence: { ...presence(), raw: [1, 2], changeCounter: 1 },
+        }),
+      ]);
+
+      expect(listener).toHaveBeenCalledTimes(3);
+      expect(listener.mock.calls[2]?.[0]?.[0]).toMatchObject({
+        rssi: -61,
+        presence: { raw: [1, 2], changeCounter: 1 },
+      });
+      jest.advanceTimersByTime(DEFAULT_PANS_DISCOVERY_PUBLICATION_INTERVAL_MS);
+      expect(listener).toHaveBeenCalledTimes(3);
+    } finally {
+      service.clear();
+      jest.useRealTimers();
+    }
+  });
+
+  test("publishes fresh-to-stale on its deadline and stale-to-fresh immediately", () => {
+    jest.useFakeTimers();
+    let now = 1_000;
+    const service = new PansDiscoveryService(discoveryGateway(), {
+      now: () => now,
+      staleAfterMs: 100,
+    });
+    const listener = jest.fn();
+    service.subscribe(listener);
+
+    try {
+      service.receiveDevices([device()]);
+      now = 1_100;
+      jest.advanceTimersByTime(100);
+      expect(listener).toHaveBeenCalledTimes(3);
+      expect(listener.mock.calls[2]?.[0]?.[0]?.stale).toBe(true);
+
+      service.receiveDevices([device({ lastSeenMs: 1_100 })]);
+      expect(listener).toHaveBeenCalledTimes(4);
+      expect(listener.mock.calls[3]?.[0]?.[0]?.stale).toBe(false);
+    } finally {
+      service.clear();
+      jest.useRealTimers();
+    }
+  });
+
+  test("suppresses identical and raw-only events without JSON serialization", () => {
+    jest.useFakeTimers();
+    const service = new PansDiscoveryService(discoveryGateway(), {
+      now: () => 1_000,
+      staleAfterMs: 10_000,
+    });
+    const listener = jest.fn();
+    service.subscribe(listener);
+    const stringify = jest.spyOn(JSON, "stringify").mockImplementation(() => {
+      throw new Error("JSON serialization must not be used by discovery");
+    });
+
+    try {
+      service.receiveDevices([device()]);
+      service.receiveDevices([device()]);
+      service.receiveDevices([
+        { ...device(), diagnosticOnly: "latest" } as PansBleDevice,
+      ]);
+
+      expect(listener).toHaveBeenCalledTimes(2);
+      expect(
+        (
+          service.getSnapshots()[0]?.rawDevice as PansBleDevice & {
+            diagnosticOnly?: string;
+          }
+        )?.diagnosticOnly,
+      ).toBe("latest");
+    } finally {
+      stringify.mockRestore();
+      service.clear();
+      jest.useRealTimers();
+    }
+  });
+
   test("deduplicates events, computes stale state, and clears native and local snapshots", async () => {
     let discovered!: (event: { devices: PansBleDevice[] }) => void;
     let scanError!: (error: PansApiError) => void;
@@ -106,9 +247,12 @@ describe("PansDiscoveryService", () => {
     };
     const service = new PansDiscoveryService(gateway);
     const errorListener = jest.fn();
+    const discoveryListener = jest.fn();
     service.subscribeErrors(errorListener);
+    service.subscribe(discoveryListener);
 
     await service.start();
+    const publicationsBeforeError = discoveryListener.mock.calls.length;
     scanError({
       code: "OPERATION_FAILED",
       message: "BLE scan failed with code 6",
@@ -116,6 +260,9 @@ describe("PansDiscoveryService", () => {
     });
 
     expect(service.isScanning).toBe(false);
+    expect(discoveryListener).toHaveBeenCalledTimes(
+      publicationsBeforeError + 1,
+    );
     expect(errorListener).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "BLE scan failed with code 6",
@@ -286,4 +433,27 @@ function createDeferred<T>() {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
+}
+
+function presence(): NonNullable<PansBleDevice["presence"]> {
+  return {
+    rawOperationModeByte: 0,
+    rawUwbModeBits: 0,
+    role: "tag",
+    errorIndicated: false,
+    initiator: false,
+    bridge: false,
+    uwbMode: "off",
+    changeCounter: 0,
+  };
+}
+
+function device(overrides: Partial<PansBleDevice> = {}): PansBleDevice {
+  return {
+    deviceId: "device-1",
+    rssi: -50,
+    lastSeenMs: 1_000,
+    presence: presence(),
+    ...overrides,
+  };
 }
