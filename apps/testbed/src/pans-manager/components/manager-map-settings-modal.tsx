@@ -95,7 +95,7 @@ export function ManagerMapSettingsModal({
             Map settings
           </Heading>
           <ModalCloseButton accessibilityLabel="Close map settings">
-            <Icon as={X} style={{ color: theme.icon }} />
+            <Icon as={X} size="xl" style={{ color: theme.icon }} />
           </ModalCloseButton>
         </ModalHeader>
         <ModalBody

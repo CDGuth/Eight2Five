@@ -223,7 +223,7 @@ export function NetworkEditModal({
             Edit network
           </Heading>
           <ModalCloseButton accessibilityLabel="Close network editor">
-            <Icon as={X} style={{ color: theme.icon }} />
+            <Icon as={X} size="xl" style={{ color: theme.icon }} />
           </ModalCloseButton>
         </ModalHeader>
         <ModalBody

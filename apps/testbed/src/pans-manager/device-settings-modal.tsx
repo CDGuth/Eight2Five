@@ -426,7 +426,7 @@ export function DeviceSettingsModal({
             </Text>
           </VStack>
           <ModalCloseButton accessibilityLabel="Close device settings">
-            <Icon as={X} style={{ color: theme.icon }} />
+            <Icon as={X} size="xl" style={{ color: theme.icon }} />
           </ModalCloseButton>
         </ModalHeader>
         <ModalBody
