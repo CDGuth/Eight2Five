@@ -6,7 +6,7 @@ export const cardStyle = tva({
   base: `${baseStyle} flex-col bg-card border border-border rounded-xl shadow-sm`,
   variants: {
     size: {
-      default: 'p-4 gap-6',
+      default: 'p-4 gap-0',
       sm: 'p-3 gap-3',
     },
   },

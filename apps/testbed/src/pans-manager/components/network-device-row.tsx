@@ -183,12 +183,7 @@ export function NetworkDeviceRow({
       onValueChange={(values) => onExpandedChange(values.includes(device.key))}
       isCollapsible
     >
-      <AccordionItem
-        value={device.key}
-        style={{
-          backgroundColor: device.available ? undefined : theme.surface,
-        }}
-      >
+      <AccordionItem value={device.key}>
         <AccordionHeader className="m-0 py-0">
           <HStack
             className="w-full items-center"

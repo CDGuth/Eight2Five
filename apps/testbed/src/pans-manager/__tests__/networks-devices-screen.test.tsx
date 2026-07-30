@@ -227,9 +227,6 @@ describe("NetworksDevicesScreen", () => {
     expect(expansionState(tree, `device-toggle-device:${device.id}`)).toBe(
       true,
     );
-    expect(
-      tree.root.findAllByProps({ testID: "network-device-child-rail" }).length,
-    ).toBeGreaterThan(0);
     expect(harness.inspectAndCache).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -288,18 +285,12 @@ describe("NetworksDevicesScreen", () => {
         testID: `device-settings-device:${device.id}`,
       }),
     ).toHaveLength(0);
-    expect(
-      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
-    ).toHaveLength(0);
 
     await expandNetworkSection(tree, network.id);
     expect(
       tree.root.findAllByProps({
         testID: `device-settings-device:${device.id}`,
       }),
-    ).not.toHaveLength(0);
-    expect(
-      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
     ).not.toHaveLength(0);
 
     await act(async () => {
@@ -310,10 +301,6 @@ describe("NetworksDevicesScreen", () => {
         testID: `device-settings-device:${device.id}`,
       }),
     ).toHaveLength(0);
-    expect(
-      tree.root.findAllByProps({ testID: "network-device-child-rail" }),
-    ).toHaveLength(0);
-
     await act(async () => tree.unmount());
     jest.useRealTimers();
   });

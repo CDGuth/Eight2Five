@@ -1,4 +1,5 @@
 import React from "react";
+import { View } from "react-native";
 import {
   selectNetworkDeviceSections,
   type DeviceConfigurationSnapshot,
@@ -236,11 +237,7 @@ export function NetworksDevicesScreen() {
           if (active) void stopDiscovery();
           else void startDiscovery();
         }}
-        className="min-h-11 rounded-lg px-4 data-[active=true]:bg-white/10"
-        style={{
-          backgroundColor:
-            active || stopping ? "rgba(255,255,255,0.12)" : "transparent",
-        }}
+        className="min-h-11 rounded-lg px-4"
       >
         {busy ? (
           <Spinner color={theme.raw.white} />
@@ -336,7 +333,6 @@ export function NetworksDevicesScreen() {
           maxToRenderPerBatch={8}
           windowSize={7}
           contentContainerStyle={{
-            paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
             paddingBottom: eight2FiveSpacing.xxl,
           }}
           keyboardShouldPersistTaps="handled"
@@ -400,7 +396,11 @@ function FlattenedListRow({
         <Heading
           testID="networks-heading"
           size="lg"
-          style={{ color: theme.text, paddingBottom: eight2FiveSpacing.md }}
+          style={{
+            color: theme.text,
+            paddingBottom: eight2FiveSpacing.md,
+            paddingLeft: MANAGER_CARD_CONTENT_INSET,
+          }}
         >
           Networks
         </Heading>
@@ -456,9 +456,14 @@ function FlattenedListRow({
       {deviceRow}
     </NetworkDeviceChildRow>
   ) : (
-    <VStack style={{ paddingHorizontal: MANAGER_CARD_CONTENT_INSET }}>
+    <View
+      style={{
+        paddingLeft: MANAGER_CARD_CONTENT_INSET + eight2FiveSpacing.lg,
+        paddingRight: MANAGER_CARD_CONTENT_INSET,
+      }}
+    >
       {deviceRow}
-    </VStack>
+    </View>
   );
 }
 

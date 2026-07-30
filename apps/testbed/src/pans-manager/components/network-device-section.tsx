@@ -15,21 +15,15 @@ import {
 } from "@eight2five/ui/components/accordion";
 import { Button, ButtonIcon } from "@eight2five/ui/components/button";
 import { Card } from "@eight2five/ui/components/card";
+import { Divider } from "@eight2five/ui/components/divider";
+import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Text } from "@eight2five/ui/components/text";
-import {
-  eight2FiveFonts,
-  eight2FiveRadii,
-  eight2FiveSpacing,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 import { VStack } from "@eight2five/ui/components/vstack";
 import { ChevronDown, Pencil } from "lucide-react-native";
 
-import {
-  MANAGER_CARD_CONTENT_INSET,
-  MANAGER_CHILD_RAIL_WIDTH,
-} from "./manager-layout";
+import { MANAGER_CARD_CONTENT_INSET } from "./manager-layout";
 import { SettingInfoCard } from "./setting-help";
 
 /**
@@ -87,14 +81,9 @@ export function NetworkDeviceSection({
               accessibilityState={{ expanded }}
             >
               <VStack className="flex-1" style={{ gap: eight2FiveSpacing.xs }}>
-                <Text
-                  style={{
-                    color: theme.text,
-                    fontFamily: eight2FiveFonts.styleSemibold,
-                  }}
-                >
+                <Heading size="lg" style={{ color: theme.text }}>
                   {title}
-                </Text>
+                </Heading>
                 <Text selectable size="sm" style={{ color: theme.textMuted }}>
                   {pan ? `PAN ${pan} · ` : ""}
                   {count}
@@ -135,15 +124,11 @@ export function NetworkDeviceSection({
   return (
     <Card
       testID={`network-card-${section.network.id}`}
-      className="p-0"
-      style={{
-        borderWidth: 0,
-        borderRadius: eight2FiveRadii.md,
-        backgroundColor: theme.surfaceRaised,
-        overflow: "hidden",
-      }}
+      className="p-0 bg-transparent shadow-none border-0 gap-0"
+      style={{ borderRadius: 0, overflow: "hidden" }}
     >
       {header}
+      <Divider style={{ backgroundColor: theme.border }} />
     </Card>
   );
 }
@@ -157,21 +142,16 @@ export function NetworkDeviceChildRow({
   children: React.ReactNode;
   isLast: boolean;
 }) {
-  const theme = useEight2FiveTheme();
   return (
-    <HStack
-      className="items-stretch"
+    <View
       style={{
-        paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
-        backgroundColor: theme.surfaceRaised,
+        paddingLeft: MANAGER_CARD_CONTENT_INSET + eight2FiveSpacing.lg,
+        paddingRight: MANAGER_CARD_CONTENT_INSET,
         marginBottom: isLast ? eight2FiveSpacing.md : 0,
-        borderBottomLeftRadius: isLast ? eight2FiveRadii.md : 0,
-        borderBottomRightRadius: isLast ? eight2FiveRadii.md : 0,
       }}
     >
-      <ChildRail isLast={isLast} />
-      <VStack className="flex-1">{children}</VStack>
-    </HStack>
+      {children}
+    </View>
   );
 }
 
@@ -218,37 +198,5 @@ export function NetworkDeviceEmptyRow({
     <NetworkDeviceChildRow isLast>{content}</NetworkDeviceChildRow>
   ) : (
     content
-  );
-}
-
-function ChildRail({ isLast }: { isLast: boolean }) {
-  const theme = useEight2FiveTheme();
-  const left = eight2FiveSpacing.sm;
-  return (
-    <View
-      testID="network-device-child-rail"
-      style={{ width: MANAGER_CHILD_RAIL_WIDTH, position: "relative" }}
-    >
-      <View
-        style={{
-          position: "absolute",
-          left,
-          top: 0,
-          bottom: isLast ? "50%" : 0,
-          width: 1,
-          backgroundColor: theme.border,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          left,
-          top: "50%",
-          width: MANAGER_CHILD_RAIL_WIDTH - left,
-          height: 1,
-          backgroundColor: theme.border,
-        }}
-      />
-    </View>
   );
 }
