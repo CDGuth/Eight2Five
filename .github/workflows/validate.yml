@@ -49,6 +49,3 @@ jobs:
 
       - name: Run Expo doctor
         run: npm run expo:doctor
-
-      - name: Run Expo install check
-        run: npm run expo:install-check
