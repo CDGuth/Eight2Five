@@ -34,7 +34,7 @@ const buttonStyle = tva({
       secondary:
         'bg-secondary text-secondary-foreground data-[hover=true]:bg-secondary/80 data-[active=true]:bg-secondary/80',
       ghost: 'data-[hover=true]:bg-accent data-[active=true]:bg-accent dark:data-[hover=true]:bg-accent/50 dark:data-[active=true]:bg-accent/50',
-      link: 'text-primary underline-offset-4 data-[hover=true]:underline data-[active=true]:underline',
+      link: 'text-primary underline-offset-4 data-[hover=true]:underline',
     },
     size: {
       default: 'px-4 py-2',
@@ -53,7 +53,7 @@ const buttonTextStyle = tva({
       outline: 'text-foreground data-[hover=true]:text-accent-foreground data-[active=true]:text-accent-foreground',
       secondary: 'text-secondary-foreground',
       ghost: 'text-foreground ',
-      link: 'text-primary data-[hover=true]:underline data-[active=true]:underline',
+      link: 'text-primary data-[hover=true]:underline',
     },
     size: {
       default: 'text-sm',

@@ -75,7 +75,7 @@ export function ManagerMapScreen({
         testID="manager-map-settings-button"
         accessibilityLabel="Open map settings"
         variant="link"
-        size="icon"
+        size="lg"
         onPress={() => setSettingsOpen(true)}
         className="h-11 w-11"
       >
