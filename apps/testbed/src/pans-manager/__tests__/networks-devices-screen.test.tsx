@@ -413,10 +413,9 @@ describe("NetworksDevicesScreen", () => {
     });
     expect(harness.inspectAndCache).not.toHaveBeenCalled();
 
-    await act(async () => {
-      pressTestId(tree, "save-device-settings");
-      await flushPromises();
-    });
+    expect(
+      tree.root.findAllByProps({ testID: "save-device-settings" }),
+    ).toHaveLength(0);
     expect(harness.applyConfigurationDiff).not.toHaveBeenCalled();
 
     act(() => tree.root.findByType(DeviceSettingsModal).props.onClose());
@@ -510,9 +509,11 @@ describe("NetworksDevicesScreen", () => {
     expect(mockPush).not.toHaveBeenCalled();
     expect(harness.inspectAndCache).toHaveBeenCalledWith(persisted.id);
     await act(async () => {
-      pressTestId(tree, "save-device-settings");
       await flushPromises();
     });
+    expect(
+      tree.root.findAllByProps({ testID: "save-device-settings" }),
+    ).toHaveLength(0);
     expect(harness.applyConfigurationDiff).not.toHaveBeenCalled();
     act(() => tree.root.findByType(DeviceSettingsModal).props.onClose());
     expect(

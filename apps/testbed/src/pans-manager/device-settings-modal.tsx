@@ -227,6 +227,8 @@ export function DeviceSettingsModal({
   const profileNetworkId = profileSelectionDirty
     ? selectedProfileNetworkId
     : baselineProfileNetworkId;
+  const hasUnsavedChanges =
+    draft.dirty || profileNetworkId !== baselineProfileNetworkId;
 
   const profileChoices = React.useMemo(
     () => [
@@ -555,14 +557,16 @@ export function DeviceSettingsModal({
           <Button variant="ghost" onPress={onClose}>
             <ButtonText>Close</ButtonText>
           </Button>
-          <Button
-            testID="save-device-settings"
-            isDisabled={saving || draft.hasErrors}
-            onPress={() => void save()}
-          >
-            {saving ? <ButtonSpinner color={theme.raw.white} /> : null}
-            <ButtonText>Save</ButtonText>
-          </Button>
+          {saving || hasUnsavedChanges ? (
+            <Button
+              testID="save-device-settings"
+              isDisabled={saving || draft.hasErrors}
+              onPress={() => void save()}
+            >
+              {saving ? <ButtonSpinner color={theme.raw.white} /> : null}
+              <ButtonText>Save</ButtonText>
+            </Button>
+          ) : null}
         </ModalFooter>
       </ModalContent>
     </Modal>
