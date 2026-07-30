@@ -1,9 +1,8 @@
 import React from "react";
-import { Check, ChevronDown } from "lucide-react-native";
+import { ChevronDown } from "lucide-react-native";
 import { Alert, AlertText } from "@eight2five/ui/components/alert";
 import {
   Button,
-  ButtonIcon,
   ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
@@ -20,13 +19,19 @@ import {
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Input, InputField } from "@eight2five/ui/components/input";
-import {
-  Popover,
-  PopoverBackdrop,
-  PopoverBody,
-  PopoverContent,
-} from "@eight2five/ui/components/popover";
 import { ScrollView } from "@eight2five/ui/components/scroll-view";
+import {
+  Select,
+  SelectBackdrop,
+  SelectContent,
+  SelectDragIndicator,
+  SelectDragIndicatorWrapper,
+  SelectIcon,
+  SelectInput,
+  SelectItem,
+  SelectPortal,
+  SelectTrigger,
+} from "@eight2five/ui/components/select";
 import { Spinner } from "@eight2five/ui/components/spinner";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
@@ -332,13 +337,8 @@ export function SelectField<T extends string>({
   disabled?: boolean;
 }) {
   const theme = useEight2FiveTheme();
-  const [open, setOpen] = React.useState(false);
   const unavailable = value === undefined;
   const isDisabled = disabled || unavailable;
-  const selected = choices.find((choice) => choice.value === value);
-  const displayValue = unavailable
-    ? "Unavailable"
-    : selected?.label || placeholder;
 
   return (
     <FormControl isInvalid={Boolean(error)}>
@@ -352,92 +352,51 @@ export function SelectField<T extends string>({
           {label}
         </FormControlLabelText>
       </FormControlLabel>
-      <Popover
-        isOpen={open && !isDisabled}
-        onOpen={() => {
-          if (!isDisabled) setOpen(true);
-        }}
-        onClose={() => setOpen(false)}
-        placement="bottom left"
-        trigger={(triggerProps) => (
-          <Button
-            {...triggerProps}
-            testID={testID}
-            variant="outline"
-            size="lg"
-            isDisabled={isDisabled}
-            accessibilityLabel={label}
-            accessibilityHint="Opens the available choices"
-            accessibilityState={{ disabled: isDisabled, expanded: open }}
-            className="min-h-12 w-full justify-between px-3"
-            style={{
-              borderWidth: 0,
-              borderRadius: eight2FiveRadii.sm,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <ButtonText
-              className="flex-1 text-left"
-              numberOfLines={1}
-              style={{
-                color: selected ? theme.text : theme.textMuted,
-                fontFamily: eight2FiveFonts.utilityRegular,
-              }}
-            >
-              {displayValue}
-            </ButtonText>
-            <ButtonIcon as={ChevronDown} style={{ color: theme.icon }} />
-          </Button>
-        )}
+      <Select
+        selectedValue={value}
+        onValueChange={(val: string) => onChange(val as T)}
+        isDisabled={isDisabled}
       >
-        <PopoverBackdrop />
-        <PopoverContent
-          className="shadow-none p-2"
+        <SelectTrigger
+          testID={testID}
+          accessibilityLabel={label}
+          variant="outline"
+          size="lg"
+          className="min-h-12"
           style={{
-            width: 280,
-            maxHeight: 360,
-            backgroundColor: theme.surfaceRaised,
+            backgroundColor: theme.surface,
             borderColor: theme.border,
           }}
         >
-          <PopoverBody contentContainerStyle={{ gap: four }}>
-            {choices.map((choice) => {
-              const choiceSelected = choice.value === value;
-              return (
-                <Button
-                  key={choice.value}
-                  testID={
-                    testID ? `${testID}-option-${choice.value}` : undefined
-                  }
-                  variant="ghost"
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: choiceSelected }}
-                  className="min-h-11 w-full justify-between px-3"
-                  style={{
-                    backgroundColor: choiceSelected
-                      ? theme.accentSoft
-                      : "transparent",
-                  }}
-                  onPress={() => {
-                    onChange(choice.value);
-                    setOpen(false);
-                  }}
-                >
-                  <ButtonText
-                    className="flex-1 text-left"
-                    style={{ color: theme.text }}
-                  >
-                    {choice.label}
-                  </ButtonText>
-                  {choiceSelected ? (
-                    <ButtonIcon as={Check} style={{ color: theme.accent }} />
-                  ) : null}
-                </Button>
-              );
-            })}
-          </PopoverBody>
-        </PopoverContent>
-      </Popover>
+          <SelectInput
+            placeholder={placeholder}
+            style={{
+              color: value ? theme.text : theme.textMuted,
+              fontFamily: eight2FiveFonts.utilityRegular,
+            }}
+          />
+          <SelectIcon as={ChevronDown} style={{ color: theme.icon }} />
+        </SelectTrigger>
+        <SelectPortal>
+          <SelectBackdrop />
+          <SelectContent
+            style={{
+              backgroundColor: theme.surfaceRaised,
+            }}
+          >
+            <SelectDragIndicatorWrapper>
+              <SelectDragIndicator />
+            </SelectDragIndicatorWrapper>
+            {choices.map((choice) => (
+              <SelectItem
+                key={choice.value}
+                label={choice.label}
+                value={choice.value}
+              />
+            ))}
+          </SelectContent>
+        </SelectPortal>
+      </Select>
       {helper ? (
         <FormControlHelper>
           <FormControlHelperText style={{ color: theme.textMuted }}>
