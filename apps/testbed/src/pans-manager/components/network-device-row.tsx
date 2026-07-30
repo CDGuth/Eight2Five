@@ -167,12 +167,6 @@ export function NetworkDeviceRow({
           }}
         />
       </HStack>
-      <AccordionIcon
-        as={ChevronDown}
-        style={{ color: device.available ? theme.icon : theme.textMuted }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      />
     </AccordionTrigger>
   );
 
@@ -209,6 +203,12 @@ export function NetworkDeviceRow({
                 }}
               />
             </Button>
+            <AccordionIcon
+              as={ChevronDown}
+              style={{ color: device.available ? theme.icon : theme.textMuted }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
           </HStack>
         </AccordionHeader>
         <Divider style={{ backgroundColor: theme.border }} />

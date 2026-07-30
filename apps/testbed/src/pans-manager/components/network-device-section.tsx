@@ -95,12 +95,6 @@ export function NetworkDeviceSection({
                   </Text>
                 ) : null}
               </VStack>
-              <AccordionIcon
-                as={ChevronDown}
-                style={{ color: theme.icon }}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-              />
             </AccordionTrigger>
             {section.network && onEditNetwork ? (
               <Button
@@ -114,6 +108,12 @@ export function NetworkDeviceSection({
                 <ButtonIcon as={Pencil} style={{ color: theme.icon }} />
               </Button>
             ) : null}
+            <AccordionIcon
+              as={ChevronDown}
+              style={{ color: theme.icon }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
           </HStack>
         </AccordionHeader>
       </AccordionItem>
