@@ -41,6 +41,7 @@ describe("DeviceSettingsModal lazy behavior", () => {
     mockUsePansActions.mockReturnValue({
       inspectDevice,
       applyDeviceConfiguration: jest.fn(),
+      assignDeviceToNetworkProfile: jest.fn(),
       deleteOfflineDevice: jest.fn(),
       unassignOnlineDevice: jest.fn(),
     });

@@ -26,7 +26,6 @@ import {
 import { VStack } from "@eight2five/ui/components/vstack";
 import { ChevronDown, Pencil } from "lucide-react-native";
 
-import type { NetworkDropZone } from "./network-device-drop";
 import {
   MANAGER_CARD_CONTENT_INSET,
   MANAGER_CHILD_RAIL_WIDTH,
@@ -42,10 +41,6 @@ export interface NetworkDeviceSectionProps {
   expanded: boolean;
   onExpandedChange(expanded: boolean): void;
   onEditNetwork?(networkId: string): void;
-  interactionsDisabled: boolean;
-  hoveredNetworkId?: string;
-  onRegisterDropZone?(networkId: string, measure: () => void): () => void;
-  onDropZoneChange?(zone: NetworkDropZone): void;
 }
 
 export function NetworkDeviceSection({
@@ -53,13 +48,8 @@ export function NetworkDeviceSection({
   expanded,
   onExpandedChange,
   onEditNetwork,
-  interactionsDisabled,
-  hoveredNetworkId,
-  onRegisterDropZone,
-  onDropZoneChange,
 }: NetworkDeviceSectionProps) {
   const theme = useEight2FiveTheme();
-  const headerRef = React.useRef<React.ComponentRef<typeof HStack>>(null);
   const title = section.network
     ? getNetworkDisplayName(section.network)
     : "Unassigned Devices";
@@ -68,82 +58,33 @@ export function NetworkDeviceSection({
     section.devices.length === 1 ? "device" : "devices"
   }`;
   const legacyUnassignedPan = section.network?.panId === PANS_UNASSIGNED_PAN_ID;
-  const networkId = section.network?.id;
-  const dropTargetNetworkId = legacyUnassignedPan ? undefined : networkId;
-  const measureDropZone = React.useCallback(() => {
-    if (!dropTargetNetworkId || !onDropZoneChange) return;
-    headerRef.current?.measureInWindow((x, y, width, height) => {
-      if (
-        !Number.isFinite(x) ||
-        !Number.isFinite(y) ||
-        !Number.isFinite(width) ||
-        !Number.isFinite(height) ||
-        width <= 0 ||
-        height <= 0
-      )
-        return;
-      onDropZoneChange({
-        networkId: dropTargetNetworkId,
-        left: x,
-        top: y,
-        right: x + width,
-        bottom: y + height,
-      });
-    });
-  }, [dropTargetNetworkId, onDropZoneChange]);
-
-  React.useEffect(() => {
-    if (!dropTargetNetworkId || !onRegisterDropZone) return;
-    return onRegisterDropZone(dropTargetNetworkId, measureDropZone);
-  }, [dropTargetNetworkId, measureDropZone, onRegisterDropZone]);
-
-  React.useEffect(() => {
-    if (!dropTargetNetworkId) return;
-    const frame = requestAnimationFrame(measureDropZone);
-    return () => cancelAnimationFrame(frame);
-  }, [dropTargetNetworkId, expanded, measureDropZone, section.devices.length]);
 
   const header = (
     <Accordion
       type="multiple"
       value={expanded ? [section.key] : []}
-      onValueChange={(values) => {
-        if (!interactionsDisabled)
-          onExpandedChange(values.includes(section.key));
-      }}
+      onValueChange={(values) => onExpandedChange(values.includes(section.key))}
       isCollapsible
     >
       <AccordionItem value={section.key}>
         <AccordionHeader className="m-0 py-0">
           <HStack
-            ref={headerRef}
-            testID={
-              dropTargetNetworkId
-                ? `network-drop-zone-${dropTargetNetworkId}`
-                : undefined
-            }
             className="w-full items-center"
-            onLayout={dropTargetNetworkId ? measureDropZone : undefined}
             style={{
               paddingVertical: eight2FiveSpacing.sm,
               paddingHorizontal: MANAGER_CARD_CONTENT_INSET,
-              backgroundColor:
-                dropTargetNetworkId && hoveredNetworkId === dropTargetNetworkId
-                  ? theme.accentSoft
-                  : undefined,
             }}
           >
             <AccordionTrigger
               testID={`section-toggle-${section.key}`}
               className="min-h-11 flex-1"
-              disabled={interactionsDisabled}
               accessibilityLabel={`${title} section, ${
                 pan ? `PAN ${pan}, ` : ""
               }${count}`}
               accessibilityHint={
                 expanded ? "Collapse section" : "Expand section"
               }
-              accessibilityState={{ expanded, disabled: interactionsDisabled }}
+              accessibilityState={{ expanded }}
             >
               <VStack className="flex-1" style={{ gap: eight2FiveSpacing.xs }}>
                 <Text
@@ -177,10 +118,8 @@ export function NetworkDeviceSection({
                 testID={`edit-network-${section.network.id}`}
                 size="icon"
                 variant="ghost"
-                isDisabled={interactionsDisabled}
                 accessibilityLabel={`Edit ${title}`}
                 accessibilityHint="Opens saved network settings"
-                accessibilityState={{ disabled: interactionsDisabled }}
                 onPress={() => onEditNetwork(section.network!.id)}
               >
                 <ButtonIcon as={Pencil} style={{ color: theme.icon }} />

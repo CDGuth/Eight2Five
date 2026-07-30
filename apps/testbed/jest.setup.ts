@@ -1,5 +1,6 @@
 import { Alert } from "react-native";
 
+// Reanimated's mock pulls worklets; keep a deterministic RN bridge for tests.
 jest.mock("react-native-worklets", () => ({
   ...jest.requireActual("react-native-worklets/lib/module/mock"),
   scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
@@ -9,40 +10,6 @@ jest.mock("react-native-worklets", () => ({
 jest.mock("react-native-reanimated", () =>
   jest.requireActual("react-native-reanimated/mock"),
 );
-
-jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
-  const React = require("react");
-  const { View } = require("react-native");
-  const MockSwipeable = React.forwardRef((props: any, ref: any) => {
-    const methods = React.useMemo(
-      () => ({
-        close: jest.fn(),
-        openLeft: jest.fn(),
-        openRight: jest.fn(),
-        reset: jest.fn(),
-      }),
-      [],
-    );
-    React.useImperativeHandle(ref, () => methods, [methods]);
-    const actions = props.renderRightActions?.(
-      { value: 0 },
-      { value: 0 },
-      methods,
-    );
-    return React.createElement(
-      View,
-      {
-        testID: props.testID,
-        onSwipeableWillOpen: props.onSwipeableWillOpen,
-        onSwipeableClose: props.onSwipeableClose,
-        swipeableMethods: methods,
-      },
-      props.children,
-      actions,
-    );
-  });
-  return { __esModule: true, default: MockSwipeable };
-});
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

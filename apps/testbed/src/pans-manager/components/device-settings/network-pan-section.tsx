@@ -9,6 +9,11 @@ import {
   cachedFieldLabel,
 } from "./device-settings-fields";
 
+export interface NetworkProfileChoice {
+  label: string;
+  value: string;
+}
+
 export interface NetworkPanSectionProps {
   panId?: number;
   source: "cached" | "actual";
@@ -16,6 +21,11 @@ export interface NetworkPanSectionProps {
   profileStatus: "matched" | "conflict" | "unverified" | "unassigned";
   profileDisplayName?: string;
   conflictingProfileNames: string[];
+  /** Selected saved-network association (`unassigned` or a network id). */
+  profileNetworkId: string;
+  profileChoices: readonly NetworkProfileChoice[];
+  profileSelectDisabled: boolean;
+  onProfileNetworkChange(value: string): void;
   role?: "anchor" | "tag";
   uwbMode?: "active" | "passive" | "off";
   ledEnabled?: boolean;
@@ -36,6 +46,10 @@ export const NetworkPanSection = React.memo(function NetworkPanSection(
     profileStatus,
     profileDisplayName,
     conflictingProfileNames,
+    profileNetworkId,
+    profileChoices,
+    profileSelectDisabled,
+    onProfileNetworkChange,
     role,
     uwbMode,
     ledEnabled,
@@ -69,6 +83,14 @@ export const NetworkPanSection = React.memo(function NetworkPanSection(
                   : "Unassigned"
           }
         />
+        <SelectField
+          testID="device-profile-select"
+          label="Saved network association"
+          value={profileNetworkId}
+          choices={profileChoices}
+          onChange={onProfileNetworkChange}
+          disabled={profileSelectDisabled}
+        />
         {profileStatus === "conflict" ? (
           <SettingInfoCard tone="error" testID="device-pan-profile-conflict">
             PAN {formatPanId(panId!)} matches multiple saved profiles:{" "}
@@ -78,9 +100,9 @@ export const NetworkPanSection = React.memo(function NetworkPanSection(
         ) : null}
         <SettingHelp title="PANS Network ID">
           Hardware value from 0 to 65535. PAN 0 (0x0000) is the PANS default PAN
-          ID and is used for the unassigned-device state. The app derives the
-          cached profile match from this value; a local selection never
-          overrides hardware.
+          ID and is used for the unassigned-device state. Choosing a saved
+          network and saving writes that profile&apos;s PAN ID to the device.
+          Use Unassign device below to clear the hardware association.
         </SettingHelp>
       </FormSection>
       <FormSection title="Node role and UWB">

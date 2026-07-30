@@ -60,14 +60,12 @@ import { SettingInfoCard } from "./components/setting-help";
 export interface NetworkEditModalProps {
   network?: ManagedNetwork;
   isOpen: boolean;
-  destructiveActionRequested?: boolean;
   onClose(): void;
 }
 
 export function NetworkEditModal({
   network,
   isOpen,
-  destructiveActionRequested = false,
   onClose,
 }: NetworkEditModalProps) {
   const theme = useEight2FiveTheme();
@@ -106,7 +104,7 @@ export function NetworkEditModal({
     setResult(undefined);
     setError(undefined);
     setConfirmingDelete(false);
-  }, [destructiveActionRequested, isOpen, network]);
+  }, [isOpen, network]);
 
   React.useEffect(() => {
     if (isOpen) return;
@@ -125,8 +123,6 @@ export function NetworkEditModal({
     ),
   ).length;
   const reviewing = targetPanId !== undefined && targetPanId !== network.panId;
-  const deleteConfirmationVisible =
-    confirmingDelete || destructiveActionRequested;
 
   const reviewOrSave = async () => {
     setSaving(true);
@@ -318,7 +314,7 @@ export function NetworkEditModal({
                   position logs. Device hardware is not changed; cached devices
                   move to Unassigned if no remaining profile matches their PAN.
                 </SettingInfoCard>
-                {deleteConfirmationVisible ? (
+                {confirmingDelete ? (
                   <VStack style={{ gap: eight2FiveSpacing.sm }}>
                     <Text
                       selectable
@@ -346,10 +342,7 @@ export function NetworkEditModal({
                       <Button
                         variant="outline"
                         isDisabled={deleting}
-                        onPress={() => {
-                          if (destructiveActionRequested) onClose();
-                          else setConfirmingDelete(false);
-                        }}
+                        onPress={() => setConfirmingDelete(false)}
                       >
                         <ButtonText>Cancel deletion</ButtonText>
                       </Button>
@@ -495,7 +488,7 @@ export function NetworkEditModal({
               </Button>
               <Button
                 testID="review-network-changes"
-                isDisabled={saving || deleting || deleteConfirmationVisible}
+                isDisabled={saving || deleting || confirmingDelete}
                 onPress={() => void reviewOrSave()}
               >
                 {saving ? <ButtonSpinner color={theme.raw.white} /> : null}

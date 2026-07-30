@@ -5,6 +5,7 @@ import type {
   PansConfigurationResult,
 } from "@eight2five/mobile/pans-manager";
 import {
+  formatPanId,
   getNetworkDisplayName,
   mapUnitAbbreviation,
   resolveCachedProfileMatch,
@@ -54,7 +55,6 @@ export interface DeviceSettingsModalProps {
   discovery?: DiscoveredDeviceSnapshot;
   isOpen: boolean;
   available: boolean;
-  destructiveActionRequested?: boolean;
   onClose(): void;
 }
 
@@ -63,7 +63,6 @@ export function DeviceSettingsModal({
   discovery,
   isOpen,
   available,
-  destructiveActionRequested = false,
   onClose,
 }: DeviceSettingsModalProps) {
   const theme = useEight2FiveTheme();
@@ -71,6 +70,7 @@ export function DeviceSettingsModal({
   const {
     inspect: inspectDevice,
     applyConfiguration: applyDeviceConfiguration,
+    assignToNetwork,
     deleteOffline: deleteOfflineDevice,
     unassignOnline: unassignOnlineDevice,
   } = useDeviceConfigurationActions();
@@ -94,6 +94,11 @@ export function DeviceSettingsModal({
   const [confirmingDestructiveAction, setConfirmingDestructiveAction] =
     React.useState(false);
   const [destructiveBusy, setDestructiveBusy] = React.useState(false);
+  /** User-selected saved network id, or `unassigned`. */
+  const [selectedProfileNetworkId, setSelectedProfileNetworkId] =
+    React.useState<string>("unassigned");
+  const [profileSelectionDirty, setProfileSelectionDirty] =
+    React.useState(false);
   const inspectionAttempted = React.useRef(false);
   const activeDeviceId = React.useRef<string | undefined>(undefined);
 
@@ -106,7 +111,9 @@ export function DeviceSettingsModal({
     setConfigurationResult(undefined);
     setAdvancedOpen(false);
     setConfirmingDestructiveAction(false);
-  }, [device, destructiveActionRequested, isOpen]);
+    setProfileSelectionDirty(false);
+    setSelectedProfileNetworkId("unassigned");
+  }, [device, isOpen]);
   React.useEffect(() => {
     if (!isOpen) activeDeviceId.current = undefined;
   }, [isOpen]);
@@ -210,23 +217,62 @@ export function DeviceSettingsModal({
       .filter((network) => network !== undefined);
     return {
       status: match.status,
+      networkId: match.networkId,
       displayName: matches[0] ? getNetworkDisplayName(matches[0]) : undefined,
       conflictNames: matches.map(getNetworkDisplayName),
     };
   }, [draft.form?.panId, networks]);
+
+  const baselineProfileNetworkId = profile.networkId ?? "unassigned";
+  const profileNetworkId = profileSelectionDirty
+    ? selectedProfileNetworkId
+    : baselineProfileNetworkId;
+
+  const profileChoices = React.useMemo(
+    () => [
+      { label: "Unassigned", value: "unassigned" },
+      ...networks.map((network) => ({
+        label: `${getNetworkDisplayName(network)} · ${formatPanId(network.panId)}`,
+        value: network.id,
+      })),
+    ],
+    [networks],
+  );
+
+  const onProfileNetworkChange = React.useCallback((value: string) => {
+    setProfileSelectionDirty(true);
+    setSelectedProfileNetworkId(value);
+  }, []);
 
   const save = async () => {
     if (draft.hasErrors) {
       setError("Correct the highlighted anchor position fields before saving.");
       return;
     }
-    if (!device || !draft.diff) return;
+    if (!device) return;
+    const hardwareChanges = draft.diff?.hardwareChanges ?? {};
+    const assignmentTarget =
+      profileSelectionDirty &&
+      profileNetworkId !== baselineProfileNetworkId &&
+      profileNetworkId !== "unassigned"
+        ? profileNetworkId
+        : undefined;
+    const wantsUnassign =
+      profileSelectionDirty &&
+      profileNetworkId === "unassigned" &&
+      baselineProfileNetworkId !== "unassigned";
+    if (
+      !Object.keys(hardwareChanges).length &&
+      !assignmentTarget &&
+      !wantsUnassign
+    )
+      return;
     setSaving(true);
     setError(undefined);
     setConfigurationResult(undefined);
     try {
       const failures: string[] = [];
-      if (Object.keys(draft.diff.hardwareChanges).length) {
+      if (Object.keys(hardwareChanges).length) {
         if (!available)
           failures.push(
             "Hardware changes were not applied because the device is unavailable.",
@@ -235,7 +281,7 @@ export function DeviceSettingsModal({
           try {
             const result = await applyDeviceConfiguration(
               device.id,
-              draft.diff.hardwareChanges,
+              hardwareChanges,
             );
             setConfigurationResult(result);
             draft.applySaveResult(result);
@@ -246,6 +292,47 @@ export function DeviceSettingsModal({
           } catch (cause) {
             failures.push(`Hardware: ${displayError(cause)}`);
           }
+      }
+      if (wantsUnassign) {
+        setSelectedProfileNetworkId(baselineProfileNetworkId);
+        setProfileSelectionDirty(false);
+        failures.push(
+          "Clearing a saved network association requires Unassign device below, which writes the default PAN ID to hardware.",
+        );
+      } else if (assignmentTarget) {
+        if (!available) {
+          setSelectedProfileNetworkId(baselineProfileNetworkId);
+          setProfileSelectionDirty(false);
+          failures.push(
+            "Profile assignment requires the device to be available.",
+          );
+        } else {
+          try {
+            const result = await assignToNetwork({
+              deviceId: device.id,
+              targetNetworkId: assignmentTarget,
+            });
+            if (result.configuration) {
+              setConfigurationResult(result.configuration);
+              if (result.configuration.inspected)
+                draft.applySaveResult(result.configuration);
+            }
+            if (result.outcome === "assigned") {
+              setProfileSelectionDirty(false);
+              setSelectedProfileNetworkId(assignmentTarget);
+            } else {
+              setSelectedProfileNetworkId(baselineProfileNetworkId);
+              setProfileSelectionDirty(false);
+              failures.push(
+                result.error?.message ?? "Profile assignment failed.",
+              );
+            }
+          } catch (cause) {
+            setSelectedProfileNetworkId(baselineProfileNetworkId);
+            setProfileSelectionDirty(false);
+            failures.push(`Profile assignment: ${displayError(cause)}`);
+          }
+        }
       }
       if (failures.length) setError(failures.join("\n"));
     } catch (cause) {
@@ -287,9 +374,8 @@ export function DeviceSettingsModal({
     void runDestructiveAction();
   }, [runDestructiveAction]);
   const cancelDestructive = React.useCallback(() => {
-    if (destructiveActionRequested) onClose();
-    else setConfirmingDestructiveAction(false);
-  }, [destructiveActionRequested, onClose]);
+    setConfirmingDestructiveAction(false);
+  }, []);
 
   const form = draft.form;
   const baseline = draft.baseline;
@@ -363,6 +449,12 @@ export function DeviceSettingsModal({
             profileStatus={profile.status}
             profileDisplayName={profile.displayName}
             conflictingProfileNames={profile.conflictNames}
+            profileNetworkId={profileNetworkId}
+            profileChoices={profileChoices}
+            profileSelectDisabled={
+              !available || profile.status === "conflict" || inspecting
+            }
+            onProfileNetworkChange={onProfileNetworkChange}
             role={form.role}
             uwbMode={form.uwbMode}
             ledEnabled={form.ledEnabled}
@@ -433,9 +525,7 @@ export function DeviceSettingsModal({
           </AnimatedHeight>
           <DestructiveActionSection
             available={available}
-            confirmationVisible={
-              confirmingDestructiveAction || destructiveActionRequested
-            }
+            confirmationVisible={confirmingDestructiveAction}
             busy={destructiveBusy}
             onRequest={requestDestructive}
             onConfirm={confirmDestructive}
