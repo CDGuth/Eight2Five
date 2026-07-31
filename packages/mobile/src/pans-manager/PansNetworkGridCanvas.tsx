@@ -59,15 +59,17 @@ export function PansNetworkGridCanvas({
         Boolean(edge.source && edge.target),
       );
   }, [nodes, observedEdges]);
-  const edgePath = useDerivedValue(() =>
-    edgeTargets
-      .map((edge) => {
-        const source = edge.source.livePosition?.value ?? edge.source.position;
-        const target = edge.target.livePosition?.value ?? edge.target.position;
-        return `M ${source.xMeters} ${source.yMeters} L ${target.xMeters} ${target.yMeters}`;
-      })
-      .join(" "),
-  );
+  const edgePath = useDerivedValue(() => {
+    let result = "";
+    for (let i = 0; i < edgeTargets.length; i++) {
+      const edge = edgeTargets[i];
+      if (!edge) continue;
+      const sourcePos = edge.source.livePosition?.value ?? edge.source.position;
+      const targetPos = edge.target.livePosition?.value ?? edge.target.position;
+      result += `M ${sourcePos.xMeters} ${sourcePos.yMeters} L ${targetPos.xMeters} ${targetPos.yMeters} `;
+    }
+    return result;
+  }, [edgeTargets]);
 
   return (
     <Canvas style={{ flex: 1 }} onSize={canvasSize} testID={`${testID}-canvas`}>

@@ -15,10 +15,12 @@ import type {
 import type {
   PansGridCameraSharedValues,
   PansGridNode,
+  PansGridObservedEdge,
 } from "./pans-network-grid-types";
 
 interface PansNetworkGridOverlaysProps {
   nodes: PansGridNode[];
+  observedEdges?: PansGridObservedEdge[];
   camera: PansGridCameraSharedValues;
   canvasSize: SharedValue<GridSize>;
   gestureActive: SharedValue<boolean>;
@@ -36,6 +38,7 @@ interface PansNetworkGridOverlaysProps {
 
 export function PansNetworkGridOverlays({
   nodes,
+  observedEdges = [],
   camera,
   canvasSize,
   gestureActive,
@@ -58,6 +61,18 @@ export function PansNetworkGridOverlays({
     [committedViewport, intervalMeters, showOrigin, size, units],
   );
 
+  const edgeTargets = React.useMemo(() => {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    return observedEdges
+      .map((edge) => ({
+        source: byId.get(edge.sourceId),
+        target: byId.get(edge.targetId),
+      }))
+      .filter((edge): edge is { source: PansGridNode; target: PansGridNode } =>
+        Boolean(edge.source && edge.target),
+      );
+  }, [nodes, observedEdges]);
+
   return (
     <>
       {showLabels
@@ -65,6 +80,20 @@ export function PansNetworkGridOverlays({
             <GridNodeLabel
               key={`label-${node.id}`}
               node={node}
+              camera={camera}
+              canvasSize={canvasSize}
+              gestureActive={gestureActive}
+              color={color}
+              fontFamily={fontFamily}
+            />
+          ))
+        : null}
+      {showLabels
+        ? edgeTargets.map(({ source, target }) => (
+            <GridEdgeLabel
+              key={`edge-${source.id}-${target.id}`}
+              source={source}
+              target={target}
               camera={camera}
               canvasSize={canvasSize}
               gestureActive={gestureActive}
@@ -167,6 +196,70 @@ const GridNodeLabel = React.memo(function GridNodeLabel({
       ]}
     >
       {node.label ?? node.id}
+    </Animated.Text>
+  );
+});
+
+const GridEdgeLabel = React.memo(function GridEdgeLabel({
+  source,
+  target,
+  camera,
+  canvasSize,
+  gestureActive,
+  color,
+  fontFamily,
+}: {
+  source: PansGridNode;
+  target: PansGridNode;
+  camera: PansGridCameraSharedValues;
+  canvasSize: SharedValue<GridSize>;
+  gestureActive: SharedValue<boolean>;
+  color: string;
+  fontFamily: string;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const sourcePos = source.livePosition?.value ?? source.position;
+    const targetPos = target.livePosition?.value ?? target.position;
+    const midX = (sourcePos.xMeters + targetPos.xMeters) / 2;
+    const midY = (sourcePos.yMeters + targetPos.yMeters) / 2;
+    return {
+      opacity: gestureActive.value ? 0 : 1,
+      transform: [
+        {
+          translateX:
+            canvasSize.value.width / 2 +
+            (midX - camera.centerX.value) / camera.metersPerPixel.value +
+            6,
+        },
+        {
+          translateY:
+            canvasSize.value.height / 2 -
+            (midY - camera.centerY.value) / camera.metersPerPixel.value -
+            15,
+        },
+      ],
+    };
+  });
+
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+      style={[
+        {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          color,
+          fontSize: 10,
+          fontFamily,
+        },
+        animatedStyle,
+      ]}
+    >
+      {target.label ?? target.id.slice(0, 6)}
     </Animated.Text>
   );
 });

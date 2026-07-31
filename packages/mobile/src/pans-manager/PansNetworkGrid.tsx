@@ -214,6 +214,7 @@ export function PansNetworkGrid({
         />
         <PansNetworkGridOverlays
           nodes={nodes}
+          observedEdges={observedEdges}
           camera={camera}
           canvasSize={canvasSize}
           gestureActive={gestureActive}

@@ -211,7 +211,6 @@ export function usePansMapDataController(
   const [rangingEdges, setRangingEdges] = React.useState<
     PansGridObservedEdge[]
   >([]);
-  const rangingEdgeKeyRef = React.useRef("");
   const [topologyCache, setTopologyCache] = React.useState<
     Record<string, ObservedPansTopology>
   >({});
@@ -396,7 +395,6 @@ export function usePansMapDataController(
         setActiveTagId(undefined);
         setActiveSampleTagId(undefined);
         setRangingEdges([]);
-        rangingEdgeKeyRef.current = "";
         setLastKnownTagPositions(lastKnownRef.current);
         setTrackingStatus("stopped");
       }
@@ -459,12 +457,6 @@ export function usePansMapDataController(
             },
             hasLiveSample: () => activeSampleTagIdRef.current === device.id,
             onEdges: (nextEdges) => {
-              const key = nextEdges
-                .map((edge) => `${edge.sourceId}:${edge.targetId}`)
-                .sort()
-                .join("|");
-              if (key === rangingEdgeKeyRef.current) return;
-              rangingEdgeKeyRef.current = key;
               setRangingEdges(nextEdges);
             },
             onInitialDiagnostic: (message) =>
@@ -1035,7 +1027,13 @@ function isDeviceOffline(
 }
 
 function normalizeNodeId(value: string): string {
-  return value.trim().replace(/^0x/i, "").toUpperCase().padStart(4, "0");
+  return value
+    .trim()
+    .replace(/^0x/i, "")
+    .replace(/^uwb-anchor-/i, "")
+    .toUpperCase()
+    .slice(-4)
+    .padStart(4, "0");
 }
 
 function setInitialTrackingDiagnostic(

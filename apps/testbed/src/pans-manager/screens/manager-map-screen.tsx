@@ -9,6 +9,7 @@ import {
 } from "@eight2five/mobile/pans-manager";
 import type {
   MapUnits,
+  PansGridNode,
   PansGridObservedEdge,
   PansGridPalette,
 } from "@eight2five/mobile/pans-manager";
@@ -84,6 +85,11 @@ export function ManagerMapScreen({
   );
 
   const displayPositionText = livePositionText ?? selectedPositionText;
+
+  const nodeById = React.useMemo(
+    () => new Map(controller.nodes.map((node) => [node.id, node])),
+    [controller.nodes],
+  );
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const palette = React.useMemo<PansGridPalette>(
@@ -201,7 +207,11 @@ export function ManagerMapScreen({
                 size="sm"
                 style={{ color: theme.textMuted }}
               >
-                {formatRangingEdge(edge, controller.mapUnits)}
+                {formatRangingEdge(
+                  edge,
+                  controller.mapUnits,
+                  nodeById.get(edge.targetId),
+                )}
               </Text>
             ) : null,
           )}
@@ -221,9 +231,13 @@ export function ManagerMapScreen({
 function formatRangingEdge(
   edge: PansGridObservedEdge,
   units: MapUnits,
+  targetNode?: PansGridNode,
 ): string {
-  if (edge.distanceMeters === undefined) return "Range unavailable";
-  return `Range ${formatMapDistance(edge.distanceMeters, units)}${
+  const label = targetNode
+    ? `${targetNode.label ?? targetNode.id.slice(0, 6)} `
+    : "";
+  if (edge.distanceMeters === undefined) return `${label}Range unavailable`;
+  return `${label}${formatMapDistance(edge.distanceMeters, units)}${
     edge.quality !== undefined ? ` · quality ${edge.quality}` : ""
   }`;
 }
