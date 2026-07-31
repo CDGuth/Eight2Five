@@ -19,7 +19,9 @@ const config: ExpoConfig = {
   slug: "eight2five",
   platforms: ["ios", "android"],
   version: "0.0.0",
-  orientation: "portrait",
+  // Field is the only route that opts into landscape; Drill and Settings
+  // apply portrait locks through their nested native stacks.
+  orientation: "default",
   icon: "./assets/app-icons/mobile-android-legacy-icon.png",
   userInterfaceStyle: "automatic",
   ios: {

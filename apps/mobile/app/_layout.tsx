@@ -1,12 +1,12 @@
 import React from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
-import {
-  eight2FiveFonts,
-  useEight2FiveFonts,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
+
+import { TabBarVisibilityProvider } from "../src/navigation/tab-bar-visibility-context";
 
 import "../global.css";
 
@@ -27,24 +27,17 @@ export default function MobileRootLayout() {
 
   return (
     <GluestackUIProvider mode="system">
-      <Stack
-        screenOptions={{
-          headerTintColor: theme.accent,
-          headerStyle: { backgroundColor: theme.background },
-          headerTitleStyle: {
-            color: theme.text,
-            fontFamily: eight2FiveFonts.styleSemibold,
-          },
-          contentStyle: { backgroundColor: theme.background },
-        }}
-      >
-        <Stack.Screen
-          name="index"
-          options={{
-            title: "Eight2Five",
-          }}
-        />
-      </Stack>
+      <SafeAreaProvider>
+        <TabBarVisibilityProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: theme.background },
+            }}
+          />
+          <StatusBar style="auto" />
+        </TabBarVisibilityProvider>
+      </SafeAreaProvider>
     </GluestackUIProvider>
   );
 }
