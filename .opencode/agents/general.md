@@ -48,8 +48,8 @@ permission:
     gh pr close*: ask
     gh pr edit*: ask
     gh release*: ask
-model: openai/gpt-5.6-sol
-variant: medium
+model: openai/gpt-5.6-luna
+variant: max
 ---
 
 You are a general-purpose subagent assisting the primary engineer agent with well-scoped implementation tasks.
