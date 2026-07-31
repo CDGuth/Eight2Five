@@ -381,7 +381,7 @@ Use compound variants when combinations of variant options need special styling.
 import React from 'react';
 import { tva } from '@gluestack-ui/utils/nativewind-utils';
 import { Button, ButtonText, ButtonIcon } from '@/components/ui/button';
-import { Loader2Icon } from '@/components/ui/icon';
+import { LoaderCircle } from 'lucide-react-native';
 
 interface ActionButtonProps {
   readonly variant?: 'solid' | 'outline' | 'ghost';
@@ -474,7 +474,7 @@ export const ActionButton = ({
       isDisabled={isDisabled || isLoading}
       className={actionButtonStyles({ variant, colorScheme, size, class: className })}
     >
-      {isLoading && <ButtonIcon as={Loader2Icon} className="animate-spin" />}
+      {isLoading && <ButtonIcon as={LoaderCircle} className="animate-spin" />}
       {children}
     </Button>
   );

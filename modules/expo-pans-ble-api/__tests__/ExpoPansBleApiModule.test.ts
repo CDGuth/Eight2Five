@@ -20,6 +20,7 @@ import {
   encodeOperationMode,
   encodePersistedPosition,
   getCapabilities,
+  getScanDiagnostics,
   patchOperationMode,
   prepareFirmwareUpdateTransport,
   readAnchorList,
@@ -51,6 +52,11 @@ import {
   PANS_BLE_UUIDS,
 } from "../src/ExpoPansBleApi.types";
 import type { PansBleCapabilities } from "../src/ExpoPansBleApi.types";
+import {
+  clonePansLocationDataFixture,
+  PANS_LOCATION_DATA_FIXTURES,
+  pansBytesToHex,
+} from "../src/testing/PansLocationDataFixtures";
 
 type NativeModuleMock = {
   startScanning: jest.Mock;
@@ -58,6 +64,7 @@ type NativeModuleMock = {
   clearDevices: jest.Mock;
   getCapabilities: jest.Mock;
   getPermissionStatus: jest.Mock;
+  getScanDiagnostics: jest.Mock;
   requestPermissions: jest.Mock;
   connect: jest.Mock;
   disconnect: jest.Mock;
@@ -86,6 +93,16 @@ jest.mock("expo-modules-core", () => {
     clearDevices: jest.fn(),
     getCapabilities: jest.fn(() => mockCapabilities),
     getPermissionStatus: jest.fn(() => ({ bluetooth: "granted" })),
+    getScanDiagnostics: jest.fn(() => ({
+      state: "scanning",
+      buildId: "test-build",
+      scanSessionId: 1,
+      rawResultCount: 2,
+      pansResultCount: 1,
+      parsedServiceDataHitCount: 0,
+      rawAdvertisementHitCount: 1,
+      rejectedResultCount: 1,
+    })),
     requestPermissions: jest.fn(async () => ({ bluetooth: "granted" })),
     connect: jest.fn(async () => true),
     disconnect: jest.fn(async () => true),
@@ -229,16 +246,16 @@ describe("PANS BLE codecs", () => {
   });
 
   test("decodes empty, position, distances, and combined location frames", () => {
-    expect(decodeLocationData([])).toEqual({
+    expect(decodeLocationData(clonePansLocationDataFixture("empty"))).toEqual({
       distances: [],
       raw: [],
       diagnostics: [],
+      decoderDiagnostics: [],
     });
 
-    const positionOnly = decodeLocationData([
-      0,
-      ...positionBytes(1000, -2000, 3000, 77),
-    ]);
+    const positionOnly = decodeLocationData(
+      clonePansLocationDataFixture("positionOnly14"),
+    );
     expect(positionOnly.position).toMatchObject({
       xMeters: 1,
       yMeters: -2,
@@ -246,42 +263,26 @@ describe("PANS BLE codecs", () => {
       quality: 77,
     });
 
-    const distanceOnly = decodeLocationData([
-      1, 1, 0x34, 0x12, 0xe8, 0x03, 0, 0, 90,
-    ]);
+    const distanceOnly = decodeLocationData(
+      clonePansLocationDataFixture("distanceOnlyOneAnchor"),
+    );
     expect(distanceOnly.distances[0]).toMatchObject({
       nodeId: 0x1234,
       distanceMeters: 1,
       quality: 90,
     });
 
-    const combined = decodeLocationData([
-      2,
-      ...positionBytes(10, 20, 30, 55),
-      1,
-      0x78,
-      0x56,
-      0xd0,
-      0x07,
-      0,
-      0,
-      91,
-    ]);
+    const combined = decodeLocationData(
+      clonePansLocationDataFixture("combinedPositionAndDistance"),
+    );
     expect(combined.position?.zMeters).toBe(0.03);
     expect(combined.distances[0].nodeId).toBe(0x5678);
   });
 
   test("decodes type-2 distance-only fallback with multiple anchors", () => {
-    const decoded = decodeLocationData([
-      2,
-      2,
-      ...u16(1),
-      ...u32(1000),
-      80,
-      ...u16(2),
-      ...u32(2000),
-      81,
-    ]);
+    const decoded = decodeLocationData(
+      clonePansLocationDataFixture("type2DistanceOnlyFallback"),
+    );
 
     expect(decoded.position).toBeUndefined();
     expect(decoded.distances).toEqual([
@@ -292,7 +293,9 @@ describe("PANS BLE codecs", () => {
 
   test("reports malformed location diagnostics", () => {
     expect(() => decodeLocationData([9])).toThrow("unknown location-data");
-    const truncated = decodeLocationData([1, 2, 0x01]);
+    const truncated = decodeLocationData(
+      clonePansLocationDataFixture("truncatedDistance"),
+    );
     expect(truncated.diagnostics[0]).toContain("truncated distance");
   });
 
@@ -304,9 +307,9 @@ describe("PANS BLE codecs", () => {
     expect(combinedDistanceOnly.position).toBeUndefined();
     expect(combinedDistanceOnly.distances).toHaveLength(1);
 
-    const overrun = decodeLocationData([
-      1, 2, 0x01, 0x00, 0xe8, 0x03, 0, 0, 80,
-    ]);
+    const overrun = decodeLocationData(
+      clonePansLocationDataFixture("overDeclaredDistanceCount"),
+    );
     expect(overrun.distances).toHaveLength(1);
     expect(overrun.diagnostics[0]).toContain("truncated distance");
   });
@@ -319,6 +322,96 @@ describe("PANS BLE codecs", () => {
     expect(trailing.diagnostics[0]).toContain("trailing byte");
 
     expect(() => decodeLocationData([1, 16])).toThrow("exceeds maximum 15");
+  });
+
+  test.each([
+    ["positionOnly18ZeroPadding", "00000000"],
+    ["positionOnly18Extension", "deadbeef"],
+  ] as const)(
+    "decodes the canonical prefix and reproduces the trailing-byte diagnostic for %s",
+    (fixtureName, extensionHex) => {
+      const decoded = decodeLocationData(
+        clonePansLocationDataFixture(fixtureName),
+      );
+
+      expect(decoded.position).toMatchObject({
+        xMeters: 1,
+        yMeters: -2,
+        zMeters: 3,
+        quality: 77,
+      });
+      expect(decoded.diagnostics).toEqual([
+        "unexpected 4 trailing byte(s) after position frame",
+      ]);
+      expect(decoded.decoderDiagnostics).toEqual([
+        {
+          code: "TRAILING_BYTES",
+          severity: "warning",
+          message: "unexpected 4 trailing byte(s) after position frame",
+          offset: 14,
+          byteCount: 4,
+          bytes: [...decoded.raw.slice(14)],
+        },
+      ]);
+      expect(pansBytesToHex(decoded.raw.slice(14))).toBe(extensionHex);
+      expect(decoded.raw).toEqual([
+        ...PANS_LOCATION_DATA_FIXTURES[fixtureName],
+      ]);
+    },
+  );
+
+  test("preserves type-2 position and distances when extension bytes follow", () => {
+    const payload = [
+      ...clonePansLocationDataFixture("combinedPositionAndDistance"),
+      0xde,
+      0xad,
+    ];
+    const decoded = decodeLocationData(payload);
+
+    expect(decoded.position).toMatchObject({
+      xMeters: 0.01,
+      yMeters: 0.02,
+      zMeters: 0.03,
+      quality: 55,
+    });
+    expect(decoded.distances).toHaveLength(1);
+    expect(decoded.decoderDiagnostics).toEqual([
+      expect.objectContaining({
+        code: "TRAILING_BYTES",
+        offset: 22,
+        byteCount: 2,
+        bytes: [0xde, 0xad],
+      }),
+    ]);
+  });
+
+  test("preserves a type-2 position when an extension layout is unrecognized", () => {
+    const canonicalPosition =
+      clonePansLocationDataFixture("positionOnly14").slice(1);
+    const decoded = decodeLocationData([2, ...canonicalPosition, 0xff, 0xee]);
+
+    expect(decoded.position).toMatchObject({
+      xMeters: 1,
+      yMeters: -2,
+      zMeters: 3,
+      quality: 77,
+    });
+    expect(decoded.decoderDiagnostics[0]).toMatchObject({
+      code: "UNRECOGNIZED_LAYOUT",
+      bytes: [0xff, 0xee],
+    });
+  });
+
+  test("decodes the canonical one- and four-anchor distance fixtures", () => {
+    expect(
+      decodeLocationData(clonePansLocationDataFixture("distanceOnlyOneAnchor"))
+        .distances,
+    ).toHaveLength(1);
+    expect(
+      decodeLocationData(
+        clonePansLocationDataFixture("distanceOnlyFourAnchors"),
+      ).distances,
+    ).toHaveLength(4);
   });
 
   test("decodes maximum distance entries", () => {
@@ -574,6 +667,11 @@ describe("ExpoPansBleApiModule wrapper", () => {
     expect(mockNativeModule.connect).toHaveBeenCalledWith("device-1", 5000);
     expect(mockNativeModule.disconnect).toHaveBeenCalledWith("device-1");
     expect(getCapabilities().transport).toBe("ble");
+    expect(getScanDiagnostics()).toMatchObject({
+      state: "scanning",
+      buildId: "test-build",
+      rawAdvertisementHitCount: 1,
+    });
   });
 
   test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(

@@ -1,5 +1,6 @@
 ---
-description: Explore agent for codebase investigation, external documentation, temporary repository cloning, dependency research, and general web research. Specify quick, medium, or comprehensive thoroughness when invoking this subagent.
+description: Explore agent for codebase investigation, external documentation,
+  temporary repository cloning, dependency research, and general web research.
 mode: subagent
 permission:
   "*": allow
@@ -23,8 +24,8 @@ permission:
   expo_workflow_run: deny
   external_directory:
     "*": ask
-    "~/.local/share/opencode/tool-output/*": allow
-    "/tmp/opencode/*": allow
+    ~/.local/share/opencode/tool-output/*: allow
+    /tmp/opencode/*: allow
   read:
     "*": allow
     "*.env": ask
@@ -34,59 +35,36 @@ permission:
   glob: allow
   list: allow
   bash:
-    "*": deny
-    "pwd": allow
-    "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "git branch*": allow
-    "git ls-files*": allow
-    "git remote*": allow
-    "git rev-parse*": allow
-    "git grep*": allow
-    "git clone * /tmp/opencode/*": allow
-    "git -C /tmp/opencode/* status*": allow
-    "git -C /tmp/opencode/* diff*": allow
-    "git -C /tmp/opencode/* log*": allow
-    "git -C /tmp/opencode/* show*": allow
-    "git -C /tmp/opencode/* branch*": allow
-    "git -C /tmp/opencode/* ls-files*": allow
-    "git -C /tmp/opencode/* remote*": allow
-    "git -C /tmp/opencode/* rev-parse*": allow
-    "git -C /tmp/opencode/* grep*": allow
-    "npm view*": allow
-    "npm info*": allow
-    "npm ls*": allow
-    "git add*": deny
-    "git rm*": deny
-    "git mv*": deny
-    "git commit*": deny
-    "git merge*": deny
-    "git rebase*": deny
-    "git reset*": deny
-    "git revert*": deny
-    "git cherry-pick*": deny
-    "git push*": deny
-    "git pull*": deny
-    "git stash*": deny
-    "git checkout*": deny
-    "git switch*": deny
-    "git restore*": deny
-    "git clean*": deny
-    "git tag*": deny
-    "git update-index*": deny
-    "git apply*": deny
-    "git am*": deny
-    "git filter-branch*": deny
-    "git submodule*": deny
-    "git branch -d*": deny
-    "git branch -D*": deny
-    "git branch -m*": deny
-    "gh pr merge*": deny
-    "gh pr close*": deny
-    "gh pr edit*": deny
-    "gh release*": deny
+    "*": allow
+    git add*: ask
+    git rm*: ask
+    git mv*: ask
+    git commit*: ask
+    git merge*: ask
+    git rebase*: ask
+    git reset*: ask
+    git revert*: ask
+    git cherry-pick*: ask
+    git push*: ask
+    git pull*: ask
+    git stash*: ask
+    git checkout*: ask
+    git switch*: ask
+    git restore*: ask
+    git clean*: ask
+    git tag*: ask
+    git update-index*: ask
+    git apply*: ask
+    git am*: ask
+    git filter-branch*: ask
+    git submodule*: ask
+    git branch -d*: ask
+    git branch -D*: ask
+    git branch -m*: ask
+    gh pr merge*: ask
+    gh pr close*: ask
+    gh pr edit*: ask
+    gh release*: ask
   webfetch: allow
   websearch: allow
   lsp: allow
@@ -94,6 +72,8 @@ permission:
   context7_resolve-library-id: allow
   context7_query-docs: allow
   markitdown_convert_to_markdown: allow
+model: openai/gpt-5.6-luna
+variant: max
 ---
 
 You are a read-only exploration and research specialist supporting the primary engineer agent.

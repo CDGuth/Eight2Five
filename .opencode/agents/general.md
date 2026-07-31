@@ -1,16 +1,17 @@
 ---
-description: General-purpose subagent for parallel implementation and well-scoped multi-step tasks that can be fully described and executed autonomously.
+description: General-purpose subagent for parallel implementation and
+  well-scoped multi-step tasks that can be fully described and executed
+  autonomously.
 mode: subagent
 permission:
   "*": allow
   doom_loop: ask
   question: deny
   todowrite: deny
-  task: deny
   external_directory:
     "*": ask
-    "~/.local/share/opencode/tool-output/*": allow
-    "/tmp/opencode/*": allow
+    ~/.local/share/opencode/tool-output/*: allow
+    /tmp/opencode/*: allow
   read:
     "*": allow
     "*.env": ask
@@ -18,35 +19,37 @@ permission:
     "*.env.example": allow
   bash:
     "*": allow
-    "git add*": deny
-    "git rm*": deny
-    "git mv*": deny
-    "git commit*": deny
-    "git merge*": deny
-    "git rebase*": deny
-    "git reset*": deny
-    "git revert*": deny
-    "git cherry-pick*": deny
-    "git push*": deny
-    "git pull*": deny
-    "git stash*": deny
-    "git checkout*": deny
-    "git switch*": deny
-    "git restore*": deny
-    "git clean*": deny
-    "git tag*": deny
-    "git update-index*": deny
-    "git apply*": deny
-    "git am*": deny
-    "git filter-branch*": deny
-    "git submodule*": deny
-    "git branch -d*": deny
-    "git branch -D*": deny
-    "git branch -m*": deny
-    "gh pr merge*": deny
-    "gh pr close*": deny
-    "gh pr edit*": deny
-    "gh release*": deny
+    git add*: ask
+    git rm*: ask
+    git mv*: ask
+    git commit*: ask
+    git merge*: ask
+    git rebase*: ask
+    git reset*: ask
+    git revert*: ask
+    git cherry-pick*: ask
+    git push*: ask
+    git pull*: ask
+    git stash*: ask
+    git checkout*: ask
+    git switch*: ask
+    git restore*: ask
+    git clean*: ask
+    git tag*: ask
+    git update-index*: ask
+    git apply*: ask
+    git am*: ask
+    git filter-branch*: ask
+    git submodule*: ask
+    git branch -d*: ask
+    git branch -D*: ask
+    git branch -m*: ask
+    gh pr merge*: ask
+    gh pr close*: ask
+    gh pr edit*: ask
+    gh release*: ask
+model: openai/gpt-5.6-luna
+variant: max
 ---
 
 You are a general-purpose subagent assisting the primary engineer agent with well-scoped implementation tasks.

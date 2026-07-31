@@ -48,7 +48,4 @@ jobs:
         run: npm run test
 
       - name: Run Expo doctor
-        run: npm run validate:expo:doctor
-
-      - name: Run Expo install check
-        run: npm run validate:expo:install-check
+        run: npm run expo:doctor

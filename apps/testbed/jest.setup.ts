@@ -1,5 +1,16 @@
 import { Alert } from "react-native";
 
+// Reanimated's mock pulls worklets; keep a deterministic RN bridge for tests.
+jest.mock("react-native-worklets", () => ({
+  ...jest.requireActual("react-native-worklets/lib/module/mock"),
+  scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    callback(...args),
+}));
+
+jest.mock("react-native-reanimated", () =>
+  jest.requireActual("react-native-reanimated/mock"),
+);
+
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Basic mocks for native/Expo helpers used in tests
@@ -15,7 +26,7 @@ jest.mock("react-native-view-shot", () => ({
 const mockToastShow = jest.fn();
 (globalThis as any).__TESTBED_TOAST_SHOW__ = mockToastShow;
 
-jest.mock("@eight2five/ui/toast", () => {
+jest.mock("@eight2five/ui/components/toast", () => {
   const React = require("react");
   const { View, Text } = require("react-native");
 
@@ -30,41 +41,41 @@ jest.mock("@eight2five/ui/toast", () => {
   };
 });
 
-jest.mock("@expo/vector-icons", () => {
-  const React = require("react");
-  const { View } = require("react-native");
+jest.mock(
+  "@shopify/react-native-skia",
+  () => {
+    const React = require("react");
+    const { View } = require("react-native");
 
-  const MockIcon = (props: any) => React.createElement(View, props);
-
-  return {
-    MaterialIcons: MockIcon,
-  };
-});
-
-jest.mock("@shopify/react-native-skia", () => {
-  const React = require("react");
-  const { View } = require("react-native");
-
-  const MockSkiaNode = ({ children, testID, ...props }: any) =>
-    React.createElement(View, { testID: testID ?? "skia-node", ...props }, children);
-
-  return {
-    Canvas: ({ children, testID, ...props }: any) =>
+    const MockSkiaNode = ({ children, testID, ...props }: any) =>
       React.createElement(
         View,
-        { testID: testID ?? "skia-canvas", ...props },
+        { testID: testID ?? "skia-node", ...props },
         children,
-      ),
-    Rect: (props: any) =>
-      React.createElement(View, { testID: "skia-rect", ...props }),
-    Line: MockSkiaNode,
-    Path: MockSkiaNode,
-    Circle: MockSkiaNode,
-    LinearGradient: MockSkiaNode,
-    useFont: () => ({}),
-    vec: (x: number, y: number) => ({ x, y }),
-  };
-});
+      );
+
+    return {
+      Canvas: ({ children, testID, ...props }: any) =>
+        React.createElement(
+          View,
+          { testID: testID ?? "skia-canvas", ...props },
+          children,
+        ),
+      Rect: (props: any) =>
+        React.createElement(View, { testID: "skia-rect", ...props }),
+      Fill: (props: any) =>
+        React.createElement(View, { testID: "skia-fill", ...props }),
+      Group: MockSkiaNode,
+      Line: MockSkiaNode,
+      Path: MockSkiaNode,
+      Circle: MockSkiaNode,
+      LinearGradient: MockSkiaNode,
+      useFont: () => ({}),
+      vec: (x: number, y: number) => ({ x, y }),
+    };
+  },
+  { virtual: true },
+);
 
 jest.mock("victory-native", () => {
   const React = require("react");

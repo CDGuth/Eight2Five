@@ -1,23 +1,5 @@
-import React from "react";
-import { useRouter } from "expo-router";
-import { TestbedHome } from "../src/screens/TestbedHome";
-import { TestbedLayout } from "../src/components/TestbedLayout";
-import { getSubappById, SUBAPPS } from "../src/subapps";
-import type { SubappId } from "../src/subapps";
+import { Redirect } from "expo-router";
 
-export default function TestbedHomeRoute() {
-  const router = useRouter();
-
-  const handleSelect = (id: SubappId) => {
-    router.push(getSubappById(id).href);
-  };
-
-  return (
-    <TestbedLayout
-      title="Eight2Five Testbed"
-      subtitle="Pick a testing subapp to explore"
-    >
-      <TestbedHome subapps={SUBAPPS} onSelect={handleSelect} />
-    </TestbedLayout>
-  );
+export default function TestbedIndexRoute() {
+  return <Redirect href="/(tabs)/networks-devices" />;
 }

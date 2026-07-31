@@ -5,12 +5,14 @@ const {
 } = require("@expo/config-plugins");
 const pkg = require("./package.json");
 
+const BUILD_ID_METADATA_NAME = "expo.modules.pansbleapi.BUILD_ID";
 const ANDROID_PERMISSIONS = [
   { name: "android.permission.BLUETOOTH_SCAN" },
   { name: "android.permission.BLUETOOTH_CONNECT" },
   { name: "android.permission.BLUETOOTH", maxSdkVersion: "30" },
   { name: "android.permission.BLUETOOTH_ADMIN", maxSdkVersion: "30" },
-  { name: "android.permission.ACCESS_FINE_LOCATION", maxSdkVersion: "30" },
+  { name: "android.permission.ACCESS_COARSE_LOCATION" },
+  { name: "android.permission.ACCESS_FINE_LOCATION" },
 ];
 
 const withPansBleApi = (config, props = {}) => {
@@ -24,6 +26,7 @@ const withPansBleApi = (config, props = {}) => {
     });
 
     upsertBleFeature(androidFeatures);
+    upsertBuildId(manifest, props.buildId || "local");
 
     manifest["uses-permission"] = androidPermissions;
     manifest["uses-feature"] = androidFeatures;
@@ -59,6 +62,10 @@ function upsertPermission(permissions, permission) {
 
   if (existing) {
     existing.$ = { ...existing.$, ...attributes };
+    if (!permission.maxSdkVersion) {
+      delete existing.$["android:maxSdkVersion"];
+    }
+    delete existing.$["android:usesPermissionFlags"];
     return;
   }
 
@@ -82,10 +89,31 @@ function upsertBleFeature(features) {
   features.push({ $: attributes });
 }
 
+function upsertBuildId(manifest, buildId) {
+  const application = manifest.application?.[0];
+  if (!application) return;
+
+  const metadata = application["meta-data"] || [];
+  const existing = metadata.find(
+    (entry) => entry.$?.["android:name"] === BUILD_ID_METADATA_NAME,
+  );
+  const attributes = {
+    "android:name": BUILD_ID_METADATA_NAME,
+    "android:value": String(buildId),
+  };
+
+  if (existing) existing.$ = { ...existing.$, ...attributes };
+  else metadata.push({ $: attributes });
+
+  application["meta-data"] = metadata;
+}
+
 module.exports = createRunOncePlugin(withPansBleApi, pkg.name, pkg.version);
 module.exports.withPansBleApi = withPansBleApi;
 module.exports._internal = {
   ANDROID_PERMISSIONS,
+  BUILD_ID_METADATA_NAME,
   upsertBleFeature,
+  upsertBuildId,
   upsertPermission,
 };

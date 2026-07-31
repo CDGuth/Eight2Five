@@ -19,6 +19,7 @@ public class ExpoPansBleApiModule: Module {
   private var connections = [String: PeripheralContext]()
   private var disconnectingDeviceIds = Set<String>()
   private var nextOperationId: UInt64 = 1
+  private var notificationSequence: UInt64 = 0
 
   public func definition() -> ModuleDefinition {
     Name("ExpoPansBleApi")
@@ -314,10 +315,15 @@ public class ExpoPansBleApiModule: Module {
       startNextOperation(context)
       return
     }
+    let payload = Array(characteristic.value ?? Data()).map { Int($0) }
+    notificationSequence &+= 1
     sendEvent("onCharacteristicNotification", [
       "deviceId": deviceId,
       "characteristicUuid": characteristic.uuid.uuidString.lowercased(),
-      "payload": Array(characteristic.value ?? Data()).map { Int($0) },
+      "payload": payload,
+      "sequence": notificationSequence,
+      "monotonicTimestampMs": ProcessInfo.processInfo.systemUptime * 1000.0,
+      "payloadLength": payload.count,
     ])
   }
 

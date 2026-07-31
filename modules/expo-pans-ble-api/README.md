@@ -33,9 +33,9 @@ Development builds are required; Expo Go cannot load this custom native module.
 
 Both app configs already invoke the plugin. It adds:
 
-- Android `<uses-permission>` entries for Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`
+- Android `<uses-permission>` entries for Android 12+: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `ACCESS_COARSE_LOCATION`, and `ACCESS_FINE_LOCATION`
 - Android `<uses-permission>` entries for Android 11 and lower: legacy Bluetooth permissions with `maxSdkVersion=30`
-- Android `<uses-permission>` entry for Android 11 and lower: `ACCESS_FINE_LOCATION` for BLE scanning/location behavior with `maxSdkVersion=30`
+- Uncapped Android coarse/fine location permissions because this localization app does not assert `neverForLocation`
 - BLE hardware feature with `required=false`
 - iOS Bluetooth usage descriptions only
 
@@ -58,7 +58,7 @@ Discovery uses cross-platform `deviceId`:
 Low-level bridge:
 
 - `startScanning()`, `stopScanning()`, `clearDevices()`
-- `getCapabilities()`, `getPermissionStatus()`, `requestPermissions()`
+- `getCapabilities()`, `getPermissionStatus()`, `requestPermissions()`, `getScanDiagnostics()`
 - `connect(deviceId, timeoutMs?)`, `disconnect(deviceId)`
 - `readCharacteristic(deviceId, characteristicUuid)`
 - `writeCharacteristic(deviceId, characteristicUuid, payload, writeType?)`
@@ -69,6 +69,10 @@ Low-level bridge:
 Typed helpers include label, operation mode, PAN ID, location-data mode, location data, proxy positions, device info, statistics, persisted position, anchor MAC stats, cluster info, anchor list, tag update rate, explicit disconnect, and raw firmware-update packet primitives.
 
 Codec helpers live in TypeScript and are covered by Jest tests.
+
+Android discovery accepts the documented two-byte PANS presence payload under the 128-bit service-data UUID. It checks Android's parsed service-data map first and then parses raw AD type `0x21` bytes for stacks that omit the record from the parsed map. The manager uses one bounded foreground scan; start it before pressing SW2 because a DWM1001-DEV normally advertises for only about 20 seconds after power-up or Bluetooth wake-up.
+
+Android scanning is intentionally foreground-only. Entering the background or starting a GATT connection stops the active scan. Scan callbacks carry a session generation so late results from an earlier scan are discarded, and native discovery events are rate-limited while retained device metadata is expired. Manager-owned disconnects attempt the documented PANS explicit-disconnect write before closing GATT, with a best-effort fallback for older firmware.
 
 `requestMtu(deviceId, mtu)` is Android-only. Platforms without explicit MTU negotiation support reject direct calls with `UNSUPPORTED`; iOS firmware-update transport sizing uses `getMaximumWriteValueLength(deviceId, writeType)` instead.
 
@@ -117,8 +121,8 @@ From the repository root:
 npm run type-check --workspace modules/expo-pans-ble-api
 npm run lint --workspace modules/expo-pans-ble-api
 npm run test --workspace modules/expo-pans-ble-api
-npm run validate:expo:doctor
-npm run validate:expo:install-check
+npm run expo:doctor
+npm run expo:install-check
 ```
 
 Do not treat source-level tests as hardware qualification. The following checks are deferred until native builds and physical DWM1001/PANS hardware are available:

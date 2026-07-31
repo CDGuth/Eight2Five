@@ -95,15 +95,43 @@ class PansBleApiCoreTest {
   fun presenceServiceDataExtractionAndDecodingAreDefensive() {
     assertNull(PansBleApiCore.validPansServiceData(byteArrayOf()))
     assertNull(PansBleApiCore.validPansServiceData(byteArrayOf(0x9a.toByte())))
+    assertNull(PansBleApiCore.validPansServiceData(byteArrayOf(0x9a.toByte(), 0x07, 0xff.toByte())))
     assertNull(PansBleApiCore.decodePresence(byteArrayOf()))
     assertNull(PansBleApiCore.decodePresence(byteArrayOf(0x9a.toByte())))
 
     val serviceData = linkedMapOf(
-      PansBleApiCore.pansServiceUuid to byteArrayOf(0x9a.toByte(), 0x07, 0xff.toByte()),
+      PansBleApiCore.pansServiceUuid to byteArrayOf(0x9a.toByte(), 0x07),
     )
     assertUnsignedBytes(
-      listOf(0x9a, 0x07, 0xff),
+      listOf(0x9a, 0x07),
       assertNotNull(PansBleApiCore.extractPansServiceData(serviceData)),
+    )
+  }
+
+  @Test
+  fun rawAdvertisementFallbackExtractsPansPresenceServiceData() {
+    val scanRecord = byteArrayOf(
+      0x02, 0x01, 0x06,
+      0x13, 0x21,
+      0xe7.toByte(), 0x29, 0x13, 0xc2.toByte(),
+      0xa1.toByte(), 0xba.toByte(), 0x11, 0x9c.toByte(),
+      0x1f, 0x4c, 0x46, 0xc9.toByte(),
+      0xd9.toByte(), 0x21, 0x0c, 0x68,
+      0x9a.toByte(), 0x07,
+      0x00,
+    )
+
+    assertUnsignedBytes(
+      listOf(0x9a, 0x07),
+      assertNotNull(PansBleApiCore.extractPansServiceDataFromScanRecord(scanRecord)),
+    )
+
+    val differentService = scanRecord.copyOf().also { it[5] = 0x00 }
+    assertNull(PansBleApiCore.extractPansServiceDataFromScanRecord(differentService))
+    assertNull(
+      PansBleApiCore.extractPansServiceDataFromScanRecord(
+        byteArrayOf(0x13, 0x21, 0xe7.toByte()),
+      ),
     )
   }
 
@@ -151,7 +179,12 @@ class PansBleApiCoreTest {
       PansBleApiCore.requiredPermissionsForSdk(30),
     )
     assertEquals(
-      listOf("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT"),
+      listOf(
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+      ),
       PansBleApiCore.requiredPermissionsForSdk(31),
     )
   }

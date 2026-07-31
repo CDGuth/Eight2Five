@@ -81,7 +81,33 @@ export type PansBlePermissionState =
 export interface PansBlePermissionStatus {
   bluetooth: PansBlePermissionState;
   location?: PansBlePermissionState;
+  bluetoothState?: "enabled" | "disabled" | "unavailable";
+  locationServices?: "enabled" | "disabled" | "unavailable";
   canAskAgain?: boolean;
+}
+
+export type PansBleScanState =
+  | "idle"
+  | "starting"
+  | "scanning"
+  | "stopped"
+  | "failed"
+  | "unsupported";
+
+export interface PansBleScanDiagnostics {
+  state: PansBleScanState;
+  buildId: string;
+  scanSessionId: number;
+  rawResultCount: number;
+  pansResultCount: number;
+  parsedServiceDataHitCount: number;
+  rawAdvertisementHitCount: number;
+  rejectedResultCount: number;
+  startedAtMs?: number;
+  lastResultAtMs?: number;
+  lastPansResultAtMs?: number;
+  lastError?: PansApiError;
+  warning?: string;
 }
 
 export interface ConnectionStateChangeEvent {
@@ -96,11 +122,18 @@ export interface PansCharacteristicNotificationEvent {
   deviceId: string;
   characteristicUuid: string;
   payload: number[];
+  /** Monotonic per-process native callback sequence. */
+  sequence?: number;
+  /** Native monotonic clock timestamp captured at callback receipt. */
+  monotonicTimestampMs?: number;
+  /** Native payload length before JavaScript conversion. */
+  payloadLength?: number;
 }
 
 export type PansApiErrorCode =
   | "UNSUPPORTED"
   | "PERMISSION_DENIED"
+  | "LOCATION_SERVICES_DISABLED"
   | "BLUETOOTH_UNAVAILABLE"
   | "DEVICE_NOT_FOUND"
   | "NOT_CONNECTED"
@@ -115,6 +148,8 @@ export type PansApiErrorCode =
 export interface PansApiError {
   code: PansApiErrorCode;
   message: string;
+  nativeCode?: number;
+  operation?: string;
 }
 
 export interface PansResult<T = void> {
@@ -159,12 +194,30 @@ export interface PansDistance {
   quality: number;
 }
 
+export type PansDecoderDiagnosticCode =
+  | "TRAILING_BYTES"
+  | "TRUNCATED_FRAME"
+  | "MISSING_COUNT"
+  | "TRUNCATED_ENTRY"
+  | "UNRECOGNIZED_LAYOUT";
+
+export interface PansDecoderDiagnostic {
+  code: PansDecoderDiagnosticCode;
+  severity: "warning";
+  message: string;
+  offset?: number;
+  byteCount?: number;
+  bytes?: number[];
+}
+
 export interface PansLocationData {
   frameType?: 0 | 1 | 2;
   position?: PansPosition;
   distances: PansDistance[];
   raw: number[];
+  /** Compatibility messages for existing consumers. */
   diagnostics: string[];
+  decoderDiagnostics: PansDecoderDiagnostic[];
 }
 
 export interface PansProxyPosition {

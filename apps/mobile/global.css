@@ -1,4 +1,5 @@
 @import "tailwindcss";
 @import "uniwind";
+@import "../../packages/ui/theme/theme.css";
 
 @source "../../packages/ui";

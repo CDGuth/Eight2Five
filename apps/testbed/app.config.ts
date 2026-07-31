@@ -1,9 +1,23 @@
 import type { ExpoConfig } from "expo/config";
 
+const buildId =
+  process.env.E2F_BUILD_ID ??
+  process.env.EAS_BUILD_GIT_COMMIT_HASH ??
+  process.env.GITHUB_SHA ??
+  "local";
+const requestedVersionCode = Number(
+  process.env.E2F_ANDROID_VERSION_CODE ?? process.env.GITHUB_RUN_NUMBER ?? 1,
+);
+const androidVersionCode =
+  Number.isSafeInteger(requestedVersionCode) && requestedVersionCode > 0
+    ? requestedVersionCode
+    : 1;
+
 const config: ExpoConfig = {
   owner: "cdguth",
   name: "Eight2Five Testbed",
   slug: "eight2five-testbed",
+  scheme: "eight2five-testbed",
   platforms: ["ios", "android"],
   version: "0.0.0",
   orientation: "portrait",
@@ -20,6 +34,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.eight2five.app.testbed",
+    versionCode: androidVersionCode,
     icon: "./assets/app-icons/testbed-android-legacy-icon.png",
     adaptiveIcon: {
       foregroundImage:
@@ -35,13 +50,22 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "./assets/splash-icon.png",
+        image: "./assets/splash-icons/testbed-ios-splash-icon-light.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         dark: {
-          image: "./assets/splash-icon-dark.png",
+          image: "./assets/splash-icons/testbed-ios-splash-icon-dark.png",
           backgroundColor: "#000000",
+        },
+        android: {
+          image:
+            "./assets/splash-icons/testbed-android-splash-icon-light.png",
+          dark: {
+            image:
+              "./assets/splash-icons/testbed-android-splash-icon-dark.png",
+            backgroundColor: "#000000",
+          },
         },
       },
     ],
@@ -56,6 +80,7 @@ const config: ExpoConfig = {
           "Our app uses Bluetooth to find, connect and communicate with DWM1001 PANS BLE devices.",
         locationWhenInUseUsageDescription:
           "Our app uses your location to scan for nearby DWM1001 PANS BLE devices.",
+        buildId,
       },
     ],
   ],
@@ -64,6 +89,7 @@ const config: ExpoConfig = {
     typedRoutes: true,
   },
   extra: {
+    buildId,
     eas: {
       projectId: "f70dc79f-a836-4355-bd39-828d2aeac71e",
     },
