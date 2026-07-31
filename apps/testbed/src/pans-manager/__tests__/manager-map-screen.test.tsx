@@ -35,6 +35,7 @@ jest.mock("@eight2five/ui/components/modal", () => {
     ModalBody: Wrapper,
     ModalCloseButton: Wrapper,
     ModalContent: Wrapper,
+    ModalFooter: Wrapper,
     ModalHeader: Wrapper,
   };
 });
