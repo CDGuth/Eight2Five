@@ -2,6 +2,7 @@ import React from "react";
 import { View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Settings2 } from "lucide-react-native";
+import { useAnimatedReaction, runOnJS } from "react-native-reanimated";
 import {
   formatMapDistance,
   PansNetworkGrid,
@@ -52,6 +53,38 @@ export function ManagerMapScreen({
         controller.mapUnits,
       )}`
     : undefined;
+  const livePosition = selectedNode?.livePosition;
+
+  const [livePositionText, setLivePositionText] = React.useState<string>();
+
+  const updateLivePositionText = React.useCallback(
+    (point: { xMeters: number; yMeters: number } | null) => {
+      if (!point) {
+        setLivePositionText(undefined);
+        return;
+      }
+      setLivePositionText(
+        `X ${formatMapDistance(point.xMeters, controller.mapUnits)} · Y ${formatMapDistance(point.yMeters, controller.mapUnits)}`,
+      );
+    },
+    [controller.mapUnits],
+  );
+
+  useAnimatedReaction(
+    () => {
+      if (!livePosition) return null;
+      return {
+        xMeters: livePosition.value.xMeters,
+        yMeters: livePosition.value.yMeters,
+      };
+    },
+    (current) => {
+      runOnJS(updateLivePositionText)(current);
+    },
+  );
+
+  const displayPositionText = livePositionText ?? selectedPositionText;
+
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const palette = React.useMemo<PansGridPalette>(
     () => ({
@@ -158,7 +191,7 @@ export function ManagerMapScreen({
             {selectedNode.label ?? selectedNode.id}
           </Text>
           <Text selectable size="sm" style={{ color: theme.textMuted }}>
-            {selectedPositionText}
+            {displayPositionText}
           </Text>
           {selectedDistances.map((edge) =>
             edge.distanceMeters !== undefined ? (
