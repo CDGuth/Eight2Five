@@ -17,9 +17,11 @@ import {
   ModalBody,
   ModalCloseButton,
   ModalContent,
+  ModalFooter,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
 import { Switch } from "@eight2five/ui/components/switch";
+import { Divider } from "@eight2five/ui/components/divider";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -169,6 +171,12 @@ export function ManagerMapSettingsModal({
             />
           ) : null}
         </ModalBody>
+        <Divider style={{ backgroundColor: theme.border }} />
+        <ModalFooter className="pt-4">
+          <Button variant="ghost" onPress={onClose}>
+            <ButtonText>Close</ButtonText>
+          </Button>
+        </ModalFooter>
       </ModalContent>
     </Modal>
   );
@@ -869,7 +877,13 @@ function MapButton({
         borderColor: outline ? theme.border : theme.accent,
       }}
     >
-      <ButtonText style={{ color: outline ? theme.text : theme.raw.white }}>
+      <ButtonText
+        numberOfLines={1}
+        style={{
+          color: outline ? theme.text : theme.raw.white,
+          textAlign: "center",
+        }}
+      >
         {label}
       </ButtonText>
     </Button>
