@@ -73,7 +73,7 @@ permission:
   context7_query-docs: allow
   markitdown_convert_to_markdown: allow
 model: openai/gpt-5.6-luna
-variant: max
+variant: high
 ---
 
 You are a read-only exploration and research specialist supporting the primary engineer agent.
