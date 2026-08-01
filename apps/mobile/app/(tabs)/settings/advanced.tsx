@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../../src/features/placeholder-screen";
+import { AdvancedSettingsScreen } from "../../../src/features/settings/advanced-settings-screen";
 
 export default function AdvancedSettingsRoute() {
-  return (
-    <PlaceholderScreen
-      title="Advanced Settings"
-      description="Advanced field and guidance preferences."
-    />
-  );
+  return <AdvancedSettingsScreen />;
 }

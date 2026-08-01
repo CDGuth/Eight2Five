@@ -39,6 +39,7 @@ export function TabBarVisibilityProvider({
     ...INITIAL_MOBILE_TAB_NAVIGATION_STATE,
     drillFeaturesEnabled,
   });
+  const configuredDrillFeatures = React.useRef(drillFeaturesEnabled);
 
   const setFieldPresentation = React.useCallback(
     ({ focused, landscape }: FieldPresentation) => {
@@ -53,12 +54,13 @@ export function TabBarVisibilityProvider({
 
   const reconfigureDrillFeatures = React.useCallback(
     (enabled: boolean) => {
-      if (state.drillFeaturesEnabled === enabled) return;
+      if (configuredDrillFeatures.current === enabled) return;
 
+      configuredDrillFeatures.current = enabled;
       router.replace("/(tabs)/field");
       dispatch({ type: "drill-features-reconfigured", enabled });
     },
-    [router, state.drillFeaturesEnabled],
+    [router],
   );
 
   React.useEffect(() => {

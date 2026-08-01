@@ -1,0 +1,150 @@
+import React from "react";
+import { useRouter } from "expo-router";
+import {
+  Code2,
+  Eye,
+  ListChecks,
+  Radio,
+  SlidersHorizontal,
+  Tags,
+} from "lucide-react-native";
+import type { DrillTerminology } from "@eight2five/mobile/drill";
+import type {
+  AppSettingsUpdate,
+  FieldPerspective,
+} from "@eight2five/mobile/settings";
+
+import { useTabBarVisibility } from "../../navigation/tab-bar-visibility-context";
+import {
+  useAppSettingsSnapshot,
+  useAppSettingsStore,
+} from "../../state/app-settings-store";
+import { ResetSettingsControl } from "./reset-settings-control";
+import { updateDrillFeatures } from "./settings-actions";
+import {
+  SettingsMessage,
+  SettingsNavigationRow,
+  SettingsScreenContainer,
+  SettingsSection,
+  SettingsSelectRow,
+  SettingsSwitchRow,
+  SettingsValueRow,
+} from "./settings-components";
+
+const TERMINOLOGY_CHOICES = [
+  { label: "Pages", value: "pages" },
+  { label: "Sets", value: "sets" },
+] as const;
+
+const PERSPECTIVE_CHOICES = [
+  { label: "Director", value: "director" },
+  { label: "Performer", value: "performer" },
+] as const;
+
+export function SettingsScreen() {
+  const router = useRouter();
+  const store = useAppSettingsStore();
+  const { status, settings, error: loadError } = useAppSettingsSnapshot();
+  const { reconfigureDrillFeatures } = useTabBarVisibility();
+  const [operationError, setOperationError] = React.useState<Error>();
+  const disabled = status !== "ready";
+
+  const update = async (partial: AppSettingsUpdate) => {
+    setOperationError(undefined);
+    try {
+      await store.update(partial);
+    } catch (cause) {
+      setOperationError(toError(cause));
+    }
+  };
+
+  const setDrillFeatures = async (enabled: boolean) => {
+    setOperationError(undefined);
+    try {
+      await updateDrillFeatures(store, reconfigureDrillFeatures, enabled);
+    } catch (cause) {
+      setOperationError(toError(cause));
+    }
+  };
+
+  return (
+    <SettingsScreenContainer>
+      {status === "loading" ? (
+        <SettingsMessage tone="info">Loading app settings…</SettingsMessage>
+      ) : null}
+      {loadError || operationError ? (
+        <SettingsMessage tone="error">
+          {(operationError ?? loadError)?.message}
+        </SettingsMessage>
+      ) : null}
+
+      <SettingsSection title="PANS">
+        <SettingsValueRow
+          icon={Radio}
+          title="Tag connection"
+          description="Connection controls will be available from Field."
+          value="Not connected"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Drill">
+        <SettingsSwitchRow
+          icon={ListChecks}
+          title="Drill features"
+          description="Show drill pages, targets, guidance, and controls."
+          value={settings.drillFeaturesEnabled}
+          onChange={(enabled) => void setDrillFeatures(enabled)}
+          disabled={disabled}
+          testID="drill-features-setting"
+        />
+        <SettingsSelectRow<DrillTerminology>
+          icon={Tags}
+          title="Drill terminology"
+          description="Choose whether the app says Pages or Sets."
+          value={settings.drillTerminology}
+          choices={TERMINOLOGY_CHOICES}
+          onChange={(drillTerminology) => void update({ drillTerminology })}
+          disabled={disabled}
+          testID="drill-terminology-setting"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Field">
+        <SettingsSelectRow<FieldPerspective>
+          icon={Eye}
+          title="Field perspective"
+          description="Choose the default semantic field view."
+          value={settings.fieldPerspective}
+          choices={PERSPECTIVE_CHOICES}
+          onChange={(fieldPerspective) => void update({ fieldPerspective })}
+          disabled={disabled}
+          testID="field-perspective-setting"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Application">
+        <SettingsNavigationRow
+          icon={SlidersHorizontal}
+          title="Advanced Settings"
+          onPress={() => router.push("/(tabs)/settings/advanced")}
+          testID="advanced-settings-link"
+        />
+        <SettingsNavigationRow
+          icon={Code2}
+          title="Developer Settings"
+          description={settings.developerModeEnabled ? "Enabled" : "Disabled"}
+          onPress={() => router.push("/(tabs)/settings/developer")}
+          testID="developer-settings-link"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Reset">
+        <ResetSettingsControl disabled={disabled} onError={setOperationError} />
+      </SettingsSection>
+    </SettingsScreenContainer>
+  );
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}

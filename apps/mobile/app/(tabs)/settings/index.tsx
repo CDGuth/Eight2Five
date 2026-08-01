@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../../src/features/placeholder-screen";
+import { SettingsScreen } from "../../../src/features/settings/settings-screen";
 
 export default function SettingsRoute() {
-  return (
-    <PlaceholderScreen
-      title="Settings"
-      description="Application preferences will appear here."
-    />
-  );
+  return <SettingsScreen />;
 }
