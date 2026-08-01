@@ -2,14 +2,16 @@ import { Redirect, Stack } from "expo-router";
 import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { useAppSettingsSnapshot } from "../../../src/state/app-settings-store";
+import { getDrillRouteAccess } from "../../../src/features/drill/drill-route-access";
 
 export default function DrillLayout() {
   const theme = useEight2FiveTheme();
   const { status, settings } = useAppSettingsSnapshot();
+  const access = getDrillRouteAccess(status, settings.drillFeaturesEnabled);
 
   // Keep disabled drill routes inaccessible even when opened from a stale link.
-  if (status === "loading") return null;
-  if (status === "error" || !settings.drillFeaturesEnabled) {
+  if (access === "loading") return null;
+  if (access === "redirect") {
     return <Redirect href="/(tabs)/field" />;
   }
 
@@ -31,7 +33,7 @@ export default function DrillLayout() {
       <Stack.Screen name="[drillId]/index" options={{ title: "Drill" }} />
       <Stack.Screen
         name="[drillId]/page/[pageId]"
-        options={{ title: "Page" }}
+        options={{ title: "Drill Entry" }}
       />
     </Stack>
   );

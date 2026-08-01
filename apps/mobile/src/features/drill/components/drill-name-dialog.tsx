@@ -3,9 +3,11 @@ import {
   ModalBackdrop,
   ModalBody,
   ModalContent,
+  ModalFooter,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
 import { Heading } from "@eight2five/ui/components/heading";
+import { Button, ButtonText } from "@eight2five/ui/components/button";
 
 import { DrillNameForm } from "./drill-name-form";
 
@@ -38,6 +40,11 @@ export function DrillNameDialog({
             onSubmit={onSave}
           />
         </ModalBody>
+        <ModalFooter>
+          <Button variant="ghost" onPress={onClose} isDisabled={saving}>
+            <ButtonText>Cancel</ButtonText>
+          </Button>
+        </ModalFooter>
       </ModalContent>
     </Modal>
   );

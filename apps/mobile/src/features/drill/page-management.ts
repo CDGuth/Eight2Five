@@ -42,7 +42,7 @@ export async function savePageDraft({
   const validation = validatePageDraft(draft);
   if (!validation.value) {
     const message =
-      Object.values(validation.errors)[0] ?? "Review the page form.";
+      Object.values(validation.errors)[0] ?? "Review the entry form.";
     throw new Error(message);
   }
   const details = {
@@ -67,7 +67,7 @@ export function reorderedPageIds(
   direction: PageMoveDirection,
 ): readonly string[] | undefined {
   const index = pages.findIndex((page) => page.id === pageId);
-  if (index < 0) throw new Error("The page to move no longer exists.");
+  if (index < 0) throw new Error("The entry to move no longer exists.");
   const destination = direction === "up" ? index - 1 : index + 1;
   if (destination < 0 || destination >= pages.length) return undefined;
   const ids = pages.map((page) => page.id);

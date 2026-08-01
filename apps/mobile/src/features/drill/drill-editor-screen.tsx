@@ -91,7 +91,7 @@ export function DrillEditorScreen({ drillId }: { drillId?: string }) {
         </Text>
         <DrillNameForm
           submitLabel="Create Drill"
-          saving={controller.saving}
+          saving={controller.saving || controller.loading}
           onSubmit={async (name) => {
             const created = await controller.saveName(name);
             router.replace(`/(tabs)/drill/${created.id}`);

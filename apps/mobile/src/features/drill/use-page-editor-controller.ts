@@ -78,7 +78,7 @@ export function usePageEditorController(
   );
 
   const save = React.useCallback(async () => {
-    if (!draft) throw new Error("The page form is not ready.");
+    if (!draft) throw new Error("The entry form is not ready.");
     if (saveInFlight.current) throw new Error("A save is already in progress.");
     saveInFlight.current = true;
     setSaving(true);
