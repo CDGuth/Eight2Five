@@ -13,9 +13,25 @@ const androidVersionCode =
     ? requestedVersionCode
     : 1;
 
+const appVariant = process.env.APP_VARIANT;
+const isDevelopment = appVariant === "development";
+const isPreview = appVariant === "preview";
+
+const appName = isDevelopment
+  ? "Eight2Five (Development)"
+  : isPreview
+    ? "Eight2Five (Preview)"
+    : "Eight2Five";
+
+const appIdentifier = isDevelopment
+  ? "com.eight2five.app.development"
+  : isPreview
+    ? "com.eight2five.app.preview"
+    : "com.eight2five.app";
+
 const config: ExpoConfig = {
   owner: "cdguth",
-  name: "Eight2Five",
+  name: appName,
   slug: "eight2five",
   platforms: ["ios", "android"],
   version: "0.0.0",
@@ -25,7 +41,7 @@ const config: ExpoConfig = {
   icon: "./assets/app-icons/mobile-android-legacy-icon.png",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "com.eight2five.app",
+    bundleIdentifier: appIdentifier,
     supportsTablet: false,
     icon: {
       light: "./assets/app-icons/mobile-ios-icon.png",
@@ -34,7 +50,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: "com.eight2five.app",
+    package: appIdentifier,
     versionCode: androidVersionCode,
     icon: "./assets/app-icons/mobile-android-legacy-icon.png",
     adaptiveIcon: {
