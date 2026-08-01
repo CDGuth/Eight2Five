@@ -16,6 +16,11 @@ import {
   renameNamedDrill,
   toError,
 } from "./drill-management";
+import {
+  deletePageAndRefreshSettings,
+  movePage,
+  type PageMoveDirection,
+} from "./page-management";
 
 export function useDrillEditorController(drillId?: string) {
   const snapshot = useAppSettingsSnapshot();
@@ -24,6 +29,7 @@ export function useDrillEditorController(drillId?: string) {
   const [pages, setPages] = React.useState<readonly DrillPage[]>([]);
   const [loading, setLoading] = React.useState(Boolean(drillId));
   const [saving, setSaving] = React.useState(false);
+  const [busyPageId, setBusyPageId] = React.useState<string>();
   const [error, setError] = React.useState<Error>();
   const operationInFlight = React.useRef(false);
 
@@ -119,18 +125,103 @@ export function useDrillEditorController(drillId?: string) {
     }
   }, [drillId, store]);
 
+  const selectPage = React.useCallback(
+    async (page: DrillPage) => {
+      if (snapshot.settings.activeDrillId !== drillId) {
+        const operationError = new Error(
+          "Make this drill active before selecting one of its entries.",
+        );
+        setError(operationError);
+        throw operationError;
+      }
+      if (operationInFlight.current) return;
+      operationInFlight.current = true;
+      setBusyPageId(page.id);
+      setError(undefined);
+      try {
+        await store.setSelectedDrillPage(page.id);
+      } catch (cause) {
+        const operationError = toError(cause);
+        setError(operationError);
+        throw operationError;
+      } finally {
+        operationInFlight.current = false;
+        setBusyPageId(undefined);
+      }
+    },
+    [drillId, snapshot.settings.activeDrillId, store],
+  );
+
+  const move = React.useCallback(
+    async (page: DrillPage, direction: PageMoveDirection) => {
+      if (!drillId || operationInFlight.current) return;
+      operationInFlight.current = true;
+      setBusyPageId(page.id);
+      setError(undefined);
+      try {
+        setPages(
+          await movePage(
+            store.getDrillRepository(),
+            drillId,
+            pages,
+            page.id,
+            direction,
+          ),
+        );
+      } catch (cause) {
+        const operationError = toError(cause);
+        setError(operationError);
+        throw operationError;
+      } finally {
+        operationInFlight.current = false;
+        setBusyPageId(undefined);
+      }
+    },
+    [drillId, pages, store],
+  );
+
+  const removePage = React.useCallback(
+    async (page: DrillPage) => {
+      if (!drillId || operationInFlight.current) return;
+      operationInFlight.current = true;
+      setBusyPageId(page.id);
+      setError(undefined);
+      try {
+        await deletePageAndRefreshSettings(
+          store.getDrillRepository(),
+          page.id,
+          () => store.reload(),
+        );
+        setPages(await store.getDrillRepository().listPages(drillId));
+      } catch (cause) {
+        const operationError = toError(cause);
+        setError(operationError);
+        throw operationError;
+      } finally {
+        operationInFlight.current = false;
+        setBusyPageId(undefined);
+      }
+    },
+    [drillId, store],
+  );
+
   return {
     drillId,
     drill,
     pages,
     loading: snapshot.status === "loading" || loading,
     saving,
+    busyPageId,
     active: snapshot.settings.activeDrillId === drillId,
+    selectedPageId: snapshot.settings.selectedDrillPageId,
     terms: getDrillTerms(snapshot.settings.drillTerminology),
     error: error ?? snapshot.error,
     refresh,
     saveName,
     makeActive,
     remove,
+    selectPage,
+    move,
+    removePage,
   } as const;
 }

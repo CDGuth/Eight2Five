@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 
 import { PageEditorScreen } from "../../../../../src/features/drill/page-editor-screen";
+import { normalizePagePlacement } from "../../../../../src/features/drill/page-management";
 
 export default function DrillPageRoute() {
   const { drillId, pageId, placement, relativePageId } = useLocalSearchParams<{
@@ -13,7 +14,7 @@ export default function DrillPageRoute() {
     <PageEditorScreen
       drillId={drillId}
       pageId={pageId}
-      placement={placement}
+      placement={normalizePagePlacement(placement)}
       relativePageId={relativePageId}
     />
   );
