@@ -100,6 +100,23 @@ jobs:
           node-version: "20"
           cache: npm
 
+      - name: Restore iOS compiler cache
+        if: ${{ inputs.platform == 'ios' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ios-ccache-${{ inputs.app }}-${{ github.sha }}
+          restore-keys: |
+            ios-ccache-${{ inputs.app }}-
+
+      - name: Install ccache
+        if: ${{ inputs.platform == 'ios' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ccache >/dev/null 2>&1 || brew install ccache
+          ccache --version
+
       - name: Setup Java
         if: ${{ inputs.platform == 'android' }}
         uses: actions/setup-java@v5

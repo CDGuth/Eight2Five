@@ -49,6 +49,15 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     [
+      "expo-build-properties",
+      {
+        buildReactNativeFromSource: false,
+        ios: {
+          ccacheEnabled: true,
+        },
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         image: "./assets/splash-icons/mobile-ios-splash-icon-light.png",
