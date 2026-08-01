@@ -1,6 +1,6 @@
 import React from "react";
 import { useRouter } from "expo-router";
-import { Check, Pencil, Trash2 } from "lucide-react-native";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
   Button,
   ButtonIcon,
@@ -123,6 +123,19 @@ export function DrillEditorScreen({ drillId }: { drillId?: string }) {
           </Card>
 
           <VStack style={{ gap: eight2FiveSpacing.sm }}>
+            <Button
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/drill/[drillId]/page/[pageId]",
+                  params: { drillId, pageId: "new", placement: "append" },
+                })
+              }
+              isDisabled={controller.saving}
+              accessibilityLabel={`Add ${controller.terms.singular}`}
+            >
+              <ButtonIcon as={Plus} />
+              <ButtonText>Add {controller.terms.singular}</ButtonText>
+            </Button>
             {!controller.active ? (
               <Button
                 variant="outline"
