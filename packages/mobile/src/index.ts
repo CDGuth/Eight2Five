@@ -32,6 +32,7 @@ export {
 export * from "./field/template";
 export * from "./field/marching";
 export * from "./field/guidance";
+export * from "./field/live-position";
 export * from "./field/camera/field-camera-types";
 export * from "./field/camera/field-camera-math";
 export * from "./field/camera/field-camera-policy";
