@@ -3,6 +3,7 @@ import { SqliteSettingsRepository } from "../SqliteSettingsRepository";
 import {
   DEFAULT_APP_SETTINGS,
   getEffectiveAppSettings,
+  getEffectiveDeveloperOverlaySettings,
   normalizeAppSettings,
 } from "../types";
 
@@ -132,6 +133,20 @@ describe("app settings", () => {
         selectedDrillPageId: "page-1",
       }).selectedDrillPageId,
     ).toBeNull();
+  });
+
+  test("gates range behind geometry and rejects ranges over 200 meters", () => {
+    expect(
+      getEffectiveDeveloperOverlaySettings({
+        ...DEFAULT_APP_SETTINGS,
+        developerModeEnabled: true,
+        showCachedAnchorGeometry: false,
+        showComfortableAnchorRange: true,
+      }),
+    ).toMatchObject({ showComfortableAnchorRange: false });
+    expect(
+      normalizeAppSettings({ comfortableAnchorRangeMeters: 201 }),
+    ).toMatchObject({ comfortableAnchorRangeMeters: 20 });
   });
 });
 

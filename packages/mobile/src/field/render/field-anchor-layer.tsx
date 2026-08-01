@@ -26,15 +26,23 @@ export const FieldAnchorLayer = React.memo(function FieldAnchorLayer({
     <>
       {options.showRange && options.rangeMeters > 0
         ? anchors.map((anchor) => (
-            <Circle
-              key={`range-${anchor.id}`}
-              cx={anchor.position.xMeters}
-              cy={anchor.position.yMeters}
-              r={options.rangeMeters}
-              color={palette.anchorRange}
-              style="stroke"
-              strokeWidth={rangeStrokeWidth}
-            />
+            <Group key={`range-${anchor.id}`}>
+              <Circle
+                cx={anchor.position.xMeters}
+                cy={anchor.position.yMeters}
+                r={options.rangeMeters}
+                color={palette.anchorRange}
+                style="fill"
+              />
+              <Circle
+                cx={anchor.position.xMeters}
+                cy={anchor.position.yMeters}
+                r={options.rangeMeters}
+                color={palette.anchorRange}
+                style="stroke"
+                strokeWidth={rangeStrokeWidth}
+              />
+            </Group>
           ))
         : null}
       {anchors.map((anchor) => (

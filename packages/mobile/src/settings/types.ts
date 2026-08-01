@@ -146,7 +146,8 @@ export function getEffectiveDeveloperOverlaySettings(
   const settings = getEffectiveAppSettings(value);
   return {
     showCachedAnchorGeometry: settings.showCachedAnchorGeometry,
-    showComfortableAnchorRange: settings.showComfortableAnchorRange,
+    showComfortableAnchorRange:
+      settings.showCachedAnchorGeometry && settings.showComfortableAnchorRange,
   };
 }
 
@@ -170,7 +171,10 @@ function booleanOrDefault(value: unknown, fallback: boolean): boolean {
 }
 
 function positiveFiniteOrDefault(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= 200
     ? value
     : fallback;
 }

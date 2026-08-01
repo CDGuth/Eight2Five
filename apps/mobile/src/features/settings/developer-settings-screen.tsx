@@ -2,8 +2,10 @@ import React from "react";
 import { useRouter } from "expo-router";
 import {
   Activity,
+  CircleDashed,
   Code2,
   Database,
+  MapPinned,
   RefreshCw,
   Radio,
   Triangle,
@@ -32,7 +34,9 @@ import {
   useMobilePansStore,
 } from "../../pans/mobile-pans-context";
 import { buildDeveloperDiagnosticRows } from "./developer-diagnostics";
+import { parseComfortableAnchorRange } from "./comfortable-anchor-range";
 import { disableDeveloperMode } from "./developer-mode-actions";
+import { AnchorNumberInput } from "./standard-anchor-position-form";
 import {
   SettingsMessage,
   SettingsNavigationRow,
@@ -51,6 +55,9 @@ export function DeveloperSettingsScreen() {
   const pans = useMobilePansSnapshot();
   const [refreshing, setRefreshing] = React.useState(false);
   const [operationError, setOperationError] = React.useState<Error>();
+  const [rangeDraft, setRangeDraft] = React.useState(() =>
+    settings.comfortableAnchorRangeMeters.toString(),
+  );
   const rows = React.useMemo(() => buildDeveloperDiagnosticRows(pans), [pans]);
 
   const disable = async () => {
@@ -78,6 +85,23 @@ export function DeveloperSettingsScreen() {
       setRefreshing(false);
     }
   };
+
+  const updateOverlay = async (partial: {
+    showCachedAnchorGeometry?: boolean;
+    showComfortableAnchorRange?: boolean;
+    comfortableAnchorRangeMeters?: number;
+  }) => {
+    setOperationError(undefined);
+    try {
+      await settingsStore.update(partial);
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause : new Error(String(cause)),
+      );
+    }
+  };
+
+  const rangeValidation = parseComfortableAnchorRange(rangeDraft);
 
   if (!settings.developerModeEnabled) {
     return (
@@ -186,6 +210,61 @@ export function DeveloperSettingsScreen() {
           onPress={() => router.push("/(tabs)/settings/anchors")}
           testID="cached-anchors-link"
         />
+      </SettingsSection>
+
+      <SettingsSection title="Field Overlays">
+        <SettingsSwitchRow
+          icon={MapPinned}
+          title="Show cached anchor geometry"
+          description="Draw locally cached anchors for the active PANS network."
+          value={settings.showCachedAnchorGeometry}
+          onChange={(showCachedAnchorGeometry) =>
+            void updateOverlay({ showCachedAnchorGeometry })
+          }
+          testID="show-cached-anchor-geometry-setting"
+        />
+        <SettingsSwitchRow
+          icon={CircleDashed}
+          title="Show comfortable anchor range"
+          description="Draw an approximate planning range, not guaranteed RF coverage."
+          value={
+            settings.showCachedAnchorGeometry &&
+            settings.showComfortableAnchorRange
+          }
+          onChange={(showComfortableAnchorRange) =>
+            void updateOverlay({ showComfortableAnchorRange })
+          }
+          disabled={!settings.showCachedAnchorGeometry}
+          testID="show-comfortable-anchor-range-setting"
+        />
+        <VStack style={{ gap: 12, padding: eight2FiveSpacing.md }}>
+          <AnchorNumberInput
+            label="Comfortable range (meters)"
+            value={rangeDraft}
+            error={rangeValidation.error}
+            helper="Stored in meters. Must be greater than 0 and no more than 200 m."
+            disabled={!settings.showCachedAnchorGeometry}
+            onChange={setRangeDraft}
+          />
+          <Button
+            variant="outline"
+            testID="apply-comfortable-anchor-range-button"
+            isDisabled={
+              !settings.showCachedAnchorGeometry ||
+              rangeValidation.value === undefined ||
+              rangeValidation.value === settings.comfortableAnchorRangeMeters
+            }
+            onPress={() => {
+              if (rangeValidation.value !== undefined) {
+                void updateOverlay({
+                  comfortableAnchorRangeMeters: rangeValidation.value,
+                });
+              }
+            }}
+          >
+            <ButtonText>Apply Comfortable Range</ButtonText>
+          </Button>
+        </VStack>
       </SettingsSection>
     </SettingsScreenContainer>
   );

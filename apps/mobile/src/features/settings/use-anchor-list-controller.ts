@@ -6,6 +6,7 @@ import {
   useMobilePansSnapshot,
   useMobilePansStore,
 } from "../../pans/mobile-pans-context";
+import { selectNetworkAnchors } from "../../pans/pans-anchor-cache";
 
 export function useAnchorListController() {
   const { settings } = useAppSettingsSnapshot();
@@ -14,6 +15,10 @@ export function useAnchorListController() {
   const [refreshing, setRefreshing] = React.useState(false);
   const refreshingRef = React.useRef(false);
   const [error, setError] = React.useState<Error>();
+  const anchors = React.useMemo(
+    () => selectNetworkAnchors(pans.rememberedTag, pans.knownAnchors),
+    [pans.knownAnchors, pans.rememberedTag],
+  );
 
   const refresh = React.useCallback(async () => {
     if (pans.initialization !== "ready" || refreshingRef.current) return;
@@ -38,7 +43,7 @@ export function useAnchorListController() {
 
   return {
     developerModeEnabled: settings.developerModeEnabled,
-    anchors: pans.knownAnchors,
+    anchors,
     refreshing,
     error: error ?? pans.error,
     refresh,

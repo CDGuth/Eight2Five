@@ -21,6 +21,8 @@ import { CoordinatePanel } from "./coordinate-panel/coordinate-panel";
 import { areCoordinatePanelControlsDisabled } from "./coordinate-panel/coordinate-panel-state";
 import { PageDial } from "./page-dial/page-dial";
 
+const EMPTY_ANCHORS: readonly FieldAnchorGeometry[] = Object.freeze([]);
+
 function setLivePositionValue(
   sharedValue: SharedValue<FieldPoint | null>,
   position: FieldPoint | null,
@@ -30,7 +32,7 @@ function setLivePositionValue(
 
 export function FieldScreen({
   livePosition,
-  anchors = [],
+  anchors = EMPTY_ANCHORS,
   anchorOverlayOptions,
 }: {
   readonly livePosition?: FieldLivePositionInput;
@@ -81,8 +83,8 @@ export function FieldScreen({
       livePosition: theme.accent,
       target: "#D29B22",
       guidance: theme.accent,
-      anchor: theme.warning,
-      anchorRange: theme.warningSoft,
+      anchor: theme.accent,
+      anchorRange: colorWithAlpha(theme.accent, "24"),
     }),
     [theme],
   );
@@ -147,4 +149,8 @@ export function FieldScreen({
       }
     />
   );
+}
+
+function colorWithAlpha(color: string, alpha: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color;
 }
