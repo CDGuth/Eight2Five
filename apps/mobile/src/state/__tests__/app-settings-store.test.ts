@@ -95,6 +95,37 @@ describe("AppSettingsStore", () => {
     );
   });
 
+  test("waits for queued writes before closing storage", async () => {
+    let releaseUpdate!: () => void;
+    const close = jest.fn(async () => undefined);
+    const storage = {
+      settingsRepository: {
+        load: jest.fn(async () => DEFAULT_APP_SETTINGS),
+        update: jest.fn(
+          async () =>
+            await new Promise<AppSettings>((resolve) => {
+              releaseUpdate = () => resolve(DEFAULT_APP_SETTINGS);
+            }),
+        ),
+        resetPreferences: jest.fn(async () => DEFAULT_APP_SETTINGS),
+      },
+      drillRepository: {},
+      close,
+    } as unknown as OpenMobileRepositoriesResult;
+    const store = new AppSettingsStore(async () => storage);
+    await store.initialize();
+
+    const update = store.update({ guidanceEnabled: false });
+    await Promise.resolve();
+    const disposal = store.dispose();
+    expect(close).not.toHaveBeenCalled();
+
+    releaseUpdate();
+    await update;
+    await disposal;
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   test("derives the persisted field session contract", () => {
     expect(
       selectFieldSession({

@@ -24,8 +24,6 @@ export interface AppSettings {
   readonly selectedDrillPageId: string | null;
 }
 
-export type AppSettingsUpdate = Partial<AppSettings>;
-
 export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   drillFeaturesEnabled: true,
   drillTerminology: "pages",
@@ -54,6 +52,7 @@ export const APP_PREFERENCE_KEYS = Object.freeze([
 ] as const satisfies readonly (keyof AppSettings)[]);
 
 export type AppPreferenceKey = (typeof APP_PREFERENCE_KEYS)[number];
+export type AppSettingsUpdate = Partial<Pick<AppSettings, AppPreferenceKey>>;
 
 export interface AppSettingsRepository {
   load(): Promise<AppSettings>;

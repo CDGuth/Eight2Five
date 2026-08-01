@@ -48,22 +48,30 @@ export class AppSettingsStore {
   async initialize(): Promise<void> {
     const generation = ++this.lifecycleGeneration;
     this.publish(INITIAL_SNAPSHOT);
+    const previousStorage = this.storage;
+    this.storage = undefined;
+    if (previousStorage) {
+      await this.writeQueue;
+      await closeStorageQuietly(previousStorage);
+      if (generation !== this.lifecycleGeneration) return;
+    }
     let storage: OpenMobileRepositoriesResult | undefined;
     try {
       storage = await this.openStorage();
       if (generation !== this.lifecycleGeneration) {
-        await storage.close();
+        await closeStorageQuietly(storage);
         return;
       }
       const settings = await storage.settingsRepository.load();
       if (generation !== this.lifecycleGeneration) {
-        await storage.close();
+        await closeStorageQuietly(storage);
         return;
       }
       this.storage = storage;
       this.publish(Object.freeze({ status: "ready", settings }));
     } catch (cause) {
-      if (storage && storage !== this.storage) await storage.close();
+      if (storage && storage !== this.storage)
+        await closeStorageQuietly(storage);
       if (generation !== this.lifecycleGeneration) return;
       this.publish(
         Object.freeze({
@@ -123,6 +131,7 @@ export class AppSettingsStore {
     this.lifecycleGeneration += 1;
     const storage = this.storage;
     this.storage = undefined;
+    await this.writeQueue;
     if (storage) await storage.close();
   }
 
@@ -199,4 +208,14 @@ export function useAppSettingsSnapshot(): AppSettingsStoreSnapshot {
 
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
+}
+
+async function closeStorageQuietly(
+  storage: OpenMobileRepositoriesResult,
+): Promise<void> {
+  try {
+    await storage.close();
+  } catch {
+    // Preserve initialization errors; disposal reports its own close failure.
+  }
 }
