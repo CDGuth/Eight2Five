@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
 import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
@@ -30,13 +31,15 @@ export default function MobileRootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <GluestackUIProvider mode="system">
-      <SafeAreaProvider>
-        <AppSettingsProvider>
-          <MobileNavigation backgroundColor={theme.background} />
-        </AppSettingsProvider>
-      </SafeAreaProvider>
-    </GluestackUIProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <GluestackUIProvider mode="system">
+        <SafeAreaProvider>
+          <AppSettingsProvider>
+            <MobileNavigation backgroundColor={theme.background} />
+          </AppSettingsProvider>
+        </SafeAreaProvider>
+      </GluestackUIProvider>
+    </GestureHandlerRootView>
   );
 }
 
