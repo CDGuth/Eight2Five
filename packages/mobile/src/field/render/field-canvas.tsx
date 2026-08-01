@@ -53,6 +53,8 @@ export interface FieldCanvasProps {
   readonly testID?: string;
 }
 
+const EMPTY_FIELD_ANCHORS: readonly FieldAnchorGeometry[] = Object.freeze([]);
+
 export function FieldCanvas({
   template = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   camera: externalCamera,
@@ -62,7 +64,7 @@ export function FieldCanvas({
   livePosition: externalLivePosition,
   targetPosition,
   guidanceVisible = false,
-  anchors = [],
+  anchors = EMPTY_FIELD_ANCHORS,
   anchorOverlayOptions = HIDDEN_FIELD_ANCHOR_OVERLAY,
   style,
   testID = "field-canvas",

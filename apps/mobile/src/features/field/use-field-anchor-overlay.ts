@@ -1,16 +1,20 @@
 import React from "react";
 
 import { useAppSettingsSnapshot } from "../../state/app-settings-store";
-import { useMobilePansSnapshot } from "../../pans/mobile-pans-context";
+import {
+  useKnownPansAnchors,
+  useRememberedPansTag,
+} from "../../pans/mobile-pans-context";
 import { cachedAnchorGeometry } from "../../pans/pans-anchor-cache";
 import { fieldAnchorOverlayOptions } from "./field-anchor-overlay-options";
 
 export function useFieldAnchorOverlay() {
   const { settings } = useAppSettingsSnapshot();
-  const pans = useMobilePansSnapshot();
+  const rememberedTag = useRememberedPansTag();
+  const knownAnchors = useKnownPansAnchors();
   const anchors = React.useMemo(
-    () => cachedAnchorGeometry(pans.rememberedTag, pans.knownAnchors),
-    [pans.knownAnchors, pans.rememberedTag],
+    () => cachedAnchorGeometry(rememberedTag, knownAnchors),
+    [knownAnchors, rememberedTag],
   );
   const options = React.useMemo(
     () => fieldAnchorOverlayOptions(settings),

@@ -10,7 +10,7 @@ export interface SettingsWriter {
 
 export const RESET_SETTINGS_MESSAGE =
   "This restores display, drill-feature, terminology, and developer preferences to their defaults.\n\n" +
-  "It does not delete drills, cached anchor positions, or modify PANS hardware.";
+  "It does not delete drills, forget the remembered tag, delete cached anchor positions, or modify PANS hardware.";
 
 /** Persistence completes before the native-tab layout is reconfigured. */
 export async function updateDrillFeatures(

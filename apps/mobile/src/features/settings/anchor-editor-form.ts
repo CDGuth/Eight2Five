@@ -6,6 +6,7 @@ import {
   anchorPositionUnitsToMeters,
   convertAnchorPositionUnits,
   formatMarchingCoordinate,
+  getAnchorPositionReferencePoint,
   parseAnchorPositionDraft,
   type AnchorFieldPosition,
   type AnchorPositionReference,
@@ -22,6 +23,7 @@ import {
 
 export type AnchorEditorMode = "marching" | "standard";
 export type MarchingHeightUnit = "meters" | "feet";
+const DEFAULT_ANCHOR_HEIGHT_METERS = 2;
 
 export interface MarchingAnchorDraft {
   readonly coordinate: MarchingCoordinateDraft;
@@ -51,10 +53,10 @@ export function createAnchorEditorDrafts(position?: AnchorFieldPosition): {
   readonly marching: MarchingAnchorDraft;
   readonly standard: StandardAnchorPositionDraft;
 } {
+  const center = getAnchorPositionReferencePoint("center-field");
   const initial = position ?? {
-    xMeters: 45.72,
-    yMeters: 24.384,
-    zMeters: 2,
+    ...center,
+    zMeters: DEFAULT_ANCHOR_HEIGHT_METERS,
   };
   const coordinate = position
     ? pageToDraft({

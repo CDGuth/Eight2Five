@@ -51,6 +51,26 @@ export function buildDeveloperDiagnosticRows(
       label: "Locally known anchors",
       value: snapshot.knownAnchors.length.toString(),
     },
+    ...(snapshot.counters
+      ? [
+          {
+            label: "Notification events",
+            value: snapshot.counters.notificationEvents.toString(),
+          },
+          {
+            label: "Decoded position frames",
+            value: snapshot.counters.positionFrames.toString(),
+          },
+        ]
+      : []),
+    ...snapshot.diagnosticMessages.map((message, index) => ({
+      label: `Stream diagnostic ${index + 1}`,
+      value: message,
+    })),
+    ...(diagnostics?.warnings.map((warning) => ({
+      label: `Hardware warning: ${warning.section}`,
+      value: warning.message,
+    })) ?? []),
     ...snapshot.knownAnchors.map(anchorDiagnosticRow),
   ];
 }

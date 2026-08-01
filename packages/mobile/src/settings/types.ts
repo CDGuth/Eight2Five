@@ -3,6 +3,9 @@ import type { DrillTerminology } from "../drill/terminology";
 export type FieldPerspective = "director" | "performer";
 export type TransitionMetricMode = "step-size" | "crossing-counts";
 
+export const DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS = 20;
+export const MAX_COMFORTABLE_ANCHOR_RANGE_METERS = 200;
+
 /**
  * App preferences and the two persisted selection pointers.
  *
@@ -33,7 +36,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   developerModeEnabled: false,
   showCachedAnchorGeometry: false,
   showComfortableAnchorRange: false,
-  comfortableAnchorRangeMeters: 20,
+  comfortableAnchorRangeMeters: DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS,
   activeDrillId: null,
   selectedDrillPageId: null,
 });
@@ -174,7 +177,7 @@ function positiveFiniteOrDefault(value: unknown, fallback: number): number {
   return typeof value === "number" &&
     Number.isFinite(value) &&
     value > 0 &&
-    value <= 200
+    value <= MAX_COMFORTABLE_ANCHOR_RANGE_METERS
     ? value
     : fallback;
 }

@@ -1,4 +1,7 @@
-import { InMemoryPansManagerRepository } from "@eight2five/mobile/pans-manager";
+import {
+  DEFAULT_MANAGED_NETWORK_SETTINGS,
+  InMemoryPansManagerRepository,
+} from "@eight2five/mobile/pans-manager";
 import type {
   DiscoveredDeviceSnapshot,
   ManagedDevice,
@@ -48,6 +51,13 @@ const DISCOVERY: DiscoveredDeviceSnapshot = {
   stale: false,
   compatibility: "compatible",
   presence: { role: "tag" } as never,
+};
+
+const ANCHOR_DISCOVERY: DiscoveredDeviceSnapshot = {
+  ...DISCOVERY,
+  transportDeviceId: "anchor-transport",
+  name: "Field Anchor",
+  presence: { role: "anchor" } as never,
 };
 
 describe("MobilePansStore", () => {
@@ -103,6 +113,26 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
+  test("does not start a pending connection after the app backgrounds", async () => {
+    const harness = await createHarness({
+      remembered: managedTag(),
+      discoveries: [],
+    });
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+
+    await store.initialize();
+    await flushPromises();
+    expect(harness.streamStart).not.toHaveBeenCalled();
+    store.setForeground(false);
+    harness.emitDiscoveries([DISCOVERY]);
+    await flushPromises();
+
+    expect(harness.streamStart).not.toHaveBeenCalled();
+    await store.dispose();
+  });
+
   test("updates the shared marker immediately and marks old data stale", async () => {
     jest.useFakeTimers();
     const harness = await createHarness();
@@ -117,11 +147,13 @@ describe("MobilePansStore", () => {
     await store.connect();
 
     harness.emitSample(positionSample(1_000, 12.5, 7.25, 1.8));
+    harness.emitSample(positionSample(1_100, 12.5, 7.25, 1.8));
     expect(marker.value).toEqual({ xMeters: 12.5, yMeters: 7.25 });
     expect(store.getSnapshot()).toMatchObject({
       connectionState: "connected",
       rawPosition: { xMeters: 12.5, yMeters: 7.25, zMeters: 1.8 },
       livePosition: { isStale: false },
+      effectiveUpdateRateHz: 10,
     });
 
     jest.advanceTimersByTime(500);
@@ -130,6 +162,24 @@ describe("MobilePansStore", () => {
       position: { xMeters: 12.5, yMeters: 7.25 },
       isStale: true,
     });
+    await store.dispose();
+  });
+
+  test("starts only one reconnect loop for duplicate disconnect events", async () => {
+    const harness = await createHarness();
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+    await store.initialize();
+    await store.selectTag(DISCOVERY.transportDeviceId);
+    await store.connect();
+    expect(harness.streamStart).toHaveBeenCalledTimes(1);
+
+    harness.emitConnectionState("disconnected");
+    harness.emitConnectionState("disconnected");
+    await flushPromises();
+
+    expect(harness.streamStart).toHaveBeenCalledTimes(2);
     await store.dispose();
   });
 
@@ -152,6 +202,23 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
+  test("rejects stale or incompatible tag selections", async () => {
+    const harness = await createHarness();
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+    await store.initialize();
+    harness.emitDiscoveries([
+      { ...DISCOVERY, compatibility: "incompatible", stale: true },
+    ]);
+
+    await expect(store.selectTag(DISCOVERY.transportDeviceId)).rejects.toThrow(
+      "compatible",
+    );
+    expect(store.getSnapshot().rememberedTag).toBeUndefined();
+    await store.dispose();
+  });
+
   test("uses the documented identity-aligned PANS-to-field conversion", () => {
     expect(
       pansPositionToFieldPoint({
@@ -163,10 +230,58 @@ describe("MobilePansStore", () => {
     ).toEqual({ xMeters: -2, yMeters: 4 });
   });
 
+  test("verifies PAN data before associating a fresh deployment", async () => {
+    const harness = await createHarness();
+    await harness.repository.saveNetwork({
+      id: "network-33",
+      name: "Field deployment",
+      panId: 33,
+      settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    harness.configurationInspect.mockImplementation(
+      async (deviceId: string) => {
+        const device = (await harness.repository.getDevice(deviceId))!;
+        await harness.repository.saveDevice({
+          ...device,
+          lastKnownConfig:
+            device.role === "anchor"
+              ? { ...anchorConfig(), panId: 33 }
+              : { ...tagConfig(), panId: 33 },
+        });
+        return {} as never;
+      },
+    );
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+    await store.initialize();
+    harness.emitDiscoveries([DISCOVERY, ANCHOR_DISCOVERY]);
+
+    await store.selectTag(DISCOVERY.transportDeviceId);
+
+    expect(store.getSnapshot().rememberedTag).toMatchObject({
+      networkId: "network-33",
+      lastKnownConfig: { panId: 33 },
+    });
+    expect(store.getSnapshot().knownAnchors).toEqual([
+      expect.objectContaining({
+        networkId: "network-33",
+        lastKnownConfig: expect.objectContaining({ panId: 33 }),
+      }),
+    ]);
+    await store.dispose();
+  });
+
   test("writes once with internal quality 100 and caches only successful writes", async () => {
     const harness = await createHarness();
-    await harness.repository.saveDevice(managedAnchor("anchor-1"));
-    await harness.repository.saveDevice(managedAnchor("anchor-2"));
+    await harness.repository.saveDevice({
+      ...managedTag(),
+      networkId: "network-a",
+    });
+    await harness.repository.saveDevice(managedAnchor("anchor-1", "network-a"));
+    await harness.repository.saveDevice(managedAnchor("anchor-2", "network-a"));
     const store = new MobilePansStore({
       createRuntime: async () => harness.runtime,
     });
@@ -175,10 +290,11 @@ describe("MobilePansStore", () => {
     await store.connect();
 
     const position = { xMeters: 10, yMeters: 20, zMeters: 2 };
-    await Promise.all([
+    const first = store.writeAnchorPosition("anchor-1", position);
+    await expect(
       store.writeAnchorPosition("anchor-1", position),
-      store.writeAnchorPosition("anchor-1", position),
-    ]);
+    ).rejects.toMatchObject({ code: "OPERATION_CANCELLED" });
+    await first;
 
     expect(harness.configurationApply).toHaveBeenCalledTimes(1);
     expect(harness.configurationApply).toHaveBeenCalledWith("anchor-1", {
@@ -202,6 +318,7 @@ describe("MobilePansStore", () => {
 async function createHarness(
   options: {
     remembered?: ManagedDevice;
+    discoveries?: DiscoveredDeviceSnapshot[];
     streamStart?: jest.Mock<Promise<void>, [StartPansPositionStreamOptions]>;
   } = {},
 ) {
@@ -216,6 +333,13 @@ async function createHarness(
     });
   }
   let streamOptions: StartPansPositionStreamOptions | undefined;
+  let connectionListener:
+    | ((event: { deviceId: string; state: "disconnected" }) => void)
+    | undefined;
+  let discoveries = options.discoveries ?? [DISCOVERY];
+  const discoveryListeners = new Set<
+    (items: DiscoveredDeviceSnapshot[]) => void
+  >();
   const streamStart = options.streamStart ?? jest.fn(async () => undefined);
   const configurationApply = jest.fn(
     async (deviceId: string, changes: { position: PansPosition }) => {
@@ -244,6 +368,7 @@ async function createHarness(
       };
     },
   );
+  const configurationInspect = jest.fn(async (_deviceId: string) => ({}));
   const runtime = {
     repository,
     discovery: {
@@ -252,13 +377,21 @@ async function createHarness(
       start: jest.fn(async () => undefined),
       stop: jest.fn(async () => undefined),
       subscribe: (listener: (items: DiscoveredDeviceSnapshot[]) => void) => {
-        listener([DISCOVERY]);
-        return { remove: jest.fn() };
+        discoveryListeners.add(listener);
+        listener(discoveries);
+        return { remove: () => discoveryListeners.delete(listener) };
       },
       subscribeErrors: () => ({ remove: jest.fn() }),
+      subscribeState: (listener: (state: string) => void) => {
+        listener("idle");
+        return { remove: jest.fn() };
+      },
     },
     sessions: {
-      addConnectionStateListener: () => ({ remove: jest.fn() }),
+      addConnectionStateListener: (listener: typeof connectionListener) => {
+        connectionListener = listener;
+        return { remove: () => (connectionListener = undefined) };
+      },
       closeAll: jest.fn(async () => undefined),
     },
     stream: {
@@ -268,7 +401,10 @@ async function createHarness(
       }),
       stop: jest.fn(async () => undefined),
     },
-    configuration: { applyConfigurationDiff: configurationApply },
+    configuration: {
+      applyConfigurationDiff: configurationApply,
+      inspectAndCache: configurationInspect,
+    },
     diagnostics: {},
     close: jest.fn(async () => undefined),
   } as unknown as MobilePansRuntime;
@@ -277,17 +413,26 @@ async function createHarness(
     runtime,
     streamStart,
     configurationApply,
+    configurationInspect,
+    emitDiscoveries(next: DiscoveredDeviceSnapshot[]) {
+      discoveries = next;
+      for (const listener of discoveryListeners) listener(discoveries);
+    },
     emitSample(sample: PansPositionStreamSample) {
       streamOptions?.onSample(sample);
+    },
+    emitConnectionState(state: "disconnected") {
+      connectionListener?.({ deviceId: DISCOVERY.transportDeviceId, state });
     },
   };
 }
 
-function managedAnchor(id: string): ManagedDevice {
+function managedAnchor(id: string, networkId?: string): ManagedDevice {
   return {
     id,
     transportDeviceId: `transport-${id}`,
     role: "anchor",
+    ...(networkId ? { networkId } : {}),
     lastKnownConfig: anchorConfig(),
     createdAt: 1,
     updatedAt: 1,
@@ -301,6 +446,18 @@ function anchorConfig() {
     ledEnabled: true,
     firmwareUpdateEnabled: false,
     initiatorEnabled: false,
+  };
+}
+
+function tagConfig() {
+  return {
+    role: "tag" as const,
+    uwbMode: "active" as const,
+    ledEnabled: true,
+    firmwareUpdateEnabled: false,
+    locationEngineEnabled: true,
+    lowPowerModeEnabled: false,
+    stationaryDetectionEnabled: true,
   };
 }
 

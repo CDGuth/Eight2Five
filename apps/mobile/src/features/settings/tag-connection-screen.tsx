@@ -1,4 +1,5 @@
 import React from "react";
+import { useFocusEffect } from "expo-router";
 import {
   Bluetooth,
   BluetoothConnected,
@@ -24,6 +25,7 @@ import {
   useMobilePansSnapshot,
   useMobilePansStore,
 } from "../../pans/mobile-pans-context";
+import { isSelectableTagDiscovery } from "../../pans/mobile-pans-model";
 import {
   SettingsMessage,
   SettingsScreenContainer,
@@ -40,8 +42,10 @@ export function TagConnectionScreen() {
   const [operation, setOperation] = React.useState<string>();
   const [error, setError] = React.useState<Error>();
   const busy = BUSY_STATES.has(snapshot.connectionState) || Boolean(operation);
-  const candidates = snapshot.discoveries.filter(
-    (device) => device.presence?.role !== "anchor",
+  const candidates = snapshot.discoveries.filter(isSelectableTagDiscovery);
+
+  useFocusEffect(
+    React.useCallback(() => () => store.stopManualDiscovery(), [store]),
   );
 
   const run = async (name: string, action: () => Promise<void>) => {
@@ -95,7 +99,11 @@ export function TagConnectionScreen() {
           <Button
             testID="discover-tags-button"
             variant="outline"
-            isDisabled={snapshot.initialization !== "ready" || busy}
+            isDisabled={
+              snapshot.initialization !== "ready" ||
+              busy ||
+              snapshot.connectionState === "connected"
+            }
             onPress={() => void run("discover", () => store.startDiscovery())}
             accessibilityLabel="Discover PANS tags"
           >
@@ -106,6 +114,19 @@ export function TagConnectionScreen() {
             )}
             <ButtonText>Discover / Select</ButtonText>
           </Button>
+          {busy ? (
+            <Button
+              variant="destructive"
+              testID="cancel-tag-operation-button"
+              onPress={() => {
+                setOperation(undefined);
+                void store.disconnect();
+              }}
+            >
+              <ButtonIcon as={BluetoothOff} />
+              <ButtonText>Cancel Connection Attempt</ButtonText>
+            </Button>
+          ) : null}
           <HStack style={{ gap: eight2FiveSpacing.sm }}>
             <Button
               className="flex-1"

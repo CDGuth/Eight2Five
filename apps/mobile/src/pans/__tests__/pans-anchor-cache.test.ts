@@ -1,6 +1,7 @@
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 
 import {
+  areDevicesNetworkAssociated,
   cachedAnchorGeometry,
   selectNetworkAnchors,
 } from "../pans-anchor-cache";
@@ -34,6 +35,8 @@ describe("network-associated anchor cache", () => {
         position: { xMeters: 1, yMeters: 2, zMeters: 3 },
       },
     ]);
+    expect(areDevicesNetworkAssociated(tag, anchors[0])).toBe(true);
+    expect(areDevicesNetworkAssociated(tag, anchors[1])).toBe(false);
   });
 
   test("falls back to equal verified PAN IDs and otherwise hides geometry", () => {

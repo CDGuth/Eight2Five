@@ -271,7 +271,7 @@ export class PansPositionStreamService {
 
   private scheduleCounterPublication(active: ActivePositionStream): void {
     if (!active.options.onCounters) return;
-    if (active.counterPublicationTimer) return;
+    if (active.counterPublicationTimer !== undefined) return;
     active.counterPublicationTimer = setTimeout(() => {
       active.counterPublicationTimer = undefined;
       if (this.active?.token === active.token) this.publishCounters(active);
@@ -279,7 +279,7 @@ export class PansPositionStreamService {
   }
 
   private publishCounters(active: ActivePositionStream): void {
-    if (active.counterPublicationTimer) {
+    if (active.counterPublicationTimer !== undefined) {
       clearTimeout(active.counterPublicationTimer);
       active.counterPublicationTimer = undefined;
     }

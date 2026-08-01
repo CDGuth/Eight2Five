@@ -22,6 +22,15 @@ export function selectNetworkAnchors(
   );
 }
 
+export function areDevicesNetworkAssociated(
+  tag: ManagedDevice,
+  anchor: ManagedDevice,
+): boolean {
+  if (tag.networkId) return anchor.networkId === tag.networkId;
+  const tagPanId = tag.lastKnownConfig?.panId;
+  return tagPanId !== undefined && anchor.lastKnownConfig?.panId === tagPanId;
+}
+
 export function cachedAnchorGeometry(
   rememberedTag: ManagedDevice | undefined,
   knownAnchors: readonly ManagedDevice[],

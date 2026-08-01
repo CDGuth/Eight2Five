@@ -47,7 +47,7 @@ describe("settings actions", () => {
   test("reset confirmation states destructive boundaries", () => {
     expect(RESET_SETTINGS_MESSAGE).toBe(
       "This restores display, drill-feature, terminology, and developer preferences to their defaults.\n\n" +
-        "It does not delete drills, cached anchor positions, or modify PANS hardware.",
+        "It does not delete drills, forget the remembered tag, delete cached anchor positions, or modify PANS hardware.",
     );
   });
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
 import type { FieldPoint } from "@eight2five/mobile/field";
+import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 
 import { MobilePansStore, type MobilePansSnapshot } from "./mobile-pans-store";
 
@@ -72,13 +73,35 @@ export function useMobilePansSnapshot(): MobilePansSnapshot {
 
 export function useFieldLivePosition() {
   const context = useMobilePansContext();
-  const snapshot = useMobilePansSnapshot();
+  const livePosition = React.useSyncExternalStore(
+    context.store.subscribe,
+    () => context.store.getSnapshot().livePosition,
+    () => context.store.getSnapshot().livePosition,
+  );
   return React.useMemo(
     () => ({
-      state: snapshot.livePosition,
+      state: livePosition,
       positionValue: context.positionValue,
     }),
-    [context.positionValue, snapshot.livePosition],
+    [context.positionValue, livePosition],
+  );
+}
+
+export function useRememberedPansTag(): ManagedDevice | undefined {
+  const store = useMobilePansStore();
+  return React.useSyncExternalStore(
+    store.subscribe,
+    () => store.getSnapshot().rememberedTag,
+    () => store.getSnapshot().rememberedTag,
+  );
+}
+
+export function useKnownPansAnchors(): readonly ManagedDevice[] {
+  const store = useMobilePansStore();
+  return React.useSyncExternalStore(
+    store.subscribe,
+    () => store.getSnapshot().knownAnchors,
+    () => store.getSnapshot().knownAnchors,
   );
 }
 
