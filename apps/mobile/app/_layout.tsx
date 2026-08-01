@@ -12,6 +12,7 @@ import {
   AppSettingsProvider,
   useAppSettingsSnapshot,
 } from "../src/state/app-settings-store";
+import { MobilePansProvider } from "../src/pans/mobile-pans-context";
 
 import "../global.css";
 
@@ -35,7 +36,9 @@ export default function MobileRootLayout() {
       <GluestackUIProvider mode="system">
         <SafeAreaProvider>
           <AppSettingsProvider>
-            <MobileNavigation backgroundColor={theme.background} />
+            <MobilePansProvider>
+              <MobileNavigation backgroundColor={theme.background} />
+            </MobilePansProvider>
           </AppSettingsProvider>
         </SafeAreaProvider>
       </GluestackUIProvider>

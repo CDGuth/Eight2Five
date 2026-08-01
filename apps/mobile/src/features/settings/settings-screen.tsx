@@ -15,6 +15,7 @@ import type {
 } from "@eight2five/mobile/settings";
 
 import { useTabBarVisibility } from "../../navigation/tab-bar-visibility-context";
+import { useMobilePansSnapshot } from "../../pans/mobile-pans-context";
 import {
   useAppSettingsSnapshot,
   useAppSettingsStore,
@@ -46,6 +47,7 @@ export function SettingsScreen() {
   const store = useAppSettingsStore();
   const { status, settings, error: loadError } = useAppSettingsSnapshot();
   const { reconfigureDrillFeatures } = useTabBarVisibility();
+  const pans = useMobilePansSnapshot();
   const [operationError, setOperationError] = React.useState<Error>();
   const disabled = status !== "ready";
 
@@ -79,11 +81,20 @@ export function SettingsScreen() {
       ) : null}
 
       <SettingsSection title="PANS">
-        <SettingsValueRow
+        <SettingsNavigationRow
           icon={Radio}
           title="Tag connection"
-          description="Connection controls will be available from Field."
-          value="Not connected"
+          description={
+            pans.rememberedTag?.lastKnownConfig?.label ??
+            "Select and manage the performer tag."
+          }
+          onPress={() => router.push("/(tabs)/settings/tag")}
+          testID="tag-connection-link"
+        />
+        <SettingsValueRow
+          icon={Radio}
+          title="Connection state"
+          value={pans.connectionState}
         />
       </SettingsSection>
 

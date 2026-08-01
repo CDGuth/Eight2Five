@@ -20,6 +20,15 @@ describe("PANS manager settings compatibility", () => {
     expect(network).not.toHaveProperty("scanDurationMs");
   });
 
+  test("preserves only a non-empty remembered tag identity", () => {
+    expect(
+      normalizePansManagerSettings({ rememberedTagDeviceId: "tag-1" }),
+    ).toMatchObject({ rememberedTagDeviceId: "tag-1" });
+    expect(
+      normalizePansManagerSettings({ rememberedTagDeviceId: "" }),
+    ).not.toHaveProperty("rememberedTagDeviceId");
+  });
+
   test("defaults and validates map display settings for older records", () => {
     expect(
       normalizeManagedNetworkSettings({

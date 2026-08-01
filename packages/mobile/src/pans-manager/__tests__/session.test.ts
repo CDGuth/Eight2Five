@@ -35,6 +35,21 @@ function gateway(
 }
 
 describe("PansDeviceSessionManager", () => {
+  test("exposes one removable native connection-state subscription", () => {
+    const remove = jest.fn();
+    const addConnectionStateChangedListener = jest.fn(() => ({ remove }));
+    const manager = new PansDeviceSessionManager(
+      gateway({ addConnectionStateChangedListener }),
+    );
+    const listener = jest.fn();
+
+    const subscription = manager.addConnectionStateListener(listener);
+
+    expect(addConnectionStateChangedListener).toHaveBeenCalledWith(listener);
+    subscription.remove();
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
   test("reserves exactly one live session while its connection opens", async () => {
     let resolve!: (connected: boolean) => void;
     const connect = jest.fn(

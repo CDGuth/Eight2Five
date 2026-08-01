@@ -396,6 +396,8 @@ export interface PansManagerSettings {
   connectionTimeoutMs: number;
   positionLogMemoryCap: number;
   positionLogFlushSize: number;
+  /** Stable local device identity selected by the performer app. */
+  rememberedTagDeviceId?: string;
 }
 
 export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
@@ -411,6 +413,13 @@ export function normalizePansManagerSettings(
   const compatible = { ...(settings ?? {}) } as Partial<PansManagerSettings> &
     Record<string, unknown>;
   delete compatible.discoveryScanDurationMs;
+  if (
+    compatible.rememberedTagDeviceId !== undefined &&
+    (typeof compatible.rememberedTagDeviceId !== "string" ||
+      !compatible.rememberedTagDeviceId.trim())
+  ) {
+    delete compatible.rememberedTagDeviceId;
+  }
   return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...compatible };
 }
 
