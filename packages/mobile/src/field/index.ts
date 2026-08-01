@@ -3,3 +3,8 @@ export * from "./units";
 export * from "./template";
 export * from "./marching";
 export * from "./guidance";
+export * from "./camera/field-camera-types";
+export * from "./camera/field-camera-math";
+export * from "./camera/field-camera-policy";
+export * from "./render/create-field-paths";
+export * from "./render/field-render-tokens";
