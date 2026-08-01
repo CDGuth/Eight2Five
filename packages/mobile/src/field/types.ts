@@ -24,6 +24,16 @@ export interface FieldPosition extends FieldPoint {
   readonly zMeters?: number;
 }
 
+/**
+ * The canonical three-dimensional position used for field anchors.
+ *
+ * Unlike the display-oriented FieldPosition type, an anchor position always
+ * has a height. Coordinates are stored in meters and z increases upward.
+ */
+export interface AnchorFieldPosition extends FieldPoint {
+  readonly zMeters: number;
+}
+
 /** The canonical origin and axis directions, useful to consumers drawing axes. */
 export interface FieldCoordinateOrigin {
   readonly xMeters: 0;
@@ -74,6 +84,17 @@ export function assertFiniteFieldPosition(
 ): void {
   assertFiniteFieldPoint(position, name);
   if (position.zMeters !== undefined && !Number.isFinite(position.zMeters)) {
+    throw new RangeError(`${name}.zMeters must be a finite number.`);
+  }
+}
+
+/** Throws a clear error when a canonical anchor position is not finite. */
+export function assertFiniteAnchorFieldPosition(
+  position: AnchorFieldPosition,
+  name = "Anchor field position",
+): void {
+  assertFiniteFieldPoint(position, name);
+  if (!Number.isFinite(position.zMeters)) {
     throw new RangeError(`${name}.zMeters must be a finite number.`);
   }
 }

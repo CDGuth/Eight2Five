@@ -31,6 +31,7 @@ export {
 } from "./field/units";
 export * from "./field/template";
 export * from "./field/marching";
+export * from "./field/anchor-position";
 export * from "./field/guidance";
 export * from "./field/live-position";
 export * from "./field/camera/field-camera-types";

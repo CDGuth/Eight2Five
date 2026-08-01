@@ -5,7 +5,7 @@ import {
   normalizeTransportDeviceId,
   type DiscoveredDeviceSnapshot,
   type ManagedDevice,
-  type ManagerError,
+  ManagerError,
   type PansConnectionStateEvent,
   type PansManagerSettings,
   type PansDiagnosticsResult,
@@ -14,6 +14,7 @@ import {
   type PansPositionStreamSample,
 } from "@eight2five/mobile/pans-manager";
 import type {
+  AnchorFieldPosition,
   FieldLivePositionState,
   FieldPoint,
 } from "@eight2five/mobile/field";
@@ -114,6 +115,7 @@ export class MobilePansStore {
   private lastHudPublicationAt = 0;
   private lastHudKey?: string;
   private sampleTimes: number[] = [];
+  private anchorWritePromise?: Promise<void>;
 
   constructor(options: MobilePansStoreOptions = {}) {
     this.createRuntime =
@@ -232,9 +234,28 @@ export class MobilePansStore {
       now: this.now(),
     });
     const saved = await runtime.repository.saveDevice({ ...tag, role: "tag" });
+    for (const nearbyAnchor of this.discoveries.filter(
+      (item) => item.presence?.role === "anchor",
+    )) {
+      const existingAnchor = devices.find(
+        (device) =>
+          normalizeTransportDeviceId(device.transportDeviceId) ===
+          normalizeTransportDeviceId(nearbyAnchor.transportDeviceId),
+      );
+      const anchor = deviceFromDiscovery(nearbyAnchor, existingAnchor, {
+        id: existingAnchor?.id ?? createLocalId("anchor"),
+        now: this.now(),
+      });
+      await runtime.repository.saveDevice({
+        ...anchor,
+        role: "anchor",
+        ...(saved.networkId ? { networkId: saved.networkId } : {}),
+      });
+    }
     this.rememberedTag = saved;
     await this.saveRememberedTag(saved.id);
     this.wantsConnection = true;
+    await this.refreshCachedAnchors();
     this.publishState("disconnected", {
       rememberedTag: saved,
       error: undefined,
@@ -382,6 +403,99 @@ export class MobilePansStore {
 
   getRuntime(): MobilePansRuntime {
     return this.requireRuntime();
+  }
+
+  async refreshCachedAnchors(): Promise<readonly ManagedDevice[]> {
+    const runtime = this.requireRuntime();
+    const devices = await runtime.repository.listDevices();
+    const knownAnchors = devices
+      .filter(
+        (device) =>
+          device.role === "anchor" || device.lastKnownConfig?.role === "anchor",
+      )
+      .sort((left, right) =>
+        (left.nodeIdHex ?? left.label ?? left.id).localeCompare(
+          right.nodeIdHex ?? right.label ?? right.id,
+        ),
+      );
+    this.publish({ ...this.snapshot, knownAnchors });
+    return knownAnchors;
+  }
+
+  async writeAnchorPosition(
+    anchorId: string,
+    position: AnchorFieldPosition,
+  ): Promise<void> {
+    if (this.anchorWritePromise) return await this.anchorWritePromise;
+    const operation = this.performAnchorPositionWrite(anchorId, position);
+    const tracked = operation.finally(() => {
+      if (this.anchorWritePromise === tracked)
+        this.anchorWritePromise = undefined;
+    });
+    this.anchorWritePromise = tracked;
+    return await tracked;
+  }
+
+  private async performAnchorPositionWrite(
+    anchorId: string,
+    position: AnchorFieldPosition,
+  ): Promise<void> {
+    const runtime = this.requireRuntime();
+    if (!this.rememberedTag || this.snapshot.connectionState !== "connected") {
+      throw new Error(
+        "Connect the remembered PANS tag before writing an anchor position.",
+      );
+    }
+    const anchor = await runtime.repository.getDevice(anchorId);
+    if (
+      !anchor ||
+      (anchor.role !== "anchor" && anchor.lastKnownConfig?.role !== "anchor")
+    ) {
+      throw new Error("The selected cached anchor does not exist.");
+    }
+    ++this.connectionGeneration;
+    this.cancelStaleTimer();
+    this.clearLiveMarker();
+    this.publishState("reconnecting", {
+      livePosition: staleLivePosition(
+        this.snapshot.livePosition,
+        "reconnecting",
+      ),
+      error: undefined,
+    });
+    try {
+      await runtime.stream.stop();
+      const result = await runtime.configuration.applyConfigurationDiff(
+        anchor.id,
+        {
+          position: { ...position, quality: 100 },
+        },
+      );
+      const write = result.writes.find((item) => item.field === "position");
+      if (result.error || write?.status !== "written-unverified") {
+        throw new ManagerError(
+          result.error?.code ?? "WRITE_FAILED",
+          result.error?.message ?? "The anchor rejected the position write.",
+          { deviceId: anchor.id, operation: "write anchor position" },
+        );
+      }
+      await this.refreshCachedAnchors();
+    } catch (cause) {
+      const error = normalizeManagerError(cause, {
+        deviceId: anchor.id,
+        operation: "write anchor position",
+      });
+      this.publishState("error", { error });
+      throw error;
+    } finally {
+      if (this.wantsConnection && this.foreground) {
+        try {
+          await this.connectOnce(true);
+        } catch {
+          // The reconnect action publishes its normalized failure.
+        }
+      }
+    }
   }
 
   private async connectOnce(reconnecting: boolean): Promise<void> {

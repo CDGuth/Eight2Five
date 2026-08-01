@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./units";
 export * from "./template";
 export * from "./marching";
+export * from "./anchor-position";
 export * from "./guidance";
 export * from "./live-position";
 export * from "./camera/field-camera-types";

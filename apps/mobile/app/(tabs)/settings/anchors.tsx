@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../../src/features/placeholder-screen";
+import { AnchorListScreen } from "../../../src/features/settings/anchor-list-screen";
 
 export default function AnchorsRoute() {
-  return (
-    <PlaceholderScreen
-      title="Cached Anchors"
-      description="Cached anchor geometry will appear here."
-    />
-  );
+  return <AnchorListScreen />;
 }

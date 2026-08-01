@@ -2,6 +2,7 @@ import { InMemoryPansManagerRepository } from "@eight2five/mobile/pans-manager";
 import type {
   DiscoveredDeviceSnapshot,
   ManagedDevice,
+  PansPosition,
   PansPositionStreamSample,
   StartPansPositionStreamOptions,
 } from "@eight2five/mobile/pans-manager";
@@ -161,6 +162,41 @@ describe("MobilePansStore", () => {
       }),
     ).toEqual({ xMeters: -2, yMeters: 4 });
   });
+
+  test("writes once with internal quality 100 and caches only successful writes", async () => {
+    const harness = await createHarness();
+    await harness.repository.saveDevice(managedAnchor("anchor-1"));
+    await harness.repository.saveDevice(managedAnchor("anchor-2"));
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+    await store.initialize();
+    await store.selectTag(DISCOVERY.transportDeviceId);
+    await store.connect();
+
+    const position = { xMeters: 10, yMeters: 20, zMeters: 2 };
+    await Promise.all([
+      store.writeAnchorPosition("anchor-1", position),
+      store.writeAnchorPosition("anchor-1", position),
+    ]);
+
+    expect(harness.configurationApply).toHaveBeenCalledTimes(1);
+    expect(harness.configurationApply).toHaveBeenCalledWith("anchor-1", {
+      position: { ...position, quality: 100 },
+    });
+    expect(await harness.repository.getDevice("anchor-1")).toMatchObject({
+      lastKnownConfig: { position: { ...position, quality: 100 } },
+    });
+
+    harness.configurationApply.mockRejectedValueOnce(new Error("write failed"));
+    await expect(
+      store.writeAnchorPosition("anchor-2", position),
+    ).rejects.toBeDefined();
+    expect(
+      (await harness.repository.getDevice("anchor-2"))?.lastKnownConfig,
+    ).not.toHaveProperty("position");
+    await store.dispose();
+  });
 });
 
 async function createHarness(
@@ -181,6 +217,33 @@ async function createHarness(
   }
   let streamOptions: StartPansPositionStreamOptions | undefined;
   const streamStart = options.streamStart ?? jest.fn(async () => undefined);
+  const configurationApply = jest.fn(
+    async (deviceId: string, changes: { position: PansPosition }) => {
+      const device = (await repository.getDevice(deviceId))!;
+      await repository.saveDevice({
+        ...device,
+        lastKnownConfig: {
+          ...(device.lastKnownConfig?.role === "anchor"
+            ? device.lastKnownConfig
+            : anchorConfig()),
+          position: changes.position,
+        },
+      });
+      return {
+        deviceId,
+        transportDeviceId: device.transportDeviceId,
+        outcome: "partial" as const,
+        writes: [
+          {
+            field: "position",
+            status: "written-unverified" as const,
+            requested: changes.position,
+          },
+        ],
+        warnings: [],
+      };
+    },
+  );
   const runtime = {
     repository,
     discovery: {
@@ -205,7 +268,7 @@ async function createHarness(
       }),
       stop: jest.fn(async () => undefined),
     },
-    configuration: {},
+    configuration: { applyConfigurationDiff: configurationApply },
     diagnostics: {},
     close: jest.fn(async () => undefined),
   } as unknown as MobilePansRuntime;
@@ -213,9 +276,31 @@ async function createHarness(
     repository,
     runtime,
     streamStart,
+    configurationApply,
     emitSample(sample: PansPositionStreamSample) {
       streamOptions?.onSample(sample);
     },
+  };
+}
+
+function managedAnchor(id: string): ManagedDevice {
+  return {
+    id,
+    transportDeviceId: `transport-${id}`,
+    role: "anchor",
+    lastKnownConfig: anchorConfig(),
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function anchorConfig() {
+  return {
+    role: "anchor" as const,
+    uwbMode: "active" as const,
+    ledEnabled: true,
+    firmwareUpdateEnabled: false,
+    initiatorEnabled: false,
   };
 }
 

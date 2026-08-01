@@ -69,11 +69,13 @@ const FRONT_BACK_RELATION_CHOICES = [
 export function MarchingCoordinateForm({
   draft,
   terminologySingular,
+  showDetails = true,
   disabled,
   onChange,
 }: {
   draft: MarchingCoordinateDraft;
   terminologySingular: string;
+  showDetails?: boolean;
   disabled: boolean;
   onChange(draft: MarchingCoordinateDraft): void;
 }) {
@@ -87,25 +89,27 @@ export function MarchingCoordinateForm({
 
   return (
     <VStack style={{ gap: eight2FiveSpacing.lg }}>
-      <FormSection title={`${terminologySingular} details`}>
-        <TextField
-          label={`${terminologySingular} label`}
-          value={draft.label}
-          error={validation.errors.label}
-          disabled={disabled}
-          maxLength={PAGE_LABEL_MAX_LENGTH}
-          onChangeText={(value) => update("label", value)}
-        />
-        <TextField
-          label="Counts from previous"
-          value={draft.countsFromPrevious}
-          error={validation.errors.countsFromPrevious}
-          disabled={disabled}
-          numeric
-          helper="Finite, non-negative counts. The first entry defaults to 0."
-          onChangeText={(value) => update("countsFromPrevious", value)}
-        />
-      </FormSection>
+      {showDetails ? (
+        <FormSection title={`${terminologySingular} details`}>
+          <TextField
+            label={`${terminologySingular} label`}
+            value={draft.label}
+            error={validation.errors.label}
+            disabled={disabled}
+            maxLength={PAGE_LABEL_MAX_LENGTH}
+            onChangeText={(value) => update("label", value)}
+          />
+          <TextField
+            label="Counts from previous"
+            value={draft.countsFromPrevious}
+            error={validation.errors.countsFromPrevious}
+            disabled={disabled}
+            numeric
+            helper="Finite, non-negative counts. The first entry defaults to 0."
+            onChangeText={(value) => update("countsFromPrevious", value)}
+          />
+        </FormSection>
+      ) : null}
 
       <FormSection title="Side to side">
         <SelectField

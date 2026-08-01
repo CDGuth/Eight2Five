@@ -6,6 +6,7 @@ import {
   Database,
   RefreshCw,
   Radio,
+  Triangle,
 } from "lucide-react-native";
 import {
   Button,
@@ -174,6 +175,16 @@ export function DeveloperSettingsScreen() {
           title="Cached anchors"
           description="Positions remain local until an explicit confirmed write."
           value={pans.knownAnchors.length.toString()}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Anchor Configuration">
+        <SettingsNavigationRow
+          icon={Triangle}
+          title="Cached Anchors"
+          description="Review and explicitly edit network anchor positions."
+          onPress={() => router.push("/(tabs)/settings/anchors")}
+          testID="cached-anchors-link"
         />
       </SettingsSection>
     </SettingsScreenContainer>

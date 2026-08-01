@@ -1,14 +1,9 @@
 import { useLocalSearchParams } from "expo-router";
 
-import { PlaceholderScreen } from "../../../../src/features/placeholder-screen";
+import { AnchorEditorScreen } from "../../../../src/features/settings/anchor-editor-screen";
 
 export default function AnchorRoute() {
   const { anchorId } = useLocalSearchParams<{ anchorId: string }>();
 
-  return (
-    <PlaceholderScreen
-      title="Anchor"
-      description={`Cached anchor ${anchorId ?? ""}`.trim()}
-    />
-  );
+  return <AnchorEditorScreen anchorId={anchorId ?? ""} />;
 }
