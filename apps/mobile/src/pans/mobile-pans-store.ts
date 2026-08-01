@@ -8,6 +8,7 @@ import {
   type ManagerError,
   type PansConnectionStateEvent,
   type PansManagerSettings,
+  type PansDiagnosticsResult,
   type PansPosition,
   type PansPositionStreamCounters,
   type PansPositionStreamSample,
@@ -46,6 +47,8 @@ export interface MobilePansSnapshot {
   readonly lastUpdateAt?: number;
   readonly effectiveUpdateRateHz: number;
   readonly counters?: Readonly<PansPositionStreamCounters>;
+  readonly hardwareDiagnostics?: PansDiagnosticsResult;
+  readonly knownAnchors: readonly ManagedDevice[];
   readonly diagnosticMessages: readonly string[];
   readonly error?: ManagerError | Error;
 }
@@ -74,6 +77,7 @@ const INITIAL_SNAPSHOT: MobilePansSnapshot = Object.freeze({
   livePosition: Object.freeze({ connectionState: "idle", isStale: false }),
   effectiveUpdateRateHz: 0,
   diagnosticMessages: EMPTY_MESSAGES,
+  knownAnchors: Object.freeze([]),
 });
 
 /**
@@ -155,6 +159,11 @@ export class MobilePansStore {
             this.settings.rememberedTagDeviceId,
           )
         : undefined;
+      const devices = await runtime.repository.listDevices();
+      const knownAnchors = devices.filter(
+        (device) =>
+          device.role === "anchor" || device.lastKnownConfig?.role === "anchor",
+      );
       if (!this.rememberedTag && this.settings.rememberedTagDeviceId) {
         await this.saveRememberedTag(undefined);
       }
@@ -162,6 +171,7 @@ export class MobilePansStore {
       this.wantsConnection = Boolean(this.rememberedTag);
       this.publishState(this.rememberedTag ? "disconnected" : "idle", {
         initialization: "ready",
+        knownAnchors,
       });
       if (this.wantsConnection && this.foreground) {
         void this.startReconnectLoop();
@@ -283,6 +293,45 @@ export class MobilePansStore {
       effectiveUpdateRateHz: 0,
       error: undefined,
     });
+  }
+
+  async refreshDiagnostics(): Promise<PansDiagnosticsResult> {
+    const runtime = this.requireRuntime();
+    const tag = this.rememberedTag;
+    if (!tag || this.snapshot.connectionState !== "connected") {
+      throw new Error(
+        "Connect the remembered PANS tag before refreshing diagnostics.",
+      );
+    }
+    ++this.connectionGeneration;
+    this.cancelStaleTimer();
+    this.clearLiveMarker();
+    this.publishState("reconnecting", {
+      livePosition: staleLivePosition(
+        this.snapshot.livePosition,
+        "reconnecting",
+      ),
+      error: undefined,
+    });
+    try {
+      await runtime.stream.stop();
+      const hardwareDiagnostics = await runtime.diagnostics.inspect(
+        tag.id,
+        tag.transportDeviceId,
+      );
+      this.publish({ ...this.snapshot, hardwareDiagnostics });
+      if (this.wantsConnection && this.foreground) await this.connectOnce(true);
+      return hardwareDiagnostics;
+    } catch (cause) {
+      const error = normalizeManagerError(cause, {
+        deviceId: tag.id,
+        operation: "refresh diagnostics",
+      });
+      this.publishState("error", { error });
+      if (this.wantsConnection && this.foreground)
+        void this.startReconnectLoop();
+      throw error;
+    }
   }
 
   setForeground(foreground: boolean): void {

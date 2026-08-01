@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../../src/features/placeholder-screen";
+import { DeveloperConfirmationScreen } from "../../../src/features/settings/developer-confirmation-screen";
 
 export default function DeveloperConfirmationRoute() {
-  return (
-    <PlaceholderScreen
-      title="Enable Developer Mode"
-      description="Developer mode confirmation will appear here."
-    />
-  );
+  return <DeveloperConfirmationScreen />;
 }
