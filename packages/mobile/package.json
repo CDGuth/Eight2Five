@@ -6,7 +6,9 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./pans-manager": "./src/pans-manager/index.ts"
+    "./pans-manager": "./src/pans-manager/index.ts",
+    "./field": "./src/field/index.ts",
+    "./drill": "./src/drill/index.ts"
   },
   "files": [
     "src"
@@ -15,7 +17,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json",
-    "test": "jest src/pans-manager --watchAll=false --passWithNoTests --runInBand"
+    "test": "jest src --watchAll=false --passWithNoTests --runInBand"
   },
   "peerDependencies": {
     "react": "19.2.3",
