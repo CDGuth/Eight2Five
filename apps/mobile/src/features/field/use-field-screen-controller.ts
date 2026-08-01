@@ -29,7 +29,12 @@ export function useFieldScreenController() {
   const [loadingDrills, setLoadingDrills] = React.useState(true);
   const [fieldError, setFieldError] = React.useState<Error>();
   const [selectionBusy, setSelectionBusy] = React.useState(false);
+  const [optimisticSelection, setOptimisticSelection] = React.useState<{
+    readonly activeDrillId: string | null;
+    readonly pageId: string;
+  }>();
   const refreshGeneration = React.useRef(0);
+  const pageSelectionGeneration = React.useRef(0);
   const commitViewport = React.useCallback((viewport: FieldViewport) => {
     committedFieldViewport = viewport;
   }, []);
@@ -97,8 +102,39 @@ export function useFieldScreenController() {
     }
   }, [snapshot.settings.transitionMetricMode, snapshot.status, store]);
 
+  const selectPageAtIndex = React.useCallback(
+    async (index: number) => {
+      const page = pages[index];
+      if (!page || snapshot.status !== "ready") return;
+      const generation = ++pageSelectionGeneration.current;
+      setOptimisticSelection({
+        activeDrillId: snapshot.settings.activeDrillId,
+        pageId: page.id,
+      });
+      setFieldError(undefined);
+      try {
+        await store.setSelectedDrillPage(page.id);
+        if (generation === pageSelectionGeneration.current) {
+          setOptimisticSelection(undefined);
+        }
+      } catch (cause) {
+        if (generation === pageSelectionGeneration.current) {
+          setOptimisticSelection(undefined);
+          setFieldError(
+            cause instanceof Error ? cause : new Error(String(cause)),
+          );
+        }
+      }
+    },
+    [pages, snapshot.settings.activeDrillId, snapshot.status, store],
+  );
+
+  const effectiveSelectedPageId =
+    optimisticSelection?.activeDrillId === snapshot.settings.activeDrillId
+      ? optimisticSelection.pageId
+      : snapshot.settings.selectedDrillPageId;
   const selectedIndex = pages.findIndex(
-    (page) => page.id === snapshot.settings.selectedDrillPageId,
+    (page) => page.id === effectiveSelectedPageId,
   );
   const selectedPage = selectedIndex >= 0 ? pages[selectedIndex] : undefined;
 
@@ -121,6 +157,7 @@ export function useFieldScreenController() {
     error: fieldError ?? snapshot.error,
     selectActiveDrill,
     toggleMetricMode,
+    selectPageAtIndex,
     refreshDrills,
   } as const;
 }

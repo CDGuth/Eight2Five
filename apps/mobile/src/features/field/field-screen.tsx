@@ -13,6 +13,7 @@ import { FieldOverlayLayout } from "./field-overlay-layout";
 import { useFieldScreenController } from "./use-field-screen-controller";
 import { CoordinatePanel } from "./coordinate-panel/coordinate-panel";
 import { areCoordinatePanelControlsDisabled } from "./coordinate-panel/coordinate-panel-state";
+import { PageDial } from "./page-dial/page-dial";
 
 export function FieldScreen({
   livePosition,
@@ -72,6 +73,24 @@ export function FieldScreen({
           }
           onToggleMetric={() => void controller.toggleMetricMode()}
         />
+      }
+      dial={
+        controller.settings.drillFeaturesEnabled
+          ? (diameter) => (
+              <PageDial
+                diameter={diameter}
+                selectedIndex={controller.selectedIndex}
+                selectedLabel={controller.selectedPage?.label}
+                pageCount={controller.pages.length}
+                terminology={controller.settings.drillTerminology}
+                activeColor={theme.accent}
+                trackColor={FIELD_FIVE_YARD_GRID_COLOR}
+                onSelectIndex={(index) =>
+                  void controller.selectPageAtIndex(index)
+                }
+              />
+            )
+          : undefined
       }
     />
   );

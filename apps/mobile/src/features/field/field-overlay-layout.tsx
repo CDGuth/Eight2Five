@@ -81,7 +81,7 @@ interface FieldOverlayLayoutProps {
   readonly landscape: boolean;
   readonly field: React.ReactNode;
   readonly hud?: React.ReactNode;
-  readonly dial?: React.ReactNode;
+  readonly dial?: (diameter: number) => React.ReactNode;
 }
 
 export function FieldOverlayLayout({
@@ -116,7 +116,7 @@ export function FieldOverlayLayout({
           style={metrics.dialStyle}
           testID="field-dial-slot"
         >
-          {dial}
+          {dial(metrics.dialDiameter)}
         </View>
       ) : null}
     </View>
