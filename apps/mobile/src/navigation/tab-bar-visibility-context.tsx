@@ -29,14 +29,16 @@ const TabBarVisibilityContext = React.createContext<
 
 export function TabBarVisibilityProvider({
   children,
+  drillFeaturesEnabled,
 }: {
   children: React.ReactNode;
+  drillFeaturesEnabled: boolean;
 }) {
   const router = useRouter();
-  const [state, dispatch] = React.useReducer(
-    reduceMobileTabNavigationState,
-    INITIAL_MOBILE_TAB_NAVIGATION_STATE,
-  );
+  const [state, dispatch] = React.useReducer(reduceMobileTabNavigationState, {
+    ...INITIAL_MOBILE_TAB_NAVIGATION_STATE,
+    drillFeaturesEnabled,
+  });
 
   const setFieldPresentation = React.useCallback(
     ({ focused, landscape }: FieldPresentation) => {
@@ -58,6 +60,10 @@ export function TabBarVisibilityProvider({
     },
     [router, state.drillFeaturesEnabled],
   );
+
+  React.useEffect(() => {
+    reconfigureDrillFeatures(drillFeaturesEnabled);
+  }, [drillFeaturesEnabled, reconfigureDrillFeatures]);
 
   const value = React.useMemo<TabBarVisibilityContextValue>(
     () => ({

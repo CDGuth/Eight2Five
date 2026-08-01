@@ -33,3 +33,5 @@ export * from "./field/template";
 export * from "./field/marching";
 export * from "./field/guidance";
 export * from "./drill";
+export * from "./settings";
+export * from "./storage";

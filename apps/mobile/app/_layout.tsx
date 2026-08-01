@@ -7,6 +7,10 @@ import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-prov
 import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { TabBarVisibilityProvider } from "../src/navigation/tab-bar-visibility-context";
+import {
+  AppSettingsProvider,
+  useAppSettingsSnapshot,
+} from "../src/state/app-settings-store";
 
 import "../global.css";
 
@@ -28,16 +32,28 @@ export default function MobileRootLayout() {
   return (
     <GluestackUIProvider mode="system">
       <SafeAreaProvider>
-        <TabBarVisibilityProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: theme.background },
-            }}
-          />
-          <StatusBar style="auto" />
-        </TabBarVisibilityProvider>
+        <AppSettingsProvider>
+          <MobileNavigation backgroundColor={theme.background} />
+        </AppSettingsProvider>
       </SafeAreaProvider>
     </GluestackUIProvider>
+  );
+}
+
+function MobileNavigation({ backgroundColor }: { backgroundColor: string }) {
+  const { settings } = useAppSettingsSnapshot();
+
+  return (
+    <TabBarVisibilityProvider
+      drillFeaturesEnabled={settings.drillFeaturesEnabled}
+    >
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor },
+        }}
+      />
+      <StatusBar style="auto" />
+    </TabBarVisibilityProvider>
   );
 }
