@@ -2,3 +2,4 @@ export * from "./create-field-paths";
 export * from "./field-render-tokens";
 export * from "./field-canvas";
 export * from "./page-dial-canvas";
+export * from "./field-overlay-types";

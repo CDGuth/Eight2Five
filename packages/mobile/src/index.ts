@@ -38,6 +38,7 @@ export * from "./field/camera/field-camera-math";
 export * from "./field/camera/field-camera-policy";
 export * from "./field/render/create-field-paths";
 export * from "./field/render/field-render-tokens";
+export * from "./field/render/field-overlay-types";
 export * from "./drill";
 export * from "./settings";
 export * from "./storage";

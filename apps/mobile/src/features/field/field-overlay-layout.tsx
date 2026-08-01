@@ -67,7 +67,8 @@ export function getFieldOverlayMetrics({
     dialStyle: {
       position: "absolute",
       alignSelf: "center",
-      left: (width - dialDiameter) / 2,
+      left:
+        insets.left + (width - insets.left - insets.right - dialDiameter) / 2,
       bottom: insets.bottom + outerPadding,
       width: dialDiameter,
       height: dialDiameter,

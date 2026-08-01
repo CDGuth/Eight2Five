@@ -32,6 +32,9 @@ describe("Field overlay layout", () => {
     expect(layout.hudStyle.left).toBe(22);
     expect(layout.hudStyle.right).toBe(22);
     expect(layout.dialStyle.bottom).toBe(32);
-    expect(layout.dialStyle.left).toBe((390 - layout.dialDiameter) / 2);
+    expect(layout.dialStyle.left).toBe(
+      insets.left +
+        (390 - insets.left - insets.right - layout.dialDiameter) / 2,
+    );
   });
 });

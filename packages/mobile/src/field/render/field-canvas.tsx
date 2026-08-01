@@ -7,13 +7,14 @@ import {
 } from "react-native";
 import { Canvas, Fill } from "@shopify/react-native-skia";
 import { GestureDetector } from "react-native-gesture-handler";
-import { useSharedValue } from "react-native-reanimated";
+import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { setFieldCamera } from "../camera/field-camera-math";
 import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   type StandardHighSchoolFieldTemplate,
 } from "../template";
+import type { FieldPoint } from "../types";
 import {
   getFieldCameraBounds,
   getFieldGridBounds,
@@ -28,6 +29,11 @@ import { useFieldGestures } from "../camera/use-field-gestures";
 import { createFieldPaths } from "./create-field-paths";
 import { FieldScene } from "./field-scene";
 import {
+  HIDDEN_FIELD_ANCHOR_OVERLAY,
+  type FieldAnchorGeometry,
+  type FieldAnchorOverlayOptions,
+} from "./field-overlay-types";
+import {
   DEFAULT_FIELD_RENDER_PALETTE,
   type FieldRenderPalette,
 } from "./field-render-tokens";
@@ -38,6 +44,11 @@ export interface FieldCanvasProps {
   readonly defaultViewport?: FieldViewport;
   readonly onViewportChange?: (viewport: FieldViewport) => void;
   readonly palette?: FieldRenderPalette;
+  readonly livePosition?: SharedValue<FieldPoint | null>;
+  readonly targetPosition?: FieldPoint;
+  readonly guidanceVisible?: boolean;
+  readonly anchors?: readonly FieldAnchorGeometry[];
+  readonly anchorOverlayOptions?: FieldAnchorOverlayOptions;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string;
 }
@@ -48,6 +59,11 @@ export function FieldCanvas({
   defaultViewport,
   onViewportChange,
   palette = DEFAULT_FIELD_RENDER_PALETTE,
+  livePosition: externalLivePosition,
+  targetPosition,
+  guidanceVisible = false,
+  anchors = [],
+  anchorOverlayOptions = HIDDEN_FIELD_ANCHOR_OVERLAY,
   style,
   testID = "field-canvas",
 }: FieldCanvasProps) {
@@ -70,6 +86,8 @@ export function FieldCanvas({
   );
   const camera = externalCamera ?? internalCamera;
   const canvasSize = useSharedValue<FieldViewportSize>({ width: 0, height: 0 });
+  const emptyLivePosition = useSharedValue<FieldPoint | null>(null);
+  const livePosition = externalLivePosition ?? emptyLivePosition;
   const initialized = React.useRef(Boolean(externalCamera || defaultViewport));
   const paths = React.useMemo(() => createFieldPaths(template), [template]);
   const cameraBounds = React.useMemo(
@@ -132,6 +150,11 @@ export function FieldCanvas({
             template={template}
             paths={paths}
             palette={palette}
+            livePosition={livePosition}
+            targetPosition={targetPosition}
+            guidanceVisible={guidanceVisible}
+            anchors={anchors}
+            anchorOverlayOptions={anchorOverlayOptions}
           />
         </Canvas>
       </View>

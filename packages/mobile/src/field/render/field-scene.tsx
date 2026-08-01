@@ -3,12 +3,20 @@ import { Group } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import type { StandardHighSchoolFieldTemplate } from "../template";
+import type { FieldPoint } from "../types";
 import type {
   FieldCamera,
   FieldViewportSize,
 } from "../camera/field-camera-types";
 import type { FieldPaths } from "./create-field-paths";
 import { FieldStaticLayer } from "./field-static-layer";
+import { FieldAnchorLayer } from "./field-anchor-layer";
+import { FieldGuidanceLayer } from "./field-guidance-layer";
+import { FieldPositionLayer } from "./field-position-layer";
+import type {
+  FieldAnchorGeometry,
+  FieldAnchorOverlayOptions,
+} from "./field-overlay-types";
 import type { FieldRenderPalette } from "./field-render-tokens";
 
 interface FieldSceneProps {
@@ -17,7 +25,11 @@ interface FieldSceneProps {
   readonly template: StandardHighSchoolFieldTemplate;
   readonly paths: FieldPaths;
   readonly palette: FieldRenderPalette;
-  readonly children?: React.ReactNode;
+  readonly livePosition: SharedValue<FieldPoint | null>;
+  readonly targetPosition?: FieldPoint;
+  readonly guidanceVisible: boolean;
+  readonly anchors: readonly FieldAnchorGeometry[];
+  readonly anchorOverlayOptions: FieldAnchorOverlayOptions;
 }
 
 export function FieldScene({
@@ -26,7 +38,11 @@ export function FieldScene({
   template,
   paths,
   palette,
-  children,
+  livePosition,
+  targetPosition,
+  guidanceVisible,
+  anchors,
+  anchorOverlayOptions,
 }: FieldSceneProps) {
   const cameraTransform = useDerivedValue(() => [
     { translateX: canvasSize.value.width / 2 },
@@ -45,7 +61,26 @@ export function FieldScene({
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
       />
-      {children}
+      <FieldAnchorLayer
+        anchors={anchors}
+        options={anchorOverlayOptions}
+        metersPerPixel={camera.metersPerPixel}
+        palette={palette}
+      />
+      {guidanceVisible && targetPosition ? (
+        <FieldGuidanceLayer
+          livePosition={livePosition}
+          targetPosition={targetPosition}
+          metersPerPixel={camera.metersPerPixel}
+          color={palette.guidance}
+        />
+      ) : null}
+      <FieldPositionLayer
+        livePosition={livePosition}
+        targetPosition={targetPosition}
+        metersPerPixel={camera.metersPerPixel}
+        palette={palette}
+      />
     </Group>
   );
 }

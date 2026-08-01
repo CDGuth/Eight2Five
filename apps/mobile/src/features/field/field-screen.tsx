@@ -1,13 +1,19 @@
 import React from "react";
 import {
   EMPTY_FIELD_LIVE_POSITION_STATE,
+  shouldShowFieldGuidance,
+  shouldShowFieldTarget,
+  type FieldAnchorGeometry,
+  type FieldAnchorOverlayOptions,
   type FieldLivePositionInput,
+  type FieldPoint,
 } from "@eight2five/mobile/field";
 import {
   FIELD_FIVE_YARD_GRID_COLOR,
   FieldCanvas,
 } from "@eight2five/mobile/field/render";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
+import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { FieldOverlayLayout } from "./field-overlay-layout";
 import { useFieldScreenController } from "./use-field-screen-controller";
@@ -15,13 +21,55 @@ import { CoordinatePanel } from "./coordinate-panel/coordinate-panel";
 import { areCoordinatePanelControlsDisabled } from "./coordinate-panel/coordinate-panel-state";
 import { PageDial } from "./page-dial/page-dial";
 
+function setLivePositionValue(
+  sharedValue: SharedValue<FieldPoint | null>,
+  position: FieldPoint | null,
+): void {
+  sharedValue.value = position;
+}
+
 export function FieldScreen({
   livePosition,
+  anchors = [],
+  anchorOverlayOptions,
 }: {
   readonly livePosition?: FieldLivePositionInput;
+  readonly anchors?: readonly FieldAnchorGeometry[];
+  readonly anchorOverlayOptions?: FieldAnchorOverlayOptions;
 }) {
   const theme = useEight2FiveTheme();
   const controller = useFieldScreenController();
+  const liveState = livePosition?.state ?? EMPTY_FIELD_LIVE_POSITION_STATE;
+  const fallbackLivePosition = useSharedValue<FieldPoint | null>(
+    liveState.position ?? null,
+  );
+  const livePositionValue = livePosition?.positionValue ?? fallbackLivePosition;
+  const liveXMeters = liveState.position?.xMeters;
+  const liveYMeters = liveState.position?.yMeters;
+  React.useEffect(() => {
+    if (livePosition?.positionValue) return;
+    setLivePositionValue(
+      fallbackLivePosition,
+      liveXMeters === undefined || liveYMeters === undefined
+        ? null
+        : { xMeters: liveXMeters, yMeters: liveYMeters },
+    );
+  }, [
+    fallbackLivePosition,
+    livePosition?.positionValue,
+    liveXMeters,
+    liveYMeters,
+  ]);
+  const drillOverlayState = {
+    drillFeaturesEnabled: controller.settings.drillFeaturesEnabled,
+    hasActiveDrill: Boolean(controller.activeDrill),
+    hasSelectedPage: Boolean(controller.selectedPage),
+    hasLivePosition: Boolean(liveState.position) && !liveState.isStale,
+    guidanceEnabled: controller.settings.guidanceEnabled,
+  };
+  const targetPosition = shouldShowFieldTarget(drillOverlayState)
+    ? controller.selectedPage?.position
+    : undefined;
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
@@ -49,12 +97,17 @@ export function FieldScreen({
           defaultViewport={controller.defaultViewport}
           onViewportChange={controller.commitViewport}
           palette={palette}
+          livePosition={livePositionValue}
+          targetPosition={targetPosition}
+          guidanceVisible={shouldShowFieldGuidance(drillOverlayState)}
+          anchors={anchors}
+          anchorOverlayOptions={anchorOverlayOptions}
         />
       }
       hud={
         <CoordinatePanel
           landscape={controller.landscape}
-          live={livePosition?.state ?? EMPTY_FIELD_LIVE_POSITION_STATE}
+          live={liveState}
           drillFeaturesEnabled={controller.settings.drillFeaturesEnabled}
           drills={controller.drills}
           activeDrill={controller.activeDrill}

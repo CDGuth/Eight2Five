@@ -19,6 +19,7 @@ export function TransitionMetricCell({
     <Pressable
       accessibilityLabel={`${label}, ${value}. Toggle transition metric.`}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       disabled={disabled}
       className="min-h-12 min-w-12 flex-1 justify-center px-2"
       onPress={onToggle}
