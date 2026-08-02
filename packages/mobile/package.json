@@ -27,7 +27,7 @@
     "react-native": "0.86.2"
   },
   "dependencies": {
-    "@eight2five/drill-schema": "*",
+    "@eight2five/drill-schema": "0.0.0",
     "@expo/html-elements": "^0.12.5",
     "@gluestack-ui/core": "^5.0.15",
     "@gluestack-ui/utils": "^5.0.6",
