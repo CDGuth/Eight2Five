@@ -6,6 +6,8 @@
     "paths": {
       "@eight2five/drill-schema": ["./packages/drill-schema/src/index"],
       "@eight2five/drill-schema/*": ["./packages/drill-schema/src/*"],
+      "@eight2five/drill-importers": ["./packages/drill-importers/src/index"],
+      "@eight2five/drill-importers/*": ["./packages/drill-importers/src/*"],
       "@eight2five/mobile": ["./packages/mobile/src/index"],
       "@eight2five/mobile/*": ["./packages/mobile/src/*"]
     }
