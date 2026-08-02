@@ -1,0 +1,142 @@
+import {
+  COLOR_PRESETS,
+  countPrimarySets,
+  drillGridToPhysicalPoint,
+  formatSetName,
+  parseDrillDocument,
+  physicalPointToDrillGrid,
+  resolveDrillEntity,
+  serializeDrillDocument,
+  type DrillDocument,
+} from "..";
+
+const fixture: DrillDocument = {
+  schema: "https://eight2five.app/schema/drill",
+  schemaVersion: "1.0.0",
+  metadata: {
+    title: "Part 4",
+    createdAt: "2026-08-02T17:30:00.000Z",
+  },
+  field: { type: "preset", preset: "football-nfhs" },
+  entityRules: {
+    bySymbol: {
+      B: {
+        instrument: "Baritone",
+        appearance: { color: COLOR_PRESETS.blue },
+      },
+    },
+    byLabel: {
+      B1: { appearance: { color: COLOR_PRESETS.green } },
+    },
+  },
+  entities: [
+    {
+      id: 1595433022185,
+      type: "performer",
+      symbol: "B",
+      label: "B1",
+    },
+  ],
+  sets: [
+    {
+      id: 0,
+      number: 31,
+      kind: "set",
+      countsFromPrevious: 0,
+      measureRange: { start: 122, end: 125 },
+    },
+    {
+      id: 1,
+      number: 31,
+      suffix: "A",
+      kind: "subset",
+      countsFromPrevious: 8,
+    },
+    {
+      id: 2,
+      number: 31,
+      suffix: ".5",
+      kind: "subset",
+      countsFromPrevious: 8,
+    },
+    {
+      id: 3,
+      number: 32,
+      kind: "set",
+      countsFromPrevious: 16,
+      measureRange: { start: 126, end: 129 },
+    },
+  ],
+  positions: [
+    { entityId: 1595433022185, setId: 0, xSteps: 0, ySteps: 0 },
+    { entityId: 1595433022185, setId: 1, xSteps: -4, ySteps: 28 },
+    { entityId: 1595433022185, setId: 2, xSteps: -2, ySteps: 30 },
+    { entityId: 1595433022185, setId: 3, xSteps: 0, ySteps: 32 },
+  ],
+};
+
+describe("drill schema", () => {
+  it("accepts the v1 set/subset model and round trips JSON", () => {
+    const parsed = parseDrillDocument(fixture);
+    expect(countPrimarySets(parsed.sets)).toBe(2);
+    expect(formatSetName(parsed.sets[1])).toBe("31A");
+    expect(formatSetName(parsed.sets[2])).toBe("31.5");
+    expect(parseDrillDocument(JSON.parse(serializeDrillDocument(parsed)))).toEqual(
+      parsed,
+    );
+  });
+
+  it("rejects arbitrary labels on sets", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        sets: [{ ...fixture.sets[0], label: "Finale" }],
+      }),
+    ).toThrow();
+  });
+
+  it("requires set ids to follow array order", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        sets: fixture.sets.map((set, index) =>
+          index === 1 ? { ...set, id: 9 } : set,
+        ),
+      }),
+    ).toThrow(/zero-based array index/);
+  });
+
+  it("requires subsets to share a number with a primary set", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        sets: fixture.sets.map((set, index) =>
+          index === 1 ? { ...set, number: 99 } : set,
+        ),
+      }),
+    ).toThrow(/requires a primary set/);
+  });
+
+  it("resolves appearance rules from broad to specific", () => {
+    const entity = resolveDrillEntity(fixture.entities[0], fixture.entityRules);
+    expect(entity.instrument).toBe("Baritone");
+    expect(entity.appearance).toEqual({
+      icon: "dot",
+      color: COLOR_PRESETS.green,
+      labelVisible: true,
+    });
+  });
+
+  it("maps the conventional NFHS front hash to exact physical geometry", () => {
+    const physical = drillGridToPhysicalPoint(
+      { xSteps: 0, ySteps: 28 },
+      fixture.field,
+    );
+    expect(physical.xMeters).toBeCloseTo(0, 8);
+    expect(physical.yMeters).toBeCloseTo((53 + 4 / 12) * 0.3048, 8);
+
+    const grid = physicalPointToDrillGrid(physical, fixture.field);
+    expect(grid.xSteps).toBeCloseTo(0, 8);
+    expect(grid.ySteps).toBeCloseTo(28, 8);
+  });
+});

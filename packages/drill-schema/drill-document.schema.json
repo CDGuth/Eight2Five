@@ -1,0 +1,660 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eight2five.app/schema/drill/1.0.0",
+  "title": "Eight2Five Drill Document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schemaVersion",
+    "metadata",
+    "field",
+    "entities",
+    "sets",
+    "positions"
+  ],
+  "properties": {
+    "schema": {
+      "const": "https://eight2five.app/schema/drill"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "field": {
+      "$ref": "#/$defs/fieldDefinition"
+    },
+    "entityRules": {
+      "$ref": "#/$defs/entityRules"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "sets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/set"
+      }
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/position"
+      }
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/path"
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "nonNegativeSafeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "createdAt"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "drillWriter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ensemble": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "lucideIcon": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "measureRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "end": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        }
+      }
+    },
+    "set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "number", "kind", "countsFromPrevious"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "number": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "suffix": {
+          "type": "string",
+          "pattern": "^(?:[A-Z]|\\.[0-9]+)$"
+        },
+        "kind": {
+          "enum": ["set", "subset"]
+        },
+        "countsFromPrevious": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "measureRange": {
+          "$ref": "#/$defs/measureRange"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "set"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "not": {
+              "required": ["suffix"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "subset"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["suffix"]
+          }
+        }
+      ]
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "icon": {
+          "enum": [
+            "dot",
+            "square",
+            "triangle",
+            "diamond",
+            "star",
+            "hexagon",
+            "cross"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "labelVisible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "symbol", "label"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "type": {
+          "enum": ["performer", "prop"]
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z]$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instrument": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appearance": {
+          "$ref": "#/$defs/appearance"
+        }
+      }
+    },
+    "entityRuleValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instrument": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appearance": {
+          "$ref": "#/$defs/appearance"
+        }
+      }
+    },
+    "entityRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bySymbol": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z]$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/entityRuleValues"
+          }
+        },
+        "byLabel": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/entityRuleValues"
+          }
+        },
+        "byId": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^(?:0|[1-9][0-9]*)$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/entityRuleValues"
+          }
+        }
+      }
+    },
+    "gridPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["xSteps", "ySteps"],
+      "properties": {
+        "xSteps": {
+          "type": "number"
+        },
+        "ySteps": {
+          "type": "number"
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entityId", "setId", "xSteps", "ySteps"],
+      "properties": {
+        "entityId": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "setId": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "xSteps": {
+          "type": "number"
+        },
+        "ySteps": {
+          "type": "number"
+        },
+        "facingDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        }
+      }
+    },
+    "path": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entityId", "fromSetId", "toSetId", "kind"],
+          "properties": {
+            "entityId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "fromSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "toSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "kind": {
+              "const": "straight"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "entityId",
+            "fromSetId",
+            "toSetId",
+            "kind",
+            "waypoints"
+          ],
+          "properties": {
+            "entityId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "fromSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "toSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "kind": {
+              "const": "polyline"
+            },
+            "waypoints": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/gridPoint"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "entityId",
+            "fromSetId",
+            "toSetId",
+            "kind",
+            "controlPoints"
+          ],
+          "properties": {
+            "entityId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "fromSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "toSetId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "kind": {
+              "const": "bezier"
+            },
+            "controlPoints": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/gridPoint"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "physicalBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minXMeters", "maxXMeters", "minYMeters", "maxYMeters"],
+      "properties": {
+        "minXMeters": {
+          "type": "number"
+        },
+        "maxXMeters": {
+          "type": "number"
+        },
+        "minYMeters": {
+          "type": "number"
+        },
+        "maxYMeters": {
+          "type": "number"
+        }
+      }
+    },
+    "gridBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minXSteps", "maxXSteps", "minYSteps", "maxYSteps"],
+      "properties": {
+        "minXSteps": {
+          "type": "number"
+        },
+        "maxXSteps": {
+          "type": "number"
+        },
+        "minYSteps": {
+          "type": "number"
+        },
+        "maxYSteps": {
+          "type": "number"
+        }
+      }
+    },
+    "physicalReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "axis", "coordinateMeters"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "axis": {
+          "enum": ["x", "y"]
+        },
+        "coordinateMeters": {
+          "type": "number"
+        }
+      }
+    },
+    "gridReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "axis", "coordinateSteps"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "axis": {
+          "enum": ["x", "y"]
+        },
+        "coordinateSteps": {
+          "type": "number"
+        }
+      }
+    },
+    "fieldDefinition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "preset"],
+          "properties": {
+            "type": {
+              "const": "preset"
+            },
+            "preset": {
+              "enum": [
+                "football-nfhs",
+                "football-ncaa",
+                "football-texas-uil",
+                "football-nfl"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "name", "physicalGeometry", "marchingGrid"],
+          "properties": {
+            "type": {
+              "const": "custom"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "physicalGeometry": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["bounds", "referenceLines"],
+              "properties": {
+                "bounds": {
+                  "$ref": "#/$defs/physicalBounds"
+                },
+                "referenceLines": {
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "$ref": "#/$defs/physicalReference"
+                  }
+                }
+              }
+            },
+            "marchingGrid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["bounds", "referenceLines"],
+              "properties": {
+                "bounds": {
+                  "$ref": "#/$defs/gridBounds"
+                },
+                "referenceLines": {
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "$ref": "#/$defs/gridReference"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "setId"],
+          "properties": {
+            "type": {
+              "const": "set"
+            },
+            "setId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entityId"],
+          "properties": {
+            "type": {
+              "const": "entity"
+            },
+            "entityId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entityId", "setId"],
+          "properties": {
+            "type": {
+              "const": "position"
+            },
+            "entityId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            },
+            "setId": {
+              "$ref": "#/$defs/nonNegativeSafeInteger"
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fileName": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "importer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "importedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target"],
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/sourceTarget"
+              },
+              "page": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "rawText": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$comment": "Cross-record semantic invariants (sequential set IDs, unique identities, valid references, consecutive paths, and measure end >= start) are additionally enforced by @eight2five/drill-schema's Zod validator."
+}
