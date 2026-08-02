@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { CoordinateSheetImportResult } from "@eight2five/drill-importers";
 import { formatSetName, type DrillDocument } from "@eight2five/drill-schema";
 
@@ -81,18 +81,17 @@ export function PreviewSection({
             }}
           >
             <PreviewList
+              key={`entities-${outputDocument.metadata.createdAt}`}
               title="Entities"
-              values={outputDocument.entities
-                .slice(0, 10)
-                .map(
-                  (entity) =>
-                    `${entity.label} · ${entity.type} · symbol ${entity.symbol}`,
-                )}
-              remainder={Math.max(0, outputDocument.entities.length - 10)}
+              values={outputDocument.entities.map(
+                (entity) =>
+                  `${entity.label} · ${entity.type} · symbol ${entity.symbol}`,
+              )}
             />
             <PreviewList
+              key={`sets-${outputDocument.metadata.createdAt}`}
               title="Sets"
-              values={outputDocument.sets.slice(0, 10).map((set) => {
+              values={outputDocument.sets.map((set) => {
                 const measures = set.measureRange
                   ? set.measureRange.start === set.measureRange.end
                     ? `m. ${set.measureRange.start}`
@@ -102,7 +101,6 @@ export function PreviewSection({
                   set.countsFromPrevious
                 } ct · ${measures}`;
               })}
-              remainder={Math.max(0, outputDocument.sets.length - 10)}
             />
           </View>
 
@@ -172,15 +170,19 @@ function Metric({
   );
 }
 
+const PREVIEW_PAGE_SIZE = 10;
+
 function PreviewList({
   title,
   values,
-  remainder,
 }: {
   readonly title: string;
   readonly values: readonly string[];
-  readonly remainder: number;
 }) {
+  const [visibleCount, setVisibleCount] = React.useState(PREVIEW_PAGE_SIZE);
+  const visibleValues = values.slice(0, visibleCount);
+  const remainder = Math.max(0, values.length - visibleValues.length);
+
   return (
     <View style={{ flex: 1, minWidth: 260, gap: spacing.sm }}>
       <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>
@@ -196,7 +198,7 @@ function PreviewList({
           backgroundColor: colors.surfaceMuted,
         }}
       >
-        {values.map((value) => (
+        {visibleValues.map((value) => (
           <Text
             key={value}
             selectable
@@ -206,9 +208,26 @@ function PreviewList({
           </Text>
         ))}
         {remainder > 0 ? (
-          <Text selectable style={{ color: colors.textMuted, fontSize: 12 }}>
-            + {remainder} more
-          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Show more ${title.toLowerCase()}`}
+            onPress={() =>
+              setVisibleCount((count) =>
+                Math.min(count + PREVIEW_PAGE_SIZE, values.length),
+              )
+            }
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              borderRadius: radius.sm,
+              paddingHorizontal: spacing.xs,
+              paddingVertical: 2,
+              opacity: pressed ? 0.65 : 1,
+            })}
+          >
+            <Text style={{ color: colors.accentText, fontSize: 12 }}>
+              + {remainder} more
+            </Text>
+          </Pressable>
         ) : null}
       </View>
     </View>
