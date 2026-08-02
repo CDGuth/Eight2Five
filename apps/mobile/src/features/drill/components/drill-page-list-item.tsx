@@ -1,8 +1,12 @@
 import React from "react";
 import { ArrowDown, ArrowUp, EllipsisVertical } from "lucide-react-native";
-import type { DrillPage, DrillTerms } from "@eight2five/mobile/drill";
 import {
-  fieldPointToMarchingCoordinate,
+  formatSetName,
+  type DrillSet,
+  type DrillTerms,
+} from "@eight2five/mobile/drill";
+import {
+  drillGridPointToMarchingCoordinate,
   formatMarchingFrontBack,
   formatMarchingSide,
 } from "@eight2five/mobile/field";
@@ -29,7 +33,7 @@ import { TransitionSummary } from "./transition-summary";
 export const DrillPageListItem = React.memo(function DrillPageListItem({
   page,
   previousPage,
-  terms,
+  terms: _terms,
   selected,
   busy,
   first,
@@ -39,9 +43,10 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
   onMoveDown,
   onOpenActions,
 }: {
-  page: DrillPage;
-  previousPage?: DrillPage;
-  terms: DrillTerms;
+  page: DrillSet;
+  previousPage?: DrillSet;
+  /** @deprecated Sets are now the only user-facing terminology. */
+  terms?: DrillTerms;
   selected: boolean;
   busy: boolean;
   first: boolean;
@@ -53,12 +58,18 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
 }) {
   const theme = useEight2FiveTheme();
   const coordinate = React.useMemo(
-    () => fieldPointToMarchingCoordinate(page.position),
+    () => drillGridPointToMarchingCoordinate(page.position),
     [page.position],
   );
   const side = formatMarchingSide(coordinate.side);
   const frontBack = formatMarchingFrontBack(coordinate.frontBack);
-  const title = `${terms.singular} ${page.label}`;
+  const setName = formatSetName(page);
+  const title = `Set ${setName}`;
+  const measures = page.measureRange
+    ? page.measureRange.start === page.measureRange.end
+      ? `Measure ${page.measureRange.start}`
+      : `Measures ${page.measureRange.start}–${page.measureRange.end}`
+    : undefined;
 
   return (
     <Card
@@ -75,8 +86,8 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
           onPress={onEdit}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel={`${title}. ${page.countsFromPrevious} counts. ${side}. ${frontBack}.${selected ? " Selected." : ""}`}
-          accessibilityHint={`Edits this ${terms.lowercaseSingular}`}
+          accessibilityLabel={`${title}. ${page.countsFromPrevious} counts.${measures ? ` ${measures}.` : ""} ${side}. ${frontBack}.${selected ? " Selected." : ""}`}
+          accessibilityHint="Edits this set"
           accessibilityState={{ selected, disabled: busy }}
         >
           <VStack
@@ -93,6 +104,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
               </Text>
               <Text size="sm" style={{ color: theme.textMuted }}>
                 {page.countsFromPrevious} counts
+                {measures ? ` · ${measures}` : ""}
               </Text>
               {selected ? (
                 <Text

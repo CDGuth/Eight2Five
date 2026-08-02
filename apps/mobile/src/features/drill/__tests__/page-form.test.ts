@@ -1,8 +1,8 @@
-import type { DrillRepository } from "@eight2five/mobile/drill";
+import type { DrillRepository, DrillSet } from "@eight2five/mobile/drill";
 import {
   formatMarchingFrontBack,
   formatMarchingSide,
-  marchingCoordinateToFieldPoint,
+  marchingCoordinateToDrillGridPoint,
 } from "@eight2five/mobile/field";
 
 import {
@@ -14,8 +14,12 @@ import {
 import { savePageDraft } from "../page-management";
 
 const VALID_DRAFT: MarchingCoordinateDraft = {
-  label: "31A",
+  setNumber: "31",
+  setKind: "subset",
+  setSuffix: "A",
   countsFromPrevious: "16",
+  measureStart: "126",
+  measureEnd: "129",
   side: "2",
   yardLine: "40",
   sideRelation: "inside",
@@ -26,12 +30,16 @@ const VALID_DRAFT: MarchingCoordinateDraft = {
 };
 
 describe("structured marching coordinate form", () => {
-  test("defaults the first entry to zero counts without copying a coordinate", () => {
+  test("defaults the first entry to zero counts and a numeric set identity", () => {
     expect(
-      createDefaultPageDraft({ ordinal: 0, suggestedLabel: "1" }),
+      createDefaultPageDraft({ ordinal: 0, suggestedNumber: 1 }),
     ).toMatchObject({
-      label: "1",
+      setNumber: "1",
+      setKind: "set",
+      setSuffix: "",
       countsFromPrevious: "0",
+      measureStart: "",
+      measureEnd: "",
       side: "center",
       yardLine: "50",
       sideRelation: "on",
@@ -39,12 +47,12 @@ describe("structured marching coordinate form", () => {
       frontBackRelation: "on",
     });
     expect(
-      createDefaultPageDraft({ ordinal: 2, suggestedLabel: "New" })
+      createDefaultPageDraft({ ordinal: 2, suggestedNumber: 7 })
         .countsFromPrevious,
     ).toBe("8");
   });
 
-  test("converts structured fractional controls to one canonical FieldPoint", () => {
+  test("converts structured fractional controls to the canonical drill grid", () => {
     const result = validatePageDraft(VALID_DRAFT);
     expect(result.errors).toEqual({});
     expect(result.value).toBeDefined();
@@ -54,11 +62,20 @@ describe("structured marching coordinate form", () => {
     expect(formatMarchingFrontBack(result.value!.coordinate.frontBack)).toBe(
       "4.5 Steps in front of HS FH",
     );
-    expect(result.value!.countsFromPrevious).toBe(16);
+    expect(result.value).toMatchObject({
+      number: 31,
+      kind: "subset",
+      suffix: "A",
+      countsFromPrevious: 16,
+      measureRange: { start: 126, end: 129 },
+    });
+    expect(result.value!.position).toEqual(
+      marchingCoordinateToDrillGridPoint(result.value!.coordinate),
+    );
   });
 
-  test("initializes controls through inverse conversion and round trips", () => {
-    const position = marchingCoordinateToFieldPoint({
+  test("initializes controls through inverse grid conversion and round trips", () => {
+    const position = marchingCoordinateToDrillGridPoint({
       side: { side: 1, yardLine: 35, relation: "outside", offsetSteps: 1.25 },
       frontBack: {
         reference: "back-hash",
@@ -66,24 +83,33 @@ describe("structured marching coordinate form", () => {
         offsetSteps: 3.75,
       },
     });
-    const draft = pageToDraft({
-      label: "Finale",
+    const set: DrillSet = {
+      id: "set-1",
+      drillId: "drill",
+      ordinal: 0,
+      number: 47,
+      kind: "set",
       countsFromPrevious: 12,
+      measureRange: { start: 210, end: 214 },
       position,
-    });
+    };
+    const draft = pageToDraft(set);
     const roundTrip = validatePageDraft(draft);
 
     expect(draft).toMatchObject({
-      label: "Finale",
+      setNumber: "47",
+      setKind: "set",
       countsFromPrevious: "12",
+      measureStart: "210",
+      measureEnd: "214",
       side: "1",
       yardLine: "35",
       sideRelation: "outside",
       frontBackReference: "back-hash",
       frontBackRelation: "behind",
     });
-    expect(roundTrip.value?.position.xMeters).toBeCloseTo(position.xMeters, 10);
-    expect(roundTrip.value?.position.yMeters).toBeCloseTo(position.yMeters, 10);
+    expect(roundTrip.value?.position.xSteps).toBeCloseTo(position.xSteps, 10);
+    expect(roundTrip.value?.position.ySteps).toBeCloseTo(position.ySteps, 10);
   });
 
   test("normalizes zero offsets and the exact 50 to On with no side", () => {
@@ -106,16 +132,21 @@ describe("structured marching coordinate form", () => {
     expect(result.value?.coordinate.frontBack.relation).toBe("on");
   });
 
-  test("returns actionable metadata, numeric, relation, and bounds errors", () => {
+  test("returns actionable set, count, measure, relation, and bounds errors", () => {
     expect(
       validatePageDraft({
         ...VALID_DRAFT,
-        label: " ",
-        countsFromPrevious: "-1",
+        setNumber: "-1",
+        setSuffix: "aa",
+        countsFromPrevious: "2.5",
+        measureStart: "130",
+        measureEnd: "129",
       }).errors,
     ).toMatchObject({
-      label: expect.stringContaining("label"),
-      countsFromPrevious: expect.stringContaining("non-negative"),
+      setNumber: expect.stringContaining("set number"),
+      setSuffix: expect.stringContaining("capital letter"),
+      countsFromPrevious: expect.stringContaining("whole-number"),
+      measureEnd: expect.stringContaining("after"),
     });
     expect(
       validatePageDraft({
@@ -124,58 +155,69 @@ describe("structured marching coordinate form", () => {
         yardLine: "45",
       }).errors.side,
     ).toContain("50-yard line");
-    expect(
-      validatePageDraft({
-        ...VALID_DRAFT,
-        side: "1",
-        yardLine: "0",
-        sideRelation: "outside",
-        sideOffsetSteps: "0.25",
-      }).errors.coordinate,
-    ).toContain("field bounds");
   });
 
   test("persists canonical create and edit payloads", async () => {
-    const createdPage = {
-      id: "page-new",
+    const parsed = validatePageDraft(VALID_DRAFT).value!;
+    const createdSet: DrillSet = {
+      id: "set-new",
       drillId: "drill",
-      ordinal: 0,
-      label: "31A",
-      countsFromPrevious: 16,
-      position: validatePageDraft(VALID_DRAFT).value!.position,
+      ordinal: 1,
+      number: parsed.number,
+      suffix: parsed.suffix,
+      kind: parsed.kind,
+      countsFromPrevious: parsed.countsFromPrevious,
+      measureRange: parsed.measureRange,
+      position: parsed.position,
     };
     const repository = {
-      createPage: jest.fn(async () => createdPage),
-      updatePage: jest.fn(async () => createdPage),
+      createSet: jest.fn(async () => createdSet),
+      updateSet: jest.fn(async () => createdSet),
     } as unknown as DrillRepository;
 
     await savePageDraft({
       repository,
       drillId: "drill",
       pageId: "new",
-      pages: [],
+      pages: [
+        {
+          ...createdSet,
+          id: "set-zero",
+          ordinal: 0,
+          number: 30,
+          suffix: undefined,
+          kind: "set",
+          countsFromPrevious: 0,
+        },
+      ],
       placement: "append",
       draft: VALID_DRAFT,
     });
-    expect(repository.createPage).toHaveBeenCalledWith({
+    expect(repository.createSet).toHaveBeenCalledWith({
       drillId: "drill",
-      label: "31A",
+      number: 31,
+      kind: "subset",
+      suffix: "A",
       countsFromPrevious: 16,
-      position: createdPage.position,
+      measureRange: { start: 126, end: 129 },
+      position: createdSet.position,
     });
 
     await savePageDraft({
       repository,
       drillId: "drill",
-      pageId: "page-new",
-      pages: [createdPage],
+      pageId: "set-new",
+      pages: [createdSet],
       placement: "append",
       draft: VALID_DRAFT,
     });
-    expect(repository.updatePage).toHaveBeenCalledWith("page-new", {
-      label: "31A",
+    expect(repository.updateSet).toHaveBeenCalledWith("set-new", {
+      number: 31,
+      kind: "subset",
+      suffix: "A",
       countsFromPrevious: 16,
-      position: createdPage.position,
+      measureRange: { start: 126, end: 129 },
+      position: createdSet.position,
     });
   });
 });

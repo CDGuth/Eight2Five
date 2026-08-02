@@ -1,23 +1,41 @@
-import type { FieldPoint } from "../field";
+import type {
+  DrillGridPoint,
+  MeasureRange,
+  SetKind,
+} from "@eight2five/drill-schema";
 
 /**
- * A drill is deliberately performer-agnostic in this phase. Performer
- * identity, assignment, and per-performer positions belong to a later domain
- * layer and must not leak into these shared page records.
+ * App-local drill metadata. The portable drill document owns richer metadata;
+ * SQLite keeps only the fields needed by the current mobile MVP.
  */
 export interface Drill {
   readonly id: string;
   readonly name: string;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly fieldPreset: "football-nfhs";
 }
 
-/** One performer-independent target page in a drill. */
-export interface DrillPage {
+/**
+ * One ordered target set for the single-performer mobile MVP.
+ *
+ * `id` is an opaque SQLite row identifier. It intentionally differs from the
+ * portable schema's zero-based set id: imports map portable set order to local
+ * rows, while mobile editing can insert/reorder rows without exposing storage
+ * identity in drill files.
+ */
+export interface DrillSet {
   readonly id: string;
   readonly drillId: string;
   readonly ordinal: number;
-  readonly label: string;
+  readonly number: number;
+  readonly suffix?: string;
+  readonly kind: SetKind;
   readonly countsFromPrevious: number;
-  readonly position: FieldPoint;
+  readonly measureRange?: MeasureRange;
+  readonly position: DrillGridPoint;
+  readonly facingDegrees?: number;
 }
+
+/** @deprecated Use DrillSet. Kept as a source-compatibility alias during v1 migration. */
+export type DrillPage = DrillSet;

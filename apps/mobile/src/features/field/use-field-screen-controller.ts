@@ -2,7 +2,7 @@ import React from "react";
 import { useFocusEffect } from "expo-router";
 import { useWindowDimensions } from "react-native";
 import type { FieldViewport } from "@eight2five/mobile/field";
-import type { Drill, DrillPage } from "@eight2five/mobile/drill";
+import type { Drill, DrillSet } from "@eight2five/mobile/drill";
 
 import { useFieldOrientation } from "../../navigation/use-field-orientation";
 import {
@@ -25,7 +25,7 @@ export function useFieldScreenController() {
   const [initialViewport] = React.useState(() => committedFieldViewport);
   const [drills, setDrills] = React.useState<readonly Drill[]>([]);
   const [activeDrill, setActiveDrill] = React.useState<Drill>();
-  const [pages, setPages] = React.useState<readonly DrillPage[]>([]);
+  const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
   const [loadingDrills, setLoadingDrills] = React.useState(true);
   const [fieldError, setFieldError] = React.useState<Error>();
   const [selectionBusy, setSelectionBusy] = React.useState(false);
@@ -49,7 +49,7 @@ export function useFieldScreenController() {
       const [nextDrills, nextActiveDrill, nextPages] = await Promise.all([
         repository.listDrills(),
         activeDrillId ? repository.getDrill(activeDrillId) : undefined,
-        activeDrillId ? repository.listPages(activeDrillId) : [],
+        activeDrillId ? repository.listSets(activeDrillId) : [],
       ]);
       if (generation !== refreshGeneration.current) return;
       setDrills(nextDrills);
@@ -113,7 +113,7 @@ export function useFieldScreenController() {
       });
       setFieldError(undefined);
       try {
-        await store.setSelectedDrillPage(page.id);
+        await store.setSelectedDrillSet(page.id);
         if (generation === pageSelectionGeneration.current) {
           setOptimisticSelection(undefined);
         }
@@ -132,7 +132,7 @@ export function useFieldScreenController() {
   const effectiveSelectedPageId =
     optimisticSelection?.activeDrillId === snapshot.settings.activeDrillId
       ? optimisticSelection.pageId
-      : snapshot.settings.selectedDrillPageId;
+      : snapshot.settings.selectedDrillSetId;
   const selectedIndex = pages.findIndex(
     (page) => page.id === effectiveSelectedPageId,
   );

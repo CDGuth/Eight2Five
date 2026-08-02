@@ -15,8 +15,8 @@ import {
 } from "@eight2five/mobile/field";
 
 import {
+  coordinateDraftFromFieldPoint,
   createDefaultPageDraft,
-  pageToDraft,
   validatePageDraft,
   type MarchingCoordinateDraft,
 } from "../drill/page-form";
@@ -59,12 +59,8 @@ export function createAnchorEditorDrafts(position?: AnchorFieldPosition): {
     zMeters: DEFAULT_ANCHOR_HEIGHT_METERS,
   };
   const coordinate = position
-    ? pageToDraft({
-        label: "Anchor",
-        countsFromPrevious: 0,
-        position,
-      })
-    : createDefaultPageDraft({ ordinal: 0, suggestedLabel: "Anchor" });
+    ? coordinateDraftFromFieldPoint(position)
+    : createDefaultPageDraft({ ordinal: 0, suggestedNumber: 0 });
   const standard = anchorFieldPositionToStandard(
     initial,
     "center-field",

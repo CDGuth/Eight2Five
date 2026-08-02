@@ -1,6 +1,6 @@
 import React from "react";
 import { useFocusEffect } from "expo-router";
-import { getDrillTerms, type DrillPage } from "@eight2five/mobile/drill";
+import { getDrillTerms, type DrillSet } from "@eight2five/mobile/drill";
 
 import {
   useAppSettingsSnapshot,
@@ -26,8 +26,8 @@ export function usePageEditorController(
 ) {
   const snapshot = useAppSettingsSnapshot();
   const store = useAppSettingsStore();
-  const [page, setPage] = React.useState<DrillPage>();
-  const [pages, setPages] = React.useState<readonly DrillPage[]>([]);
+  const [page, setPage] = React.useState<DrillSet>();
+  const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
   const [draft, setDraft] = React.useState<MarchingCoordinateDraft>();
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -38,7 +38,7 @@ export function usePageEditorController(
     if (snapshot.status !== "ready") return;
     try {
       const repository = store.getDrillRepository();
-      const nextPages = await repository.listPages(drillId);
+      const nextPages = await repository.listSets(drillId);
       setPages(nextPages);
       if (pageId === "new") {
         const ordinal = getPageCreationOrdinal(
@@ -46,17 +46,20 @@ export function usePageEditorController(
           placement,
           relativePageId,
         );
-        // Count-based labels are only an editable suggestion; existing labels
-        // are never parsed or assumed to form a numeric sequence.
+        const highestPrimaryNumber = nextPages.reduce(
+          (highest, set) =>
+            set.kind === "set" ? Math.max(highest, set.number) : highest,
+          -1,
+        );
         setDraft(
           createDefaultPageDraft({
             ordinal,
-            suggestedLabel: String(nextPages.length + 1),
+            suggestedNumber: highestPrimaryNumber + 1,
           }),
         );
         setPage(undefined);
       } else {
-        const nextPage = await repository.getPage(pageId);
+        const nextPage = await repository.getSet(pageId);
         if (!nextPage || nextPage.drillId !== drillId) {
           throw new Error("This drill entry no longer exists in the drill.");
         }
@@ -113,7 +116,7 @@ export function usePageEditorController(
     setDraft,
     loading: snapshot.status === "loading" || loading,
     saving,
-    terms: getDrillTerms(snapshot.settings.drillTerminology),
+    terms: getDrillTerms("sets"),
     error: error ?? snapshot.error,
     save,
   } as const;

@@ -1,14 +1,11 @@
 import {
+  drillGridPointToMarchingCoordinate,
   fieldPointToMarchingCoordinate,
   formatMarchingFrontBack,
   formatMarchingSide,
   type FieldLivePositionState,
 } from "@eight2five/mobile/field";
-import {
-  getDrillTerms,
-  type DrillPage,
-  type DrillTerminology,
-} from "@eight2five/mobile/drill";
+import { formatSetName, type DrillSet } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 
 import { getTransitionPresentation } from "../../drill/transition-presentation";
@@ -26,9 +23,10 @@ export interface LiveCoordinatePresentation {
 }
 
 export interface DrillCoordinatePresentation {
-  readonly term: "Page" | "Set";
-  readonly page: string;
+  readonly term: "Set";
+  readonly set: string;
   readonly counts: string;
+  readonly measures: string;
   readonly metricLabel: "Step Size" | "xCounts";
   readonly metric: string;
   readonly coordinate: CoordinateLines | null;
@@ -47,10 +45,10 @@ export function areCoordinatePanelControlsDisabled({
   return !settingsReady || loadingDrills || selectionBusy;
 }
 
-export function formatCoordinateLines(
-  position: DrillPage["position"],
+export function formatDrillCoordinateLines(
+  position: DrillSet["position"],
 ): CoordinateLines {
-  const coordinate = fieldPointToMarchingCoordinate(position);
+  const coordinate = drillGridPointToMarchingCoordinate(position);
   return {
     side: formatMarchingSide(coordinate.side),
     frontBack: formatMarchingFrontBack(coordinate.frontBack),
@@ -70,11 +68,11 @@ export function getLiveCoordinatePresentation(
       muted: true,
     };
   }
-  const coordinate = formatCoordinateLines(live.position);
+  const coordinate = fieldPointToMarchingCoordinate(live.position);
   return {
     ...(live.isStale ? { statusLabel: "Last known position" } : {}),
-    primary: coordinate.side,
-    secondary: coordinate.frontBack,
+    primary: formatMarchingSide(coordinate.side),
+    secondary: formatMarchingFrontBack(coordinate.frontBack),
     muted: live.isStale,
   };
 }
@@ -82,37 +80,42 @@ export function getLiveCoordinatePresentation(
 export function getDrillCoordinatePresentation({
   page,
   previousPage,
-  terminology,
   metricMode,
 }: {
-  readonly page?: DrillPage;
-  readonly previousPage?: DrillPage;
-  readonly terminology: DrillTerminology;
+  readonly page?: DrillSet;
+  readonly previousPage?: DrillSet;
   readonly metricMode: TransitionMetricMode;
+  /** @deprecated Sets are the only v2 terminology. */
+  readonly terminology?: unknown;
 }): DrillCoordinatePresentation {
-  const term = getDrillTerms(terminology).singular;
   const metricLabel = metricMode === "step-size" ? "Step Size" : "xCounts";
   if (!page) {
     return {
-      term,
-      page: "–",
+      term: "Set",
+      set: "–",
       counts: "–",
+      measures: "–",
       metricLabel,
       metric: "–",
       coordinate: null,
-      emptyMessage: "No drill page selected",
+      emptyMessage: "No drill set selected",
     };
   }
   const transition = getTransitionPresentation(previousPage, page);
   return {
-    term,
-    page: page.label || String(page.ordinal + 1),
-    counts: previousPage ? String(page.countsFromPrevious) : "–",
+    term: "Set",
+    set: formatSetName(page),
+    counts: String(page.countsFromPrevious),
+    measures: page.measureRange
+      ? page.measureRange.start === page.measureRange.end
+        ? String(page.measureRange.start)
+        : `${page.measureRange.start}–${page.measureRange.end}`
+      : "–",
     metricLabel,
     metric:
       metricMode === "step-size"
         ? transition.stepSize
         : transition.crossingCounts,
-    coordinate: formatCoordinateLines(page.position),
+    coordinate: formatDrillCoordinateLines(page.position),
   };
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { analyzeTransition, type DrillPage } from "@eight2five/mobile/drill";
+import { analyzeTransition, type DrillSet } from "@eight2five/mobile/drill";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Text } from "@eight2five/ui/components/text";
 import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -10,14 +10,14 @@ export const TransitionSummary = React.memo(function TransitionSummary({
   previousPage,
   page,
 }: {
-  previousPage?: DrillPage;
-  page: DrillPage;
+  previousPage?: DrillSet;
+  page: DrillSet;
 }) {
   const theme = useEight2FiveTheme();
-  const currentX = page.position.xMeters;
-  const currentY = page.position.yMeters;
-  const previousX = previousPage?.position.xMeters;
-  const previousY = previousPage?.position.yMeters;
+  const currentX = page.position.xSteps;
+  const currentY = page.position.ySteps;
+  const previousX = previousPage?.position.xSteps;
+  const previousY = previousPage?.position.ySteps;
   const counts = page.countsFromPrevious;
   const presentation = React.useMemo(
     () =>
@@ -25,8 +25,8 @@ export const TransitionSummary = React.memo(function TransitionSummary({
         analyzeTransition(
           previousX === undefined || previousY === undefined
             ? undefined
-            : { xMeters: previousX, yMeters: previousY },
-          { xMeters: currentX, yMeters: currentY },
+            : { xSteps: previousX, ySteps: previousY },
+          { xSteps: currentX, ySteps: currentY },
           counts,
         ),
         previousX !== undefined && previousY !== undefined,

@@ -1,29 +1,30 @@
 import {
   analyzeDrillTransition,
   analyzeTransition,
-  type DrillPage,
+  type DrillSet,
 } from "../index";
-import { standardStepsToMeters, yardsToMeters } from "../../field";
 
-function page(
+function set(
   id: string,
-  xYards: number,
+  xSteps: number,
   countsFromPrevious: number,
-  yMeters = 0,
-): DrillPage {
+  ySteps = 0,
+): DrillSet {
+  const ordinal = Number(id);
   return {
     id,
     drillId: "drill-1",
-    ordinal: Number(id),
-    label: id,
+    ordinal,
+    number: ordinal,
+    kind: "set",
     countsFromPrevious,
-    position: { xMeters: yardsToMeters(xYards), yMeters },
+    position: { xSteps, ySteps },
   };
 }
 
 describe("drill transition analysis", () => {
-  test("omits derived rates for the first page", () => {
-    expect(analyzeDrillTransition(undefined, page("1", 10, 0))).toEqual({
+  test("omits derived rates for the first set", () => {
+    expect(analyzeDrillTransition(undefined, set("1", -64, 0))).toEqual({
       distanceSteps: 0,
       isHalt: false,
       yardLineCrossingCounts: [],
@@ -31,7 +32,7 @@ describe("drill transition analysis", () => {
   });
 
   test("omits step size and crossing counts for zero counts", () => {
-    const analysis = analyzeDrillTransition(page("1", 10, 0), page("2", 20, 0));
+    const analysis = analyzeDrillTransition(set("1", -64, 0), set("2", -48, 0));
     expect(analysis.distanceSteps).toBe(16);
     expect(analysis.stepSizeToFive).toBeUndefined();
     expect(analysis.yardLineCrossingCounts).toEqual([]);
@@ -39,49 +40,49 @@ describe("drill transition analysis", () => {
 
   test("recognizes a same-position positive-count halt", () => {
     const analysis = analyzeDrillTransition(
-      page("1", 40, 0),
-      page("2", 40, 16),
+      set("1", -16, 0),
+      set("2", -16, 16),
     );
     expect(analysis).toMatchObject({ distanceSteps: 0, isHalt: true });
     expect(analysis.stepSizeToFive).toBeUndefined();
   });
 
   test.each([
-    [standardStepsToMeters(8), 8, 8],
-    [standardStepsToMeters(4.5), 8, 14.25],
-    [standardStepsToMeters(16), 13, 6.5],
+    [8, 8, 8],
+    [4.5, 8, 14.25],
+    [16, 13, 6.5],
   ])(
-    "derives %s meters over %s counts as %s-to-5",
+    "derives %s drill-grid steps over %s counts as %s-to-5",
     (distance, counts, expected) => {
       expect(
         analyzeTransition(
-          { xMeters: 0, yMeters: 0 },
-          { xMeters: distance, yMeters: 0 },
+          { xSteps: 0, ySteps: 0 },
+          { xSteps: distance, ySteps: 0 },
           counts,
         ).stepSizeToFive,
       ).toBe(expected);
     },
   );
 
-  test("returns the transition count at one and multiple line crossings", () => {
+  test("returns the transition count at one and multiple five-yard crossings", () => {
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(10), yMeters: 0 },
-        { xMeters: yardsToMeters(20), yMeters: 0 },
+        { xSteps: -64, ySteps: 0 },
+        { xSteps: -48, ySteps: 0 },
         8,
       ).yardLineCrossingCounts,
     ).toEqual([4]);
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(10), yMeters: 0 },
-        { xMeters: yardsToMeters(25), yMeters: 0 },
+        { xSteps: -64, ySteps: 0 },
+        { xSteps: -40, ySteps: 0 },
         16,
       ).yardLineCrossingCounts,
     ).toEqual([5.333333, 10.666667]);
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(12.5), yMeters: 0 },
-        { xMeters: yardsToMeters(22.5), yMeters: 0 },
+        { xSteps: -60, ySteps: 0 },
+        { xSteps: -44, ySteps: 0 },
         16,
       ).yardLineCrossingCounts,
     ).toEqual([4, 12]);
@@ -90,8 +91,8 @@ describe("drill transition analysis", () => {
   test("returns crossing counts in time order for reverse movement", () => {
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(25), yMeters: 0 },
-        { xMeters: yardsToMeters(10), yMeters: 0 },
+        { xSteps: -40, ySteps: 0 },
+        { xSteps: -64, ySteps: 0 },
         16,
       ).yardLineCrossingCounts,
     ).toEqual([5.333333, 10.666667]);
@@ -100,8 +101,8 @@ describe("drill transition analysis", () => {
   test("excludes exact start and end yard lines", () => {
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(10), yMeters: 0 },
-        { xMeters: yardsToMeters(15), yMeters: 0 },
+        { xSteps: -64, ySteps: 0 },
+        { xSteps: -56, ySteps: 0 },
         8,
       ).yardLineCrossingCounts,
     ).toEqual([]);
@@ -110,16 +111,26 @@ describe("drill transition analysis", () => {
   test("cleans floating-point values near integer and half counts", () => {
     expect(
       analyzeTransition(
-        { xMeters: yardsToMeters(10), yMeters: 0 },
-        { xMeters: yardsToMeters(20) + 1e-12, yMeters: 0 },
+        { xSteps: -64, ySteps: 0 },
+        { xSteps: -48 + 1e-12, ySteps: 0 },
         8,
       ).yardLineCrossingCounts,
     ).toEqual([4]);
   });
 
-  test("keeps derived values off persisted page records", () => {
-    const current = page("2", 20, 8);
-    analyzeDrillTransition(page("1", 10, 0), current);
+  test("rejects fractional incoming counts", () => {
+    expect(() =>
+      analyzeTransition(
+        { xSteps: 0, ySteps: 0 },
+        { xSteps: 8, ySteps: 0 },
+        2.5,
+      ),
+    ).toThrow("integer");
+  });
+
+  test("keeps derived values off persisted set records", () => {
+    const current = set("2", -48, 8);
+    analyzeDrillTransition(set("1", -64, 0), current);
     expect(current).not.toHaveProperty("stepSizeToFive");
     expect(current).not.toHaveProperty("yardLineCrossingCounts");
   });

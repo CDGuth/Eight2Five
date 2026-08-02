@@ -1,21 +1,14 @@
-import type { DrillTerminology } from "../drill/terminology";
-
 export type FieldPerspective = "director" | "performer";
 export type TransitionMetricMode = "step-size" | "crossing-counts";
 
 export const DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS = 20;
 export const MAX_COMFORTABLE_ANCHOR_RANGE_METERS = 200;
 
-/**
- * App preferences and the two persisted selection pointers.
- *
- * The selection pointers live in the same singleton row as preferences so a
- * drill screen can restore its place without introducing another storage
- * mechanism. They are intentionally not part of resetPreferences().
- */
+/** App preferences plus persisted drill/set selection pointers. */
 export interface AppSettings {
   readonly drillFeaturesEnabled: boolean;
-  readonly drillTerminology: DrillTerminology;
+  /** @deprecated Drill terminology is fixed to Sets in v2. */
+  readonly drillTerminology: "sets";
   readonly fieldPerspective: FieldPerspective;
   readonly transitionMetricMode: TransitionMetricMode;
   readonly guidanceEnabled: boolean;
@@ -24,12 +17,14 @@ export interface AppSettings {
   readonly showComfortableAnchorRange: boolean;
   readonly comfortableAnchorRangeMeters: number;
   readonly activeDrillId: string | null;
+  readonly selectedDrillSetId: string | null;
+  /** @deprecated Use selectedDrillSetId. */
   readonly selectedDrillPageId: string | null;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   drillFeaturesEnabled: true,
-  drillTerminology: "pages",
+  drillTerminology: "sets",
   fieldPerspective: "director",
   transitionMetricMode: "step-size",
   guidanceEnabled: true,
@@ -38,13 +33,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   showComfortableAnchorRange: false,
   comfortableAnchorRangeMeters: DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS,
   activeDrillId: null,
+  selectedDrillSetId: null,
   selectedDrillPageId: null,
 });
 
-/** The preferences reset by resetPreferences, in their public contract order. */
 export const APP_PREFERENCE_KEYS = Object.freeze([
   "drillFeaturesEnabled",
-  "drillTerminology",
   "fieldPerspective",
   "transitionMetricMode",
   "guidanceEnabled",
@@ -63,10 +57,7 @@ export interface AppSettingsRepository {
   resetPreferences(): Promise<AppSettings>;
 }
 
-/**
- * Normalize values at every storage boundary. Invalid values fall back to the
- * field default rather than leaking malformed persisted data to a caller.
- */
+/** Normalize untrusted persisted settings at the storage boundary. */
 export function normalizeAppSettings(value?: unknown): AppSettings {
   const candidate = isRecord(value) ? value : {};
   const activeDrillId = nullableIdOrNull(candidate.activeDrillId);
@@ -75,11 +66,7 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       candidate.drillFeaturesEnabled,
       DEFAULT_APP_SETTINGS.drillFeaturesEnabled,
     ),
-    drillTerminology:
-      candidate.drillTerminology === "pages" ||
-      candidate.drillTerminology === "sets"
-        ? candidate.drillTerminology
-        : DEFAULT_APP_SETTINGS.drillTerminology,
+    drillTerminology: "sets",
     fieldPerspective:
       candidate.fieldPerspective === "director" ||
       candidate.fieldPerspective === "performer"
@@ -111,18 +98,21 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       DEFAULT_APP_SETTINGS.comfortableAnchorRangeMeters,
     ),
     activeDrillId,
+    selectedDrillSetId:
+      activeDrillId === null
+        ? null
+        : nullableIdOrNull(
+            candidate.selectedDrillSetId ?? candidate.selectedDrillPageId,
+          ),
     selectedDrillPageId:
       activeDrillId === null
         ? null
-        : nullableIdOrNull(candidate.selectedDrillPageId),
+        : nullableIdOrNull(
+            candidate.selectedDrillSetId ?? candidate.selectedDrillPageId,
+          ),
   };
 }
 
-/**
- * Return settings as they may be used by UI. Developer overlay preferences
- * remain persisted separately, but are ineffective while developer mode is
- * disabled.
- */
 export function getEffectiveAppSettings(value: AppSettings): AppSettings {
   const normalized = normalizeAppSettings(value);
   if (normalized.developerModeEnabled) return normalized;
@@ -133,7 +123,6 @@ export function getEffectiveAppSettings(value: AppSettings): AppSettings {
   };
 }
 
-/** Alias with selector-oriented naming for store consumers. */
 export const selectEffectiveSettings = getEffectiveAppSettings;
 export const getEffectiveSettings = getEffectiveAppSettings;
 export const selectEffectiveAppSettings = getEffectiveAppSettings;

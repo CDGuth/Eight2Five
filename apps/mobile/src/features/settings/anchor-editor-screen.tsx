@@ -100,7 +100,6 @@ export function AnchorEditorScreen({
         <VStack style={{ gap: eight2FiveSpacing.lg }}>
           <MarchingCoordinateForm
             draft={controller.marchingDraft.coordinate}
-            terminologySingular="Anchor"
             showDetails={false}
             disabled={controller.saving}
             onChange={(coordinate) =>

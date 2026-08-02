@@ -1,6 +1,7 @@
 import React from "react";
 import {
   EMPTY_FIELD_LIVE_POSITION_STATE,
+  drillGridPointToFieldPoint,
   shouldShowFieldGuidance,
   shouldShowFieldTarget,
   type FieldAnchorGeometry,
@@ -8,6 +9,7 @@ import {
   type FieldLivePositionInput,
   type FieldPoint,
 } from "@eight2five/mobile/field";
+import { formatSetName } from "@eight2five/mobile/drill";
 import {
   FIELD_FIVE_YARD_GRID_COLOR,
   FieldCanvas,
@@ -69,9 +71,10 @@ export function FieldScreen({
     hasLivePosition: Boolean(liveState.position) && !liveState.isStale,
     guidanceEnabled: controller.settings.guidanceEnabled,
   };
-  const targetPosition = shouldShowFieldTarget(drillOverlayState)
-    ? controller.selectedPage?.position
-    : undefined;
+  const targetPosition =
+    shouldShowFieldTarget(drillOverlayState) && controller.selectedPage
+      ? drillGridPointToFieldPoint(controller.selectedPage.position)
+      : undefined;
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
@@ -115,7 +118,7 @@ export function FieldScreen({
           activeDrill={controller.activeDrill}
           selectedPage={controller.selectedPage}
           previousPage={controller.previousPage}
-          terminology={controller.settings.drillTerminology}
+          terminology="sets"
           metricMode={controller.settings.transitionMetricMode}
           controlsDisabled={areCoordinatePanelControlsDisabled({
             settingsReady: controller.settingsStatus === "ready",
@@ -135,9 +138,13 @@ export function FieldScreen({
               <PageDial
                 diameter={diameter}
                 selectedIndex={controller.selectedIndex}
-                selectedLabel={controller.selectedPage?.label}
+                selectedLabel={
+                  controller.selectedPage
+                    ? formatSetName(controller.selectedPage)
+                    : undefined
+                }
                 pageCount={controller.pages.length}
-                terminology={controller.settings.drillTerminology}
+                terminology="sets"
                 activeColor={theme.accent}
                 trackColor={FIELD_FIVE_YARD_GRID_COLOR}
                 onSelectIndex={(index) =>

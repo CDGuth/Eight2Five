@@ -10,14 +10,7 @@ import { DEFAULT_APP_SETTINGS, normalizeAppSettings } from "./types";
 type SqlValue = string | number | null;
 type AppSettingsRow = Record<string, SqlValue | undefined>;
 
-/**
- * SQLite implementation for the singleton app settings row.
- *
- * Parameterized `runAsync` calls are intentionally used directly. Expo SQLite
- * documents `runAsync` as a prepare/execute/finalize convenience wrapper, so
- * an explicit prepared-statement loop would add complexity without changing
- * the safety or performance contract needed by these small writes.
- */
+/** SQLite implementation for the singleton app settings row. */
 export class SqliteSettingsRepository implements AppSettingsRepository {
   constructor(private readonly db: SQLiteDatabase) {}
 
@@ -45,13 +38,12 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
 
   async resetPreferences(): Promise<AppSettings> {
     await this.load();
-    // Deliberately omit both selection columns: resetPreferences must not
-    // overwrite activeDrillId or selectedDrillPageId, even if another caller
-    // changes a selection between the initial load and this write.
+    // Deliberately omit both selection columns. The legacy physical
+    // drill_terminology column is pinned to "sets" and is no longer exposed.
     await this.db.runAsync(
       `UPDATE ${APP_SETTINGS_TABLE}
        SET drill_features_enabled = ?,
-           drill_terminology = ?,
+           drill_terminology = 'sets',
            field_perspective = ?,
            transition_metric_mode = ?,
            guidance_enabled = ?,
@@ -62,7 +54,6 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
        WHERE singleton_id = ?`,
       [
         boolToSql(DEFAULT_APP_SETTINGS.drillFeaturesEnabled),
-        DEFAULT_APP_SETTINGS.drillTerminology,
         DEFAULT_APP_SETTINGS.fieldPerspective,
         DEFAULT_APP_SETTINGS.transitionMetricMode,
         boolToSql(DEFAULT_APP_SETTINGS.guidanceEnabled),
@@ -112,10 +103,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, 'sets', ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
          drill_features_enabled = excluded.drill_features_enabled,
-         drill_terminology = excluded.drill_terminology,
+         drill_terminology = 'sets',
          field_perspective = excluded.field_perspective,
          transition_metric_mode = excluded.transition_metric_mode,
          guidance_enabled = excluded.guidance_enabled,
@@ -128,7 +119,6 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
       [
         1,
         boolToSql(normalized.drillFeaturesEnabled),
-        normalized.drillTerminology,
         normalized.fieldPerspective,
         normalized.transitionMetricMode,
         boolToSql(normalized.guidanceEnabled),
@@ -137,7 +127,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         boolToSql(normalized.showComfortableAnchorRange),
         normalized.comfortableAnchorRangeMeters,
         normalized.activeDrillId,
-        normalized.selectedDrillPageId,
+        normalized.selectedDrillSetId,
       ],
     );
   }
@@ -151,7 +141,6 @@ export function normalizeAppSettingsRow(row: unknown): AppSettings {
 function fromRow(row: AppSettingsRow): AppSettings {
   return normalizeAppSettings({
     drillFeaturesEnabled: sqliteBoolean(row.drill_features_enabled),
-    drillTerminology: row.drill_terminology,
     fieldPerspective: row.field_perspective,
     transitionMetricMode: row.transition_metric_mode,
     guidanceEnabled: sqliteBoolean(row.guidance_enabled),
@@ -162,14 +151,14 @@ function fromRow(row: AppSettingsRow): AppSettings {
     ),
     comfortableAnchorRangeMeters: row.comfortable_anchor_range_meters,
     activeDrillId: row.active_drill_id,
-    selectedDrillPageId: row.selected_drill_page_id,
+    selectedDrillSetId: row.selected_drill_page_id,
   });
 }
 
 function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
   return (
     row.drill_features_enabled === boolToSql(settings.drillFeaturesEnabled) &&
-    row.drill_terminology === settings.drillTerminology &&
+    row.drill_terminology === "sets" &&
     row.field_perspective === settings.fieldPerspective &&
     row.transition_metric_mode === settings.transitionMetricMode &&
     row.guidance_enabled === boolToSql(settings.guidanceEnabled) &&
@@ -181,7 +170,7 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
     row.comfortable_anchor_range_meters ===
       settings.comfortableAnchorRangeMeters &&
     row.active_drill_id === settings.activeDrillId &&
-    row.selected_drill_page_id === settings.selectedDrillPageId
+    row.selected_drill_page_id === settings.selectedDrillSetId
   );
 }
 

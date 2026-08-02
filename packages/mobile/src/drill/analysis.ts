@@ -1,13 +1,13 @@
-import { assertFiniteFieldPoint, type FieldPoint } from "../field/types";
-import {
-  metersToStandardSteps,
-  STANDARD_STEPS_PER_FIVE_YARDS,
-} from "../field/units";
-import { STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE } from "../field/template";
-import type { DrillPage } from "./types";
+import type { DrillGridPoint } from "@eight2five/drill-schema";
 
-const POSITION_EPSILON_METERS = 1e-9;
+import type { DrillSet } from "./types";
+
+const POSITION_EPSILON_STEPS = 1e-9;
 const NUMBER_EPSILON = 1e-8;
+const STANDARD_STEPS_PER_FIVE_YARDS = 8;
+const FIVE_YARD_GRID_LINES = Object.freeze(
+  Array.from({ length: 21 }, (_, index) => -80 + index * 8),
+);
 
 export interface TransitionAnalysis {
   readonly distanceSteps: number;
@@ -17,10 +17,14 @@ export interface TransitionAnalysis {
 }
 
 function assertCounts(counts: number): void {
-  if (!Number.isFinite(counts) || counts < 0) {
-    throw new RangeError(
-      "Transition counts must be a finite non-negative number.",
-    );
+  if (!Number.isInteger(counts) || counts < 0) {
+    throw new RangeError("Transition counts must be a non-negative integer.");
+  }
+}
+
+function assertGridPoint(point: DrillGridPoint, name: string): void {
+  if (!Number.isFinite(point.xSteps) || !Number.isFinite(point.ySteps)) {
+    throw new RangeError(`${name} must contain finite xSteps and ySteps.`);
   }
 }
 
@@ -34,42 +38,43 @@ function roundToQuarter(value: number): number {
   return Number((Math.round(value * 4) / 4).toFixed(2));
 }
 
-function isSamePoint(start: FieldPoint, end: FieldPoint): boolean {
+function isSamePoint(start: DrillGridPoint, end: DrillGridPoint): boolean {
   return (
-    Math.abs(start.xMeters - end.xMeters) <= POSITION_EPSILON_METERS &&
-    Math.abs(start.yMeters - end.yMeters) <= POSITION_EPSILON_METERS
+    Math.abs(start.xSteps - end.xSteps) <= POSITION_EPSILON_STEPS &&
+    Math.abs(start.ySteps - end.ySteps) <= POSITION_EPSILON_STEPS
   );
 }
 
 function crossingCounts(
-  start: FieldPoint,
-  end: FieldPoint,
+  start: DrillGridPoint,
+  end: DrillGridPoint,
   counts: number,
 ): readonly number[] {
-  const xDelta = end.xMeters - start.xMeters;
-  if (Math.abs(xDelta) <= POSITION_EPSILON_METERS || counts === 0) return [];
+  const xDelta = end.xSteps - start.xSteps;
+  if (Math.abs(xDelta) <= POSITION_EPSILON_STEPS || counts === 0) return [];
 
-  const crossings = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE.allFiveYardLines
-    .map((line) => (line.coordinateMeters - start.xMeters) / xDelta)
-    .filter(
-      (progress) => progress > NUMBER_EPSILON && progress < 1 - NUMBER_EPSILON,
-    )
-    .sort((left, right) => left - right)
-    .map((progress) => cleanNearHalf(progress * counts));
-
-  return Object.freeze(crossings);
+  return Object.freeze(
+    FIVE_YARD_GRID_LINES.map((xSteps) => (xSteps - start.xSteps) / xDelta)
+      .filter(
+        (progress) =>
+          progress > NUMBER_EPSILON && progress < 1 - NUMBER_EPSILON,
+      )
+      .sort((left, right) => left - right)
+      .map((progress) => cleanNearHalf(progress * counts)),
+  );
 }
 
 /**
- * Derives all transition metrics from canonical points and counts. These
- * values are intentionally never fields on DrillPage or persisted records.
+ * Derives transition metrics from drill-grid positions and incoming counts.
+ * Counts remain performer-facing metadata in v1; these convenience metrics do
+ * not create a musical timeline or persisted step-size field.
  */
 export function analyzeTransition(
-  previousPosition: FieldPoint | null | undefined,
-  currentPosition: FieldPoint,
+  previousPosition: DrillGridPoint | null | undefined,
+  currentPosition: DrillGridPoint,
   countsFromPrevious: number,
 ): TransitionAnalysis {
-  assertFiniteFieldPoint(currentPosition, "Current position");
+  assertGridPoint(currentPosition, "Current position");
   assertCounts(countsFromPrevious);
 
   if (!previousPosition) {
@@ -80,17 +85,15 @@ export function analyzeTransition(
     });
   }
 
-  assertFiniteFieldPoint(previousPosition, "Previous position");
-  const distanceSteps = metersToStandardSteps(
-    Math.hypot(
-      currentPosition.xMeters - previousPosition.xMeters,
-      currentPosition.yMeters - previousPosition.yMeters,
-    ),
+  assertGridPoint(previousPosition, "Previous position");
+  const distanceSteps = Math.hypot(
+    currentPosition.xSteps - previousPosition.xSteps,
+    currentPosition.ySteps - previousPosition.ySteps,
   );
   const isHalt =
     countsFromPrevious > 0 && isSamePoint(previousPosition, currentPosition);
   const stepSizeToFive =
-    countsFromPrevious > 0 && distanceSteps > POSITION_EPSILON_METERS
+    countsFromPrevious > 0 && distanceSteps > POSITION_EPSILON_STEPS
       ? roundToQuarter(
           (countsFromPrevious * STANDARD_STEPS_PER_FIVE_YARDS) / distanceSteps,
         )
@@ -109,13 +112,13 @@ export function analyzeTransition(
 }
 
 export function analyzeDrillTransition(
-  previousPage: DrillPage | null | undefined,
-  currentPage: DrillPage,
+  previousSet: DrillSet | null | undefined,
+  currentSet: DrillSet,
 ): TransitionAnalysis {
   return analyzeTransition(
-    previousPage?.position,
-    currentPage.position,
-    currentPage.countsFromPrevious,
+    previousSet?.position,
+    currentSet.position,
+    currentSet.countsFromPrevious,
   );
 }
 

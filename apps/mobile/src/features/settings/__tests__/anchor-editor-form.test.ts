@@ -11,7 +11,7 @@ import {
 import { confirmAnchorPositionWrite } from "../anchor-write-confirmation";
 
 describe("anchor editor form", () => {
-  test("reuses the marching page coordinate domain", () => {
+  test("reuses the marching drill-grid coordinate domain", () => {
     const draft = createAnchorEditorDrafts();
     const result = validateMarchingAnchorDraft({
       ...draft.marching,
@@ -21,7 +21,7 @@ describe("anchor editor form", () => {
 
     expect(result.errors).toEqual({});
     expect(result.position).toMatchObject({
-      xMeters: 45.72,
+      xMeters: 0,
       yMeters: 0,
       zMeters: expect.closeTo(1.8288, 8),
     });

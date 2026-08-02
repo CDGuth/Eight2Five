@@ -3,8 +3,20 @@ import type { Drill } from "@eight2five/mobile/drill";
 import { createDrillMenuActions } from "../drill-menu-state";
 
 const drills: Drill[] = [
-  { id: "one", name: "Opener 2026", createdAt: 1, updatedAt: 1 },
-  { id: "two", name: "Closer", createdAt: 2, updatedAt: 2 },
+  {
+    id: "one",
+    name: "Opener 2026",
+    fieldPreset: "football-nfhs",
+    createdAt: 1,
+    updatedAt: 1,
+  },
+  {
+    id: "two",
+    name: "Closer",
+    fieldPreset: "football-nfhs",
+    createdAt: 2,
+    updatedAt: 2,
+  },
 ];
 
 describe("active drill menu", () => {

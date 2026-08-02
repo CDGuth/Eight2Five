@@ -15,7 +15,7 @@ describe("app settings", () => {
     await expect(repository.load()).resolves.toEqual(DEFAULT_APP_SETTINGS);
     expect(fake.row).toMatchObject({
       drill_features_enabled: 1,
-      drill_terminology: "pages",
+      drill_terminology: "sets",
       field_perspective: "director",
       transition_metric_mode: "step-size",
       guidance_enabled: 1,
@@ -26,10 +26,10 @@ describe("app settings", () => {
     });
   });
 
-  test("normalizes every invalid persisted value and keeps stale overlay flags", async () => {
+  test("normalizes invalid persisted values and pins legacy terminology to sets", async () => {
     const fake = new SettingsFakeDatabase({
       drill_features_enabled: 2,
-      drill_terminology: "unknown",
+      drill_terminology: "pages",
       field_perspective: "unknown",
       transition_metric_mode: "unknown",
       guidance_enabled: "yes",
@@ -49,6 +49,7 @@ describe("app settings", () => {
       showCachedAnchorGeometry: true,
       showComfortableAnchorRange: true,
     });
+    expect(fake.row?.drill_terminology).toBe("sets");
     expect(fake.database.runAsync).toHaveBeenCalled();
     expect(getEffectiveAppSettings(loaded)).toMatchObject({
       developerModeEnabled: false,
@@ -57,7 +58,7 @@ describe("app settings", () => {
     });
   });
 
-  test("updates only supplied fields and normalizes invalid updates", async () => {
+  test("updates supplied fields while preserving drill/set selection", async () => {
     const fake = new SettingsFakeDatabase({
       drill_features_enabled: 1,
       drill_terminology: "pages",
@@ -69,31 +70,31 @@ describe("app settings", () => {
       show_comfortable_anchor_range: 1,
       comfortable_anchor_range_meters: 30,
       active_drill_id: "drill-1",
-      selected_drill_page_id: "page-1",
+      selected_drill_page_id: "set-1",
     });
     const repository = new SqliteSettingsRepository(fake.database);
 
     const updated = await repository.update({
-      drillTerminology: "not-a-value" as never,
       comfortableAnchorRangeMeters: -1,
     });
 
     expect(updated).toMatchObject({
       drillFeaturesEnabled: true,
-      drillTerminology: "pages",
+      drillTerminology: "sets",
       comfortableAnchorRangeMeters: 20,
       activeDrillId: "drill-1",
-      selectedDrillPageId: "page-1",
+      selectedDrillSetId: "set-1",
+      selectedDrillPageId: "set-1",
     });
     expect(updated.developerModeEnabled).toBe(true);
     expect(updated.showCachedAnchorGeometry).toBe(true);
     expect(updated.showComfortableAnchorRange).toBe(true);
   });
 
-  test("resetPreferences restores nine preference fields but preserves selection", async () => {
+  test("resetPreferences restores preference fields but preserves selection", async () => {
     const fake = new SettingsFakeDatabase({
       drill_features_enabled: 0,
-      drill_terminology: "sets",
+      drill_terminology: "pages",
       field_perspective: "performer",
       transition_metric_mode: "crossing-counts",
       guidance_enabled: 0,
@@ -102,7 +103,7 @@ describe("app settings", () => {
       show_comfortable_anchor_range: 1,
       comfortable_anchor_range_meters: 7,
       active_drill_id: "drill-1",
-      selected_drill_page_id: "page-2",
+      selected_drill_page_id: "set-2",
     });
     const repository = new SqliteSettingsRepository(fake.database);
 
@@ -111,8 +112,10 @@ describe("app settings", () => {
     expect(reset).toEqual({
       ...DEFAULT_APP_SETTINGS,
       activeDrillId: "drill-1",
-      selectedDrillPageId: "page-2",
+      selectedDrillSetId: "set-2",
+      selectedDrillPageId: "set-2",
     });
+    expect(fake.row?.drill_terminology).toBe("sets");
   });
 
   test("the pure normalizer treats malformed input as defaults", () => {
@@ -126,12 +129,12 @@ describe("app settings", () => {
     ).toEqual(DEFAULT_APP_SETTINGS);
   });
 
-  test("clears an impossible selected page when no drill is active", () => {
+  test("clears an impossible selected set when no drill is active", () => {
     expect(
       normalizeAppSettings({
         activeDrillId: null,
-        selectedDrillPageId: "page-1",
-      }).selectedDrillPageId,
+        selectedDrillSetId: "set-1",
+      }).selectedDrillSetId,
     ).toBeNull();
   });
 
@@ -163,7 +166,19 @@ class SettingsFakeDatabase {
           this.row = {
             ...(this.row ?? {}),
             drill_features_enabled: params[0],
-            drill_terminology: params[1],
+            drill_terminology: "sets",
+            field_perspective: params[1],
+            transition_metric_mode: params[2],
+            guidance_enabled: params[3],
+            developer_mode_enabled: params[4],
+            show_cached_anchor_geometry: params[5],
+            show_comfortable_anchor_range: params[6],
+            comfortable_anchor_range_meters: params[7],
+          };
+        } else {
+          this.row = {
+            drill_features_enabled: params[1],
+            drill_terminology: "sets",
             field_perspective: params[2],
             transition_metric_mode: params[3],
             guidance_enabled: params[4],
@@ -171,20 +186,8 @@ class SettingsFakeDatabase {
             show_cached_anchor_geometry: params[6],
             show_comfortable_anchor_range: params[7],
             comfortable_anchor_range_meters: params[8],
-          };
-        } else {
-          this.row = {
-            drill_features_enabled: params[1],
-            drill_terminology: params[2],
-            field_perspective: params[3],
-            transition_metric_mode: params[4],
-            guidance_enabled: params[5],
-            developer_mode_enabled: params[6],
-            show_cached_anchor_geometry: params[7],
-            show_comfortable_anchor_range: params[8],
-            comfortable_anchor_range_meters: params[9],
-            active_drill_id: params[10],
-            selected_drill_page_id: params[11],
+            active_drill_id: params[9],
+            selected_drill_page_id: params[10],
           };
         }
         return { lastInsertRowId: 1, changes: 1 };

@@ -34,12 +34,16 @@ import {
 } from "@eight2five/ui/theme";
 
 import {
-  PAGE_LABEL_MAX_LENGTH,
   YARD_LINES,
   previewCoordinate,
   validatePageDraft,
   type MarchingCoordinateDraft,
 } from "../page-form";
+
+const SET_KIND_CHOICES = [
+  { label: "Set", value: "set" },
+  { label: "Subset", value: "subset" },
+] as const;
 
 const SIDE_CHOICES = [
   { label: "Side 1", value: "1" },
@@ -68,13 +72,11 @@ const FRONT_BACK_RELATION_CHOICES = [
 
 export function MarchingCoordinateForm({
   draft,
-  terminologySingular,
   showDetails = true,
   disabled,
   onChange,
 }: {
   draft: MarchingCoordinateDraft;
-  terminologySingular: string;
   showDetails?: boolean;
   disabled: boolean;
   onChange(draft: MarchingCoordinateDraft): void;
@@ -90,23 +92,64 @@ export function MarchingCoordinateForm({
   return (
     <VStack style={{ gap: eight2FiveSpacing.lg }}>
       {showDetails ? (
-        <FormSection title={`${terminologySingular} details`}>
+        <FormSection title="Set details">
           <TextField
-            label={`${terminologySingular} label`}
-            value={draft.label}
-            error={validation.errors.label}
+            label="Set number"
+            value={draft.setNumber}
+            error={validation.errors.setNumber}
             disabled={disabled}
-            maxLength={PAGE_LABEL_MAX_LENGTH}
-            onChangeText={(value) => update("label", value)}
+            numeric
+            helper="The printed set number. Subsets share the number of their primary set."
+            onChangeText={(value) => update("setNumber", value)}
           />
+          <SelectField
+            label="Type"
+            value={draft.setKind}
+            choices={SET_KIND_CHOICES}
+            disabled={disabled}
+            onChange={(value) =>
+              onChange({
+                ...draft,
+                setKind: value,
+                ...(value === "set" ? { setSuffix: "" } : {}),
+              })
+            }
+          />
+          {draft.setKind === "subset" ? (
+            <TextField
+              label="Suffix"
+              value={draft.setSuffix}
+              error={validation.errors.setSuffix}
+              disabled={disabled}
+              helper="One capital letter (A) or a decimal suffix (.5)."
+              onChangeText={(value) => update("setSuffix", value)}
+            />
+          ) : null}
           <TextField
             label="Counts from previous"
             value={draft.countsFromPrevious}
             error={validation.errors.countsFromPrevious}
             disabled={disabled}
             numeric
-            helper="Finite, non-negative counts. The first entry defaults to 0."
+            helper="Whole-number transition counts. The first set is always 0."
             onChangeText={(value) => update("countsFromPrevious", value)}
+          />
+          <TextField
+            label="Measure start"
+            value={draft.measureStart}
+            error={validation.errors.measureStart}
+            disabled={disabled}
+            numeric
+            helper="Optional. Measures are performer-facing reference information in v1."
+            onChangeText={(value) => update("measureStart", value)}
+          />
+          <TextField
+            label="Measure end"
+            value={draft.measureEnd}
+            error={validation.errors.measureEnd}
+            disabled={disabled}
+            numeric
+            onChangeText={(value) => update("measureEnd", value)}
           />
         </FormSection>
       ) : null}
@@ -178,7 +221,7 @@ export function MarchingCoordinateForm({
           error={validation.errors.sideOffsetSteps}
           disabled={disabled || draft.sideRelation === "on"}
           numeric
-          helper="Quarter-step and other fractional values are supported."
+          helper="Fractional step values are preserved without rounding."
           onChangeText={(value) =>
             onChange({
               ...draft,
@@ -216,7 +259,7 @@ export function MarchingCoordinateForm({
           error={validation.errors.frontBackOffsetSteps}
           disabled={disabled || draft.frontBackRelation === "on"}
           numeric
-          helper="Fractional step values are supported."
+          helper="NFHS marching references use front hash 28 and back hash 56."
           onChangeText={(value) =>
             onChange({
               ...draft,
@@ -236,14 +279,12 @@ export function MarchingCoordinateForm({
         style={{
           gap: eight2FiveSpacing.xs,
           borderRadius: eight2FiveRadii.md,
-          borderColor: validation.errors.coordinate
-            ? theme.danger
-            : theme.border,
+          borderColor: validation.errors.coordinate ? theme.danger : theme.border,
           backgroundColor: theme.accentSoft,
         }}
       >
         <Heading size="sm" style={{ color: theme.text }}>
-          Live coordinate preview
+          Coordinate preview
         </Heading>
         {preview ? (
           <>
@@ -252,7 +293,7 @@ export function MarchingCoordinateForm({
           </>
         ) : (
           <Text style={{ color: theme.textMuted }}>
-            Complete a valid in-bounds coordinate to preview it.
+            Complete a valid coordinate to preview it.
           </Text>
         )}
         {validation.errors.coordinate ? (
@@ -302,7 +343,6 @@ function TextField({
   helper,
   disabled,
   numeric = false,
-  maxLength,
   onChangeText,
 }: {
   label: string;
@@ -311,7 +351,6 @@ function TextField({
   helper?: string;
   disabled: boolean;
   numeric?: boolean;
-  maxLength?: number;
   onChangeText(value: string): void;
 }) {
   return (
@@ -326,7 +365,6 @@ function TextField({
           editable={!disabled}
           inputMode={numeric ? "decimal" : "text"}
           keyboardType={numeric ? "decimal-pad" : "default"}
-          maxLength={maxLength}
           accessibilityLabel={label}
         />
       </Input>
@@ -344,9 +382,7 @@ function TextField({
   );
 }
 
-function SelectField<
-  Value extends MarchingCoordinateDraft[keyof MarchingCoordinateDraft],
->({
+function SelectField<Value extends string>({
   label,
   value,
   choices,
@@ -361,7 +397,6 @@ function SelectField<
   disabled: boolean;
   onChange(value: Value): void;
 }) {
-  const theme = useEight2FiveTheme();
   return (
     <FormControl isInvalid={Boolean(error)}>
       <FormControlLabel>
@@ -372,26 +407,18 @@ function SelectField<
         onValueChange={(next) => onChange(next as Value)}
         isDisabled={disabled}
       >
-        <SelectTrigger
-          accessibilityLabel={label}
-          size="lg"
-          style={{ borderColor: theme.border, backgroundColor: theme.surface }}
-        >
-          <SelectInput style={{ color: theme.text }} />
-          <SelectIcon as={ChevronDown} style={{ color: theme.icon }} />
+        <SelectTrigger>
+          <SelectInput value={choices.find((choice) => choice.value === value)?.label ?? value} />
+          <SelectIcon as={ChevronDown} />
         </SelectTrigger>
         <SelectPortal>
           <SelectBackdrop />
-          <SelectContent style={{ backgroundColor: theme.surfaceRaised }}>
+          <SelectContent>
             <SelectDragIndicatorWrapper>
               <SelectDragIndicator />
             </SelectDragIndicatorWrapper>
             {choices.map((choice) => (
-              <SelectItem
-                key={choice.value}
-                label={choice.label}
-                value={choice.value}
-              />
+              <SelectItem key={choice.value} label={choice.label} value={choice.value} />
             ))}
           </SelectContent>
         </SelectPortal>

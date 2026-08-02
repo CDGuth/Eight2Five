@@ -1,6 +1,10 @@
 import { Alert } from "react-native";
 import { Flag, Pencil, Plus, Trash2 } from "lucide-react-native";
-import type { DrillPage, DrillTerms } from "@eight2five/mobile/drill";
+import {
+  formatSetName,
+  type DrillSet,
+  type DrillTerms,
+} from "@eight2five/mobile/drill";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -14,13 +18,13 @@ import {
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
 export function confirmDeletePage(
-  page: DrillPage,
-  terms: DrillTerms,
+  page: DrillSet,
+  _terms: DrillTerms,
   onConfirm: () => void,
 ) {
   Alert.alert(
-    `Delete ${terms.singular} ${page.label}?`,
-    `This permanently deletes the ${terms.lowercaseSingular}.`,
+    `Delete Set ${formatSetName(page)}?`,
+    "This permanently deletes the set.",
     [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: onConfirm },
@@ -30,7 +34,7 @@ export function confirmDeletePage(
 
 export function DrillPageActionsSheet({
   page,
-  terms,
+  terms: _terms,
   drillActive,
   selected,
   onClose,
@@ -40,8 +44,8 @@ export function DrillPageActionsSheet({
   onInsertAfter,
   onDelete,
 }: {
-  page?: DrillPage;
-  terms: DrillTerms;
+  page?: DrillSet;
+  terms?: DrillTerms;
   drillActive: boolean;
   selected: boolean;
   onClose(): void;
@@ -62,29 +66,25 @@ export function DrillPageActionsSheet({
         {drillActive && !selected ? (
           <ActionsheetItem onPress={onSelect} accessibilityRole="button">
             <ActionsheetIcon as={Flag} />
-            <ActionsheetItemText>Select {terms.singular}</ActionsheetItemText>
+            <ActionsheetItemText>Select Set</ActionsheetItemText>
           </ActionsheetItem>
         ) : null}
         <ActionsheetItem onPress={onEdit} accessibilityRole="button">
           <ActionsheetIcon as={Pencil} />
-          <ActionsheetItemText>Edit {terms.singular}</ActionsheetItemText>
+          <ActionsheetItemText>Edit Set</ActionsheetItemText>
         </ActionsheetItem>
         <ActionsheetItem onPress={onInsertBefore} accessibilityRole="button">
           <ActionsheetIcon as={Plus} />
-          <ActionsheetItemText>
-            Insert {terms.lowercaseSingular} before
-          </ActionsheetItemText>
+          <ActionsheetItemText>Insert set before</ActionsheetItemText>
         </ActionsheetItem>
         <ActionsheetItem onPress={onInsertAfter} accessibilityRole="button">
           <ActionsheetIcon as={Plus} />
-          <ActionsheetItemText>
-            Insert {terms.lowercaseSingular} after
-          </ActionsheetItemText>
+          <ActionsheetItemText>Insert set after</ActionsheetItemText>
         </ActionsheetItem>
         <ActionsheetItem onPress={onDelete} accessibilityRole="button">
           <ActionsheetIcon as={Trash2} style={{ color: theme.danger }} />
           <ActionsheetItemText style={{ color: theme.danger }}>
-            Delete {terms.singular}
+            Delete Set
           </ActionsheetItemText>
         </ActionsheetItem>
       </ActionsheetContent>

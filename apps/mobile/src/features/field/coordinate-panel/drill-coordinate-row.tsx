@@ -1,7 +1,7 @@
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
-import type { DrillPage, DrillTerminology } from "@eight2five/mobile/drill";
+import type { DrillSet, DrillTerminology } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 
 import { getDrillCoordinatePresentation } from "./coordinate-panel-state";
@@ -58,15 +58,16 @@ function DrillCoordinate({
 export function DrillCoordinateRow({
   page,
   previousPage,
-  terminology,
+  terminology: _terminology,
   metricMode,
   landscape,
   metricToggleDisabled,
   onToggleMetric,
 }: {
-  readonly page?: DrillPage;
-  readonly previousPage?: DrillPage;
-  readonly terminology: DrillTerminology;
+  readonly page?: DrillSet;
+  readonly previousPage?: DrillSet;
+  /** @deprecated Sets are the only terminology; kept for call-site compatibility. */
+  readonly terminology?: DrillTerminology;
   readonly metricMode: TransitionMetricMode;
   readonly landscape: boolean;
   readonly metricToggleDisabled: boolean;
@@ -75,13 +76,13 @@ export function DrillCoordinateRow({
   const presentation = getDrillCoordinatePresentation({
     page,
     previousPage,
-    terminology,
     metricMode,
   });
   const metadata = (
     <HStack className="min-h-12 flex-1 items-stretch">
-      <MetadataCell label={presentation.term} value={presentation.page} />
+      <MetadataCell label="Set" value={presentation.set} />
       <MetadataCell label="Counts" value={presentation.counts} />
+      <MetadataCell label="Measures" value={presentation.measures} />
       <TransitionMetricCell
         label={presentation.metricLabel}
         value={presentation.metric}
@@ -92,10 +93,7 @@ export function DrillCoordinateRow({
   );
 
   return landscape ? (
-    <HStack
-      className="flex-1 items-stretch"
-      testID="drill-coordinate-landscape"
-    >
+    <HStack className="flex-1 items-stretch" testID="drill-coordinate-landscape">
       {metadata}
       <DrillCoordinate
         coordinate={presentation.coordinate}

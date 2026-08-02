@@ -6,9 +6,7 @@ import {
   ListChecks,
   Radio,
   SlidersHorizontal,
-  Tags,
 } from "lucide-react-native";
-import type { DrillTerminology } from "@eight2five/mobile/drill";
 import type {
   AppSettingsUpdate,
   FieldPerspective,
@@ -31,11 +29,6 @@ import {
   SettingsSwitchRow,
   SettingsValueRow,
 } from "./settings-components";
-
-const TERMINOLOGY_CHOICES = [
-  { label: "Pages", value: "pages" },
-  { label: "Sets", value: "sets" },
-] as const;
 
 const PERSPECTIVE_CHOICES = [
   { label: "Director", value: "director" },
@@ -102,21 +95,11 @@ export function SettingsScreen() {
         <SettingsSwitchRow
           icon={ListChecks}
           title="Drill features"
-          description="Show drill pages, targets, guidance, and controls."
+          description="Show drill sets, targets, guidance, and controls."
           value={settings.drillFeaturesEnabled}
           onChange={(enabled) => void setDrillFeatures(enabled)}
           disabled={disabled}
           testID="drill-features-setting"
-        />
-        <SettingsSelectRow<DrillTerminology>
-          icon={Tags}
-          title="Drill terminology"
-          description="Choose whether the app says Pages or Sets."
-          value={settings.drillTerminology}
-          choices={TERMINOLOGY_CHOICES}
-          onChange={(drillTerminology) => void update({ drillTerminology })}
-          disabled={disabled}
-          testID="drill-terminology-setting"
         />
       </SettingsSection>
 

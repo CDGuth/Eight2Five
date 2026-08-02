@@ -107,12 +107,17 @@ export class AppSettingsStore {
     });
   }
 
-  async setSelectedDrillPage(id: string | null): Promise<AppSettings> {
+  async setSelectedDrillSet(id: string | null): Promise<AppSettings> {
     return await this.enqueue(async (storage) => {
-      const settings = await storage.drillRepository.setSelectedDrillPage(id);
+      const settings = await storage.drillRepository.setSelectedDrillSet(id);
       this.publish(Object.freeze({ status: "ready", settings }));
       return settings;
     });
+  }
+
+  /** @deprecated Use setSelectedDrillSet. */
+  async setSelectedDrillPage(id: string | null): Promise<AppSettings> {
+    return await this.setSelectedDrillSet(id);
   }
 
   async reload(): Promise<AppSettings> {

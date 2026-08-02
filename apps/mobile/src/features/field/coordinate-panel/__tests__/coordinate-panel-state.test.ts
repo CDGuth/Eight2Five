@@ -1,4 +1,5 @@
-import type { DrillPage } from "@eight2five/mobile/drill";
+import type { DrillSet } from "@eight2five/mobile/drill";
+import { drillGridPointToFieldPoint } from "@eight2five/mobile/field";
 
 import {
   areCoordinatePanelControlsDisabled,
@@ -6,25 +7,29 @@ import {
   getLiveCoordinatePresentation,
 } from "../coordinate-panel-state";
 
-const first: DrillPage = {
-  id: "p1",
+const first: DrillSet = {
+  id: "s1",
   drillId: "d1",
   ordinal: 0,
-  label: "1",
+  number: 31,
+  kind: "set",
   countsFromPrevious: 0,
-  position: { xMeters: 36.576, yMeters: 4.064 },
+  measureRange: { start: 122, end: 125 },
+  position: { xSteps: -16, ySteps: 7 },
 };
-const second: DrillPage = {
-  id: "p2",
+const second: DrillSet = {
+  id: "s2",
   drillId: "d1",
   ordinal: 1,
-  label: "2",
+  number: 32,
+  kind: "set",
   countsFromPrevious: 8,
-  position: { xMeters: 41.148, yMeters: 4.064 },
+  measureRange: { start: 126, end: 129 },
+  position: { xSteps: -8, ySteps: 7 },
 };
 
 describe("coordinate panel state", () => {
-  test("presents waiting, live, and stale states", () => {
+  test("presents waiting, live, and stale physical-position states", () => {
     expect(
       getLiveCoordinatePresentation({
         connectionState: "idle",
@@ -35,36 +40,37 @@ describe("coordinate panel state", () => {
       secondary: "Connect a PANS tag to begin",
       muted: true,
     });
+    const livePosition = drillGridPointToFieldPoint(second.position);
     expect(
       getLiveCoordinatePresentation({
         connectionState: "connected",
-        position: second.position,
+        position: livePosition,
         isStale: false,
       }).primary,
     ).toContain("Side 1");
     expect(
       getLiveCoordinatePresentation({
         connectionState: "disconnected",
-        position: second.position,
+        position: livePosition,
         isStale: true,
       }),
     ).toMatchObject({ statusLabel: "Last known position", muted: true });
   });
 
-  test("keeps the empty drill model stable and terminology-aware", () => {
+  test("uses fixed Set terminology and separate count/measure fields", () => {
     expect(
       getDrillCoordinatePresentation({
-        terminology: "sets",
         metricMode: "step-size",
       }),
     ).toEqual({
       term: "Set",
-      page: "–",
+      set: "–",
       counts: "–",
+      measures: "–",
       metricLabel: "Step Size",
       metric: "–",
       coordinate: null,
-      emptyMessage: "No drill page selected",
+      emptyMessage: "No drill set selected",
     });
   });
 
@@ -72,24 +78,32 @@ describe("coordinate panel state", () => {
     const stepSize = getDrillCoordinatePresentation({
       page: second,
       previousPage: first,
-      terminology: "pages",
       metricMode: "step-size",
     });
     const crossingCounts = getDrillCoordinatePresentation({
       page: second,
       previousPage: first,
-      terminology: "pages",
       metricMode: "crossing-counts",
     });
 
     expect(stepSize).toMatchObject({
-      term: "Page",
-      page: "2",
+      term: "Set",
+      set: "32",
       counts: "8",
+      measures: "126–129",
       metricLabel: "Step Size",
       metric: "8 to 5",
     });
     expect(crossingCounts.metricLabel).toBe("xCounts");
+  });
+
+  test("shows zero counts for the first set instead of using an unavailable marker", () => {
+    expect(
+      getDrillCoordinatePresentation({
+        page: first,
+        metricMode: "step-size",
+      }).counts,
+    ).toBe("0");
   });
 
   test("disables controls until storage and drill data are ready", () => {

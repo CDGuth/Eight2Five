@@ -3,7 +3,7 @@ import { useFocusEffect } from "expo-router";
 import {
   getDrillTerms,
   type Drill,
-  type DrillPage,
+  type DrillSet,
 } from "@eight2five/mobile/drill";
 
 import {
@@ -26,7 +26,7 @@ export function useDrillEditorController(drillId?: string) {
   const snapshot = useAppSettingsSnapshot();
   const store = useAppSettingsStore();
   const [drill, setDrill] = React.useState<Drill>();
-  const [pages, setPages] = React.useState<readonly DrillPage[]>([]);
+  const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
   const [loading, setLoading] = React.useState(Boolean(drillId));
   const [saving, setSaving] = React.useState(false);
   const [busyPageId, setBusyPageId] = React.useState<string>();
@@ -39,7 +39,7 @@ export function useDrillEditorController(drillId?: string) {
       const repository = store.getDrillRepository();
       const [nextDrill, nextPages] = await Promise.all([
         repository.getDrill(drillId),
-        repository.listPages(drillId),
+        repository.listSets(drillId),
       ]);
       if (!nextDrill) throw new Error("This drill no longer exists.");
       setDrill(nextDrill);
@@ -126,7 +126,7 @@ export function useDrillEditorController(drillId?: string) {
   }, [drillId, store]);
 
   const selectPage = React.useCallback(
-    async (page: DrillPage) => {
+    async (page: DrillSet) => {
       if (snapshot.settings.activeDrillId !== drillId) {
         const operationError = new Error(
           "Make this drill active before selecting one of its entries.",
@@ -139,7 +139,7 @@ export function useDrillEditorController(drillId?: string) {
       setBusyPageId(page.id);
       setError(undefined);
       try {
-        await store.setSelectedDrillPage(page.id);
+        await store.setSelectedDrillSet(page.id);
       } catch (cause) {
         const operationError = toError(cause);
         setError(operationError);
@@ -153,7 +153,7 @@ export function useDrillEditorController(drillId?: string) {
   );
 
   const move = React.useCallback(
-    async (page: DrillPage, direction: PageMoveDirection) => {
+    async (page: DrillSet, direction: PageMoveDirection) => {
       if (!drillId || operationInFlight.current) return;
       operationInFlight.current = true;
       setBusyPageId(page.id);
@@ -181,7 +181,7 @@ export function useDrillEditorController(drillId?: string) {
   );
 
   const removePage = React.useCallback(
-    async (page: DrillPage) => {
+    async (page: DrillSet) => {
       if (!drillId || operationInFlight.current) return;
       operationInFlight.current = true;
       setBusyPageId(page.id);
@@ -192,7 +192,7 @@ export function useDrillEditorController(drillId?: string) {
           page.id,
           () => store.reload(),
         );
-        setPages(await store.getDrillRepository().listPages(drillId));
+        setPages(await store.getDrillRepository().listSets(drillId));
       } catch (cause) {
         const operationError = toError(cause);
         setError(operationError);
@@ -213,8 +213,8 @@ export function useDrillEditorController(drillId?: string) {
     saving,
     busyPageId,
     active: snapshot.settings.activeDrillId === drillId,
-    selectedPageId: snapshot.settings.selectedDrillPageId,
-    terms: getDrillTerms(snapshot.settings.drillTerminology),
+    selectedPageId: snapshot.settings.selectedDrillSetId,
+    terms: getDrillTerms("sets"),
     error: error ?? snapshot.error,
     refresh,
     saveName,
