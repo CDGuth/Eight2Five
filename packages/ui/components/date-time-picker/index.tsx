@@ -417,11 +417,11 @@ function IOSDateTimePicker({
         <View className="bg-background rounded-t-lg p-4 relative">
           <View className="flex-row justify-between items-center mb-4 border-b border-border pb-2">
             <Pressable onPress={handleCancel}>
-              <Text className="text-primary font-semibold text-base">
+              <Text className="text-primary font-heading-semibold text-base">
                 Cancel
               </Text>
             </Pressable>
-            <Text className="text-foreground font-semibold text-base">
+            <Text className="text-foreground font-heading-semibold text-base">
               {mode === 'date'
                 ? 'Select Date'
                 : mode === 'time'
@@ -429,7 +429,7 @@ function IOSDateTimePicker({
                   : 'Select Date & Time'}
             </Text>
             <Pressable onPress={handleDone}>
-              <Text className="text-primary font-semibold text-base">Done</Text>
+              <Text className="text-primary font-heading-semibold text-base">Done</Text>
             </Pressable>
           </View>
           <DateTimePickerNative

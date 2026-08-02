@@ -180,7 +180,7 @@ export const ModelSelectorGroup = ({
 }: ComponentProps<typeof View> & { heading?: string }) => (
   <View className={className} {...props}>
     {heading && (
-      <Text className="px-4 py-2 text-sm font-semibold text-muted-foreground">
+      <Text className="px-4 py-2 text-sm font-body-semibold text-muted-foreground">
         {heading}
       </Text>
     )}
@@ -220,7 +220,7 @@ export const ModelSelectorSeparator = ({
 
 export const ModelSelectorLogo = ({ provider }: { provider: string }) => (
   <View className="w-5 h-5 rounded-full bg-muted items-center justify-center">
-    <Text className="text-[10px] text-foreground font-medium text-foreground">
+    <Text className="text-[10px] text-foreground font-body-medium text-foreground">
       {provider.slice(0, 2).toUpperCase()}
     </Text>
   </View>

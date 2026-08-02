@@ -126,7 +126,7 @@ const CalendarHeaderMonthSelectRoot = React.forwardRef<
         offset={4}
         trigger={({ ...triggerProps }) => (
           <Pressable {...triggerProps} className="px-2 py-1 rounded-md flex-row items-center">
-            <Text className="text-sm font-medium text-foreground">{label}</Text>
+            <Text className="text-sm font-body-medium text-foreground">{label}</Text>
           </Pressable>
         )}
       >
@@ -137,7 +137,7 @@ const CalendarHeaderMonthSelectRoot = React.forwardRef<
             onPress={() => onValueChange?.(item.value)}
           >
             <MenuItemLabel
-              className={item.value === selectedValue ? 'text-primary font-semibold' : ''}
+              className={item.value === selectedValue ? 'text-primary font-body-semibold' : ''}
             >
               {item.label}
             </MenuItemLabel>
@@ -160,7 +160,7 @@ const CalendarHeaderYearSelectRoot = React.forwardRef<
         offset={4}
         trigger={({ ...triggerProps }) => (
           <Pressable {...triggerProps} className="px-2 py-1 rounded-md flex-row items-center">
-            <Text className="text-sm font-medium text-foreground">{label}</Text>
+            <Text className="text-sm font-body-medium text-foreground">{label}</Text>
           </Pressable>
         )}
       >
@@ -171,7 +171,7 @@ const CalendarHeaderYearSelectRoot = React.forwardRef<
             onPress={() => onValueChange?.(item.value)}
           >
             <MenuItemLabel
-              className={item.value === selectedValue ? 'text-primary font-semibold' : ''}
+              className={item.value === selectedValue ? 'text-primary font-body-semibold' : ''}
             >
               {item.label}
             </MenuItemLabel>

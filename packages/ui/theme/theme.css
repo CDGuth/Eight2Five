@@ -103,6 +103,13 @@
   --color-accent: rgb(var(--accent));
   --color-accent-foreground: rgb(var(--accent-foreground));
   --font-heading: Montserrat_700Bold;
+  --font-heading-regular: Montserrat_400Regular;
+  --font-heading-medium: Montserrat_500Medium;
+  --font-heading-semibold: Montserrat_600SemiBold;
+  --font-heading-bold: Montserrat_700Bold;
   --font-body: SourceSans3_400Regular;
+  --font-body-medium: SourceSans3_500Medium;
+  --font-body-semibold: SourceSans3_600SemiBold;
+  --font-body-bold: SourceSans3_700Bold;
   --font-sans: SourceSans3_400Regular;
 }

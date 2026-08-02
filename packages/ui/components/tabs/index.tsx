@@ -49,7 +49,7 @@ const tabsTriggerStyle = tva({
 });
 
 const tabsTriggerTextStyle = tva({
-  base: 'text-foreground/70 data-[selected=true]:text-foreground font-medium data-[hover=true]:text-foreground/90 ',
+  base: 'text-foreground/70 data-[selected=true]:text-foreground font-body-medium data-[hover=true]:text-foreground/90 ',
  
 });
 

@@ -24,7 +24,7 @@ const sendButtonStyle = tva({
 });
 
 const sendButtonTextStyle = tva({
-  base: 'text-primary-foreground font-medium',
+  base: 'text-primary-foreground font-body-medium',
 });
 
 interface ChatInputProps extends ViewProps {

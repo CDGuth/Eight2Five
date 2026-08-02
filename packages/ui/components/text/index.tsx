@@ -3,7 +3,6 @@ import React from 'react';
 import type { VariantProps } from '@gluestack-ui/utils/nativewind-utils';
 import { Text as RNText } from 'react-native';
 import { textStyle } from './styles';
-import { eight2FiveFonts } from '../../theme';
 
 type ITextProps = React.ComponentProps<typeof RNText> &
   VariantProps<typeof textStyle>;
@@ -38,7 +37,7 @@ const Text = React.forwardRef<React.ComponentRef<typeof RNText>, ITextProps>(
           highlight: highlight as boolean,
           class: className,
         })}
-        style={[{ fontFamily: eight2FiveFonts.utilityRegular }, style]}
+        style={style}
         {...props}
         ref={ref}
       />

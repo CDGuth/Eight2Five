@@ -1,5 +1,6 @@
 import React from "react";
-import { Group, matchFont, Path, Rect, Text } from "@shopify/react-native-skia";
+import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
+import { Group, Path, Rect, Text, useFont } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import type { StandardHighSchoolFieldTemplate } from "../template";
@@ -23,14 +24,9 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   const fiveYardStroke = useDerivedValue(() => metersPerPixel.value * 1.1);
   const fieldLineStroke = useDerivedValue(() => metersPerPixel.value * 1.4);
   const boundaryStroke = useDerivedValue(() => metersPerPixel.value * 2);
-  const numberFont = React.useMemo(
-    () =>
-      matchFont({
-        fontFamily: "Montserrat",
-        fontSize: template.dimensions.yardNumberHeightMeters,
-        fontWeight: "600",
-      }),
-    [template],
+  const numberFont = useFont(
+    Montserrat_600SemiBold,
+    template.dimensions.yardNumberHeightMeters,
   );
   const fieldClip = {
     x: template.bounds.minXMeters,
@@ -77,28 +73,30 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
         style="stroke"
         strokeWidth={boundaryStroke}
       />
-      {template.yardNumbers.map((number) => {
-        const width = numberFont.measureText(number.label).width;
-        return (
-          <Group
-            key={`${number.side}-${number.xMeters}`}
-            transform={[
-              { translateX: number.xMeters },
-              { translateY: number.yMeters },
-              { scaleY: -1 },
-            ]}
-          >
-            <Text
-              x={-width / 2}
-              y={template.dimensions.yardNumberHeightMeters / 2}
-              text={number.label}
-              font={numberFont}
-              color={palette.fieldNumbers}
-              opacity={0.72}
-            />
-          </Group>
-        );
-      })}
+      {numberFont
+        ? template.yardNumbers.map((number) => {
+            const width = numberFont.measureText(number.label).width;
+            return (
+              <Group
+                key={`${number.side}-${number.xMeters}`}
+                transform={[
+                  { translateX: number.xMeters },
+                  { translateY: number.yMeters },
+                  { scaleY: -1 },
+                ]}
+              >
+                <Text
+                  x={-width / 2}
+                  y={template.dimensions.yardNumberHeightMeters / 2}
+                  text={number.label}
+                  font={numberFont}
+                  color={palette.fieldNumbers}
+                  opacity={0.72}
+                />
+              </Group>
+            );
+          })
+        : null}
     </>
   );
 });

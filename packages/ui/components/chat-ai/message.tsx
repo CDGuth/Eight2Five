@@ -178,7 +178,7 @@ export const MessageResponse = memo(({ message }: { message: UIMessage }) => {
     },
 
     strong: (node, children) => (
-      <Text key={node.key} className="font-bold text-foreground">
+      <Text key={node.key} className="font-body-bold text-foreground">
         {children}
       </Text>
     ),

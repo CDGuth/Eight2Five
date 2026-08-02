@@ -3,6 +3,7 @@ import { Montserrat_500Medium } from '@expo-google-fonts/montserrat/500Medium';
 import { Montserrat_600SemiBold } from '@expo-google-fonts/montserrat/600SemiBold';
 import { Montserrat_700Bold } from '@expo-google-fonts/montserrat/700Bold';
 import { SourceSans3_400Regular } from '@expo-google-fonts/source-sans-3/400Regular';
+import { SourceSans3_500Medium } from '@expo-google-fonts/source-sans-3/500Medium';
 import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
 import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
 import { useFonts } from 'expo-font';
@@ -71,13 +72,14 @@ export const eight2FiveSpacing = {
 } as const;
 
 export const eight2FiveFonts = {
-  style: 'Montserrat',
-  utility: 'Source Sans 3',
+  style: 'Montserrat_400Regular',
+  utility: 'SourceSans3_400Regular',
   styleRegular: 'Montserrat_400Regular',
   styleMedium: 'Montserrat_500Medium',
   styleSemibold: 'Montserrat_600SemiBold',
   styleBold: 'Montserrat_700Bold',
   utilityRegular: 'SourceSans3_400Regular',
+  utilityMedium: 'SourceSans3_500Medium',
   utilitySemibold: 'SourceSans3_600SemiBold',
   utilityBold: 'SourceSans3_700Bold',
 } as const;
@@ -145,6 +147,7 @@ export function useEight2FiveFonts(): [boolean, Error | null] {
     Montserrat_600SemiBold,
     Montserrat_700Bold,
     SourceSans3_400Regular,
+    SourceSans3_500Medium,
     SourceSans3_600SemiBold,
     SourceSans3_700Bold,
   });

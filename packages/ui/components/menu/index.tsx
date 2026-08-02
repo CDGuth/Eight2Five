@@ -27,14 +27,14 @@ const menuSeparatorStyle = tva({
 });
 
 const menuItemLabelStyle = tva({
-  base: 'text-popover-foreground font-normal font-body',
+  base: 'text-popover-foreground font-body',
 
   variants: {
     isTruncated: {
       true: 'web:truncate',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-body-bold',
     },
     underline: {
       true: 'underline',
