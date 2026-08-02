@@ -14,7 +14,7 @@ export const COLOR_PRESETS = Object.freeze({
   orange: "#FB8C00",
   yellow: "#FDD835",
   green: "#43A047",
-  blue: "#3C6EC8",
+  blue: "#3c6ec8",
   indigo: "#4F51B5",
   violet: "#8E44AD",
   grey: DEFAULT_ENTITY_COLOR,
