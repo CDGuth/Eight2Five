@@ -27,14 +27,16 @@ interface PdfJsPage {
 interface PdfJsDocument {
   readonly numPages: number;
   getPage(pageNumber: number): Promise<PdfJsPage>;
+}
+
+interface PdfJsLoadingTask {
+  readonly promise: Promise<PdfJsDocument>;
   destroy(): Promise<void>;
 }
 
 interface PdfJsModule {
   readonly GlobalWorkerOptions: { workerSrc: string };
-  getDocument(source: { data: Uint8Array }): {
-    readonly promise: Promise<PdfJsDocument>;
-  };
+  getDocument(source: { data: Uint8Array }): PdfJsLoadingTask;
 }
 
 let pdfJsPromise: Promise<PdfJsModule> | undefined;
@@ -68,7 +70,8 @@ export async function extractPdfText(
 ): Promise<readonly ExtractedPdfPage[]> {
   const bytes = new Uint8Array(await readAssetBytes(asset));
   const pdfjs = await loadPdfJs();
-  const document = await pdfjs.getDocument({ data: bytes }).promise;
+  const loadingTask = pdfjs.getDocument({ data: bytes });
+  const document = await loadingTask.promise;
   try {
     const pages: ExtractedPdfPage[] = [];
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
@@ -87,7 +90,7 @@ export async function extractPdfText(
     }
     return pages;
   } finally {
-    await document.destroy();
+    await loadingTask.destroy();
   }
 }
 
