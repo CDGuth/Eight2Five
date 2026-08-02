@@ -1,0 +1,234 @@
+import React from "react";
+import * as DocumentPicker from "expo-document-picker";
+import {
+  importCoordinateSheetPages,
+  type CoordinateSheetImportResult,
+  type ExtractedPdfPage,
+} from "@eight2five/drill-importers";
+import {
+  serializeDrillDocument,
+  type DrillDocument,
+} from "@eight2five/drill-schema";
+
+import { downloadTextFile } from "./download.web";
+import {
+  applyConverterSettings,
+  createDefaultConverterSettings,
+  createEmptyRuleDraft,
+  downloadFileName,
+  getDocumentSummary,
+  inferTitleFromFileName,
+  validateConverterSettings,
+  type ConverterSettings,
+  type EntityRuleDraft,
+} from "./settings";
+import { extractPdfText, getPdfJsVersion } from "../pdf/pdf-text-extractor.web";
+
+export type ConverterPhase = "idle" | "extracting" | "ready" | "error";
+
+let nextRuleId = 1;
+
+export function useConverterController() {
+  const [settings, setSettings] = React.useState<ConverterSettings>(
+    createDefaultConverterSettings,
+  );
+  const [asset, setAsset] =
+    React.useState<DocumentPicker.DocumentPickerAsset>();
+  const [extractedPages, setExtractedPages] = React.useState<
+    readonly ExtractedPdfPage[]
+  >([]);
+  const [createdAt, setCreatedAt] = React.useState(() =>
+    new Date().toISOString(),
+  );
+  const [phase, setPhase] = React.useState<ConverterPhase>("idle");
+  const [extractionError, setExtractionError] = React.useState<string>();
+
+  const settingsValidation = React.useMemo(
+    () => validateConverterSettings(settings),
+    [settings],
+  );
+
+  const importResult = React.useMemo<
+    CoordinateSheetImportResult | undefined
+  >(() => {
+    if (extractedPages.length === 0 || !settingsValidation.field)
+      return undefined;
+    return importCoordinateSheetPages(extractedPages, {
+      title: settings.title.trim() || "Imported Drill",
+      ...(asset?.name ? { fileName: asset.name } : {}),
+      createdAt,
+      field: settingsValidation.field,
+    });
+  }, [
+    asset,
+    createdAt,
+    extractedPages,
+    settings.title,
+    settingsValidation.field,
+  ]);
+
+  const outputDocument = React.useMemo<DrillDocument | undefined>(() => {
+    if (!importResult?.document || settingsValidation.errors.length > 0) {
+      return undefined;
+    }
+    try {
+      return applyConverterSettings(
+        importResult.document,
+        settings,
+        settingsValidation,
+      );
+    } catch {
+      return undefined;
+    }
+  }, [importResult, settings, settingsValidation]);
+
+  const summary = React.useMemo(
+    () => (outputDocument ? getDocumentSummary(outputDocument) : undefined),
+    [outputDocument],
+  );
+
+  const availableSymbols = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (importResult?.sheets ?? [])
+            .map((sheet) => sheet.sourceSymbol.trim())
+            .filter(Boolean),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [importResult?.sheets],
+  );
+
+  const pickPdf = React.useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "application/pdf",
+      multiple: false,
+      copyToCacheDirectory: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const nextAsset = result.assets[0];
+    setPhase("extracting");
+    setExtractionError(undefined);
+    setAsset(nextAsset);
+    setExtractedPages([]);
+    const nextCreatedAt = new Date().toISOString();
+    setCreatedAt(nextCreatedAt);
+    setSettings((current) => ({
+      ...current,
+      title: inferTitleFromFileName(nextAsset.name),
+      propSymbols: [],
+      rules: [],
+    }));
+
+    try {
+      const pages = await extractPdfText(nextAsset);
+      if (
+        pages.length === 0 ||
+        pages.every((page) => page.items.length === 0)
+      ) {
+        throw new Error(
+          "The PDF contains no extractable text. Scanned/image-only coordinate sheets are not supported in v1.",
+        );
+      }
+      setExtractedPages(pages);
+      setPhase("ready");
+    } catch (cause) {
+      setPhase("error");
+      setExtractionError(
+        cause instanceof Error ? cause.message : "PDF text extraction failed.",
+      );
+    }
+  }, []);
+
+  const clearPdf = React.useCallback(() => {
+    setAsset(undefined);
+    setExtractedPages([]);
+    setExtractionError(undefined);
+    setPhase("idle");
+    setSettings((current) => ({
+      ...current,
+      title: "",
+      propSymbols: [],
+      rules: [],
+    }));
+  }, []);
+
+  const updateSettings = React.useCallback(
+    (patch: Partial<ConverterSettings>) =>
+      setSettings((current) => ({ ...current, ...patch })),
+    [],
+  );
+
+  const addRule = React.useCallback(
+    (target: EntityRuleDraft["target"] = "symbol") => {
+      setSettings((current) => ({
+        ...current,
+        rules: [
+          ...current.rules,
+          { ...createEmptyRuleDraft(`rule-${nextRuleId++}`), target },
+        ],
+      }));
+    },
+    [],
+  );
+
+  const updateRule = React.useCallback(
+    (id: string, patch: Partial<Omit<EntityRuleDraft, "id">>) => {
+      setSettings((current) => ({
+        ...current,
+        rules: current.rules.map((rule) =>
+          rule.id === id ? { ...rule, ...patch } : rule,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const removeRule = React.useCallback((id: string) => {
+    setSettings((current) => ({
+      ...current,
+      rules: current.rules.filter((rule) => rule.id !== id),
+    }));
+  }, []);
+
+  const togglePropSymbol = React.useCallback((symbol: string) => {
+    setSettings((current) => ({
+      ...current,
+      propSymbols: current.propSymbols.includes(symbol)
+        ? current.propSymbols.filter((candidate) => candidate !== symbol)
+        : [...current.propSymbols, symbol],
+    }));
+  }, []);
+
+  const download = React.useCallback(() => {
+    if (!outputDocument) return;
+    downloadTextFile(
+      serializeDrillDocument(outputDocument),
+      downloadFileName(outputDocument.metadata.title),
+    );
+  }, [outputDocument]);
+
+  return {
+    phase,
+    asset,
+    extractedPages,
+    extractionError,
+    settings,
+    settingsErrors: settingsValidation.errors,
+    importResult,
+    outputDocument,
+    summary,
+    availableSymbols,
+    pdfJsVersion: getPdfJsVersion(),
+    canDownload: Boolean(outputDocument),
+    pickPdf,
+    clearPdf,
+    updateSettings,
+    addRule,
+    updateRule,
+    removeRule,
+    togglePropSymbol,
+    download,
+  };
+}
