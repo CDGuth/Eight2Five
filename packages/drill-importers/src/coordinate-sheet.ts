@@ -53,6 +53,11 @@ interface SheetSlice {
   readonly items: readonly ExtractedPdfTextItem[];
 }
 
+interface SheetAnchor {
+  readonly x: number;
+  readonly y: number;
+}
+
 interface ParsedSheetResult {
   readonly sheet?: ParsedCoordinateSheet;
   readonly diagnostics: readonly ImportDiagnostic[];
@@ -126,49 +131,101 @@ function splitPageIntoSheets(page: ExtractedPdfPage): readonly SheetSlice[] {
   const usefulItems = page.items.filter((item) => item.text.trim().length > 0);
   if (usefulItems.length === 0) return [];
 
-  let anchors = distinctSortedX(
-    usefulItems
-      .filter((item) => /\bPerformer\s*:/i.test(item.text))
-      .map((item) => item.x),
-  );
-  if (anchors.length < 2) {
-    anchors = distinctSortedX(
-      usefulItems
-        .filter((item) => /^\s*Set(?:\s|$)/i.test(item.text))
-        .map((item) => item.x),
-    );
+  let sheetAnchors = usefulItems
+    .filter((item) => /\bPerformer\s*:/i.test(item.text))
+    .map((item) => ({ x: item.x, y: item.y } satisfies SheetAnchor));
+  if (sheetAnchors.length === 0) {
+    sheetAnchors = usefulItems
+      .filter((item) => /^\s*Set(?:\s|$)/i.test(item.text))
+      .map((item) => ({ x: item.x, y: item.y } satisfies SheetAnchor));
   }
-  if (anchors.length === 0) anchors = [Math.min(...usefulItems.map((item) => item.x))];
+  if (sheetAnchors.length === 0) {
+    sheetAnchors = [
+      {
+        x: Math.min(...usefulItems.map((item) => item.x)),
+        y: Math.max(...usefulItems.map((item) => item.y)),
+      },
+    ];
+  }
 
-  // Sheet anchors are left-edge origins, not centers. A two-up sheet can use
-  // most of the horizontal distance before the next origin, so midpoint
-  // partitioning would incorrectly steal the right-side coordinate columns.
-  return anchors
-    .map((anchor, sheetIndex) => {
-      const minX = sheetIndex === 0 ? Number.NEGATIVE_INFINITY : anchor - 0.5;
+  const xAnchors = distinctSortedValues(
+    sheetAnchors.map((anchor) => anchor.x),
+    "ascending",
+  );
+  const yAnchors = distinctSortedValues(
+    sheetAnchors.map((anchor) => anchor.y),
+    "descending",
+  );
+
+  // Pyware can print four logical coordinate sheets on one physical PDF page
+  // (two columns by two rows). Origins are the top-left edges of each logical
+  // sheet, so midpoint partitioning is wrong: the coordinate columns can use
+  // almost the full distance up to the next origin. Partition immediately
+  // before each next origin instead, in both axes, and only emit grid cells
+  // that actually contain a detected sheet anchor. PDF.js Y increases upward,
+  // hence rows are ordered from larger to smaller Y values.
+  const slices: SheetSlice[] = [];
+  for (const [rowIndex, yAnchor] of yAnchors.entries()) {
+    const minY =
+      rowIndex === yAnchors.length - 1
+        ? Number.NEGATIVE_INFINITY
+        : yAnchors[rowIndex + 1] + 0.5;
+    const maxY =
+      rowIndex === 0 ? Number.POSITIVE_INFINITY : yAnchor + 0.5;
+
+    for (const [columnIndex, xAnchor] of xAnchors.entries()) {
+      if (!hasSheetAnchor(sheetAnchors, xAnchor, yAnchor)) continue;
+      const minX =
+        columnIndex === 0 ? Number.NEGATIVE_INFINITY : xAnchor - 0.5;
       const maxX =
-        sheetIndex === anchors.length - 1
+        columnIndex === xAnchors.length - 1
           ? Number.POSITIVE_INFINITY
-          : anchors[sheetIndex + 1] - 0.5;
-      return {
+          : xAnchors[columnIndex + 1] - 0.5;
+      const items = usefulItems.filter(
+        (item) =>
+          item.x >= minX && item.x < maxX && item.y >= minY && item.y < maxY,
+      );
+      if (items.length === 0) continue;
+      slices.push({
         pageNumber: page.pageNumber,
-        sheetIndex,
-        items: usefulItems.filter((item) => item.x >= minX && item.x < maxX),
-      } satisfies SheetSlice;
-    })
-    .filter((slice) => slice.items.length > 0);
+        sheetIndex: slices.length,
+        items,
+      });
+    }
+  }
+  return slices;
 }
 
-function distinctSortedX(values: readonly number[]): number[] {
-  const sorted = [...values].sort((left, right) => left - right);
+function distinctSortedValues(
+  values: readonly number[],
+  direction: "ascending" | "descending",
+): number[] {
+  const sorted = [...values].sort((left, right) =>
+    direction === "ascending" ? left - right : right - left,
+  );
   const distinct: number[] = [];
   for (const value of sorted) {
     const previous = distinct.at(-1);
-    if (previous === undefined || Math.abs(value - previous) > SHEET_ANCHOR_DEDUPLICATION) {
+    if (
+      previous === undefined ||
+      Math.abs(value - previous) > SHEET_ANCHOR_DEDUPLICATION
+    ) {
       distinct.push(value);
     }
   }
   return distinct;
+}
+
+function hasSheetAnchor(
+  anchors: readonly SheetAnchor[],
+  x: number,
+  y: number,
+): boolean {
+  return anchors.some(
+    (anchor) =>
+      Math.abs(anchor.x - x) <= SHEET_ANCHOR_DEDUPLICATION &&
+      Math.abs(anchor.y - y) <= SHEET_ANCHOR_DEDUPLICATION,
+  );
 }
 
 function parseCoordinateSheetSlice(
@@ -304,9 +361,9 @@ function isTableHeaderLine(line: TextLine): boolean {
 function parseHeaderMetadata(text: string): Omit<ParsedCoordinateSheet, "pageNumber" | "sheetIndex" | "rows"> | undefined {
   const match = text.match(HEADER_FIELD_PATTERN);
   if (!match) return undefined;
-  const performerName = cleanOptionalText(match[1]);
+  const performerName = normalizeHeaderValue(match[1], "unnamed");
   const sourceSymbol = cleanOptionalText(match[2]) ?? "?";
-  const sourceLabel = cleanOptionalText(match[3]);
+  const sourceLabel = normalizeHeaderValue(match[3], "unlabeled");
   const sourceId = cleanOptionalText(match[4]);
   const displayLabel = composeDisplayLabel(sourceSymbol, sourceLabel, performerName);
   const tailStart = (match.index ?? 0) + match[0].length;
@@ -331,6 +388,17 @@ function parseHeaderMetadata(text: string): Omit<ParsedCoordinateSheet, "pageNum
 function cleanOptionalText(value: string | undefined): string | undefined {
   const cleaned = value?.replace(/\s+/g, " ").trim();
   return cleaned ? cleaned : undefined;
+}
+
+function normalizeHeaderValue(
+  value: string | undefined,
+  placeholder: string,
+): string | undefined {
+  const cleaned = cleanOptionalText(value);
+  if (!cleaned) return undefined;
+  return new RegExp(`^\\(${placeholder}\\)$`, "i").test(cleaned)
+    ? undefined
+    : cleaned;
 }
 
 function composeDisplayLabel(
@@ -746,26 +814,54 @@ function buildDrillDocument(
 function assignEntityIds(
   sheets: readonly ParsedCoordinateSheet[],
   diagnostics: ImportDiagnostic[],
-): readonly number[] | undefined {
-  const sourceIds = sheets.map((sheet) => {
+): readonly number[] {
+  const safeSourceIds = sheets.map((sheet) => {
     if (!sheet.sourceId || !/^\d+$/.test(sheet.sourceId)) return undefined;
     const parsed = Number(sheet.sourceId);
     return Number.isSafeInteger(parsed) ? parsed : undefined;
   });
-  const validSourceIds = sourceIds.every(
-    (id): id is number => id !== undefined,
+  const reservedSafeIds = new Set(
+    safeSourceIds.filter((id): id is number => id !== undefined),
   );
-  if (validSourceIds && new Set(sourceIds).size === sourceIds.length) return sourceIds;
+  const usedIds = new Set<number>();
+  let nextGeneratedId = 0;
+  let hadMissingSourceId = false;
+  let hadDuplicateSafeSourceId = false;
 
-  if (sheets.some((sheet) => sheet.sourceId)) {
+  const ids = safeSourceIds.map((sourceId, index) => {
+    if (sourceId !== undefined && !usedIds.has(sourceId)) {
+      usedIds.add(sourceId);
+      return sourceId;
+    }
+    if (!sheets[index].sourceId) hadMissingSourceId = true;
+    if (sourceId !== undefined && usedIds.has(sourceId)) {
+      hadDuplicateSafeSourceId = true;
+    }
+    while (
+      reservedSafeIds.has(nextGeneratedId) ||
+      usedIds.has(nextGeneratedId)
+    ) {
+      nextGeneratedId += 1;
+    }
+    const generatedId = nextGeneratedId;
+    usedIds.add(generatedId);
+    nextGeneratedId += 1;
+    return generatedId;
+  });
+
+  // Pyware can emit numeric source IDs larger than JavaScript's safe integer
+  // range. Those exact strings are retained in coordinate-sheet provenance,
+  // while the portable document receives a generated safe numeric ID. This is
+  // normal conversion behavior and does not warrant a warning by itself.
+  if (hadMissingSourceId || hadDuplicateSafeSourceId) {
     diagnostics.push({
       severity: "warning",
       code: "SOURCE_IDS_REASSIGNED",
       message:
-        "One or more source performer IDs were missing, duplicated, or outside JavaScript's safe integer range; portable IDs were assigned sequentially.",
+        "One or more source performer IDs were missing or duplicated; generated portable IDs were used where needed. Original source IDs are preserved in coordinate-sheet provenance when available.",
     });
   }
-  return sheets.map((_, index) => index + 1);
+  return ids;
 }
 
 function sameSetIdentity(left: ParsedSetIdentity, right: ParsedSetIdentity): boolean {

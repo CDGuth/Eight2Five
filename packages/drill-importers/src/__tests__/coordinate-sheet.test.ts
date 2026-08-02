@@ -14,6 +14,7 @@ function item(text: string, x: number, y: number): ExtractedPdfTextItem {
 
 function sheetItems({
   offsetX,
+  offsetY = 0,
   performer,
   symbol,
   label,
@@ -21,6 +22,7 @@ function sheetItems({
   sideShift = 0,
 }: {
   offsetX: number;
+  offsetY?: number;
   performer: string;
   symbol: string;
   label: string;
@@ -28,31 +30,32 @@ function sheetItems({
   sideShift?: number;
 }): ExtractedPdfTextItem[] {
   const x = (value: number) => offsetX + value;
+  const y = (value: number) => offsetY + value;
   return [
     item(
       `Performer: ${performer} Symbol: ${symbol} Label: ${label} ID:${id} Part 4`,
       x(0),
-      760,
+      y(760),
     ),
-    item("Set", x(0), 720),
-    item("Measure", x(55), 720),
-    item("Counts", x(115), 720),
-    item("Side 1-Side 2", x(170), 720),
-    item("Front-Back", x(300), 720),
-    item("31", x(0), 700),
-    item("0", x(55), 700),
-    item("0", x(115), 700),
-    item("Side 1: On 45 yd ln", x(170), 700),
-    item("On Front side line", x(300), 700),
-    item("32", x(0), 680),
-    item("126-129", x(55), 680),
-    item("16", x(115), 680),
+    item("Set", x(0), y(720)),
+    item("Measure", x(55), y(720)),
+    item("Counts", x(115), y(720)),
+    item("Side 1-Side 2", x(170), y(720)),
+    item("Front-Back", x(300), y(720)),
+    item("31", x(0), y(700)),
+    item("0", x(55), y(700)),
+    item("0", x(115), y(700)),
+    item("Side 1: On 45 yd ln", x(170), y(700)),
+    item("On Front side line", x(300), y(700)),
+    item("32", x(0), y(680)),
+    item("126-129", x(55), y(680)),
+    item("16", x(115), y(680)),
     item(
       `Side 2: ${4 + sideShift}.0 steps Inside 45 yd ln`,
       x(170),
-      680,
+      y(680),
     ),
-    item("4.0 steps Behind Front Hash (HS)", x(300), 680),
+    item("4.0 steps Behind Front Hash (HS)", x(300), y(680)),
   ];
 }
 
@@ -126,6 +129,106 @@ describe("coordinate sheet importer", () => {
       { entityId: 1595433022186, setId: 0, xSteps: -8, ySteps: 0 },
       { entityId: 1595433022186, setId: 1, xSteps: 4, ySteps: 32 },
     ]);
+  });
+
+  test("splits four-up physical pages into logical sheets in row-major order", () => {
+    const fourUpPage: ExtractedPdfPage = {
+      pageNumber: 1,
+      width: 800,
+      height: 800,
+      items: [
+        ...sheetItems({
+          offsetX: 20,
+          performer: "Top Left",
+          symbol: "B",
+          label: "1",
+          id: "101",
+        }),
+        ...sheetItems({
+          offsetX: 420,
+          performer: "Top Right",
+          symbol: "B",
+          label: "2",
+          id: "102",
+        }),
+        ...sheetItems({
+          offsetX: 20,
+          offsetY: -400,
+          performer: "Bottom Left",
+          symbol: "C",
+          label: "1",
+          id: "103",
+        }),
+        ...sheetItems({
+          offsetX: 420,
+          offsetY: -400,
+          performer: "Bottom Right",
+          symbol: "C",
+          label: "2",
+          id: "104",
+        }),
+      ],
+    };
+    const finalPartialPage: ExtractedPdfPage = {
+      pageNumber: 2,
+      width: 800,
+      height: 800,
+      items: [
+        ...sheetItems({
+          offsetX: 20,
+          performer: "Tenth Trumpet",
+          symbol: "T",
+          label: "10",
+          id: "105",
+        }),
+        ...sheetItems({
+          offsetX: 420,
+          performer: "(unnamed)",
+          symbol: "X",
+          label: "(unlabeled)",
+          id: "639161623594264901",
+        }),
+      ],
+    };
+
+    const result = importCoordinateSheetPages([fourUpPage, finalPartialPage], {
+      title: "Part 4",
+      createdAt: "2026-08-02T18:00:00.000Z",
+    });
+
+    expect(result.sheets).toHaveLength(6);
+    expect(result.sheets.map((sheet) => sheet.displayLabel)).toEqual([
+      "B1",
+      "B2",
+      "C1",
+      "C2",
+      "T10",
+      "X",
+    ]);
+    expect(result.sheets.every((sheet) => sheet.rows.length === 2)).toBe(true);
+    expect(result.diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "SET_COUNT_MISMATCH" }),
+        expect.objectContaining({ code: "SOURCE_IDS_REASSIGNED" }),
+      ]),
+    );
+    expect(result.document?.entities.map((entity) => entity.id)).toEqual([
+      101,
+      102,
+      103,
+      104,
+      105,
+      0,
+    ]);
+    expect(result.document?.extensions?.["eight2five.coordinateSheet"]).toMatchObject({
+      sheets: expect.arrayContaining([
+        expect.objectContaining({
+          entityId: 0,
+          sourceId: "639161623594264901",
+        }),
+      ]),
+    });
+    expect(result.document).toBeDefined();
   });
 
   test("rejects global set metadata disagreements instead of silently choosing one", () => {
