@@ -259,7 +259,9 @@ function sideCoordinateToXSteps(coordinate: MarchingSideCoordinate): number {
   if (coordinate.yardLine === 50) {
     if (coordinate.side === "center") {
       if (coordinate.relation !== "on" || coordinate.offsetSteps > EPSILON) {
-        throw new RangeError('The center 50-yard reference must be exactly "on".');
+        throw new RangeError(
+          'The center 50-yard reference must be exactly "on".',
+        );
       }
       return 0;
     }
@@ -275,7 +277,9 @@ function sideCoordinateToXSteps(coordinate: MarchingSideCoordinate): number {
   }
 
   if (coordinate.side === "center") {
-    throw new RangeError("Only the 50-yard line can use the center side reference.");
+    throw new RangeError(
+      "Only the 50-yard line can use the center side reference.",
+    );
   }
 
   const baseMagnitude = ((50 - coordinate.yardLine) / 5) * 8;
@@ -288,9 +292,13 @@ function sideCoordinateToXSteps(coordinate: MarchingSideCoordinate): number {
   }
   const towardCenter = coordinate.relation === "inside";
   if (coordinate.side === 1) {
-    return base + (towardCenter ? coordinate.offsetSteps : -coordinate.offsetSteps);
+    return (
+      base + (towardCenter ? coordinate.offsetSteps : -coordinate.offsetSteps)
+    );
   }
-  return base + (towardCenter ? -coordinate.offsetSteps : coordinate.offsetSteps);
+  return (
+    base + (towardCenter ? -coordinate.offsetSteps : coordinate.offsetSteps)
+  );
 }
 
 function frontBackCoordinateToYSteps(

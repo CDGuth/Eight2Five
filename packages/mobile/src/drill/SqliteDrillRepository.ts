@@ -1,4 +1,9 @@
-import { formatSetName, type DrillGridPoint, type MeasureRange, type SetKind } from "@eight2five/drill-schema";
+import {
+  formatSetName,
+  type DrillGridPoint,
+  type MeasureRange,
+  type SetKind,
+} from "@eight2five/drill-schema";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { drillGridPointToFieldPoint } from "../field/marching";
@@ -169,7 +174,9 @@ export class SqliteDrillRepository implements DrillRepository {
     const id = assertId(input.id ?? this.idFactory(), "Drill id");
     const fieldPreset = input.fieldPreset ?? "football-nfhs";
     if (fieldPreset !== "football-nfhs") {
-      throw invalidInput("The mobile MVP currently supports the NFHS field preset.");
+      throw invalidInput(
+        "The mobile MVP currently supports the NFHS field preset.",
+      );
     }
 
     await this.db.runAsync(
@@ -202,7 +209,9 @@ export class SqliteDrillRepository implements DrillRepository {
 
   async deleteDrill(id: string): Promise<void> {
     const drillId = assertId(id, "Drill id");
-    await this.db.runAsync(`DELETE FROM ${DRILLS_TABLE} WHERE id = ?`, [drillId]);
+    await this.db.runAsync(`DELETE FROM ${DRILLS_TABLE} WHERE id = ?`, [
+      drillId,
+    ]);
   }
 
   async setActiveDrill(id: string | null): Promise<AppSettings> {
@@ -249,21 +258,25 @@ export class SqliteDrillRepository implements DrillRepository {
 
   async getSet(id: string): Promise<DrillSet | undefined> {
     const setId = assertId(id, "Drill set id");
-    const row = await this.db.getFirstAsync<Row>(
-      `${SET_SELECT} WHERE id = ?`,
-      [setId],
-    );
+    const row = await this.db.getFirstAsync<Row>(`${SET_SELECT} WHERE id = ?`, [
+      setId,
+    ]);
     return row ? toSet(row) : undefined;
   }
 
   async createSet(input: CreateDrillSetInput): Promise<DrillSet> {
     const normalized = normalizeCreateSet(input);
-    const createdId = assertId(normalized.id ?? this.idFactory(), "Drill set id");
+    const createdId = assertId(
+      normalized.id ?? this.idFactory(),
+      "Drill set id",
+    );
     await this.db.withTransactionAsync(async () => {
       await this.requireDrill(normalized.drillId);
       const count = await this.setCount(normalized.drillId);
       if (count === 0 && normalized.countsFromPrevious !== 0) {
-        throw invalidInput("The first set must have zero counts from previous.");
+        throw invalidInput(
+          "The first set must have zero counts from previous.",
+        );
       }
       await this.insertSetRow({ ...normalized, id: createdId, ordinal: count });
       await this.validateSetStructure(normalized.drillId);
@@ -271,7 +284,10 @@ export class SqliteDrillRepository implements DrillRepository {
     return requireValue(await this.getSet(createdId), "drill set", createdId);
   }
 
-  async updateSet(idValue: string, changes: UpdateDrillSetInput): Promise<DrillSet> {
+  async updateSet(
+    idValue: string,
+    changes: UpdateDrillSetInput,
+  ): Promise<DrillSet> {
     const id = assertId(idValue, "Drill set id");
     const current = await this.getSet(id);
     if (!current) throw setNotFound(id);
@@ -293,7 +309,9 @@ export class SqliteDrillRepository implements DrillRepository {
     await this.db.withTransactionAsync(async () => {
       const set = await this.getSet(id);
       if (!set) return;
-      await this.db.runAsync(`DELETE FROM ${DRILL_SETS_TABLE} WHERE id = ?`, [id]);
+      await this.db.runAsync(`DELETE FROM ${DRILL_SETS_TABLE} WHERE id = ?`, [
+        id,
+      ]);
       await this.db.runAsync(
         `UPDATE ${DRILL_SETS_TABLE}
          SET ordinal = ordinal - 1
@@ -328,12 +346,17 @@ export class SqliteDrillRepository implements DrillRepository {
       await this.requireDrill(normalized.drillId);
       const count = await this.setCount(normalized.drillId);
       if (ordinal > count) {
-        throw invalidInput(`Set ordinal must be between 0 and ${count} when inserting.`);
+        throw invalidInput(
+          `Set ordinal must be between 0 and ${count} when inserting.`,
+        );
       }
       if (ordinal === 0 && normalized.countsFromPrevious !== 0) {
-        throw invalidInput("The first set must have zero counts from previous.");
+        throw invalidInput(
+          "The first set must have zero counts from previous.",
+        );
       }
-      if (count > 0) await this.shiftSetsForInsertion(normalized.drillId, count, ordinal);
+      if (count > 0)
+        await this.shiftSetsForInsertion(normalized.drillId, count, ordinal);
       await this.insertSetRow({ ...normalized, id, ordinal });
       await this.validateSetStructure(normalized.drillId);
     });
@@ -437,11 +460,21 @@ export class SqliteDrillRepository implements DrillRepository {
   }
 
   // Compatibility aliases.
-  listPages(drillId: string) { return this.listSets(drillId); }
-  getPage(id: string) { return this.getSet(id); }
-  createPage(input: CreateDrillSetInput) { return this.createSet(input); }
-  updatePage(id: string, input: UpdateDrillSetInput) { return this.updateSet(id, input); }
-  deletePage(id: string) { return this.deleteSet(id); }
+  listPages(drillId: string) {
+    return this.listSets(drillId);
+  }
+  getPage(id: string) {
+    return this.getSet(id);
+  }
+  createPage(input: CreateDrillSetInput) {
+    return this.createSet(input);
+  }
+  updatePage(id: string, input: UpdateDrillSetInput) {
+    return this.updateSet(id, input);
+  }
+  deletePage(id: string) {
+    return this.deleteSet(id);
+  }
   insertPage(drillId: string, ordinal: number, details: CreateDrillSetDetails) {
     return this.insertSet(drillId, ordinal, details);
   }
@@ -451,7 +484,9 @@ export class SqliteDrillRepository implements DrillRepository {
   ) {
     return this.reorderSets(drillId, orderedSetIds);
   }
-  setSelectedDrillPage(id: string | null) { return this.setSelectedDrillSet(id); }
+  setSelectedDrillPage(id: string | null) {
+    return this.setSelectedDrillSet(id);
+  }
 
   private async requireDrill(id: string): Promise<Drill> {
     const drill = await this.getDrill(id);
@@ -460,7 +495,9 @@ export class SqliteDrillRepository implements DrillRepository {
   }
 
   private async setCount(drillId: string): Promise<number> {
-    const row = await this.db.getFirstAsync<{ set_count: SqlValue | undefined }>(
+    const row = await this.db.getFirstAsync<{
+      set_count: SqlValue | undefined;
+    }>(
       `SELECT COUNT(*) AS set_count FROM ${DRILL_SETS_TABLE} WHERE drill_id = ?`,
       [drillId],
     );
@@ -471,7 +508,9 @@ export class SqliteDrillRepository implements DrillRepository {
     return count;
   }
 
-  private async insertSetRow(set: NormalizedCreateSet & { id: string; ordinal: number }) {
+  private async insertSetRow(
+    set: NormalizedCreateSet & { id: string; ordinal: number },
+  ) {
     const physical = drillGridPointToFieldPoint(set.position);
     const label = formatSetName(set);
     await this.db.runAsync(
@@ -553,14 +592,20 @@ export class SqliteDrillRepository implements DrillRepository {
     const identities = new Set<string>();
     for (const [index, set] of sets.entries()) {
       if (set.ordinal !== index) {
-        throw invalidInput("Persisted set ordinals must be contiguous from zero.");
+        throw invalidInput(
+          "Persisted set ordinals must be contiguous from zero.",
+        );
       }
       if (index === 0 && set.countsFromPrevious !== 0) {
-        throw invalidInput("The first set must have zero counts from previous.");
+        throw invalidInput(
+          "The first set must have zero counts from previous.",
+        );
       }
       const identity = `${set.number}|${set.suffix ?? ""}`;
       if (identities.has(identity)) {
-        throw invalidInput(`Set ${formatSetName(set)} already exists in this drill.`);
+        throw invalidInput(
+          `Set ${formatSetName(set)} already exists in this drill.`,
+        );
       }
       identities.add(identity);
       if (set.kind === "set") {
@@ -607,7 +652,9 @@ function normalizeCreateSet(input: CreateDrillSetInput): NormalizedCreateSet {
   const kind = input.kind ?? (input.suffix ? "subset" : "set");
   const suffix = normalizeSuffix(input.suffix, kind);
   return {
-    ...(input.id === undefined ? {} : { id: assertId(input.id, "Drill set id") }),
+    ...(input.id === undefined
+      ? {}
+      : { id: assertId(input.id, "Drill set id") }),
     drillId: assertId(input.drillId, "Drill id"),
     number: assertNonNegativeInteger(input.number, "Set number"),
     ...(suffix === undefined ? {} : { suffix }),
@@ -631,7 +678,10 @@ function normalizeExistingSet(
   changes: UpdateDrillSetInput,
 ): DrillSet {
   const kind = changes.kind ?? current.kind;
-  const rawSuffix = changes.suffix === undefined ? current.suffix : changes.suffix ?? undefined;
+  const rawSuffix =
+    changes.suffix === undefined
+      ? current.suffix
+      : (changes.suffix ?? undefined);
   const suffix = normalizeSuffix(rawSuffix, kind);
   const measureRange =
     changes.measureRange === undefined
@@ -656,15 +706,27 @@ function normalizeExistingSet(
     countsFromPrevious:
       changes.countsFromPrevious === undefined
         ? current.countsFromPrevious
-        : assertNonNegativeInteger(changes.countsFromPrevious, "countsFromPrevious"),
-    ...(measureRange === undefined ? { measureRange: undefined } : { measureRange }),
+        : assertNonNegativeInteger(
+            changes.countsFromPrevious,
+            "countsFromPrevious",
+          ),
+    ...(measureRange === undefined
+      ? { measureRange: undefined }
+      : { measureRange }),
     position:
-      changes.position === undefined ? current.position : assertGridPoint(changes.position),
-    ...(facingDegrees === undefined ? { facingDegrees: undefined } : { facingDegrees }),
+      changes.position === undefined
+        ? current.position
+        : assertGridPoint(changes.position),
+    ...(facingDegrees === undefined
+      ? { facingDegrees: undefined }
+      : { facingDegrees }),
   };
 }
 
-function normalizeSuffix(value: string | undefined, kind: SetKind): string | undefined {
+function normalizeSuffix(
+  value: string | undefined,
+  kind: SetKind,
+): string | undefined {
   if (kind === "set") {
     if (value !== undefined && value.trim().length > 0) {
       throw invalidInput("Primary sets cannot have a suffix.");
@@ -672,14 +734,22 @@ function normalizeSuffix(value: string | undefined, kind: SetKind): string | und
     return undefined;
   }
   if (typeof value !== "string" || !/^(?:[A-Z]|\.[0-9]+)$/.test(value.trim())) {
-    throw invalidInput("A subset suffix must be one capital letter or a decimal such as .5.");
+    throw invalidInput(
+      "A subset suffix must be one capital letter or a decimal such as .5.",
+    );
   }
   return value.trim();
 }
 
 function assertGridPoint(position: DrillGridPoint): DrillGridPoint {
-  if (!position || !Number.isFinite(position.xSteps) || !Number.isFinite(position.ySteps)) {
-    throw invalidInput("Drill set position must contain finite xSteps and ySteps.");
+  if (
+    !position ||
+    !Number.isFinite(position.xSteps) ||
+    !Number.isFinite(position.ySteps)
+  ) {
+    throw invalidInput(
+      "Drill set position must contain finite xSteps and ySteps.",
+    );
   }
   return { xSteps: position.xSteps, ySteps: position.ySteps };
 }
@@ -687,7 +757,8 @@ function assertGridPoint(position: DrillGridPoint): DrillGridPoint {
 function assertMeasureRange(value: MeasureRange): MeasureRange {
   const start = assertNonNegativeInteger(value.start, "Measure start");
   const end = assertNonNegativeInteger(value.end, "Measure end");
-  if (end < start) throw invalidInput("Measure end must be at or after measure start.");
+  if (end < start)
+    throw invalidInput("Measure end must be at or after measure start.");
   return { start, end };
 }
 
@@ -725,11 +796,7 @@ function assertTimestamp(value: unknown, name: string): number {
 }
 
 function assertNonNegativeInteger(value: unknown, name: string): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isSafeInteger(value) ||
-    value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw invalidInput(`${name} must be a non-negative integer.`);
   }
   return value;
@@ -792,7 +859,8 @@ function toSet(row: Row): DrillSet {
 }
 
 function rowText(value: SqlValue | undefined, name: string): string {
-  if (typeof value !== "string") throw new MobileRowError(`${name} is not a string.`);
+  if (typeof value !== "string")
+    throw new MobileRowError(`${name} is not a string.`);
   return value;
 }
 
@@ -809,11 +877,15 @@ function rowNumber(value: SqlValue | undefined, name: string): number {
 
 function rowInteger(value: SqlValue | undefined, name: string): number {
   const number = rowNumber(value, name);
-  if (!Number.isSafeInteger(number)) throw new MobileRowError(`${name} is not an integer.`);
+  if (!Number.isSafeInteger(number))
+    throw new MobileRowError(`${name} is not an integer.`);
   return number;
 }
 
-function rowNullableNumber(value: SqlValue | undefined, name: string): number | null {
+function rowNullableNumber(
+  value: SqlValue | undefined,
+  name: string,
+): number | null {
   if (value === null || value === undefined) return null;
   return rowNumber(value, name);
 }
@@ -835,11 +907,17 @@ function invalidInput(message: string): DrillRepositoryError {
 }
 
 function drillNotFound(id: string): DrillRepositoryError {
-  return new DrillRepositoryError("DRILL_NOT_FOUND", `Drill ${id} was not found.`);
+  return new DrillRepositoryError(
+    "DRILL_NOT_FOUND",
+    `Drill ${id} was not found.`,
+  );
 }
 
 function setNotFound(id: string): DrillRepositoryError {
-  return new DrillRepositoryError("SET_NOT_FOUND", `Drill set ${id} was not found.`);
+  return new DrillRepositoryError(
+    "SET_NOT_FOUND",
+    `Drill set ${id} was not found.`,
+  );
 }
 
 function defaultIdFactory(): string {

@@ -97,11 +97,7 @@ describe("SqliteDrillRepository", () => {
       ["set-b", 2],
     ]);
 
-    await repository.reorderSets(drill.id, [
-      "set-a",
-      "set-inserted",
-      "set-b",
-    ]);
+    await repository.reorderSets(drill.id, ["set-a", "set-inserted", "set-b"]);
     expect((await repository.listSets(drill.id)).map(({ id }) => id)).toEqual([
       "set-a",
       "set-inserted",
@@ -150,11 +146,15 @@ describe("SqliteDrillRepository", () => {
     });
 
     await repository.setActiveDrill(first.id);
-    await expect(repository.setSelectedDrillSet(set.id)).resolves.toMatchObject({
-      activeDrillId: first.id,
-      selectedDrillSetId: set.id,
-    });
-    await expect(repository.setSelectedDrillSet("missing")).rejects.toMatchObject({
+    await expect(repository.setSelectedDrillSet(set.id)).resolves.toMatchObject(
+      {
+        activeDrillId: first.id,
+        selectedDrillSetId: set.id,
+      },
+    );
+    await expect(
+      repository.setSelectedDrillSet("missing"),
+    ).rejects.toMatchObject({
       code: "INVALID_SELECTION",
     });
     await expect(repository.setActiveDrill("missing")).rejects.toMatchObject({
@@ -353,7 +353,8 @@ class DrillFakeDatabase {
       return [...this.drills.values()]
         .sort(
           (left, right) =>
-            left.created_at - right.created_at || left.id.localeCompare(right.id),
+            left.created_at - right.created_at ||
+            left.id.localeCompare(right.id),
         )
         .map((row) => ({ ...row }));
     }
@@ -365,7 +366,9 @@ class DrillFakeDatabase {
             left.ordinal - right.ordinal || left.id.localeCompare(right.id),
         );
       return rows.map((row) =>
-        /^\s*SELECT id\s+FROM drill_pages/m.test(sql) ? { id: row.id } : { ...row },
+        /^\s*SELECT id\s+FROM drill_pages/m.test(sql)
+          ? { id: row.id }
+          : { ...row },
       );
     }
     return [];

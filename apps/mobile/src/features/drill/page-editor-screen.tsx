@@ -52,9 +52,7 @@ export function PageEditorScreen({
         }}
       >
         {controller.loading ? (
-          <Text style={{ color: theme.textMuted }}>
-            Loading set…
-          </Text>
+          <Text style={{ color: theme.textMuted }}>Loading set…</Text>
         ) : null}
         {controller.error ? (
           <SettingsMessage tone="error">

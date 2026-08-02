@@ -19,9 +19,7 @@ function gridPoint(xSteps: number, ySteps: number) {
 describe("marching coordinate conversion", () => {
   test("formats exact side examples in the centered field convention", () => {
     expect(
-      formatMarchingSide(
-        fieldPointToMarchingCoordinate(gridPoint(16, 0)).side,
-      ),
+      formatMarchingSide(fieldPointToMarchingCoordinate(gridPoint(16, 0)).side),
     ).toBe("Side 2: On 40 yd ln");
     expect(
       formatMarchingSide(

@@ -141,7 +141,9 @@ function setDraftFromPosition(
     setKind: details.kind,
     setSuffix: details.suffix ?? "",
     countsFromPrevious: String(details.countsFromPrevious),
-    measureStart: details.measureRange ? String(details.measureRange.start) : "",
+    measureStart: details.measureRange
+      ? String(details.measureRange.start)
+      : "",
     measureEnd: details.measureRange ? String(details.measureRange.end) : "",
     side: String(coordinate.side.side) as MarchingCoordinateDraft["side"],
     yardLine: String(coordinate.side.yardLine),
@@ -210,7 +212,8 @@ export function previewCoordinate(
   draft: MarchingCoordinateDraft,
 ): CoordinatePreview | undefined {
   const result = coordinateFromDraft(draft);
-  if (!result.coordinate || Object.keys(result.errors).length > 0) return undefined;
+  if (!result.coordinate || Object.keys(result.errors).length > 0)
+    return undefined;
   return {
     side: formatMarchingSide(result.coordinate.side),
     frontBack: formatMarchingFrontBack(result.coordinate.frontBack),
@@ -230,7 +233,10 @@ function parseMeasureRange(
     if (!endText) errors.measureEnd = message;
     return undefined;
   }
-  const start = parseNonNegativeInteger(startText, "Enter a valid start measure.");
+  const start = parseNonNegativeInteger(
+    startText,
+    "Enter a valid start measure.",
+  );
   const end = parseNonNegativeInteger(endText, "Enter a valid end measure.");
   if (typeof start === "string") errors.measureStart = start;
   if (typeof end === "string") errors.measureEnd = end;
@@ -248,7 +254,10 @@ function coordinateFromDraft(draft: MarchingCoordinateDraft): {
   readonly position?: DrillGridPoint;
 } {
   const errors: SetFormErrors = {};
-  const yardLine = parseNonNegativeNumber(draft.yardLine, "Choose a five-yard line.");
+  const yardLine = parseNonNegativeNumber(
+    draft.yardLine,
+    "Choose a five-yard line.",
+  );
   if (typeof yardLine === "string" || !YARD_LINES.includes(yardLine)) {
     errors.yardLine = "Choose a five-yard line from 0 through 50.";
   }
@@ -261,7 +270,8 @@ function coordinateFromDraft(draft: MarchingCoordinateDraft): {
     draft.frontBackOffsetSteps,
     "Enter a finite, non-negative front-to-back offset.",
   );
-  if (typeof frontBackOffset === "string") errors.frontBackOffsetSteps = frontBackOffset;
+  if (typeof frontBackOffset === "string")
+    errors.frontBackOffsetSteps = frontBackOffset;
   if (
     typeof yardLine === "string" ||
     typeof sideOffset === "string" ||
@@ -285,7 +295,8 @@ function coordinateFromDraft(draft: MarchingCoordinateDraft): {
     normalizedSide !== "center" &&
     normalizedSideRelation !== "outside"
   ) {
-    errors.coordinate = "An offset from the 50-yard line must be outside on Side 1 or Side 2.";
+    errors.coordinate =
+      "An offset from the 50-yard line must be outside on Side 1 or Side 2.";
   }
 
   const coordinate: MarchingCoordinate = {
@@ -315,19 +326,27 @@ function coordinateFromDraft(draft: MarchingCoordinateDraft): {
   }
 }
 
-function parseNonNegativeInteger(value: string, message: string): number | string {
+function parseNonNegativeInteger(
+  value: string,
+  message: string,
+): number | string {
   if (!value.trim()) return message;
   const number = Number(value);
   return Number.isSafeInteger(number) && number >= 0 ? number : message;
 }
 
-function parseNonNegativeNumber(value: string, message: string): number | string {
+function parseNonNegativeNumber(
+  value: string,
+  message: string,
+): number | string {
   if (!value.trim()) return message;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : message;
 }
 
-function parseSide(value: MarchingCoordinateDraft["side"]): MarchingSideReference | undefined {
+function parseSide(
+  value: MarchingCoordinateDraft["side"],
+): MarchingSideReference | undefined {
   if (value === "1") return 1;
   if (value === "2") return 2;
   return value === "center" ? "center" : undefined;

@@ -279,7 +279,9 @@ export function MarchingCoordinateForm({
         style={{
           gap: eight2FiveSpacing.xs,
           borderRadius: eight2FiveRadii.md,
-          borderColor: validation.errors.coordinate ? theme.danger : theme.border,
+          borderColor: validation.errors.coordinate
+            ? theme.danger
+            : theme.border,
           backgroundColor: theme.accentSoft,
         }}
       >
@@ -408,7 +410,11 @@ function SelectField<Value extends string>({
         isDisabled={disabled}
       >
         <SelectTrigger>
-          <SelectInput value={choices.find((choice) => choice.value === value)?.label ?? value} />
+          <SelectInput
+            value={
+              choices.find((choice) => choice.value === value)?.label ?? value
+            }
+          />
           <SelectIcon as={ChevronDown} />
         </SelectTrigger>
         <SelectPortal>
@@ -418,7 +424,11 @@ function SelectField<Value extends string>({
               <SelectDragIndicator />
             </SelectDragIndicatorWrapper>
             {choices.map((choice) => (
-              <SelectItem key={choice.value} label={choice.label} value={choice.value} />
+              <SelectItem
+                key={choice.value}
+                label={choice.label}
+                value={choice.value}
+              />
             ))}
           </SelectContent>
         </SelectPortal>

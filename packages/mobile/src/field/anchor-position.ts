@@ -101,8 +101,14 @@ export const ANCHOR_POSITION_REFERENCE_POINTS: Readonly<
   "side-2-back-corner": point(bounds.maxXMeters, bounds.maxYMeters),
   "side-1-goal-line-center": point(bounds.minXMeters, centerYMeters),
   "side-2-goal-line-center": point(bounds.maxXMeters, centerYMeters),
-  "front-hash-center": point(centerXMeters, template.frontHashLine.coordinateMeters),
-  "back-hash-center": point(centerXMeters, template.backHashLine.coordinateMeters),
+  "front-hash-center": point(
+    centerXMeters,
+    template.frontHashLine.coordinateMeters,
+  ),
+  "back-hash-center": point(
+    centerXMeters,
+    template.backHashLine.coordinateMeters,
+  ),
 });
 
 export function getAnchorPositionReferencePoint(

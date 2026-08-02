@@ -18,7 +18,9 @@ describe("mobile app SQLite migration", () => {
     expect(MOBILE_SCHEMA_VERSION).toBe(2);
     expect(sql).toContain("PRAGMA journal_mode = WAL");
     expect(sql).toContain("PRAGMA foreign_keys = ON");
-    expect(sql).toContain("CREATE TABLE IF NOT EXISTS mobile_schema_migrations");
+    expect(sql).toContain(
+      "CREATE TABLE IF NOT EXISTS mobile_schema_migrations",
+    );
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS drills");
     expect(sql).toContain("field_preset TEXT NOT NULL DEFAULT 'football-nfhs'");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS drill_pages");
@@ -87,8 +89,8 @@ describe("mobile app SQLite migration", () => {
     );
     expect(sql).toContain("PRAGMA user_version = 2");
 
-    const migrationUpdates = database.runAsync.mock.calls.filter(([statement]) =>
-      String(statement).includes("SET set_number = ?"),
+    const migrationUpdates = database.runAsync.mock.calls.filter(
+      ([statement]) => String(statement).includes("SET set_number = ?"),
     );
     expect(migrationUpdates).toHaveLength(3);
     expect(migrationUpdates[0][1]).toEqual([
@@ -146,7 +148,9 @@ describe("mobile app SQLite migration", () => {
       `Unsupported mobile database version ${MOBILE_SCHEMA_VERSION + 1}`,
     );
     expect(database.withTransactionAsync).not.toHaveBeenCalled();
-    expect(executed.join("\n")).not.toContain("CREATE TABLE IF NOT EXISTS drills");
+    expect(executed.join("\n")).not.toContain(
+      "CREATE TABLE IF NOT EXISTS drills",
+    );
   });
 });
 

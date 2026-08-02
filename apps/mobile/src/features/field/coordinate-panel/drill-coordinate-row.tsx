@@ -93,7 +93,10 @@ export function DrillCoordinateRow({
   );
 
   return landscape ? (
-    <HStack className="flex-1 items-stretch" testID="drill-coordinate-landscape">
+    <HStack
+      className="flex-1 items-stretch"
+      testID="drill-coordinate-landscape"
+    >
       {metadata}
       <DrillCoordinate
         coordinate={presentation.coordinate}

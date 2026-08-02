@@ -241,7 +241,10 @@ async function migrateLegacyDrillRows(
   for (const [index, row] of rows.entries()) {
     const candidate = parsed[index];
     let identity: LegacyIdentity | undefined;
-    if (candidate?.kind === "set" && !usedPrimaryNumbers.has(candidate.number)) {
+    if (
+      candidate?.kind === "set" &&
+      !usedPrimaryNumbers.has(candidate.number)
+    ) {
       identity = candidate;
     } else if (
       candidate?.kind === "subset" &&
@@ -274,7 +277,8 @@ async function migrateLegacyDrillRows(
       },
       NFHS_FIELD,
     );
-    const counts = index === 0 ? 0 : normalizeLegacyCount(row.counts_from_previous);
+    const counts =
+      index === 0 ? 0 : normalizeLegacyCount(row.counts_from_previous);
 
     await db.runAsync(
       `UPDATE ${DRILL_SETS_TABLE}
@@ -302,9 +306,7 @@ export function parseLegacySetLabel(label: string): LegacyIdentity | undefined {
   const number = Number(match[1]);
   if (!Number.isSafeInteger(number)) return undefined;
   const suffix = match[2];
-  return suffix
-    ? { number, suffix, kind: "subset" }
-    : { number, kind: "set" };
+  return suffix ? { number, suffix, kind: "subset" } : { number, kind: "set" };
 }
 
 function identityKey(identity: LegacyIdentity): string {
