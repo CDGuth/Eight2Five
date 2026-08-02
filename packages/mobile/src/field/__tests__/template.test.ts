@@ -14,6 +14,8 @@ describe("standard high-school field template", () => {
     expect(field.dimensions.highSchoolHashFromSidelineFeet).toBeCloseTo(
       53 + 4 / 12,
     );
+    expect(field.bounds.minXMeters).toBeCloseTo(-45.72);
+    expect(field.bounds.maxXMeters).toBeCloseTo(45.72);
     expect(field.frontHashLine.coordinateMeters).toBeCloseTo(16.256);
     expect(field.backHashLine.coordinateMeters).toBeCloseTo(32.512);
   });
@@ -33,10 +35,10 @@ describe("standard high-school field template", () => {
       "HS BH",
     ]);
     expect(field.fiveYardLines.map((line) => line.yardLineYards)).toEqual(
-      Array.from({ length: 19 }, (_, index) => (index + 1) * 5),
+      Array.from({ length: 19 }, (_, index) => -45 + index * 5),
     );
-    expect(field.fiveYardLines[0].start.xMeters).toBeCloseTo(4.572);
-    expect(field.fiveYardLines[18].start.xMeters).toBeCloseTo(86.868);
+    expect(field.fiveYardLines[0].start.xMeters).toBeCloseTo(-41.148);
+    expect(field.fiveYardLines[18].start.xMeters).toBeCloseTo(41.148);
   });
 
   test("includes two dimensioned numbers for each standard number position", () => {

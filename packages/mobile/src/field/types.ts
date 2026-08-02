@@ -9,10 +9,12 @@ export type FieldLateralReference =
   | "back-sideline";
 
 /**
- * A two-dimensional point in the canonical field coordinate system.
+ * A two-dimensional point in Eight2Five's canonical physical field space.
  *
- * The origin is the Side 1 goal line/front sideline intersection. X increases
- * toward the Side 2 goal line and Y increases toward the back sideline.
+ * The origin is center field (the 50-yard line) on the front sideline. X is
+ * negative toward Side 1 and positive toward Side 2. Y is positive toward the
+ * back sideline. Physical positions use meters; drill positions use the
+ * separate DrillGridPoint type from @eight2five/drill-schema.
  */
 export interface FieldPoint {
   readonly xMeters: number;
@@ -26,20 +28,18 @@ export interface FieldPosition extends FieldPoint {
 
 /**
  * The canonical three-dimensional position used for field anchors.
- *
- * Unlike the display-oriented FieldPosition type, an anchor position always
- * has a height. Coordinates are stored in meters and z increases upward.
+ * Coordinates are stored in meters and z increases upward.
  */
 export interface AnchorFieldPosition extends FieldPoint {
   readonly zMeters: number;
 }
 
-/** The canonical origin and axis directions, useful to consumers drawing axes. */
+/** The canonical physical origin and axis directions. */
 export interface FieldCoordinateOrigin {
   readonly xMeters: 0;
   readonly yMeters: 0;
   readonly zMeters: 0;
-  readonly side: 1;
+  readonly longitudinalReference: "center-field";
   readonly lateralReference: "front-sideline";
 }
 
@@ -49,16 +49,17 @@ export const FIELD_ORIGIN: FieldCoordinateOrigin = Object.freeze({
   xMeters: 0,
   yMeters: 0,
   zMeters: 0,
-  side: 1,
+  longitudinalReference: "center-field",
   lateralReference: "front-sideline",
 });
 
 export const FIELD_COORDINATE_ORIGIN = FIELD_ORIGIN;
 
 export const FIELD_AXIS_DIRECTIONS = Object.freeze({
-  x: "toward-side-2",
-  y: "toward-back-sideline",
-  z: "up",
+  xNegative: "toward-side-1",
+  xPositive: "toward-side-2",
+  yPositive: "toward-back-sideline",
+  zPositive: "up",
 } as const);
 
 /** Throws a clear error when a point contains a non-finite coordinate. */

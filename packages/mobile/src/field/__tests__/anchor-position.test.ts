@@ -10,8 +10,8 @@ import {
   convertAnchorPositionUnits,
   getAnchorPositionReferencePoint,
   metersToAnchorPositionUnits,
+  drillGridPointToFieldPoint,
   parseAnchorPositionDraft,
-  standardStepsToMeters,
   yardsToMeters,
 } from "../index";
 
@@ -38,43 +38,28 @@ describe("shared anchor position domain", () => {
         getAnchorPositionReferencePoint(reference),
       ),
     ).toEqual([
-      { xMeters: field.goalToGoalMeters / 2, yMeters: field.widthMeters / 2 },
-      { xMeters: field.goalToGoalMeters / 2, yMeters: 0 },
-      {
-        xMeters: field.goalToGoalMeters / 2,
-        yMeters: field.widthMeters,
-      },
+      { xMeters: 0, yMeters: field.widthMeters / 2 },
       { xMeters: 0, yMeters: 0 },
       { xMeters: 0, yMeters: field.widthMeters },
-      { xMeters: field.goalToGoalMeters, yMeters: 0 },
-      {
-        xMeters: field.goalToGoalMeters,
-        yMeters: field.widthMeters,
-      },
-      { xMeters: 0, yMeters: field.widthMeters / 2 },
-      {
-        xMeters: field.goalToGoalMeters,
-        yMeters: field.widthMeters / 2,
-      },
-      {
-        xMeters: field.goalToGoalMeters / 2,
-        yMeters: field.frontHashLine.coordinateMeters,
-      },
-      {
-        xMeters: field.goalToGoalMeters / 2,
-        yMeters: field.backHashLine.coordinateMeters,
-      },
+      { xMeters: field.bounds.minXMeters, yMeters: 0 },
+      { xMeters: field.bounds.minXMeters, yMeters: field.widthMeters },
+      { xMeters: field.bounds.maxXMeters, yMeters: 0 },
+      { xMeters: field.bounds.maxXMeters, yMeters: field.widthMeters },
+      { xMeters: field.bounds.minXMeters, yMeters: field.widthMeters / 2 },
+      { xMeters: field.bounds.maxXMeters, yMeters: field.widthMeters / 2 },
+      { xMeters: 0, yMeters: field.frontHashLine.coordinateMeters },
+      { xMeters: 0, yMeters: field.backHashLine.coordinateMeters },
     ]);
     expect(getAnchorPositionReferencePoint("center-field")).toEqual({
-      xMeters: field.goalToGoalMeters / 2,
+      xMeters: 0,
       yMeters: field.widthMeters / 2,
     });
     expect(getAnchorPositionReferencePoint("front-hash-center")).toEqual({
-      xMeters: field.goalToGoalMeters / 2,
+      xMeters: 0,
       yMeters: field.frontHashLine.coordinateMeters,
     });
     expect(getAnchorPositionReferencePoint("side-2-goal-line-center")).toEqual({
-      xMeters: field.goalToGoalMeters,
+      xMeters: field.bounds.maxXMeters,
       yMeters: field.widthMeters / 2,
     });
   });
@@ -142,7 +127,9 @@ describe("shared anchor position domain", () => {
       frontToBackOffset: 5,
       height: 1,
     });
-    expect(side1.xMeters).toBeCloseTo(yardsToMeters(5));
+    expect(side1.xMeters).toBeCloseTo(
+      field.bounds.minXMeters + yardsToMeters(5),
+    );
     expect(side1.yMeters).toBeCloseTo(yardsToMeters(5));
 
     const inverse = anchorFieldPositionToStandard(
@@ -174,12 +161,12 @@ describe("shared anchor position domain", () => {
       },
     };
     const expected = anchorFieldPositionFromMarchingCoordinate(coordinate, 2.4);
-    expect(expected.xMeters).toBeCloseTo(
-      field.goalToGoalMeters - yardsToMeters(40) - standardStepsToMeters(1.5),
-    );
-    expect(expected.yMeters).toBeCloseTo(
-      field.frontHashLine.coordinateMeters + standardStepsToMeters(2.25),
-    );
+    const projected = drillGridPointToFieldPoint({
+      xSteps: 16 - 1.5,
+      ySteps: 28 + 2.25,
+    });
+    expect(expected.xMeters).toBeCloseTo(projected.xMeters);
+    expect(expected.yMeters).toBeCloseTo(projected.yMeters);
     expect(expected.zMeters).toBe(2.4);
   });
 

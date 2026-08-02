@@ -27,6 +27,7 @@
     "react-native": "0.86.2"
   },
   "dependencies": {
+    "@eight2five/drill-schema": "*",
     "@expo/html-elements": "^0.12.5",
     "@gluestack-ui/core": "^5.0.15",
     "@gluestack-ui/utils": "^5.0.6",
@@ -118,6 +119,10 @@
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
     ],
+    "moduleNameMapper": {
+      "^@eight2five/drill-schema$": "<rootDir>/../drill-schema/src/index.ts",
+      "^@eight2five/drill-schema/(.*)$": "<rootDir>/../drill-schema/src/$1"
+    },
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ]

@@ -1,20 +1,22 @@
 import {
+  drillGridToPhysicalPoint,
+  getFieldPreset,
+  physicalPointToDrillGrid,
+  type DrillGridPoint,
+} from "@eight2five/drill-schema";
+
+import {
   assertFiniteFieldPoint,
   type FieldLateralReference,
   type FieldPoint,
 } from "./types";
-import {
-  metersToStandardSteps,
-  metersToYards,
-  standardStepsToMeters,
-  yardsToMeters,
-} from "./units";
 import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   type StandardHighSchoolFieldTemplate,
 } from "./template";
 
 const EPSILON = 1e-9;
+const NFHS_FIELD = getFieldPreset("football-nfhs");
 
 export type MarchingSideReference = 1 | 2 | "center";
 export type MarchingSideRelation = "on" | "inside" | "outside";
@@ -58,8 +60,7 @@ export function formatMarchingSteps(steps: number): string {
   assertFinite(steps, "Steps");
   const quarterSteps = Math.round(steps * 4) / 4;
   const cleaned = Math.abs(quarterSteps) < EPSILON ? 0 : quarterSteps;
-  const text = Number(cleaned.toFixed(2)).toString();
-  return text;
+  return Number(cleaned.toFixed(2)).toString();
 }
 
 function stepWord(steps: number, uppercase = true): string {
@@ -73,21 +74,29 @@ function yardLineText(yardLine: number): string {
 }
 
 interface XReference {
-  readonly xYards: number;
+  readonly xSteps: number;
   readonly side: MarchingSideReference;
   readonly yardLine: number;
 }
 
 function xReferences(): readonly XReference[] {
   return Array.from({ length: 21 }, (_, index) => {
-    const xYards = index * 5;
-    if (xYards < 50) {
-      return { xYards, side: 1, yardLine: xYards };
+    const xSteps = -80 + index * 8;
+    if (xSteps < 0) {
+      return {
+        xSteps,
+        side: 1,
+        yardLine: 50 - (Math.abs(xSteps) / 8) * 5,
+      };
     }
-    if (xYards > 50) {
-      return { xYards, side: 2, yardLine: 100 - xYards };
+    if (xSteps > 0) {
+      return {
+        xSteps,
+        side: 2,
+        yardLine: 50 - (Math.abs(xSteps) / 8) * 5,
+      };
     }
-    return { xYards, side: "center", yardLine: 50 };
+    return { xSteps: 0, side: "center", yardLine: 50 };
   });
 }
 
@@ -95,38 +104,17 @@ const X_REFERENCES = xReferences();
 
 interface LateralReference {
   readonly reference: FieldLateralReference;
-  readonly yMeters: number;
+  readonly ySteps: number;
 }
 
-function lateralReferences(
-  template: StandardHighSchoolFieldTemplate,
-): readonly LateralReference[] {
-  return [
-    {
-      reference: "front-sideline",
-      yMeters: template.bounds.minYMeters,
-    },
-    {
-      reference: "front-hash",
-      yMeters: template.frontHashLine.coordinateMeters,
-    },
-    {
-      reference: "back-hash",
-      yMeters: template.backHashLine.coordinateMeters,
-    },
-    {
-      reference: "back-sideline",
-      yMeters: template.bounds.maxYMeters,
-    },
-  ];
-}
+const LATERAL_REFERENCES: readonly LateralReference[] = Object.freeze([
+  { reference: "front-sideline", ySteps: 0 },
+  { reference: "front-hash", ySteps: 28 },
+  { reference: "back-hash", ySteps: 56 },
+  { reference: "back-sideline", ySteps: 84 },
+]);
 
-/**
- * Selects a nearest reference deterministically. Exact halfway ties choose
- * the candidate closer to the field center. The two HS hashes are symmetric;
- * when they tie at the exact lateral center, front hash wins as the stable
- * front-to-back ordering. This avoids display flicker at reference midpoints.
- */
+/** Deterministic nearest-reference selection avoids display flicker at ties. */
 function nearestReference<T extends { readonly coordinate: number }>(
   value: number,
   references: readonly T[],
@@ -172,21 +160,16 @@ function frontBackRelation(offsetYSteps: number): MarchingFrontBackRelation {
   return offsetYSteps < 0 ? "in-front-of" : "behind";
 }
 
-function makeSideCoordinate(xMeters: number): MarchingSideCoordinate {
-  const xYards = metersToYards(xMeters);
+function makeSideCoordinate(xSteps: number): MarchingSideCoordinate {
   const references = X_REFERENCES.map((reference) => ({
     ...reference,
-    coordinate: reference.xYards,
+    coordinate: reference.xSteps,
   }));
-  const nearest = nearestReference(xYards, references, 50);
-  const offsetXSteps = metersToStandardSteps(
-    xMeters - yardsToMeters(nearest.xYards),
-  );
-  // Exactly on the 50 has no side. Any offset from the 50 is presented on the
-  // point's actual side and uses the normal inside/outside vocabulary.
+  const nearest = nearestReference(xSteps, references, 0);
+  const offsetXSteps = xSteps - nearest.xSteps;
   const side =
     nearest.side === "center" && Math.abs(offsetXSteps) > EPSILON
-      ? xMeters < yardsToMeters(50)
+      ? xSteps < 0
         ? 1
         : 2
       : nearest.side;
@@ -198,20 +181,13 @@ function makeSideCoordinate(xMeters: number): MarchingSideCoordinate {
   });
 }
 
-function makeFrontBackCoordinate(
-  yMeters: number,
-  template: StandardHighSchoolFieldTemplate,
-): MarchingFrontBackCoordinate {
-  const references = lateralReferences(template).map((reference) => ({
+function makeFrontBackCoordinate(ySteps: number): MarchingFrontBackCoordinate {
+  const references = LATERAL_REFERENCES.map((reference) => ({
     ...reference,
-    coordinate: reference.yMeters,
+    coordinate: reference.ySteps,
   }));
-  const nearest = nearestReference(
-    yMeters,
-    references,
-    template.bounds.maxYMeters / 2,
-  );
-  const offsetYSteps = metersToStandardSteps(yMeters - nearest.yMeters);
+  const nearest = nearestReference(ySteps, references, 42);
+  const offsetYSteps = ySteps - nearest.ySteps;
   return Object.freeze({
     reference: nearest.reference,
     offsetSteps: Math.abs(offsetYSteps),
@@ -219,37 +195,41 @@ function makeFrontBackCoordinate(
   });
 }
 
-function getOutOfBounds(
-  point: FieldPoint,
-  template: StandardHighSchoolFieldTemplate,
+function getGridOutOfBounds(
+  point: DrillGridPoint,
 ): readonly ("goal-to-goal" | "front-back")[] | undefined {
   const outOfBounds: ("goal-to-goal" | "front-back")[] = [];
-  if (
-    point.xMeters < template.bounds.minXMeters - EPSILON ||
-    point.xMeters > template.bounds.maxXMeters + EPSILON
-  ) {
+  if (point.xSteps < -80 - EPSILON || point.xSteps > 80 + EPSILON) {
     outOfBounds.push("goal-to-goal");
   }
-  if (
-    point.yMeters < template.bounds.minYMeters - EPSILON ||
-    point.yMeters > template.bounds.maxYMeters + EPSILON
-  ) {
+  if (point.ySteps < -EPSILON || point.ySteps > 84 + EPSILON) {
     outOfBounds.push("front-back");
   }
   return outOfBounds.length > 0 ? Object.freeze(outOfBounds) : undefined;
 }
 
-export function fieldPointToMarchingCoordinate(
-  point: FieldPoint,
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+export function drillGridPointToMarchingCoordinate(
+  point: DrillGridPoint,
 ): MarchingCoordinate {
-  assertFiniteFieldPoint(point);
-  const outOfBounds = getOutOfBounds(point, template);
+  if (!Number.isFinite(point.xSteps) || !Number.isFinite(point.ySteps)) {
+    throw new RangeError("Drill grid coordinates must be finite.");
+  }
+  const outOfBounds = getGridOutOfBounds(point);
   return Object.freeze({
-    side: makeSideCoordinate(point.xMeters),
-    frontBack: makeFrontBackCoordinate(point.yMeters, template),
+    side: makeSideCoordinate(point.xSteps),
+    frontBack: makeFrontBackCoordinate(point.ySteps),
     ...(outOfBounds ? { outOfBounds } : {}),
   });
+}
+
+export function fieldPointToMarchingCoordinate(
+  point: FieldPoint,
+  _template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+): MarchingCoordinate {
+  assertFiniteFieldPoint(point);
+  return drillGridPointToMarchingCoordinate(
+    physicalPointToDrillGrid(point, NFHS_FIELD),
+  );
 }
 
 function assertYardLine(yardLine: number): void {
@@ -269,94 +249,117 @@ function assertOffset(offsetSteps: number, name: string): void {
   }
 }
 
-function sideCoordinateToX(coordinate: MarchingSideCoordinate): number {
+function sideCoordinateToXSteps(coordinate: MarchingSideCoordinate): number {
   assertYardLine(coordinate.yardLine);
   assertOffset(coordinate.offsetSteps, "Marching side offsetSteps");
   if (coordinate.relation === "on" && coordinate.offsetSteps > EPSILON) {
     throw new RangeError('An "on" marching coordinate must have zero offset.');
   }
-  if (
-    coordinate.yardLine === 50 &&
-    ((coordinate.side === "center" && coordinate.relation !== "on") ||
-      (coordinate.side !== "center" && coordinate.relation !== "outside"))
-  ) {
-    throw new RangeError(
-      "The 50-yard line uses center/on or Side 1/2 outside coordinates.",
-    );
+
+  if (coordinate.yardLine === 50) {
+    if (coordinate.side === "center") {
+      if (coordinate.relation !== "on" || coordinate.offsetSteps > EPSILON) {
+        throw new RangeError('The center 50-yard reference must be exactly "on".');
+      }
+      return 0;
+    }
+    if (coordinate.relation === "on") return 0;
+    if (coordinate.relation !== "outside") {
+      throw new RangeError(
+        "An offset from the 50-yard line must be outside on Side 1 or Side 2.",
+      );
+    }
+    return coordinate.side === 1
+      ? -coordinate.offsetSteps
+      : coordinate.offsetSteps;
   }
-  const lineX =
-    coordinate.side === "center"
-      ? yardsToMeters(50)
-      : yardsToMeters(
-          coordinate.side === 1
-            ? coordinate.yardLine
-            : 100 - coordinate.yardLine,
-        );
+
   if (coordinate.side === "center") {
-    if (coordinate.relation === "on") return lineX;
-    throw new RangeError('A center marching reference must use "on".');
+    throw new RangeError("Only the 50-yard line can use the center side reference.");
   }
-  if (coordinate.relation === "on") return lineX;
+
+  const baseMagnitude = ((50 - coordinate.yardLine) / 5) * 8;
+  const base = coordinate.side === 1 ? -baseMagnitude : baseMagnitude;
+  if (coordinate.relation === "on") return base;
   if (coordinate.relation !== "inside" && coordinate.relation !== "outside") {
     throw new RangeError(
       'A Side 1/2 marching reference must use "on", "inside", or "outside".',
     );
   }
-  const towardSide2 =
-    coordinate.side === 1
-      ? coordinate.relation === "inside"
-      : coordinate.relation === "outside";
-  const offset = standardStepsToMeters(coordinate.offsetSteps);
-  return towardSide2 ? lineX + offset : lineX - offset;
+  const towardCenter = coordinate.relation === "inside";
+  if (coordinate.side === 1) {
+    return base + (towardCenter ? coordinate.offsetSteps : -coordinate.offsetSteps);
+  }
+  return base + (towardCenter ? -coordinate.offsetSteps : coordinate.offsetSteps);
 }
 
-function frontBackCoordinateToY(
+function frontBackCoordinateToYSteps(
   coordinate: MarchingFrontBackCoordinate,
-  template: StandardHighSchoolFieldTemplate,
 ): number {
   assertOffset(coordinate.offsetSteps, "Marching front/back offsetSteps");
   if (coordinate.relation === "on" && coordinate.offsetSteps > EPSILON) {
     throw new RangeError('An "on" marching coordinate must have zero offset.');
   }
   const yByReference: Record<FieldLateralReference, number> = {
-    "front-sideline": template.bounds.minYMeters,
-    "front-hash": template.frontHashLine.coordinateMeters,
-    "back-hash": template.backHashLine.coordinateMeters,
-    "back-sideline": template.bounds.maxYMeters,
+    "front-sideline": 0,
+    "front-hash": 28,
+    "back-hash": 56,
+    "back-sideline": 84,
   };
   const lineY = yByReference[coordinate.reference];
-  if (lineY === undefined) {
-    throw new RangeError(
-      `Unknown marching lateral reference: ${String(coordinate.reference)}.`,
-    );
-  }
   if (coordinate.relation === "on") return lineY;
   if (coordinate.relation === "in-front-of") {
-    return lineY - standardStepsToMeters(coordinate.offsetSteps);
+    return lineY - coordinate.offsetSteps;
   }
   if (coordinate.relation === "behind") {
-    return lineY + standardStepsToMeters(coordinate.offsetSteps);
+    return lineY + coordinate.offsetSteps;
   }
   throw new RangeError(
     'A marching front/back reference must use "on", "in-front-of", or "behind".',
   );
 }
 
-export function marchingCoordinateToFieldPoint(
+export function marchingCoordinateToDrillGridPoint(
   coordinate: MarchingCoordinate,
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
-): FieldPoint {
+): DrillGridPoint {
   if (!coordinate || !coordinate.side || !coordinate.frontBack) {
     throw new TypeError(
       "A marching coordinate requires side and frontBack values.",
     );
   }
+  return Object.freeze({
+    xSteps: sideCoordinateToXSteps(coordinate.side),
+    ySteps: frontBackCoordinateToYSteps(coordinate.frontBack),
+  });
+}
+
+export function marchingCoordinateToFieldPoint(
+  coordinate: MarchingCoordinate,
+  _template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+): FieldPoint {
+  const physical = drillGridToPhysicalPoint(
+    marchingCoordinateToDrillGridPoint(coordinate),
+    NFHS_FIELD,
+  );
   const point = {
-    xMeters: sideCoordinateToX(coordinate.side),
-    yMeters: frontBackCoordinateToY(coordinate.frontBack, template),
+    xMeters: physical.xMeters,
+    yMeters: physical.yMeters,
   };
   assertFiniteFieldPoint(point, "Converted field point");
   return Object.freeze(point);
+}
+
+export function drillGridPointToFieldPoint(point: DrillGridPoint): FieldPoint {
+  const physical = drillGridToPhysicalPoint(point, NFHS_FIELD);
+  return Object.freeze({
+    xMeters: physical.xMeters,
+    yMeters: physical.yMeters,
+  });
+}
+
+export function fieldPointToDrillGridPoint(point: FieldPoint): DrillGridPoint {
+  assertFiniteFieldPoint(point);
+  return physicalPointToDrillGrid(point, NFHS_FIELD);
 }
 
 export const fieldPointToMarching = fieldPointToMarchingCoordinate;
@@ -414,13 +417,17 @@ export function formatMarchingFrontBack(
 export const formatMarchingFrontBackCoordinate = formatMarchingFrontBack;
 
 export function formatMarchingCoordinate(
-  coordinateOrPoint: MarchingCoordinate | FieldPoint,
+  coordinateOrPoint: MarchingCoordinate | FieldPoint | DrillGridPoint,
   template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
 ): string {
-  const coordinate =
-    "side" in coordinateOrPoint
-      ? coordinateOrPoint
-      : fieldPointToMarchingCoordinate(coordinateOrPoint, template);
+  let coordinate: MarchingCoordinate;
+  if ("side" in coordinateOrPoint) {
+    coordinate = coordinateOrPoint;
+  } else if ("xSteps" in coordinateOrPoint) {
+    coordinate = drillGridPointToMarchingCoordinate(coordinateOrPoint);
+  } else {
+    coordinate = fieldPointToMarchingCoordinate(coordinateOrPoint, template);
+  }
   const parts = [
     formatSideCoordinate(coordinate.side),
     formatFrontBackCoordinate(coordinate.frontBack),

@@ -82,6 +82,8 @@ export const MAX_ANCHOR_HEIGHT_METERS = 100;
 
 const template = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
 const bounds = template.bounds;
+const centerXMeters = (bounds.minXMeters + bounds.maxXMeters) / 2;
+const centerYMeters = (bounds.minYMeters + bounds.maxYMeters) / 2;
 const point = (xMeters: number, yMeters: number): FieldPoint => ({
   xMeters,
   yMeters,
@@ -90,23 +92,17 @@ const point = (xMeters: number, yMeters: number): FieldPoint => ({
 export const ANCHOR_POSITION_REFERENCE_POINTS: Readonly<
   Record<AnchorPositionReference, FieldPoint>
 > = Object.freeze({
-  "center-field": point(bounds.maxXMeters / 2, bounds.maxYMeters / 2),
-  "center-front-sideline": point(bounds.maxXMeters / 2, bounds.minYMeters),
-  "center-back-sideline": point(bounds.maxXMeters / 2, bounds.maxYMeters),
+  "center-field": point(centerXMeters, centerYMeters),
+  "center-front-sideline": point(centerXMeters, bounds.minYMeters),
+  "center-back-sideline": point(centerXMeters, bounds.maxYMeters),
   "side-1-front-corner": point(bounds.minXMeters, bounds.minYMeters),
   "side-1-back-corner": point(bounds.minXMeters, bounds.maxYMeters),
   "side-2-front-corner": point(bounds.maxXMeters, bounds.minYMeters),
   "side-2-back-corner": point(bounds.maxXMeters, bounds.maxYMeters),
-  "side-1-goal-line-center": point(bounds.minXMeters, bounds.maxYMeters / 2),
-  "side-2-goal-line-center": point(bounds.maxXMeters, bounds.maxYMeters / 2),
-  "front-hash-center": point(
-    bounds.maxXMeters / 2,
-    template.frontHashLine.coordinateMeters,
-  ),
-  "back-hash-center": point(
-    bounds.maxXMeters / 2,
-    template.backHashLine.coordinateMeters,
-  ),
+  "side-1-goal-line-center": point(bounds.minXMeters, centerYMeters),
+  "side-2-goal-line-center": point(bounds.maxXMeters, centerYMeters),
+  "front-hash-center": point(centerXMeters, template.frontHashLine.coordinateMeters),
+  "back-hash-center": point(centerXMeters, template.backHashLine.coordinateMeters),
 });
 
 export function getAnchorPositionReferencePoint(

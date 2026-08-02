@@ -1,91 +1,67 @@
 import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  drillGridPointToFieldPoint,
   fieldPointToMarchingCoordinate,
   formatMarchingCoordinate,
   formatMarchingFrontBack,
   formatMarchingSide,
+  marchingCoordinateToDrillGridPoint,
   marchingCoordinateToFieldPoint,
   standardStepsToMeters,
-  yardsToMeters,
 } from "../index";
 
 const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
 
+function gridPoint(xSteps: number, ySteps: number) {
+  return drillGridPointToFieldPoint({ xSteps, ySteps });
+}
+
 describe("marching coordinate conversion", () => {
-  test("formats exact side examples", () => {
+  test("formats exact side examples in the centered field convention", () => {
     expect(
       formatMarchingSide(
-        fieldPointToMarchingCoordinate({
-          xMeters: yardsToMeters(60),
-          yMeters: field.bounds.minYMeters,
-        }).side,
+        fieldPointToMarchingCoordinate(gridPoint(16, 0)).side,
       ),
     ).toBe("Side 2: On 40 yd ln");
     expect(
       formatMarchingSide(
-        fieldPointToMarchingCoordinate({
-          xMeters: yardsToMeters(35) + standardStepsToMeters(2),
-          yMeters: field.bounds.minYMeters,
-        }).side,
+        fieldPointToMarchingCoordinate(gridPoint(-24 + 2, 0)).side,
       ),
     ).toBe("Side 1: 2 Steps inside 35 yd ln");
     expect(
       formatMarchingSide(
-        fieldPointToMarchingCoordinate({
-          xMeters: yardsToMeters(60) + standardStepsToMeters(1.25),
-          yMeters: field.bounds.minYMeters,
-        }).side,
+        fieldPointToMarchingCoordinate(gridPoint(16 + 1.25, 0)).side,
       ),
     ).toBe("Side 2: 1.25 Steps outside 40 yd ln");
     expect(
-      formatMarchingSide(
-        fieldPointToMarchingCoordinate({
-          xMeters: yardsToMeters(50),
-          yMeters: field.bounds.minYMeters,
-        }).side,
-      ),
+      formatMarchingSide(fieldPointToMarchingCoordinate(gridPoint(0, 0)).side),
     ).toBe("On 50 yd ln");
   });
 
-  test("formats exact front/back examples", () => {
+  test("uses the conventional 0/28/56/84 NFHS marching grid", () => {
     const examples = [
-      [field.bounds.minYMeters, "On Front Sideline"],
-      [standardStepsToMeters(8), "8 Steps behind Front Sideline"],
-      [
-        field.frontHashLine.coordinateMeters - standardStepsToMeters(12),
-        "12 Steps in front of HS FH",
-      ],
-      [field.frontHashLine.coordinateMeters, "On HS FH"],
-      [
-        field.frontHashLine.coordinateMeters + standardStepsToMeters(4),
-        "4 Steps behind HS FH",
-      ],
-      [
-        field.backHashLine.coordinateMeters - standardStepsToMeters(3.5),
-        "3.5 Steps in front of HS BH",
-      ],
-      [field.bounds.maxYMeters, "On Back Sideline"],
+      [0, "On Front Sideline"],
+      [8, "8 Steps behind Front Sideline"],
+      [16, "12 Steps in front of HS FH"],
+      [28, "On HS FH"],
+      [32, "4 Steps behind HS FH"],
+      [52.5, "3.5 Steps in front of HS BH"],
+      [84, "On Back Sideline"],
     ] as const;
 
-    for (const [yMeters, expected] of examples) {
+    for (const [ySteps, expected] of examples) {
       expect(
         formatMarchingFrontBack(
-          fieldPointToMarchingCoordinate({
-            xMeters: yardsToMeters(50),
-            yMeters,
-          }).frontBack,
+          fieldPointToMarchingCoordinate(gridPoint(0, ySteps)).frontBack,
         ),
       ).toBe(expected);
     }
   });
 
   test("keeps canonical fractional values while formatting quarter steps", () => {
-    const coordinate = fieldPointToMarchingCoordinate({
-      xMeters: yardsToMeters(35) + standardStepsToMeters(1.249999999),
-      yMeters:
-        field.frontHashLine.coordinateMeters +
-        standardStepsToMeters(2.500000001),
-    });
+    const coordinate = fieldPointToMarchingCoordinate(
+      gridPoint(-24 + 1.249999999, 28 + 2.500000001),
+    );
     expect(coordinate.side.offsetSteps).toBeCloseTo(1.249999999);
     expect(formatMarchingSide(coordinate.side)).toBe(
       "Side 1: 1.25 Steps inside 35 yd ln",
@@ -96,60 +72,45 @@ describe("marching coordinate conversion", () => {
   });
 
   test("uses centerward references for exact halfway ties", () => {
-    const sideTie = fieldPointToMarchingCoordinate({
-      xMeters: yardsToMeters(32.5),
-      yMeters: field.bounds.minYMeters,
-    });
+    const sideTie = fieldPointToMarchingCoordinate(gridPoint(-28, 0));
     expect(sideTie.side).toMatchObject({
       side: 1,
       yardLine: 35,
       relation: "outside",
     });
 
-    const lateralTie = fieldPointToMarchingCoordinate({
-      xMeters: yardsToMeters(50),
-      yMeters:
-        (field.frontHashLine.coordinateMeters +
-          field.backHashLine.coordinateMeters) /
-        2,
-    });
+    const lateralTie = fieldPointToMarchingCoordinate(gridPoint(0, 42));
     expect(lateralTie.frontBack.reference).toBe("front-hash");
   });
 
   test("uses a side and outside terminology when the 50 is nearest", () => {
-    const coordinate = fieldPointToMarchingCoordinate({
-      xMeters: yardsToMeters(50) - standardStepsToMeters(1.5),
-      yMeters: 0,
-    });
+    const coordinate = fieldPointToMarchingCoordinate(gridPoint(-1.5, 0));
     expect(formatMarchingSide(coordinate.side)).toBe(
       "Side 1: 1.5 Steps outside 50 yd ln",
     );
+    expect(marchingCoordinateToDrillGridPoint(coordinate).xSteps).toBeCloseTo(
+      -1.5,
+    );
     expect(marchingCoordinateToFieldPoint(coordinate).xMeters).toBeCloseTo(
-      yardsToMeters(50) - standardStepsToMeters(1.5),
+      -standardStepsToMeters(1.5),
     );
   });
 
   test("marks out-of-bounds points explicitly while retaining nearest references", () => {
-    const coordinate = fieldPointToMarchingCoordinate({
-      xMeters: -standardStepsToMeters(2),
-      yMeters: field.bounds.maxYMeters + standardStepsToMeters(1.25),
-    });
+    const coordinate = fieldPointToMarchingCoordinate(gridPoint(-82, 85.25));
     expect(formatMarchingCoordinate(coordinate)).toBe(
       "Out of Bounds — Side 1: 2 Steps outside Goal Line; 1.25 Steps behind Back Sideline",
     );
     expect(coordinate.outOfBounds).toEqual(["goal-to-goal", "front-back"]);
   });
 
-  test("round trips ordinary finite points without display quantization", () => {
+  test("round trips ordinary finite physical points without display quantization", () => {
     const points = [
-      { xMeters: yardsToMeters(0), yMeters: 0 },
-      { xMeters: yardsToMeters(12.345678), yMeters: 1.234567 },
-      {
-        xMeters: yardsToMeters(50),
-        yMeters: field.frontHashLine.coordinateMeters,
-      },
-      { xMeters: yardsToMeters(87.654321), yMeters: 42.123456 },
-      { xMeters: field.goalToGoalMeters, yMeters: field.widthMeters },
+      gridPoint(-80, 0),
+      gridPoint(-41.234567, 2.345678),
+      gridPoint(0, 28),
+      gridPoint(52.654321, 71.123456),
+      gridPoint(80, 84),
     ];
     for (const point of points) {
       const roundTrip = marchingCoordinateToFieldPoint(
@@ -158,6 +119,16 @@ describe("marching coordinate conversion", () => {
       expect(roundTrip.xMeters).toBeCloseTo(point.xMeters, 10);
       expect(roundTrip.yMeters).toBeCloseTo(point.yMeters, 10);
     }
+  });
+
+  test("keeps exact physical NFHS hash geometry separate from the marching grid", () => {
+    const frontHash = gridPoint(0, 28);
+    expect(frontHash.xMeters).toBeCloseTo(0);
+    expect(frontHash.yMeters).toBeCloseTo(field.frontHashLine.coordinateMeters);
+    expect(field.frontHashLine.coordinateMeters).not.toBeCloseTo(
+      standardStepsToMeters(28),
+      4,
+    );
   });
 
   test("rejects non-finite points", () => {
