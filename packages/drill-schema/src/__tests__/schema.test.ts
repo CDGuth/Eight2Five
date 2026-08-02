@@ -117,6 +117,16 @@ describe("drill schema", () => {
     ).toThrow(/requires a primary set/);
   });
 
+  it("accepts source symbols beyond A-Z", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entityRules: { bySymbol: { $: { section: "Guard" } } },
+        entities: [{ ...fixture.entities[0], symbol: "$", label: "$1" }],
+      }),
+    ).not.toThrow();
+  });
+
   it("resolves appearance rules from broad to specific", () => {
     const entity = resolveDrillEntity(fixture.entities[0], fixture.entityRules);
     expect(entity.instrument).toBe("Baritone");

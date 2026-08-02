@@ -204,7 +204,8 @@
         },
         "symbol": {
           "type": "string",
-          "pattern": "^[A-Z]$"
+          "minLength": 1,
+          "maxLength": 16
         },
         "label": {
           "type": "string",
@@ -251,7 +252,8 @@
         "bySymbol": {
           "type": "object",
           "propertyNames": {
-            "pattern": "^[A-Z]$"
+            "minLength": 1,
+            "maxLength": 16
           },
           "additionalProperties": {
             "$ref": "#/$defs/entityRuleValues"

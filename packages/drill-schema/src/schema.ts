@@ -15,7 +15,7 @@ const safeNonNegativeInteger = z
 const finiteNumber = z.number().finite();
 const nonEmptyText = z.string().trim().min(1);
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
-const symbol = z.string().regex(/^[A-Z]$/);
+const symbol = z.string().trim().min(1).max(16);
 const lucideIcon = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 export const measureRangeSchema = z
@@ -111,11 +111,11 @@ export const entityRulesSchema = z
   .strict()
   .superRefine((rules, context) => {
     for (const key of Object.keys(rules.bySymbol ?? {})) {
-      if (!/^[A-Z]$/.test(key)) {
+      if (key.trim().length === 0 || key.length > 16) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["bySymbol", key],
-          message: "Symbol rule keys must be one uppercase A-Z letter.",
+          message: "Symbol rule keys must be 1-16 non-whitespace characters.",
         });
       }
     }
