@@ -2,8 +2,10 @@ import {
   DRILL_SCHEMA_URL,
   DRILL_SCHEMA_VERSION,
   formatSetName,
+  getGridReference,
   parseDrillDocument,
   type DrillDocument,
+  type FieldDefinition,
   type DrillEntity,
   type DrillPosition,
   type DrillSet,
@@ -23,6 +25,10 @@ import type {
 
 const IMPORTER_NAME = "@eight2five/drill-importers/coordinate-sheet";
 const IMPORTER_VERSION = "1";
+const DEFAULT_FIELD: FieldDefinition = {
+  type: "preset",
+  preset: "football-nfhs",
+};
 const LINE_Y_TOLERANCE = 2.5;
 const SHEET_ANCHOR_DEDUPLICATION = 24;
 const HEADER_FIELD_PATTERN =
@@ -64,10 +70,11 @@ export function importCoordinateSheetPages(
 ): CoordinateSheetImportResult {
   const diagnostics: ImportDiagnostic[] = [];
   const sheets: ParsedCoordinateSheet[] = [];
+  const field = options.field ?? DEFAULT_FIELD;
 
   for (const page of pages) {
     for (const slice of splitPageIntoSheets(page)) {
-      const parsed = parseCoordinateSheetSlice(slice);
+      const parsed = parseCoordinateSheetSlice(slice, field);
       diagnostics.push(...parsed.diagnostics);
       if (parsed.sheet) sheets.push(parsed.sheet);
     }
@@ -108,8 +115,11 @@ export function importCoordinateSheetPages(
 
 export function parseCoordinateSheetPage(
   page: ExtractedPdfPage,
+  field: FieldDefinition = DEFAULT_FIELD,
 ): readonly ParsedSheetResult[] {
-  return splitPageIntoSheets(page).map(parseCoordinateSheetSlice);
+  return splitPageIntoSheets(page).map((slice) =>
+    parseCoordinateSheetSlice(slice, field),
+  );
 }
 
 function splitPageIntoSheets(page: ExtractedPdfPage): readonly SheetSlice[] {
@@ -161,7 +171,10 @@ function distinctSortedX(values: readonly number[]): number[] {
   return distinct;
 }
 
-function parseCoordinateSheetSlice(slice: SheetSlice): ParsedSheetResult {
+function parseCoordinateSheetSlice(
+  slice: SheetSlice,
+  field: FieldDefinition,
+): ParsedSheetResult {
   const diagnostics: ImportDiagnostic[] = [];
   const lines = groupTextLines(slice.items);
   const headerIndex = lines.findIndex(isTableHeaderLine);
@@ -199,7 +212,10 @@ function parseCoordinateSheetSlice(slice: SheetSlice): ParsedSheetResult {
   const rows: ParsedCoordinateRow[] = [];
   for (const line of lines.slice(headerIndex + 1)) {
     if (/\bPrinted\s*:/i.test(line.text) || /^Page\s+\d+/i.test(line.text)) continue;
-    const parsed = anchors.length >= 5 ? parsePositionedRow(line, anchors) : parseFlatRow(line.text);
+    const parsed =
+      anchors.length >= 5
+        ? parsePositionedRow(line, anchors, field)
+        : parseFlatRow(line.text, field);
     if (parsed === undefined) continue;
     if (typeof parsed === "string") {
       diagnostics.push({
@@ -351,6 +367,7 @@ function deriveColumnAnchors(header: TextLine): readonly ColumnAnchor[] {
 function parsePositionedRow(
   line: TextLine,
   anchors: readonly ColumnAnchor[],
+  field: FieldDefinition,
 ): ParsedCoordinateRow | string | undefined {
   const columns = bucketLineByColumns(line, anchors);
   const setText = columns.get("set")?.trim() ?? "";
@@ -370,7 +387,7 @@ function parsePositionedRow(
   const frontBackText = columns.get("frontBack")?.trim() ?? "";
   const xSteps = parseSideToSide(sideText);
   if (typeof xSteps === "string") return xSteps;
-  const ySteps = parseFrontBack(frontBackText);
+  const ySteps = parseFrontBack(frontBackText, field);
   if (typeof ySteps === "string") return ySteps;
 
   return {
@@ -406,7 +423,10 @@ function bucketLineByColumns(
 }
 
 /** Fallback for extractors that provide a whole row as one text fragment. */
-function parseFlatRow(text: string): ParsedCoordinateRow | string | undefined {
+function parseFlatRow(
+  text: string,
+  field: FieldDefinition,
+): ParsedCoordinateRow | string | undefined {
   const normalized = text.replace(/\s+/g, " ").trim();
   const setMatch = normalized.match(/^(\d+(?:[A-Z]|\.[0-9]+)?)\s+(.*)$/);
   if (!setMatch) return undefined;
@@ -441,7 +461,7 @@ function parseFlatRow(text: string): ParsedCoordinateRow | string | undefined {
   if (typeof measureRange === "string") return measureRange;
   const xSteps = parseSideToSide(sideText);
   if (typeof xSteps === "string") return xSteps;
-  const ySteps = parseFrontBack(frontBackText);
+  const ySteps = parseFrontBack(frontBackText, field);
   if (typeof ySteps === "string") return ySteps;
   return {
     set,
@@ -522,9 +542,12 @@ export function parseSideToSide(value: string): number | string {
     : base + (towardCenter ? -offset : offset);
 }
 
-export function parseFrontBack(value: string): number | string {
+export function parseFrontBack(
+  value: string,
+  field: FieldDefinition = DEFAULT_FIELD,
+): number | string {
   const normalized = normalizeCoordinateText(value);
-  const reference = parseFrontBackReference(normalized);
+  const reference = parseFrontBackReference(normalized, field);
   if (!reference) return `Could not parse front/back reference "${value}".`;
   const base = reference.ySteps;
   if (/^\s*on\b/i.test(normalized)) return base;
@@ -545,14 +568,26 @@ function normalizeCoordinateText(value: string): string {
 
 function parseFrontBackReference(
   value: string,
+  field: FieldDefinition,
 ): { readonly name: string; readonly ySteps: number } | undefined {
   const references = [
-    { pattern: /\b(?:front|home)\s+(?:side\s*line|sideline)\b/i, name: "front-sideline", ySteps: 0 },
-    { pattern: /\bfront\s+hash\b/i, name: "front-hash", ySteps: 28 },
-    { pattern: /\bback\s+hash\b/i, name: "back-hash", ySteps: 56 },
-    { pattern: /\b(?:back|visitor)\s+(?:side\s*line|sideline)\b/i, name: "back-sideline", ySteps: 84 },
+    {
+      pattern: /\b(?:front|home)\s+(?:side\s*line|sideline)\b/i,
+      id: "front-sideline",
+    },
+    { pattern: /\bfront\s+hash\b/i, id: "front-hash" },
+    { pattern: /\bback\s+hash\b/i, id: "back-hash" },
+    {
+      pattern: /\b(?:back|visitor)\s+(?:side\s*line|sideline)\b/i,
+      id: "back-sideline",
+    },
   ] as const;
-  return references.find((reference) => reference.pattern.test(value));
+  const matched = references.find((reference) => reference.pattern.test(value));
+  if (!matched) return undefined;
+  const gridReference = getGridReference(field, matched.id);
+  return gridReference
+    ? { name: matched.id, ySteps: gridReference.coordinateSteps }
+    : undefined;
 }
 
 function buildDrillDocument(
@@ -680,7 +715,7 @@ function buildDrillDocument(
       title: options.title.trim() || "Imported Drill",
       createdAt: options.createdAt,
     },
-    field: { type: "preset", preset: "football-nfhs" },
+    field: options.field ?? DEFAULT_FIELD,
     entities,
     sets: canonicalSets,
     positions,

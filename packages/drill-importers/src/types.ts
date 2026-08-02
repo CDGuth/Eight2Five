@@ -1,6 +1,7 @@
 import type {
   DrillDocument,
   DrillGridPoint,
+  FieldDefinition,
   MeasureRange,
   SetKind,
 } from "@eight2five/drill-schema";
@@ -61,6 +62,7 @@ export interface CoordinateSheetImportOptions {
   readonly title: string;
   readonly fileName?: string;
   readonly createdAt: string;
+  readonly field?: FieldDefinition;
 }
 
 export interface CoordinateSheetImportResult {

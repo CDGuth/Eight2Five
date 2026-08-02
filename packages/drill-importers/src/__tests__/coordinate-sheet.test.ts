@@ -175,6 +175,12 @@ describe("coordinate sheet importer", () => {
     expect(parseFrontBack("4.0 steps Behind Front Hash (HS)")).toBe(32);
     expect(parseFrontBack("3.5 steps In Front Of Back Hash (HS)")).toBe(52.5);
     expect(parseFrontBack("On Back Sideline")).toBe(84);
+    expect(
+      parseFrontBack("On Front Hash", {
+        type: "preset",
+        preset: "football-ncaa",
+      }),
+    ).toBe(32);
   });
 
   test("keeps set identity and measure ranges structured", () => {
