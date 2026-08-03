@@ -29,19 +29,19 @@ export function FieldPageDialCanvas({
   const ringThickness = diameter * 0.07;
   const ringRadius = diameter / 2 - ringThickness / 2;
   const trackPath = React.useMemo(() => {
-    const path = Skia.Path.Make();
     const inset = ringThickness / 2;
-    path.addArc(
-      Skia.XYWHRect(
-        inset,
-        inset,
-        diameter - ringThickness,
-        diameter - ringThickness,
-      ),
-      startAngleDegrees,
-      usableArcDegrees,
-    );
-    return path;
+    return Skia.PathBuilder.Make()
+      .addArc(
+        Skia.XYWHRect(
+          inset,
+          inset,
+          diameter - ringThickness,
+          diameter - ringThickness,
+        ),
+        startAngleDegrees,
+        usableArcDegrees,
+      )
+      .build();
   }, [diameter, ringThickness, startAngleDegrees, usableArcDegrees]);
   const knobX = useDerivedValue(() => {
     const angle =

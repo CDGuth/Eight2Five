@@ -33,6 +33,7 @@ const config: ExpoConfig = {
   owner: "cdguth",
   name: appName,
   slug: "eight2five",
+  scheme: "eight2five",
   platforms: ["ios", "android"],
   version: "0.0.0",
   // Field is the only route that opts into landscape; Drill and Settings
