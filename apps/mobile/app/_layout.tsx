@@ -1,7 +1,8 @@
 import React from "react";
-import { Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
@@ -48,18 +49,21 @@ export default function MobileRootLayout() {
 
 function MobileNavigation({ backgroundColor }: { backgroundColor: string }) {
   const { settings } = useAppSettingsSnapshot();
+  const colorScheme = useColorScheme();
 
   return (
-    <TabBarVisibilityProvider
-      drillFeaturesEnabled={settings.drillFeaturesEnabled}
-    >
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor },
-        }}
-      />
-      <StatusBar style="auto" />
-    </TabBarVisibilityProvider>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <TabBarVisibilityProvider
+        drillFeaturesEnabled={settings.drillFeaturesEnabled}
+      >
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor },
+          }}
+        />
+        <StatusBar style="auto" />
+      </TabBarVisibilityProvider>
+    </ThemeProvider>
   );
 }
