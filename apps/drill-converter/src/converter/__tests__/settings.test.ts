@@ -15,7 +15,7 @@ import {
 } from "../settings";
 
 const source: DrillDocument = parseDrillDocument({
-  schema: "https://eight2five.app/schema/drill",
+  schema: "https://eight2five.com/schema/drill",
   schemaVersion: "1.0.0",
   metadata: {
     title: "Imported",

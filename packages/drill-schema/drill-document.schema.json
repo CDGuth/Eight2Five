@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eight2five.app/schema/drill/1.0.0",
+  "$id": "https://eight2five.com/schema/drill/1.0.0",
   "title": "Eight2Five Drill Document",
   "type": "object",
   "additionalProperties": false,
@@ -15,7 +15,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "https://eight2five.app/schema/drill"
+      "const": "https://eight2five.com/schema/drill"
     },
     "schemaVersion": {
       "const": "1.0.0"

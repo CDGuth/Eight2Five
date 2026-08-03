@@ -11,7 +11,7 @@ import {
 } from "..";
 
 const fixture: DrillDocument = {
-  schema: "https://eight2five.app/schema/drill",
+  schema: "https://eight2five.com/schema/drill",
   schemaVersion: "1.0.0",
   metadata: {
     title: "Part 4",
