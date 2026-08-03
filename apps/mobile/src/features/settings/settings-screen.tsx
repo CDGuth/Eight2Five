@@ -4,12 +4,14 @@ import {
   Code2,
   Eye,
   ListChecks,
+  Navigation,
   Radio,
-  SlidersHorizontal,
+  Route,
 } from "lucide-react-native";
 import type {
   AppSettingsUpdate,
   FieldPerspective,
+  TransitionMetricMode,
 } from "@eight2five/mobile/settings";
 
 import { useTabBarVisibility } from "../../navigation/tab-bar-visibility-context";
@@ -33,6 +35,11 @@ import {
 const PERSPECTIVE_CHOICES = [
   { label: "Director", value: "director" },
   { label: "Performer", value: "performer" },
+] as const;
+
+const TRANSITION_CHOICES = [
+  { label: "Step Size", value: "step-size" },
+  { label: "Crossing Counts", value: "crossing-counts" },
 ] as const;
 
 export function SettingsScreen() {
@@ -116,13 +123,34 @@ export function SettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Application">
-        <SettingsNavigationRow
-          icon={SlidersHorizontal}
-          title="Advanced Settings"
-          onPress={() => router.push("/(tabs)/settings/advanced")}
-          testID="advanced-settings-link"
+      <SettingsSection title="Transitions">
+        <SettingsSelectRow<TransitionMetricMode>
+          icon={Route}
+          title="Transition metric"
+          description="Show Step Size or yard-line crossing counts."
+          value={settings.transitionMetricMode}
+          choices={TRANSITION_CHOICES}
+          onChange={(transitionMetricMode) =>
+            void update({ transitionMetricMode })
+          }
+          disabled={disabled}
+          testID="transition-metric-setting"
         />
+      </SettingsSection>
+
+      <SettingsSection title="Guidance">
+        <SettingsSwitchRow
+          icon={Navigation}
+          title="Field guidance"
+          description="Show field-relative movement guidance to the target."
+          value={settings.guidanceEnabled}
+          onChange={(guidanceEnabled) => void update({ guidanceEnabled })}
+          disabled={disabled}
+          testID="guidance-enabled-setting"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Application">
         <SettingsNavigationRow
           icon={Code2}
           title="Developer Settings"

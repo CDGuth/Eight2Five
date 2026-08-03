@@ -18,7 +18,6 @@ export default function SettingsLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />
-      <Stack.Screen name="advanced" options={{ title: "Advanced Settings" }} />
       <Stack.Screen name="tag" options={{ title: "PANS Tag" }} />
       <Stack.Screen
         name="developer"
