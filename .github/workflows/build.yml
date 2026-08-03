@@ -239,7 +239,6 @@ jobs:
         working-directory: ${{ steps.resolve.outputs.app_dir }}
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EXPO_APPLE_TEAM_ID: ${{ vars.EXPO_APPLE_TEAM_ID }}
           EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ steps.resolve.outputs.artifact_dir }}
         shell: bash
