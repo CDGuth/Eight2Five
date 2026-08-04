@@ -57,7 +57,7 @@ export function TabBarVisibilityProvider({
       if (configuredDrillFeatures.current === enabled) return;
 
       configuredDrillFeatures.current = enabled;
-      router.replace("/(tabs)/field");
+      router.replace("/(tabs)/settings");
       dispatch({ type: "drill-features-reconfigured", enabled });
     },
     [router],
