@@ -9,6 +9,7 @@ import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-prov
 import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { TabBarVisibilityProvider } from "../src/navigation/tab-bar-visibility-context";
+import { useMobileOrientationLock } from "../src/navigation/use-mobile-orientation-lock";
 import {
   AppSettingsProvider,
   useAppSettingsSnapshot,
@@ -48,6 +49,7 @@ export default function MobileRootLayout() {
 }
 
 function MobileNavigation({ backgroundColor }: { backgroundColor: string }) {
+  useMobileOrientationLock();
   const { settings } = useAppSettingsSnapshot();
   const colorScheme = useColorScheme();
 
