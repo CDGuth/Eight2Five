@@ -12,11 +12,13 @@ export type EntityIcon =
   | "hexagon"
   | "cross";
 
-export type FieldPresetId =
-  | "football-nfhs"
-  | "football-ncaa"
-  | "football-texas-uil"
-  | "football-nfl";
+export const FIELD_PRESET_IDS = Object.freeze([
+  "football-nfhs",
+  "football-ncaa",
+  "football-texas-uil",
+  "football-nfl",
+] as const);
+export type FieldPresetId = (typeof FIELD_PRESET_IDS)[number];
 
 export interface DrillMetadata {
   readonly title: string;

@@ -1,3 +1,4 @@
+import { FIELD_PRESET_IDS, type FieldPresetId } from "@eight2five/drill-schema";
 import type { SQLiteDatabase } from "expo-sqlite";
 import { SqliteDrillRepository } from "../SqliteDrillRepository";
 
@@ -61,6 +62,24 @@ describe("SqliteDrillRepository", () => {
       "set-2",
     ]);
   });
+
+  test.each(FIELD_PRESET_IDS)(
+    "round-trips the %s field preset",
+    async (fieldPreset) => {
+      const fake = new DrillFakeDatabase();
+      const repository = new SqliteDrillRepository(fake.database, {
+        idFactory: () => `drill-${fieldPreset}`,
+        timeFactory: () => 1,
+      });
+
+      await expect(
+        repository.createDrill({ name: fieldPreset, fieldPreset }),
+      ).resolves.toMatchObject({ fieldPreset });
+      await expect(repository.listDrills()).resolves.toEqual([
+        expect.objectContaining({ fieldPreset }),
+      ]);
+    },
+  );
 
   test("inserts, reorders, updates, and deletes sets through transactions", async () => {
     const fake = new DrillFakeDatabase();
@@ -238,7 +257,7 @@ describe("SqliteDrillRepository", () => {
 type FakeDrillRow = {
   id: string;
   name: string;
-  field_preset: "football-nfhs";
+  field_preset: FieldPresetId;
   created_at: number;
   updated_at: number;
 };
@@ -256,9 +275,6 @@ type FakeSetRow = {
   x_steps: number;
   y_steps: number;
   facing_degrees: number | null;
-  label: string;
-  x_meters: number;
-  y_meters: number;
 };
 
 class DrillFakeDatabase {
@@ -268,11 +284,13 @@ class DrillFakeDatabase {
     drill_features_enabled: 1,
     drill_terminology: "sets",
     field_perspective: "director",
+    default_field_preset: "football-nfhs",
     transition_metric_mode: "step-size",
     guidance_enabled: 1,
     developer_mode_enabled: 0,
     show_cached_anchor_geometry: 0,
     show_comfortable_anchor_range: 0,
+    show_perimeter_step_grid: 0,
     comfortable_anchor_range_meters: 20,
     active_drill_id: null as string | null,
     selected_drill_page_id: null as string | null,
@@ -330,17 +348,17 @@ class DrillFakeDatabase {
       const row = this.drills.get(String(params[0]));
       return row ? { ...row } : null;
     }
-    if (sql.includes("SELECT id FROM drill_pages") && sql.includes("LIMIT 1")) {
+    if (sql.includes("SELECT id FROM drill_sets") && sql.includes("LIMIT 1")) {
       const row = [...this.sets.values()]
         .filter((set) => set.drill_id === params[0])
         .sort((left, right) => left.ordinal - right.ordinal)[0];
       return row ? { id: row.id } : null;
     }
-    if (sql.includes("SELECT drill_id FROM drill_pages")) {
+    if (sql.includes("SELECT drill_id FROM drill_sets")) {
       const row = this.sets.get(String(params[0]));
       return row ? { drill_id: row.drill_id } : null;
     }
-    if (sql.includes("FROM drill_pages")) {
+    if (sql.includes("FROM drill_sets")) {
       const row = this.sets.get(String(params[0]));
       return row ? { ...row } : null;
     }
@@ -358,7 +376,7 @@ class DrillFakeDatabase {
         )
         .map((row) => ({ ...row }));
     }
-    if (sql.includes("FROM drill_pages")) {
+    if (sql.includes("FROM drill_sets")) {
       const rows = [...this.sets.values()]
         .filter((set) => set.drill_id === params[0])
         .sort(
@@ -366,7 +384,7 @@ class DrillFakeDatabase {
             left.ordinal - right.ordinal || left.id.localeCompare(right.id),
         );
       return rows.map((row) =>
-        /^\s*SELECT id\s+FROM drill_pages/m.test(sql)
+        /^\s*SELECT id\s+FROM drill_sets/m.test(sql)
           ? { id: row.id }
           : { ...row },
       );
@@ -379,7 +397,7 @@ class DrillFakeDatabase {
       const [id, name, fieldPreset, createdAt, updatedAt] = params as [
         string,
         string,
-        "football-nfhs",
+        FieldPresetId,
         number,
         number,
       ];
@@ -390,7 +408,7 @@ class DrillFakeDatabase {
         created_at: createdAt,
         updated_at: updatedAt,
       });
-    } else if (sql.includes("INSERT INTO drill_pages")) {
+    } else if (sql.includes("INSERT INTO drill_sets")) {
       const [
         id,
         drillId,
@@ -404,9 +422,6 @@ class DrillFakeDatabase {
         xSteps,
         ySteps,
         facingDegrees,
-        label,
-        xMeters,
-        yMeters,
       ] = params as [
         string,
         string,
@@ -420,9 +435,6 @@ class DrillFakeDatabase {
         number,
         number,
         number | null,
-        string,
-        number,
-        number,
       ];
       this.sets.set(id, {
         id,
@@ -437,9 +449,6 @@ class DrillFakeDatabase {
         x_steps: xSteps,
         y_steps: ySteps,
         facing_degrees: facingDegrees,
-        label,
-        x_meters: xMeters,
-        y_meters: yMeters,
       });
     } else if (sql.includes("INSERT OR IGNORE INTO app_settings")) {
       // Singleton already exists in this fake.
@@ -458,7 +467,7 @@ class DrillFakeDatabase {
         this.settings.active_drill_id = null;
         this.settings.selected_drill_page_id = null;
       }
-    } else if (sql.includes("DELETE FROM drill_pages")) {
+    } else if (sql.includes("DELETE FROM drill_sets")) {
       const id = String(params[0]);
       this.sets.delete(id);
       if (this.settings.selected_drill_page_id === id) {
@@ -470,7 +479,7 @@ class DrillFakeDatabase {
       if (row) this.drills.set(id, { ...row, name, updated_at: updatedAt });
     } else if (sql.includes("UPDATE app_settings")) {
       this.updateSettings(sql, params);
-    } else if (sql.includes("UPDATE drill_pages")) {
+    } else if (sql.includes("UPDATE drill_sets")) {
       this.updateSets(sql, params);
     }
     return { lastInsertRowId: 1, changes: 1 };
@@ -559,9 +568,6 @@ class DrillFakeDatabase {
         xSteps,
         ySteps,
         facingDegrees,
-        label,
-        xMeters,
-        yMeters,
         id,
       ] = params as [
         number,
@@ -573,9 +579,6 @@ class DrillFakeDatabase {
         number,
         number,
         number | null,
-        string,
-        number,
-        number,
         string,
       ];
       const set = this.sets.get(id);
@@ -590,9 +593,6 @@ class DrillFakeDatabase {
           x_steps: xSteps,
           y_steps: ySteps,
           facing_degrees: facingDegrees,
-          label,
-          x_meters: xMeters,
-          y_meters: yMeters,
         });
       }
     }

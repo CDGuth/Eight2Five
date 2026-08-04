@@ -11,7 +11,7 @@ import {
 } from "@eight2five/mobile/field";
 import { formatSetName } from "@eight2five/mobile/drill";
 import {
-  FIELD_FIVE_YARD_GRID_COLOR,
+  FIELD_FOUR_STEP_GRID_COLOR,
   FieldCanvas,
 } from "@eight2five/mobile/field/render";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -73,14 +73,17 @@ export function FieldScreen({
   };
   const targetPosition =
     shouldShowFieldTarget(drillOverlayState) && controller.selectedPage
-      ? drillGridPointToFieldPoint(controller.selectedPage.position)
+      ? drillGridPointToFieldPoint(
+          controller.selectedPage.position,
+          controller.fieldPreset,
+        )
       : undefined;
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
       stepGrid: theme.textSubtle,
       fieldBackground: theme.surfaceRaised,
-      fiveYardGrid: FIELD_FIVE_YARD_GRID_COLOR,
+      fourStepGrid: FIELD_FOUR_STEP_GRID_COLOR,
       fieldLines: theme.textMuted,
       fieldNumbers: theme.textMuted,
       livePosition: theme.accent,
@@ -102,11 +105,16 @@ export function FieldScreen({
           defaultViewport={controller.defaultViewport}
           onViewportChange={controller.commitViewport}
           palette={palette}
+          fieldPreset={controller.fieldPreset}
           livePosition={livePositionValue}
           targetPosition={targetPosition}
           guidanceVisible={shouldShowFieldGuidance(drillOverlayState)}
           anchors={anchors}
           anchorOverlayOptions={anchorOverlayOptions}
+          showPerimeterStepGrid={
+            controller.settings.developerModeEnabled &&
+            controller.settings.showPerimeterStepGrid
+          }
         />
       }
       hud={
@@ -120,6 +128,7 @@ export function FieldScreen({
           previousPage={controller.previousPage}
           terminology="sets"
           metricMode={controller.settings.transitionMetricMode}
+          fieldPreset={controller.fieldPreset}
           controlsDisabled={areCoordinatePanelControlsDisabled({
             settingsReady: controller.settingsStatus === "ready",
             loadingDrills: controller.loadingDrills,
@@ -146,7 +155,7 @@ export function FieldScreen({
                 pageCount={controller.pages.length}
                 terminology="sets"
                 activeColor={theme.accent}
-                trackColor={FIELD_FIVE_YARD_GRID_COLOR}
+                trackColor={FIELD_FOUR_STEP_GRID_COLOR}
                 onSelectIndex={(index) =>
                   void controller.selectPageAtIndex(index)
                 }

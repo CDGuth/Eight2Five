@@ -66,7 +66,7 @@ export function DetailsSection({
           autoCorrect={false}
           spellCheck={false}
           error={customFieldError}
-          helper="Advanced: paste a v1 custom field object with matched physical and marching reference lines. The editor starts from NFHS geometry so you can change only what differs."
+          helper="Advanced: paste a custom field object with matched physical and marching reference lines. The editor starts from NFHS geometry so you can change only what differs."
         />
       ) : (
         <FieldPresetSummary preset={settings.fieldMode} />
@@ -113,6 +113,10 @@ function FieldPresetSummary({ preset }: { readonly preset: FieldPresetId }) {
   const field = getFieldPreset(preset);
   const frontHash = getGridReference({ type: "preset", preset }, "front-hash");
   const backHash = getGridReference({ type: "preset", preset }, "back-hash");
+  const backSideline = getGridReference(
+    { type: "preset", preset },
+    "back-sideline",
+  );
   return (
     <View
       style={{
@@ -143,7 +147,8 @@ function FieldPresetSummary({ preset }: { readonly preset: FieldPresetId }) {
       >
         Marching grid: Front sideline 0 · Front hash{" "}
         {formatNumber(frontHash?.coordinateSteps)} · Back hash{" "}
-        {formatNumber(backHash?.coordinateSteps)} · Back sideline 84.
+        {formatNumber(backHash?.coordinateSteps)} · Back sideline{" "}
+        {formatNumber(backSideline?.coordinateSteps)}.
       </Text>
     </View>
   );

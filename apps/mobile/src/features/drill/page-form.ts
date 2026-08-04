@@ -16,6 +16,7 @@ import type {
   MeasureRange,
   SetKind,
 } from "@eight2five/mobile/drill";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 export const YARD_LINES = Object.freeze(
   Array.from({ length: 11 }, (_, index) => index * 5),
@@ -104,25 +105,39 @@ export function createDefaultPageDraft({
   };
 }
 
-export function pageToDraft(set: DrillSet): MarchingCoordinateDraft {
-  return setDraftFromPosition(set.position, {
-    number: set.number,
-    kind: set.kind,
-    suffix: set.suffix,
-    countsFromPrevious: set.countsFromPrevious,
-    measureRange: set.measureRange,
-  });
+export function pageToDraft(
+  set: DrillSet,
+  fieldPreset: FieldPresetId = "football-nfhs",
+): MarchingCoordinateDraft {
+  return setDraftFromPosition(
+    set.position,
+    {
+      number: set.number,
+      kind: set.kind,
+      suffix: set.suffix,
+      countsFromPrevious: set.countsFromPrevious,
+      measureRange: set.measureRange,
+    },
+    fieldPreset,
+  );
 }
 
-export function coordinateDraftFromFieldPoint(position: {
-  readonly xMeters: number;
-  readonly yMeters: number;
-}): MarchingCoordinateDraft {
-  return setDraftFromPosition(fieldPointToDrillGridPoint(position), {
-    number: 0,
-    kind: "set",
-    countsFromPrevious: 0,
-  });
+export function coordinateDraftFromFieldPoint(
+  position: {
+    readonly xMeters: number;
+    readonly yMeters: number;
+  },
+  fieldPreset: FieldPresetId = "football-nfhs",
+): MarchingCoordinateDraft {
+  return setDraftFromPosition(
+    fieldPointToDrillGridPoint(position, fieldPreset),
+    {
+      number: 0,
+      kind: "set",
+      countsFromPrevious: 0,
+    },
+    fieldPreset,
+  );
 }
 
 function setDraftFromPosition(
@@ -134,8 +149,9 @@ function setDraftFromPosition(
     readonly countsFromPrevious: number;
     readonly measureRange?: MeasureRange;
   },
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): MarchingCoordinateDraft {
-  const coordinate = drillGridPointToMarchingCoordinate(position);
+  const coordinate = drillGridPointToMarchingCoordinate(position, fieldPreset);
   return {
     setNumber: String(details.number),
     setKind: details.kind,
@@ -157,6 +173,7 @@ function setDraftFromPosition(
 
 export function validatePageDraft(
   draft: MarchingCoordinateDraft,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): SetDraftValidation {
   const errors: SetFormErrors = {};
   const setNumber = parseNonNegativeInteger(
@@ -182,7 +199,7 @@ export function validatePageDraft(
   if (typeof counts === "string") errors.countsFromPrevious = counts;
 
   const measureRange = parseMeasureRange(draft, errors);
-  const coordinateResult = coordinateFromDraft(draft);
+  const coordinateResult = coordinateFromDraft(draft, fieldPreset);
   Object.assign(errors, coordinateResult.errors);
   if (
     Object.keys(errors).length > 0 ||
@@ -210,13 +227,17 @@ export function validatePageDraft(
 
 export function previewCoordinate(
   draft: MarchingCoordinateDraft,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): CoordinatePreview | undefined {
-  const result = coordinateFromDraft(draft);
+  const result = coordinateFromDraft(draft, fieldPreset);
   if (!result.coordinate || Object.keys(result.errors).length > 0)
     return undefined;
   return {
     side: formatMarchingSide(result.coordinate.side),
-    frontBack: formatMarchingFrontBack(result.coordinate.frontBack),
+    frontBack: formatMarchingFrontBack(
+      result.coordinate.frontBack,
+      fieldPreset,
+    ),
   };
 }
 
@@ -248,7 +269,10 @@ function parseMeasureRange(
   return { start, end };
 }
 
-function coordinateFromDraft(draft: MarchingCoordinateDraft): {
+function coordinateFromDraft(
+  draft: MarchingCoordinateDraft,
+  fieldPreset: FieldPresetId,
+): {
   readonly errors: SetFormErrors;
   readonly coordinate?: MarchingCoordinate;
   readonly position?: DrillGridPoint;
@@ -318,7 +342,7 @@ function coordinateFromDraft(draft: MarchingCoordinateDraft): {
     return {
       errors,
       coordinate,
-      position: marchingCoordinateToDrillGridPoint(coordinate),
+      position: marchingCoordinateToDrillGridPoint(coordinate, fieldPreset),
     };
   } catch (cause) {
     errors.coordinate = cause instanceof Error ? cause.message : String(cause);

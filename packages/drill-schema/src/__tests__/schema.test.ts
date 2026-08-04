@@ -1,8 +1,13 @@
 import {
   COLOR_PRESETS,
+  FIELD_PRESETS,
+  FIELD_PRESET_IDS,
   countPrimarySets,
   drillGridToPhysicalPoint,
   formatSetName,
+  getFieldPreset,
+  getGridReference,
+  isFieldPresetId,
   parseDrillDocument,
   physicalPointToDrillGrid,
   resolveDrillEntity,
@@ -76,7 +81,7 @@ const fixture: DrillDocument = {
 };
 
 describe("drill schema", () => {
-  it("accepts the v1 set/subset model and round trips JSON", () => {
+  it("accepts the current set/subset model and round trips JSON", () => {
     const parsed = parseDrillDocument(fixture);
     expect(countPrimarySets(parsed.sets)).toBe(2);
     expect(formatSetName(parsed.sets[1])).toBe("31A");
@@ -136,6 +141,43 @@ describe("drill schema", () => {
       labelVisible: true,
     });
   });
+
+  it("exposes all field preset ids from one canonical registry", () => {
+    expect(FIELD_PRESET_IDS).toEqual(Object.keys(FIELD_PRESETS));
+    for (const id of FIELD_PRESET_IDS) expect(isFieldPresetId(id)).toBe(true);
+    expect(isFieldPresetId("football-made-up")).toBe(false);
+  });
+
+  it.each(FIELD_PRESET_IDS)(
+    "%s uses the canonical 160 by 84 marching-grid bounds",
+    (preset) => {
+      expect(getFieldPreset(preset).marchingGrid.bounds).toEqual({
+        minXSteps: -80,
+        maxXSteps: 80,
+        minYSteps: 0,
+        maxYSteps: 84,
+      });
+    },
+  );
+
+  it("keeps the conventional NFHS lateral references at 0/28/56/84", () => {
+    const field = getFieldPreset("football-nfhs");
+    expect(getGridReference(field, "front-sideline")?.coordinateSteps).toBe(0);
+    expect(getGridReference(field, "front-hash")?.coordinateSteps).toBe(28);
+    expect(getGridReference(field, "back-hash")?.coordinateSteps).toBe(56);
+    expect(getGridReference(field, "back-sideline")?.coordinateSteps).toBe(84);
+  });
+
+  it.each(["football-ncaa", "football-texas-uil"] as const)(
+    "%s keeps its schema-defined 0/32/52/84 lateral references",
+    (preset) => {
+      const field = getFieldPreset(preset);
+      expect(getGridReference(field, "front-sideline")?.coordinateSteps).toBe(0);
+      expect(getGridReference(field, "front-hash")?.coordinateSteps).toBe(32);
+      expect(getGridReference(field, "back-hash")?.coordinateSteps).toBe(52);
+      expect(getGridReference(field, "back-sideline")?.coordinateSteps).toBe(84);
+    },
+  );
 
   it("maps the conventional NFHS front hash to exact physical geometry", () => {
     const physical = drillGridToPhysicalPoint(

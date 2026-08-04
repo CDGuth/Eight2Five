@@ -1,3 +1,4 @@
+import type { FieldPresetId } from "@eight2five/drill-schema";
 import {
   ANCHOR_POSITION_REFERENCE_LABELS,
   ANCHOR_POSITION_REFERENCES,
@@ -49,22 +50,26 @@ export const ANCHOR_UNIT_CHOICES: readonly {
   { label: "Feet", value: "feet" },
 ];
 
-export function createAnchorEditorDrafts(position?: AnchorFieldPosition): {
+export function createAnchorEditorDrafts(
+  position?: AnchorFieldPosition,
+  fieldPreset: FieldPresetId = "football-nfhs",
+): {
   readonly marching: MarchingAnchorDraft;
   readonly standard: StandardAnchorPositionDraft;
 } {
-  const center = getAnchorPositionReferencePoint("center-field");
+  const center = getAnchorPositionReferencePoint("center-field", fieldPreset);
   const initial = position ?? {
     ...center,
     zMeters: DEFAULT_ANCHOR_HEIGHT_METERS,
   };
   const coordinate = position
-    ? coordinateDraftFromFieldPoint(position)
+    ? coordinateDraftFromFieldPoint(position, fieldPreset)
     : createDefaultPageDraft({ ordinal: 0, suggestedNumber: 0 });
   const standard = anchorFieldPositionToStandard(
     initial,
     "center-field",
     "meters",
+    fieldPreset,
   );
   return {
     marching: {
@@ -84,8 +89,9 @@ export function createAnchorEditorDrafts(position?: AnchorFieldPosition): {
 
 export function validateMarchingAnchorDraft(
   draft: MarchingAnchorDraft,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorDraftValidation {
-  const coordinate = validatePageDraft(draft.coordinate);
+  const coordinate = validatePageDraft(draft.coordinate, fieldPreset);
   const errors: Record<string, string> = { ...coordinate.errors };
   const height = Number(draft.height);
   if (!draft.height.trim() || !Number.isFinite(height)) {
@@ -100,6 +106,7 @@ export function validateMarchingAnchorDraft(
       position: anchorFieldPositionFromMarchingCoordinate(
         coordinate.value.coordinate,
         anchorPositionUnitsToMeters(height, draft.heightUnit),
+        fieldPreset,
       ),
     };
   } catch (cause) {
@@ -132,17 +139,19 @@ export function convertMarchingHeightUnit(
 
 export function validateStandardAnchorDraft(
   draft: StandardAnchorPositionDraft,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorDraftValidation {
-  const result = parseAnchorPositionDraft(draft);
+  const result = parseAnchorPositionDraft(draft, fieldPreset);
   return { errors: result.errors, position: result.value };
 }
 
 export function formatAnchorCanonicalPreview(
   position: AnchorFieldPosition | undefined,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): { readonly marching: string; readonly meters: string } | undefined {
   if (!position) return undefined;
   return {
-    marching: formatMarchingCoordinate(position),
+    marching: formatMarchingCoordinate(position, fieldPreset),
     meters: `X ${position.xMeters.toFixed(3)} m · Y ${position.yMeters.toFixed(3)} m · Z ${position.zMeters.toFixed(3)} m`,
   };
 }
@@ -151,8 +160,14 @@ export function standardDraftFromPosition(
   position: AnchorFieldPosition,
   reference: AnchorPositionReference,
   unit: AnchorPositionUnit,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): StandardAnchorPositionDraft {
-  const standard = anchorFieldPositionToStandard(position, reference, unit);
+  const standard = anchorFieldPositionToStandard(
+    position,
+    reference,
+    unit,
+    fieldPreset,
+  );
   return {
     reference,
     unit,

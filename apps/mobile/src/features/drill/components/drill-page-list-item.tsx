@@ -5,6 +5,7 @@ import {
   type DrillSet,
   type DrillTerms,
 } from "@eight2five/mobile/drill";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 import {
   drillGridPointToMarchingCoordinate,
   formatMarchingFrontBack,
@@ -34,6 +35,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
   page,
   previousPage,
   terms: _terms,
+  fieldPreset,
   selected,
   busy,
   first,
@@ -47,6 +49,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
   previousPage?: DrillSet;
   /** @deprecated Sets are now the only user-facing terminology. */
   terms?: DrillTerms;
+  fieldPreset: FieldPresetId;
   selected: boolean;
   busy: boolean;
   first: boolean;
@@ -58,11 +61,11 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
 }) {
   const theme = useEight2FiveTheme();
   const coordinate = React.useMemo(
-    () => drillGridPointToMarchingCoordinate(page.position),
-    [page.position],
+    () => drillGridPointToMarchingCoordinate(page.position, fieldPreset),
+    [fieldPreset, page.position],
   );
   const side = formatMarchingSide(coordinate.side);
-  const frontBack = formatMarchingFrontBack(coordinate.frontBack);
+  const frontBack = formatMarchingFrontBack(coordinate.frontBack, fieldPreset);
   const setName = formatSetName(page);
   const title = `Set ${setName}`;
   const measures = page.measureRange

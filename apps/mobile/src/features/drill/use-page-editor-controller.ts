@@ -1,6 +1,7 @@
 import React from "react";
 import { useFocusEffect } from "expo-router";
 import { getDrillTerms, type DrillSet } from "@eight2five/mobile/drill";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import {
   useAppSettingsSnapshot,
@@ -28,6 +29,8 @@ export function usePageEditorController(
   const store = useAppSettingsStore();
   const [page, setPage] = React.useState<DrillSet>();
   const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
+  const [fieldPreset, setFieldPreset] =
+    React.useState<FieldPresetId>("football-nfhs");
   const [draft, setDraft] = React.useState<MarchingCoordinateDraft>();
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -38,7 +41,12 @@ export function usePageEditorController(
     if (snapshot.status !== "ready") return;
     try {
       const repository = store.getDrillRepository();
-      const nextPages = await repository.listSets(drillId);
+      const [nextDrill, nextPages] = await Promise.all([
+        repository.getDrill(drillId),
+        repository.listSets(drillId),
+      ]);
+      if (!nextDrill) throw new Error("This drill no longer exists.");
+      setFieldPreset(nextDrill.fieldPreset);
       setPages(nextPages);
       if (pageId === "new") {
         const ordinal = getPageCreationOrdinal(
@@ -64,7 +72,7 @@ export function usePageEditorController(
           throw new Error("This drill entry no longer exists in the drill.");
         }
         setPage(nextPage);
-        setDraft(pageToDraft(nextPage));
+        setDraft(pageToDraft(nextPage, nextDrill.fieldPreset));
       }
       setError(undefined);
     } catch (cause) {
@@ -95,6 +103,7 @@ export function usePageEditorController(
         placement,
         relativePageId,
         draft,
+        fieldPreset,
       });
       setPage(saved);
       return saved;
@@ -106,7 +115,16 @@ export function usePageEditorController(
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [draft, drillId, pageId, pages, placement, relativePageId, store]);
+  }, [
+    draft,
+    drillId,
+    fieldPreset,
+    pageId,
+    pages,
+    placement,
+    relativePageId,
+    store,
+  ]);
 
   return {
     drillId,
@@ -114,6 +132,7 @@ export function usePageEditorController(
     page,
     draft,
     setDraft,
+    fieldPreset,
     loading: snapshot.status === "loading" || loading,
     saving,
     terms: getDrillTerms("sets"),

@@ -1,14 +1,14 @@
 import { assertFiniteFieldPoint, type FieldPoint } from "./types";
 import {
-  fieldPointDisplacementInStandardSteps,
-  metersToStandardSteps,
-} from "./units";
-import { formatMarchingSteps } from "./marching";
+  fieldPointToDrillGridPoint,
+  formatMarchingSteps,
+  type MarchingFieldInput,
+} from "./marching";
 
 export interface FieldGuidance {
-  /** Straight-line horizontal distance, in standard 8-to-5 steps. */
+  /** Straight-line distance in the active field's marching-grid coordinates. */
   readonly distanceSteps: number;
-  /** Signed target-minus-current displacement along canonical X/Y axes. */
+  /** Signed target-minus-current displacement along canonical grid X/Y axes. */
   readonly xDisplacementSteps: number;
   readonly yDisplacementSteps: number;
   readonly xLabel: string;
@@ -28,24 +28,24 @@ function formatGuidanceAxis(
 }
 
 /**
- * Produces field-relative guidance only. It deliberately does not use device
- * heading, phone orientation, compass data, or any other view-dependent input.
+ * Produces field-relative guidance in the active marching coordinate system.
+ * Physical meters are projected through the field definition first so an NFHS
+ * sideline-to-sideline move is exactly 84 grid steps rather than 85 1/3 literal
+ * 22.5-inch intervals.
  */
 export function calculateFieldGuidance(
   current: FieldPoint,
   target: FieldPoint,
+  field?: MarchingFieldInput,
 ): FieldGuidance {
   assertFiniteFieldPoint(current, "Current point");
   assertFiniteFieldPoint(target, "Target point");
-  const { xSteps, ySteps } = fieldPointDisplacementInStandardSteps(
-    current,
-    target,
-  );
-  const xMeters = target.xMeters - current.xMeters;
-  const yMeters = target.yMeters - current.yMeters;
-  const distanceSteps = metersToStandardSteps(Math.hypot(xMeters, yMeters));
+  const currentGrid = fieldPointToDrillGridPoint(current, field);
+  const targetGrid = fieldPointToDrillGridPoint(target, field);
+  const xSteps = targetGrid.xSteps - currentGrid.xSteps;
+  const ySteps = targetGrid.ySteps - currentGrid.ySteps;
   return Object.freeze({
-    distanceSteps,
+    distanceSteps: Math.hypot(xSteps, ySteps),
     xDisplacementSteps: xSteps,
     yDisplacementSteps: ySteps,
     xLabel: formatGuidanceAxis(xSteps, "Side 1", "Side 2"),

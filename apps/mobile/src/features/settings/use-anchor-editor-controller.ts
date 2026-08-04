@@ -7,11 +7,15 @@ import type {
 } from "@eight2five/mobile/field";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 
-import { useAppSettingsSnapshot } from "../../state/app-settings-store";
+import {
+  useAppSettingsSnapshot,
+  useAppSettingsStore,
+} from "../../state/app-settings-store";
 import {
   useMobilePansSnapshot,
   useMobilePansStore,
 } from "../../pans/mobile-pans-context";
+import { resolveEffectiveFieldPreset } from "../field/effective-field-preset";
 import {
   createAnchorEditorDrafts,
   convertMarchingHeightUnit,
@@ -24,9 +28,13 @@ import {
 
 export function useAnchorEditorController(anchorId: string) {
   const settings = useAppSettingsSnapshot();
+  const settingsStore = useAppSettingsStore();
   const pans = useMobilePansSnapshot();
   const pansStore = useMobilePansStore();
   const [anchor, setAnchor] = React.useState<ManagedDevice>();
+  const [fieldPreset, setFieldPreset] = React.useState(
+    settings.settings.defaultFieldPreset,
+  );
   const [mode, setModeState] = React.useState<AnchorEditorMode>("marching");
   const [marchingDraft, setMarchingDraft] = React.useState(
     () => createAnchorEditorDrafts().marching,
@@ -40,11 +48,18 @@ export function useAnchorEditorController(anchorId: string) {
   const [error, setError] = React.useState<Error>();
 
   const load = React.useCallback(async () => {
-    if (pans.initialization !== "ready") return;
+    if (pans.initialization !== "ready" || settings.status !== "ready") return;
     setLoading(true);
     setError(undefined);
     try {
-      const next = await pansStore.getRuntime().repository.getDevice(anchorId);
+      const [next, activeDrill] = await Promise.all([
+        pansStore.getRuntime().repository.getDevice(anchorId),
+        settings.settings.activeDrillId
+          ? settingsStore
+              .getDrillRepository()
+              .getDrill(settings.settings.activeDrillId)
+          : Promise.resolve(undefined),
+      ]);
       if (
         !next ||
         (next.role !== "anchor" && next.lastKnownConfig?.role !== "anchor")
@@ -55,8 +70,13 @@ export function useAnchorEditorController(anchorId: string) {
         next.lastKnownConfig?.role === "anchor"
           ? next.lastKnownConfig.position
           : undefined;
-      const drafts = createAnchorEditorDrafts(position);
+      const nextFieldPreset = resolveEffectiveFieldPreset(
+        activeDrill,
+        settings.settings.defaultFieldPreset,
+      );
+      const drafts = createAnchorEditorDrafts(position, nextFieldPreset);
       setAnchor(next);
+      setFieldPreset(nextFieldPreset);
       setMarchingDraft(drafts.marching);
       setStandardDraft(drafts.standard);
     } catch (cause) {
@@ -64,7 +84,15 @@ export function useAnchorEditorController(anchorId: string) {
     } finally {
       setLoading(false);
     }
-  }, [anchorId, pans.initialization, pansStore]);
+  }, [
+    anchorId,
+    pans.initialization,
+    pansStore,
+    settings.settings.activeDrillId,
+    settings.settings.defaultFieldPreset,
+    settings.status,
+    settingsStore,
+  ]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -74,8 +102,8 @@ export function useAnchorEditorController(anchorId: string) {
 
   const validation =
     mode === "marching"
-      ? validateMarchingAnchorDraft(marchingDraft)
-      : validateStandardAnchorDraft(standardDraft);
+      ? validateMarchingAnchorDraft(marchingDraft, fieldPreset)
+      : validateStandardAnchorDraft(standardDraft, fieldPreset);
 
   const setMode = (nextMode: AnchorEditorMode) => {
     if (nextMode === mode) return;
@@ -87,10 +115,13 @@ export function useAnchorEditorController(anchorId: string) {
             position,
             standardDraft.reference,
             standardDraft.unit,
+            fieldPreset,
           ),
         );
       } else {
-        setMarchingDraft(createAnchorEditorDrafts(position).marching);
+        setMarchingDraft(
+          createAnchorEditorDrafts(position, fieldPreset).marching,
+        );
       }
     }
     setSaved(false);
@@ -100,19 +131,35 @@ export function useAnchorEditorController(anchorId: string) {
   const updateStandardReference = (
     reference: StandardAnchorPositionDraft["reference"],
   ) => {
-    const position = validateStandardAnchorDraft(standardDraft).position;
+    const position = validateStandardAnchorDraft(
+      standardDraft,
+      fieldPreset,
+    ).position;
     setStandardDraft(
       position
-        ? standardDraftFromPosition(position, reference, standardDraft.unit)
+        ? standardDraftFromPosition(
+            position,
+            reference,
+            standardDraft.unit,
+            fieldPreset,
+          )
         : { ...standardDraft, reference },
     );
   };
 
   const updateStandardUnit = (unit: AnchorPositionUnit) => {
-    const position = validateStandardAnchorDraft(standardDraft).position;
+    const position = validateStandardAnchorDraft(
+      standardDraft,
+      fieldPreset,
+    ).position;
     setStandardDraft(
       position
-        ? standardDraftFromPosition(position, standardDraft.reference, unit)
+        ? standardDraftFromPosition(
+            position,
+            standardDraft.reference,
+            unit,
+            fieldPreset,
+          )
         : { ...standardDraft, unit },
     );
   };
@@ -137,6 +184,7 @@ export function useAnchorEditorController(anchorId: string) {
     developerModeEnabled: settings.settings.developerModeEnabled,
     connectionState: pans.connectionState,
     anchor,
+    fieldPreset,
     mode,
     marchingDraft,
     standardDraft,

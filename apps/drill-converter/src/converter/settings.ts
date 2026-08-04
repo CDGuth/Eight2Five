@@ -1,5 +1,6 @@
 import {
   COLOR_PRESETS,
+  FIELD_PRESET_IDS,
   countPrimarySets,
   fieldDefinitionSchema,
   getFieldPreset,
@@ -13,15 +14,15 @@ import {
   type FieldPresetId,
 } from "@eight2five/drill-schema";
 
-export const FIELD_PRESET_OPTIONS = Object.freeze([
-  { value: "football-nfhs", label: "High School (NFHS)" },
-  { value: "football-ncaa", label: "College (NCAA)" },
-  { value: "football-texas-uil", label: "Texas High School (UIL)" },
-  { value: "football-nfl", label: "Professional (NFL)" },
-] as const satisfies readonly {
-  value: FieldPresetId;
-  label: string;
-}[]);
+export const FIELD_PRESET_OPTIONS = Object.freeze(
+  FIELD_PRESET_IDS.map((value) => ({
+    value,
+    label: getFieldPreset(value).name,
+  })) satisfies readonly {
+    value: FieldPresetId;
+    label: string;
+  }[],
+);
 
 export const ENTITY_ICON_OPTIONS = Object.freeze([
   "dot",

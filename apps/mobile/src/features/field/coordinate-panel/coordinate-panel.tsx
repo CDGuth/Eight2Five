@@ -9,6 +9,7 @@ import type {
   DrillTerminology,
 } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import { ConnectionIndicator } from "./connection-indicator";
 import { DrillCoordinateRow } from "./drill-coordinate-row";
@@ -25,6 +26,7 @@ export interface CoordinatePanelProps {
   readonly previousPage?: DrillPage;
   readonly terminology: DrillTerminology;
   readonly metricMode: TransitionMetricMode;
+  readonly fieldPreset: FieldPresetId;
   readonly controlsDisabled: boolean;
   readonly error?: Error;
   readonly onSelectDrill: (drillId: string | null) => void;
@@ -41,6 +43,7 @@ export function CoordinatePanel({
   previousPage,
   terminology,
   metricMode,
+  fieldPreset,
   controlsDisabled,
   error,
   onSelectDrill,
@@ -62,7 +65,7 @@ export function CoordinatePanel({
     >
       <HStack className="h-[76px] items-center px-2" style={{ gap: 6 }}>
         <ConnectionIndicator state={live.connectionState} />
-        <LiveCoordinateRow live={live} />
+        <LiveCoordinateRow live={live} fieldPreset={fieldPreset} />
         {drillFeaturesEnabled ? (
           <DrillMenu
             drills={drills}
@@ -83,6 +86,7 @@ export function CoordinatePanel({
             previousPage={previousPage}
             terminology={terminology}
             metricMode={metricMode}
+            fieldPreset={fieldPreset}
             landscape={landscape}
             metricToggleDisabled={controlsDisabled}
             onToggleMetric={onToggleMetric}

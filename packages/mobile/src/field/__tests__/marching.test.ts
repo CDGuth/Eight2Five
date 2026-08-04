@@ -1,3 +1,4 @@
+import { FIELD_PRESET_IDS } from "@eight2five/drill-schema";
 import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   drillGridPointToFieldPoint,
@@ -11,6 +12,7 @@ import {
 } from "../index";
 
 const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
+const PRESETS = FIELD_PRESET_IDS;
 
 function gridPoint(xSteps: number, ySteps: number) {
   return drillGridPointToFieldPoint({ xSteps, ySteps });
@@ -55,6 +57,37 @@ describe("marching coordinate conversion", () => {
       ).toBe(expected);
     }
   });
+
+  test.each(PRESETS)(
+    "%s round-trips the field-specific front hash through physical space",
+    (preset) => {
+      const fieldPoint = marchingCoordinateToFieldPoint(
+        {
+          side: {
+            side: "center",
+            yardLine: 50,
+            relation: "on",
+            offsetSteps: 0,
+          },
+          frontBack: {
+            reference: "front-hash",
+            relation: "on",
+            offsetSteps: 0,
+          },
+        },
+        preset,
+      );
+      const roundTrip = fieldPointToMarchingCoordinate(fieldPoint, preset);
+      expect(roundTrip.frontBack).toMatchObject({
+        reference: "front-hash",
+        relation: "on",
+        offsetSteps: expect.closeTo(0, 8),
+      });
+      expect(formatMarchingFrontBack(roundTrip.frontBack, preset)).toContain(
+        "FH",
+      );
+    },
+  );
 
   test("keeps canonical fractional values while formatting quarter steps", () => {
     const coordinate = fieldPointToMarchingCoordinate(

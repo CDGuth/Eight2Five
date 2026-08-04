@@ -2,7 +2,7 @@ import React from "react";
 import { Group } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
-import type { StandardHighSchoolFieldTemplate } from "../template";
+import type { StandardFootballFieldTemplate } from "../template";
 import type { FieldPoint } from "../types";
 import type {
   FieldCamera,
@@ -22,7 +22,7 @@ import type { FieldRenderPalette } from "./field-render-tokens";
 interface FieldSceneProps {
   readonly camera: FieldCamera;
   readonly canvasSize: SharedValue<FieldViewportSize>;
-  readonly template: StandardHighSchoolFieldTemplate;
+  readonly template: StandardFootballFieldTemplate;
   readonly paths: FieldPaths;
   readonly palette: FieldRenderPalette;
   readonly livePosition: SharedValue<FieldPoint | null>;
@@ -30,6 +30,7 @@ interface FieldSceneProps {
   readonly guidanceVisible: boolean;
   readonly anchors: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions: FieldAnchorOverlayOptions;
+  readonly showPerimeterStepGrid: boolean;
 }
 
 export function FieldScene({
@@ -43,6 +44,7 @@ export function FieldScene({
   guidanceVisible,
   anchors,
   anchorOverlayOptions,
+  showPerimeterStepGrid,
 }: FieldSceneProps) {
   const cameraTransform = useDerivedValue(() => [
     { translateX: canvasSize.value.width / 2 },
@@ -60,6 +62,7 @@ export function FieldScene({
         paths={paths}
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
+        showPerimeterStepGrid={showPerimeterStepGrid}
       />
       <FieldAnchorLayer
         anchors={anchors}

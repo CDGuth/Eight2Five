@@ -3,6 +3,7 @@ import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import type { DrillSet, DrillTerminology } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import { getDrillCoordinatePresentation } from "./coordinate-panel-state";
 import { TransitionMetricCell } from "./transition-metric-cell";
@@ -60,6 +61,7 @@ export function DrillCoordinateRow({
   previousPage,
   terminology: _terminology,
   metricMode,
+  fieldPreset,
   landscape,
   metricToggleDisabled,
   onToggleMetric,
@@ -69,6 +71,7 @@ export function DrillCoordinateRow({
   /** @deprecated Sets are the only terminology; kept for call-site compatibility. */
   readonly terminology?: DrillTerminology;
   readonly metricMode: TransitionMetricMode;
+  readonly fieldPreset: FieldPresetId;
   readonly landscape: boolean;
   readonly metricToggleDisabled: boolean;
   readonly onToggleMetric: () => void;
@@ -77,6 +80,7 @@ export function DrillCoordinateRow({
     page,
     previousPage,
     metricMode,
+    fieldPreset,
   });
   const metadata = (
     <HStack className="min-h-12 flex-1 items-stretch">

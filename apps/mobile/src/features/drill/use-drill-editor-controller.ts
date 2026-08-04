@@ -70,7 +70,11 @@ export function useDrillEditorController(drillId?: string) {
         const repository = store.getDrillRepository();
         const saved = drillId
           ? await renameNamedDrill(repository, drillId, name)
-          : await createNamedDrill(repository, name);
+          : await createNamedDrill(
+              repository,
+              name,
+              snapshot.settings.defaultFieldPreset,
+            );
         setDrill(saved);
         return saved;
       } catch (cause) {
@@ -82,7 +86,7 @@ export function useDrillEditorController(drillId?: string) {
         setSaving(false);
       }
     },
-    [drillId, store],
+    [drillId, snapshot.settings.defaultFieldPreset, store],
   );
 
   const makeActive = React.useCallback(async () => {

@@ -53,7 +53,10 @@ describe("manual drill management", () => {
     await expect(createNamedDrill(repository, "  Show  ")).resolves.toBe(
       created,
     );
-    expect(repository.createDrill).toHaveBeenCalledWith("Show");
+    expect(repository.createDrill).toHaveBeenCalledWith({
+      name: "Show",
+      fieldPreset: "football-nfhs",
+    });
     await renameNamedDrill(repository, "new", "  Finale ");
     expect(repository.renameDrill).toHaveBeenCalledWith("new", "Finale");
 
@@ -64,6 +67,27 @@ describe("manual drill management", () => {
     await expect(createNamedDrill(repository, " ")).rejects.toThrow(
       "Enter a drill name",
     );
+  });
+
+  test("uses the selected default field preset for a new manual drill", async () => {
+    const created = {
+      id: "new",
+      name: "College Show",
+      fieldPreset: "football-ncaa" as const,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const repository = {
+      createDrill: jest.fn(async () => created),
+    } as unknown as DrillRepository;
+
+    await expect(
+      createNamedDrill(repository, "College Show", "football-ncaa"),
+    ).resolves.toBe(created);
+    expect(repository.createDrill).toHaveBeenCalledWith({
+      name: "College Show",
+      fieldPreset: "football-ncaa",
+    });
   });
 
   test("deletes the drill before refreshing cleared selection pointers", async () => {

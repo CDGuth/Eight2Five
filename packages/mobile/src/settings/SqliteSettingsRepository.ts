@@ -45,21 +45,25 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
        SET drill_features_enabled = ?,
            drill_terminology = 'sets',
            field_perspective = ?,
+           default_field_preset = ?,
            transition_metric_mode = ?,
            guidance_enabled = ?,
            developer_mode_enabled = ?,
            show_cached_anchor_geometry = ?,
            show_comfortable_anchor_range = ?,
+           show_perimeter_step_grid = ?,
            comfortable_anchor_range_meters = ?
        WHERE singleton_id = ?`,
       [
         boolToSql(DEFAULT_APP_SETTINGS.drillFeaturesEnabled),
         DEFAULT_APP_SETTINGS.fieldPerspective,
+        DEFAULT_APP_SETTINGS.defaultFieldPreset,
         DEFAULT_APP_SETTINGS.transitionMetricMode,
         boolToSql(DEFAULT_APP_SETTINGS.guidanceEnabled),
         boolToSql(DEFAULT_APP_SETTINGS.developerModeEnabled),
         boolToSql(DEFAULT_APP_SETTINGS.showCachedAnchorGeometry),
         boolToSql(DEFAULT_APP_SETTINGS.showComfortableAnchorRange),
+        boolToSql(DEFAULT_APP_SETTINGS.showPerimeterStepGrid),
         DEFAULT_APP_SETTINGS.comfortableAnchorRangeMeters,
         1,
       ],
@@ -73,11 +77,13 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          drill_features_enabled,
          drill_terminology,
          field_perspective,
+         default_field_preset,
          transition_metric_mode,
          guidance_enabled,
          developer_mode_enabled,
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
+         show_perimeter_step_grid,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
@@ -95,24 +101,28 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          drill_features_enabled,
          drill_terminology,
          field_perspective,
+         default_field_preset,
          transition_metric_mode,
          guidance_enabled,
          developer_mode_enabled,
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
+         show_perimeter_step_grid,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, 'sets', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, 'sets', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
          drill_features_enabled = excluded.drill_features_enabled,
          drill_terminology = 'sets',
          field_perspective = excluded.field_perspective,
+         default_field_preset = excluded.default_field_preset,
          transition_metric_mode = excluded.transition_metric_mode,
          guidance_enabled = excluded.guidance_enabled,
          developer_mode_enabled = excluded.developer_mode_enabled,
          show_cached_anchor_geometry = excluded.show_cached_anchor_geometry,
          show_comfortable_anchor_range = excluded.show_comfortable_anchor_range,
+         show_perimeter_step_grid = excluded.show_perimeter_step_grid,
          comfortable_anchor_range_meters = excluded.comfortable_anchor_range_meters,
          active_drill_id = excluded.active_drill_id,
          selected_drill_page_id = excluded.selected_drill_page_id`,
@@ -120,11 +130,13 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         1,
         boolToSql(normalized.drillFeaturesEnabled),
         normalized.fieldPerspective,
+        normalized.defaultFieldPreset,
         normalized.transitionMetricMode,
         boolToSql(normalized.guidanceEnabled),
         boolToSql(normalized.developerModeEnabled),
         boolToSql(normalized.showCachedAnchorGeometry),
         boolToSql(normalized.showComfortableAnchorRange),
+        boolToSql(normalized.showPerimeterStepGrid),
         normalized.comfortableAnchorRangeMeters,
         normalized.activeDrillId,
         normalized.selectedDrillSetId,
@@ -142,6 +154,7 @@ function fromRow(row: AppSettingsRow): AppSettings {
   return normalizeAppSettings({
     drillFeaturesEnabled: sqliteBoolean(row.drill_features_enabled),
     fieldPerspective: row.field_perspective,
+    defaultFieldPreset: row.default_field_preset,
     transitionMetricMode: row.transition_metric_mode,
     guidanceEnabled: sqliteBoolean(row.guidance_enabled),
     developerModeEnabled: sqliteBoolean(row.developer_mode_enabled),
@@ -149,6 +162,7 @@ function fromRow(row: AppSettingsRow): AppSettings {
     showComfortableAnchorRange: sqliteBoolean(
       row.show_comfortable_anchor_range,
     ),
+    showPerimeterStepGrid: sqliteBoolean(row.show_perimeter_step_grid),
     comfortableAnchorRangeMeters: row.comfortable_anchor_range_meters,
     activeDrillId: row.active_drill_id,
     selectedDrillSetId: row.selected_drill_page_id,
@@ -160,6 +174,7 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
     row.drill_features_enabled === boolToSql(settings.drillFeaturesEnabled) &&
     row.drill_terminology === "sets" &&
     row.field_perspective === settings.fieldPerspective &&
+    row.default_field_preset === settings.defaultFieldPreset &&
     row.transition_metric_mode === settings.transitionMetricMode &&
     row.guidance_enabled === boolToSql(settings.guidanceEnabled) &&
     row.developer_mode_enabled === boolToSql(settings.developerModeEnabled) &&
@@ -167,6 +182,8 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
       boolToSql(settings.showCachedAnchorGeometry) &&
     row.show_comfortable_anchor_range ===
       boolToSql(settings.showComfortableAnchorRange) &&
+    row.show_perimeter_step_grid ===
+      boolToSql(settings.showPerimeterStepGrid) &&
     row.comfortable_anchor_range_meters ===
       settings.comfortableAnchorRangeMeters &&
     row.active_drill_id === settings.activeDrillId &&

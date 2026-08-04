@@ -1,13 +1,20 @@
-import { STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE } from "../template";
-import type { StandardHighSchoolFieldTemplate } from "../template";
-import { feetToMeters, STANDARD_STEP_METERS, yardsToMeters } from "../units";
+import {
+  drillGridToPhysicalPoint,
+  physicalPointToDrillGrid,
+} from "@eight2five/drill-schema";
+
+import {
+  STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  type StandardFootballFieldTemplate,
+} from "../template";
+import { feetToMeters, yardsToMeters } from "../units";
 
 const GRID_PADDING_YARDS = 10;
-const FIVE_YARD_GRID_SPACING_METERS = yardsToMeters(5);
 const HASH_MARK_SPACING_METERS = yardsToMeters(1);
 const HASH_MARK_LENGTH_METERS = feetToMeters(2);
 const PATH_NUMBER_PRECISION = 1_000_000;
 const COORDINATE_EPSILON = 1e-9;
+const FOUR_STEP_INTERVAL = 4;
 
 export interface FieldPathExtent {
   readonly minXMeters: number;
@@ -16,14 +23,18 @@ export interface FieldPathExtent {
   readonly maxYMeters: number;
 }
 
-export interface StepGridPathMetadata {
-  readonly spacingMeters: typeof STANDARD_STEP_METERS;
+export interface MarchingGridPathMetadata {
+  readonly spacingSteps: 1;
   readonly verticalLineCount: number;
   readonly horizontalLineCount: number;
 }
 
-export interface FiveYardGridPathMetadata {
-  readonly spacingMeters: number;
+export interface PerimeterMarchingGridPathMetadata extends MarchingGridPathMetadata {
+  readonly clippedByFieldBackground: true;
+}
+
+export interface FourStepGridPathMetadata {
+  readonly spacingSteps: 4;
   readonly verticalSubdivisionCount: number;
   readonly horizontalSubdivisionCount: number;
   readonly segmentCount: number;
@@ -47,53 +58,52 @@ export interface BoundaryPathMetadata {
 }
 
 export interface FieldPathCounts {
-  readonly stepGrid: StepGridPathMetadata;
-  readonly fiveYardGrid: FiveYardGridPathMetadata;
+  readonly stepGrid: MarchingGridPathMetadata;
+  readonly perimeterStepGrid: PerimeterMarchingGridPathMetadata;
+  readonly fourStepGrid: FourStepGridPathMetadata;
   readonly yardLines: YardLinesPathMetadata;
   readonly hashMarks: HashMarksPathMetadata;
   readonly boundary: BoundaryPathMetadata;
 }
 
-/**
- * The immutable, world-space SVG geometry consumed by field renderers.
- *
- * Each path is a single aggregate string rather than a collection of line
- * components. Coordinates stay in the field's canonical meter coordinate
- * system: X runs from Side 1 to Side 2 and Y runs from the front sideline to
- * the back sideline.
- */
+/** Immutable world-space geometry projected from the active marching field. */
 export interface FieldPaths {
+  /** One marching-grid step, clipped to the physical field. */
   readonly stepGridPath: string;
-  readonly fiveYardGridPath: string;
+  /** One marching-grid step across the 10-yard camera perimeter. */
+  readonly perimeterStepGridPath: string;
+  /** Four marching-grid steps, clipped to the physical field. */
+  readonly fourStepGridPath: string;
   readonly yardLinesPath: string;
   readonly hashMarksPath: string;
   readonly boundaryPath: string;
   readonly fieldExtent: FieldPathExtent;
   readonly gridExtent: FieldPathExtent;
-  readonly stepGridSpacingMeters: typeof STANDARD_STEP_METERS;
+  readonly stepGridSpacingSteps: 1;
+  readonly fourStepGridSpacingSteps: 4;
   readonly extents: {
     readonly field: FieldPathExtent;
     readonly grid: FieldPathExtent;
   };
   readonly counts: FieldPathCounts;
 
-  /** Short aliases keep the path set convenient for drawing callers. */
   readonly stepGrid: string;
-  readonly fiveYardGrid: string;
+  readonly perimeterStepGrid: string;
+  readonly fourStepGrid: string;
   readonly yardLines: string;
   readonly hashMarks: string;
   readonly boundary: string;
 }
 
-const PATH_CACHE = new WeakMap<StandardHighSchoolFieldTemplate, FieldPaths>();
+const PATH_CACHE = new WeakMap<StandardFootballFieldTemplate, FieldPaths>();
 
 /**
- * Builds all static field geometry in one pass and memoizes it by template.
- * The standard template is deeply immutable, so identity-based memoization is
- * sufficient and avoids rebuilding hundreds of path segments on every render.
+ * Project the active drill schema's marching grid onto the exact physical
+ * football geometry. Grid steps are abstract drill coordinates; they are not
+ * assumed to equal 22.5 physical inches on both axes.
  */
 export function createFieldPaths(
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
 ): FieldPaths {
   const cached = PATH_CACHE.get(template);
   if (cached) return cached;
@@ -112,45 +122,54 @@ export function createFieldPaths(
     maxYMeters: fieldExtent.maxYMeters + gridPaddingMeters,
   });
 
-  const stepGridXCoordinates = coordinatesAtInterval(
-    gridExtent.minXMeters,
-    gridExtent.maxXMeters,
-    STANDARD_STEP_METERS,
+  const marchingBounds = template.fieldDefinition.marchingGrid.bounds;
+  const stepGridXSteps = integerCoordinates(
+    marchingBounds.minXSteps,
+    marchingBounds.maxXSteps,
   );
-  const stepGridYCoordinates = coordinatesAtInterval(
-    gridExtent.minYMeters,
-    gridExtent.maxYMeters,
-    STANDARD_STEP_METERS,
+  const stepGridYSteps = integerCoordinates(
+    marchingBounds.minYSteps,
+    marchingBounds.maxYSteps,
   );
-  const stepGridPath = [
-    ...stepGridXCoordinates.map((xMeters) =>
-      verticalSegment(xMeters, gridExtent.minYMeters, gridExtent.maxYMeters),
-    ),
-    ...stepGridYCoordinates.map((yMeters) =>
-      horizontalSegment(gridExtent.minXMeters, yMeters, gridExtent.maxXMeters),
-    ),
-  ].join(" ");
+  const stepGridPath = gridPathFromSteps(
+    template,
+    stepGridXSteps,
+    stepGridYSteps,
+    fieldExtent,
+  );
 
-  const fiveYardXCoordinates = template.allFiveYardLines.map(
-    (line) => line.coordinateMeters,
+  const perimeterGridBounds = physicalExtentToGridBounds(template, gridExtent);
+  const perimeterXSteps = integerCoordinates(
+    Math.floor(perimeterGridBounds.minXSteps),
+    Math.ceil(perimeterGridBounds.maxXSteps),
   );
-  const fiveYardYCoordinates = coordinatesAtInterval(
-    fieldExtent.minYMeters,
-    fieldExtent.maxYMeters,
-    FIVE_YARD_GRID_SPACING_METERS,
+  const perimeterYSteps = integerCoordinates(
+    Math.floor(perimeterGridBounds.minYSteps),
+    Math.ceil(perimeterGridBounds.maxYSteps),
   );
-  const fiveYardGridPath = [
-    ...fiveYardXCoordinates.map((xMeters) =>
-      verticalSegment(xMeters, fieldExtent.minYMeters, fieldExtent.maxYMeters),
-    ),
-    ...fiveYardYCoordinates.map((yMeters) =>
-      horizontalSegment(
-        fieldExtent.minXMeters,
-        yMeters,
-        fieldExtent.maxXMeters,
-      ),
-    ),
-  ].join(" ");
+  const perimeterStepGridPath = gridPathFromSteps(
+    template,
+    perimeterXSteps,
+    perimeterYSteps,
+    gridExtent,
+  );
+
+  const fourStepXSteps = stepIntervalCoordinates(
+    marchingBounds.minXSteps,
+    marchingBounds.maxXSteps,
+    FOUR_STEP_INTERVAL,
+  );
+  const fourStepYSteps = stepIntervalCoordinates(
+    marchingBounds.minYSteps,
+    marchingBounds.maxYSteps,
+    FOUR_STEP_INTERVAL,
+  );
+  const fourStepGridPath = gridPathFromSteps(
+    template,
+    fourStepXSteps,
+    fourStepYSteps,
+    fieldExtent,
+  );
 
   const yardLinesPath = template.yardLines
     .map((line) =>
@@ -166,7 +185,7 @@ export function createFieldPaths(
     template.frontHashLine.coordinateMeters,
     template.backHashLine.coordinateMeters,
   ] as const;
-  const hashMarks = [] as string[];
+  const hashMarks: string[] = [];
   const ticksPerRow = Math.max(0, Math.ceil(template.goalToGoalYards) - 1);
   for (const yMeters of hashYCoordinates) {
     for (let yard = 1; yard < template.goalToGoalYards; yard += 1) {
@@ -186,15 +205,21 @@ export function createFieldPaths(
   const extents = Object.freeze({ field: fieldExtent, grid: gridExtent });
   const counts: FieldPathCounts = Object.freeze({
     stepGrid: Object.freeze({
-      spacingMeters: STANDARD_STEP_METERS,
-      verticalLineCount: stepGridXCoordinates.length,
-      horizontalLineCount: stepGridYCoordinates.length,
+      spacingSteps: 1,
+      verticalLineCount: stepGridXSteps.length,
+      horizontalLineCount: stepGridYSteps.length,
     }),
-    fiveYardGrid: Object.freeze({
-      spacingMeters: FIVE_YARD_GRID_SPACING_METERS,
-      verticalSubdivisionCount: fiveYardXCoordinates.length,
-      horizontalSubdivisionCount: fiveYardYCoordinates.length,
-      segmentCount: fiveYardXCoordinates.length + fiveYardYCoordinates.length,
+    perimeterStepGrid: Object.freeze({
+      spacingSteps: 1,
+      verticalLineCount: perimeterXSteps.length,
+      horizontalLineCount: perimeterYSteps.length,
+      clippedByFieldBackground: true,
+    }),
+    fourStepGrid: Object.freeze({
+      spacingSteps: 4,
+      verticalSubdivisionCount: fourStepXSteps.length,
+      horizontalSubdivisionCount: fourStepYSteps.length,
+      segmentCount: fourStepXSteps.length + fourStepYSteps.length,
       clippedToField: true,
     }),
     yardLines: Object.freeze({ lineCount: template.yardLines.length }),
@@ -210,17 +235,20 @@ export function createFieldPaths(
 
   const paths: FieldPaths = Object.freeze({
     stepGridPath,
-    fiveYardGridPath,
+    perimeterStepGridPath,
+    fourStepGridPath,
     yardLinesPath,
     hashMarksPath,
     boundaryPath,
     fieldExtent,
     gridExtent,
-    stepGridSpacingMeters: STANDARD_STEP_METERS,
+    stepGridSpacingSteps: 1,
+    fourStepGridSpacingSteps: 4,
     extents,
     counts,
     stepGrid: stepGridPath,
-    fiveYardGrid: fiveYardGridPath,
+    perimeterStepGrid: perimeterStepGridPath,
+    fourStepGrid: fourStepGridPath,
     yardLines: yardLinesPath,
     hashMarks: hashMarksPath,
     boundary: boundaryPath,
@@ -229,27 +257,117 @@ export function createFieldPaths(
   return paths;
 }
 
-/** Alias for callers that describe the operation as building geometry. */
 export const buildFieldPaths = createFieldPaths;
 
-function freezeExtent(extent: FieldPathExtent): FieldPathExtent {
-  return Object.freeze(extent);
+function gridPathFromSteps(
+  template: StandardFootballFieldTemplate,
+  xSteps: readonly number[],
+  ySteps: readonly number[],
+  extent: FieldPathExtent,
+): string {
+  return [
+    ...xSteps.map((step) =>
+      verticalSegment(
+        projectXStep(template, step),
+        extent.minYMeters,
+        extent.maxYMeters,
+      ),
+    ),
+    ...ySteps.map((step) =>
+      horizontalSegment(
+        extent.minXMeters,
+        projectYStep(template, step),
+        extent.maxXMeters,
+      ),
+    ),
+  ].join(" ");
 }
 
-function coordinatesAtInterval(
+function projectXStep(
+  template: StandardFootballFieldTemplate,
+  xSteps: number,
+): number {
+  return drillGridToPhysicalPoint(
+    {
+      xSteps,
+      ySteps: template.fieldDefinition.marchingGrid.bounds.minYSteps,
+    },
+    template.fieldDefinition,
+  ).xMeters;
+}
+
+function projectYStep(
+  template: StandardFootballFieldTemplate,
+  ySteps: number,
+): number {
+  return drillGridToPhysicalPoint(
+    {
+      xSteps: 0,
+      ySteps,
+    },
+    template.fieldDefinition,
+  ).yMeters;
+}
+
+function physicalExtentToGridBounds(
+  template: StandardFootballFieldTemplate,
+  extent: FieldPathExtent,
+) {
+  const field = template.fieldDefinition;
+  const xMin = physicalPointToDrillGrid(
+    { xMeters: extent.minXMeters, yMeters: template.bounds.minYMeters },
+    field,
+  ).xSteps;
+  const xMax = physicalPointToDrillGrid(
+    { xMeters: extent.maxXMeters, yMeters: template.bounds.minYMeters },
+    field,
+  ).xSteps;
+  const yMin = physicalPointToDrillGrid(
+    { xMeters: 0, yMeters: extent.minYMeters },
+    field,
+  ).ySteps;
+  const yMax = physicalPointToDrillGrid(
+    { xMeters: 0, yMeters: extent.maxYMeters },
+    field,
+  ).ySteps;
+  return { minXSteps: xMin, maxXSteps: xMax, minYSteps: yMin, maxYSteps: yMax };
+}
+
+function integerCoordinates(
+  minimum: number,
+  maximum: number,
+): readonly number[] {
+  const start = Math.ceil(minimum - COORDINATE_EPSILON);
+  const end = Math.floor(maximum + COORDINATE_EPSILON);
+  const coordinates: number[] = [];
+  for (let value = start; value <= end; value += 1) coordinates.push(value);
+  return Object.freeze(coordinates);
+}
+
+function stepIntervalCoordinates(
   minimum: number,
   maximum: number,
   interval: number,
 ): readonly number[] {
   const coordinates: number[] = [];
-  const intervalCount = Math.floor(
-    (maximum - minimum) / interval + COORDINATE_EPSILON,
-  );
-  for (let index = 0; index <= intervalCount; index += 1) {
-    coordinates.push(minimum + index * interval);
+  for (
+    let value = minimum;
+    value <= maximum + COORDINATE_EPSILON;
+    value += interval
+  ) {
+    coordinates.push(value);
   }
-
+  if (
+    coordinates.length === 0 ||
+    Math.abs(coordinates[coordinates.length - 1] - maximum) > COORDINATE_EPSILON
+  ) {
+    coordinates.push(maximum);
+  }
   return Object.freeze(coordinates);
+}
+
+function freezeExtent(extent: FieldPathExtent): FieldPathExtent {
+  return Object.freeze(extent);
 }
 
 function verticalSegment(

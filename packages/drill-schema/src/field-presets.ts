@@ -1,8 +1,9 @@
-import type {
-  FieldPresetId,
-  MarchingReferenceLine,
-  PhysicalReferenceLine,
-  ResolvedFieldDefinition,
+import {
+  FIELD_PRESET_IDS,
+  type FieldPresetId,
+  type MarchingReferenceLine,
+  type PhysicalReferenceLine,
+  type ResolvedFieldDefinition,
 } from "./types";
 
 const FEET_TO_METERS = 0.3048;
@@ -139,6 +140,15 @@ function makeFootballPreset({
       ]),
     }),
   });
+}
+
+const FIELD_PRESET_ID_SET = new Set<FieldPresetId>(FIELD_PRESET_IDS);
+
+export function isFieldPresetId(value: unknown): value is FieldPresetId {
+  return (
+    typeof value === "string" &&
+    FIELD_PRESET_ID_SET.has(value as FieldPresetId)
+  );
 }
 
 /**

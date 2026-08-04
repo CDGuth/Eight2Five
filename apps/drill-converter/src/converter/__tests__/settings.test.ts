@@ -1,5 +1,6 @@
 import {
   COLOR_PRESETS,
+  FIELD_PRESET_IDS,
   parseDrillDocument,
   resolveDrillEntity,
   type DrillDocument,
@@ -10,6 +11,7 @@ import {
   createDefaultConverterSettings,
   createEmptyRuleDraft,
   downloadFileName,
+  FIELD_PRESET_OPTIONS,
   inferTitleFromFileName,
   validateConverterSettings,
 } from "../settings";
@@ -55,6 +57,12 @@ describe("drill converter settings", () => {
       field: { type: "preset", preset: "football-nfhs" },
       errors: [],
     });
+  });
+
+  test("exposes every schema field preset in schema order", () => {
+    expect(FIELD_PRESET_OPTIONS.map(({ value }) => value)).toEqual(
+      FIELD_PRESET_IDS,
+    );
   });
 
   test("applies metadata, props, rules, and optional explicit straight paths", () => {

@@ -1,4 +1,5 @@
 import type { DrillRepository, DrillSet } from "@eight2five/mobile/drill";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import { validatePageDraft, type MarchingCoordinateDraft } from "./page-form";
 
@@ -34,6 +35,7 @@ export async function savePageDraft({
   placement,
   relativePageId,
   draft,
+  fieldPreset = "football-nfhs",
 }: {
   repository: DrillRepository;
   drillId: string;
@@ -42,8 +44,9 @@ export async function savePageDraft({
   placement: SetPlacement;
   relativePageId?: string;
   draft: MarchingCoordinateDraft;
+  fieldPreset?: FieldPresetId;
 }): Promise<DrillSet> {
-  const validation = validatePageDraft(draft);
+  const validation = validatePageDraft(draft, fieldPreset);
   if (!validation.value) {
     const message =
       Object.values(validation.errors)[0] ?? "Review the set form.";

@@ -4,6 +4,7 @@ import {
   Code2,
   Eye,
   ListChecks,
+  Map,
   Navigation,
   Radio,
   Route,
@@ -13,6 +14,11 @@ import type {
   FieldPerspective,
   TransitionMetricMode,
 } from "@eight2five/mobile/settings";
+import {
+  FIELD_PRESET_IDS,
+  getFieldPreset,
+  type FieldPresetId,
+} from "@eight2five/drill-schema";
 
 import { useTabBarVisibility } from "../../navigation/tab-bar-visibility-context";
 import { useMobilePansSnapshot } from "../../pans/mobile-pans-context";
@@ -36,6 +42,11 @@ const PERSPECTIVE_CHOICES = [
   { label: "Director", value: "director" },
   { label: "Performer", value: "performer" },
 ] as const;
+
+const FIELD_PRESET_CHOICES = FIELD_PRESET_IDS.map((value) => ({
+  label: getFieldPreset(value).name,
+  value,
+})) satisfies readonly { label: string; value: FieldPresetId }[];
 
 const TRANSITION_CHOICES = [
   { label: "Step Size", value: "step-size" },
@@ -111,6 +122,16 @@ export function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="Field">
+        <SettingsSelectRow<FieldPresetId>
+          icon={Map}
+          title="Default marching field"
+          description="Used when no drill is loaded and for new manual drills. A loaded drill overrides this default."
+          value={settings.defaultFieldPreset}
+          choices={FIELD_PRESET_CHOICES}
+          onChange={(defaultFieldPreset) => void update({ defaultFieldPreset })}
+          disabled={disabled}
+          testID="default-field-preset-setting"
+        />
         <SettingsSelectRow<FieldPerspective>
           icon={Eye}
           title="Field perspective"

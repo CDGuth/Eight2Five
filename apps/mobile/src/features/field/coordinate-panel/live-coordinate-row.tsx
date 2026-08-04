@@ -1,11 +1,18 @@
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import type { FieldLivePositionState } from "@eight2five/mobile/field";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import { getLiveCoordinatePresentation } from "./coordinate-panel-state";
 
-export function LiveCoordinateRow({ live }: { live: FieldLivePositionState }) {
-  const presentation = getLiveCoordinatePresentation(live);
+export function LiveCoordinateRow({
+  live,
+  fieldPreset,
+}: {
+  live: FieldLivePositionState;
+  fieldPreset: FieldPresetId;
+}) {
+  const presentation = getLiveCoordinatePresentation(live, fieldPreset);
   const color = presentation.muted ? "rgba(255,255,255,0.58)" : "#FFFFFF";
   return (
     <VStack

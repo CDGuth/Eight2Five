@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import {
   MOBILE_DB_NAME,
-  migrateMobileDatabase,
+  prepareMobileDatabase,
 } from "./storage/mobileDatabase";
 import { SqliteDrillRepository } from "./drill/SqliteDrillRepository";
 import { SqliteSettingsRepository } from "./settings/SqliteSettingsRepository";
@@ -16,8 +16,8 @@ export interface OpenMobileRepositoriesResult {
  * Open the app-side repositories over one database connection.
  *
  * `expo-sqlite` is imported lazily so consumers of the pure field and drill
- * helpers do not load native SQLite at module evaluation time. Migration is
- * owned here and runs before either repository is exposed.
+ * helpers do not load native SQLite at module evaluation time. Schema
+ * preparation is owned here and runs before either repository is exposed.
  */
 export async function openMobileRepositories(
   databaseName = MOBILE_DB_NAME,
@@ -25,7 +25,7 @@ export async function openMobileRepositories(
   const { openDatabaseAsync } = await import("expo-sqlite");
   const database = await openDatabaseAsync(databaseName);
   try {
-    await migrateMobileDatabase(database);
+    await prepareMobileDatabase(database);
   } catch (cause) {
     await closeQuietly(database);
     throw cause;
@@ -42,6 +42,6 @@ async function closeQuietly(database: SQLiteDatabase): Promise<void> {
   try {
     await database.closeAsync();
   } catch {
-    // Preserve the migration/opening error rather than masking it with close.
+    // Preserve the schema/opening error rather than masking it with close.
   }
 }

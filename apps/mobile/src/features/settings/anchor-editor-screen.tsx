@@ -39,7 +39,10 @@ export function AnchorEditorScreen({
 }) {
   const theme = useEight2FiveTheme();
   const controller = useAnchorEditorController(anchorId);
-  const preview = formatAnchorCanonicalPreview(controller.validation.position);
+  const preview = formatAnchorCanonicalPreview(
+    controller.validation.position,
+    controller.fieldPreset,
+  );
 
   if (!controller.developerModeEnabled) {
     return (
@@ -100,6 +103,7 @@ export function AnchorEditorScreen({
         <VStack style={{ gap: eight2FiveSpacing.lg }}>
           <MarchingCoordinateForm
             draft={controller.marchingDraft.coordinate}
+            fieldPreset={controller.fieldPreset}
             showDetails={false}
             disabled={controller.saving}
             onChange={(coordinate) =>

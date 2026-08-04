@@ -1,3 +1,4 @@
+import { FIELD_PRESET_IDS } from "@eight2five/drill-schema";
 import {
   ANCHOR_POSITION_REFERENCES,
   ANCHOR_POSITION_REFERENCE_POINTS,
@@ -8,6 +9,7 @@ import {
   anchorFieldPositionFromStandard,
   anchorFieldPositionToStandard,
   convertAnchorPositionUnits,
+  createStandardFootballFieldTemplate,
   getAnchorPositionReferencePoint,
   metersToAnchorPositionUnits,
   drillGridPointToFieldPoint,
@@ -16,6 +18,7 @@ import {
 } from "../index";
 
 const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
+const PRESETS = FIELD_PRESET_IDS;
 
 describe("shared anchor position domain", () => {
   test("defines exactly the standard references and their field points", () => {
@@ -63,6 +66,25 @@ describe("shared anchor position domain", () => {
       yMeters: field.widthMeters / 2,
     });
   });
+
+  test.each(PRESETS)(
+    "%s derives hash reference points from the active field preset",
+    (preset) => {
+      const template = createStandardFootballFieldTemplate(preset);
+      expect(
+        getAnchorPositionReferencePoint("front-hash-center", preset),
+      ).toEqual({
+        xMeters: 0,
+        yMeters: template.frontHashLine.coordinateMeters,
+      });
+      expect(
+        getAnchorPositionReferencePoint("back-hash-center", preset),
+      ).toEqual({
+        xMeters: 0,
+        yMeters: template.backHashLine.coordinateMeters,
+      });
+    },
+  );
 
   test("converts all supported units through one canonical meter path", () => {
     expect(ANCHOR_POSITION_UNITS).toEqual(["meters", "yards", "feet"]);
@@ -169,6 +191,35 @@ describe("shared anchor position domain", () => {
     expect(expected.yMeters).toBeCloseTo(projected.yMeters);
     expect(expected.zMeters).toBe(2.4);
   });
+
+  test.each(PRESETS)(
+    "%s projects marching anchor coordinates with that preset's hash convention",
+    (preset) => {
+      const position = anchorFieldPositionFromMarchingCoordinate(
+        {
+          side: {
+            side: "center",
+            yardLine: 50,
+            relation: "on",
+            offsetSteps: 0,
+          },
+          frontBack: {
+            reference: "front-hash",
+            relation: "on",
+            offsetSteps: 0,
+          },
+        },
+        2,
+        preset,
+      );
+      const template = createStandardFootballFieldTemplate(preset);
+      expect(position.yMeters).toBeCloseTo(
+        template.frontHashLine.coordinateMeters,
+        8,
+      );
+      expect(position.zMeters).toBe(2);
+    },
+  );
 
   test("parses drafts and rejects empty, non-finite, out-of-field, and excessive values", () => {
     expect(

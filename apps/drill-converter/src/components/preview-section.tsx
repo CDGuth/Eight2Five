@@ -41,7 +41,7 @@ export function PreviewSection({
   return (
     <SectionCard
       title="3. Validate and download"
-      description="The download is enabled only after the parsed data passes the portable Eight2Five v1 schema."
+      description="The download is enabled only after the parsed data passes the current portable Eight2Five schema."
     >
       {!importResult ? (
         <Text selectable style={{ color: colors.textMuted, fontSize: 13 }}>

@@ -1,8 +1,13 @@
 import {
   drillGridToPhysicalPoint,
   getFieldPreset,
+  getGridReference,
   physicalPointToDrillGrid,
+  resolveFieldDefinition,
   type DrillGridPoint,
+  type FieldDefinition,
+  type FieldPresetId,
+  type ResolvedFieldDefinition,
 } from "@eight2five/drill-schema";
 
 import {
@@ -10,13 +15,25 @@ import {
   type FieldLateralReference,
   type FieldPoint,
 } from "./types";
-import {
-  STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
-  type StandardHighSchoolFieldTemplate,
-} from "./template";
+import type { StandardFootballFieldTemplate } from "./template";
 
 const EPSILON = 1e-9;
 const NFHS_FIELD = getFieldPreset("football-nfhs");
+
+export type MarchingFieldInput =
+  | FieldPresetId
+  | FieldDefinition
+  | ResolvedFieldDefinition
+  | StandardFootballFieldTemplate;
+
+function resolveMarchingField(
+  field: MarchingFieldInput = NFHS_FIELD,
+): ResolvedFieldDefinition {
+  if (typeof field === "string") return getFieldPreset(field);
+  if ("fieldDefinition" in field) return field.fieldDefinition;
+  if ("type" in field) return resolveFieldDefinition(field);
+  return field;
+}
 
 export type MarchingSideReference = 1 | 2 | "center";
 export type MarchingSideRelation = "on" | "inside" | "outside";
@@ -107,12 +124,22 @@ interface LateralReference {
   readonly ySteps: number;
 }
 
-const LATERAL_REFERENCES: readonly LateralReference[] = Object.freeze([
-  { reference: "front-sideline", ySteps: 0 },
-  { reference: "front-hash", ySteps: 28 },
-  { reference: "back-hash", ySteps: 56 },
-  { reference: "back-sideline", ySteps: 84 },
+const LATERAL_REFERENCE_IDS: readonly FieldLateralReference[] = Object.freeze([
+  "front-sideline",
+  "front-hash",
+  "back-hash",
+  "back-sideline",
 ]);
+
+function lateralReferences(
+  field: ResolvedFieldDefinition,
+): readonly LateralReference[] {
+  return LATERAL_REFERENCE_IDS.map((reference) => {
+    const line = getGridReference(field, reference);
+    if (!line) throw new RangeError(`Field is missing ${reference}.`);
+    return Object.freeze({ reference, ySteps: line.coordinateSteps });
+  });
+}
 
 /** Deterministic nearest-reference selection avoids display flicker at ties. */
 function nearestReference<T extends { readonly coordinate: number }>(
@@ -181,12 +208,20 @@ function makeSideCoordinate(xSteps: number): MarchingSideCoordinate {
   });
 }
 
-function makeFrontBackCoordinate(ySteps: number): MarchingFrontBackCoordinate {
-  const references = LATERAL_REFERENCES.map((reference) => ({
+function makeFrontBackCoordinate(
+  ySteps: number,
+  field: ResolvedFieldDefinition,
+): MarchingFrontBackCoordinate {
+  const references = lateralReferences(field).map((reference) => ({
     ...reference,
     coordinate: reference.ySteps,
   }));
-  const nearest = nearestReference(ySteps, references, 42);
+  const bounds = field.marchingGrid.bounds;
+  const nearest = nearestReference(
+    ySteps,
+    references,
+    (bounds.minYSteps + bounds.maxYSteps) / 2,
+  );
   const offsetYSteps = ySteps - nearest.ySteps;
   return Object.freeze({
     reference: nearest.reference,
@@ -197,12 +232,20 @@ function makeFrontBackCoordinate(ySteps: number): MarchingFrontBackCoordinate {
 
 function getGridOutOfBounds(
   point: DrillGridPoint,
+  field: ResolvedFieldDefinition,
 ): readonly ("goal-to-goal" | "front-back")[] | undefined {
   const outOfBounds: ("goal-to-goal" | "front-back")[] = [];
-  if (point.xSteps < -80 - EPSILON || point.xSteps > 80 + EPSILON) {
+  const bounds = field.marchingGrid.bounds;
+  if (
+    point.xSteps < bounds.minXSteps - EPSILON ||
+    point.xSteps > bounds.maxXSteps + EPSILON
+  ) {
     outOfBounds.push("goal-to-goal");
   }
-  if (point.ySteps < -EPSILON || point.ySteps > 84 + EPSILON) {
+  if (
+    point.ySteps < bounds.minYSteps - EPSILON ||
+    point.ySteps > bounds.maxYSteps + EPSILON
+  ) {
     outOfBounds.push("front-back");
   }
   return outOfBounds.length > 0 ? Object.freeze(outOfBounds) : undefined;
@@ -210,25 +253,29 @@ function getGridOutOfBounds(
 
 export function drillGridPointToMarchingCoordinate(
   point: DrillGridPoint,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): MarchingCoordinate {
   if (!Number.isFinite(point.xSteps) || !Number.isFinite(point.ySteps)) {
     throw new RangeError("Drill grid coordinates must be finite.");
   }
-  const outOfBounds = getGridOutOfBounds(point);
+  const field = resolveMarchingField(fieldInput);
+  const outOfBounds = getGridOutOfBounds(point, field);
   return Object.freeze({
     side: makeSideCoordinate(point.xSteps),
-    frontBack: makeFrontBackCoordinate(point.ySteps),
+    frontBack: makeFrontBackCoordinate(point.ySteps, field),
     ...(outOfBounds ? { outOfBounds } : {}),
   });
 }
 
 export function fieldPointToMarchingCoordinate(
   point: FieldPoint,
-  _template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): MarchingCoordinate {
   assertFiniteFieldPoint(point);
+  const field = resolveMarchingField(fieldInput);
   return drillGridPointToMarchingCoordinate(
-    physicalPointToDrillGrid(point, NFHS_FIELD),
+    physicalPointToDrillGrid(point, field),
+    field,
   );
 }
 
@@ -303,18 +350,15 @@ function sideCoordinateToXSteps(coordinate: MarchingSideCoordinate): number {
 
 function frontBackCoordinateToYSteps(
   coordinate: MarchingFrontBackCoordinate,
+  field: ResolvedFieldDefinition,
 ): number {
   assertOffset(coordinate.offsetSteps, "Marching front/back offsetSteps");
   if (coordinate.relation === "on" && coordinate.offsetSteps > EPSILON) {
     throw new RangeError('An "on" marching coordinate must have zero offset.');
   }
-  const yByReference: Record<FieldLateralReference, number> = {
-    "front-sideline": 0,
-    "front-hash": 28,
-    "back-hash": 56,
-    "back-sideline": 84,
-  };
-  const lineY = yByReference[coordinate.reference];
+  const line = getGridReference(field, coordinate.reference);
+  if (!line) throw new RangeError(`Field is missing ${coordinate.reference}.`);
+  const lineY = line.coordinateSteps;
   if (coordinate.relation === "on") return lineY;
   if (coordinate.relation === "in-front-of") {
     return lineY - coordinate.offsetSteps;
@@ -329,25 +373,28 @@ function frontBackCoordinateToYSteps(
 
 export function marchingCoordinateToDrillGridPoint(
   coordinate: MarchingCoordinate,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): DrillGridPoint {
   if (!coordinate || !coordinate.side || !coordinate.frontBack) {
     throw new TypeError(
       "A marching coordinate requires side and frontBack values.",
     );
   }
+  const field = resolveMarchingField(fieldInput);
   return Object.freeze({
     xSteps: sideCoordinateToXSteps(coordinate.side),
-    ySteps: frontBackCoordinateToYSteps(coordinate.frontBack),
+    ySteps: frontBackCoordinateToYSteps(coordinate.frontBack, field),
   });
 }
 
 export function marchingCoordinateToFieldPoint(
   coordinate: MarchingCoordinate,
-  _template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): FieldPoint {
+  const field = resolveMarchingField(fieldInput);
   const physical = drillGridToPhysicalPoint(
-    marchingCoordinateToDrillGridPoint(coordinate),
-    NFHS_FIELD,
+    marchingCoordinateToDrillGridPoint(coordinate, field),
+    field,
   );
   const point = {
     xMeters: physical.xMeters,
@@ -357,17 +404,26 @@ export function marchingCoordinateToFieldPoint(
   return Object.freeze(point);
 }
 
-export function drillGridPointToFieldPoint(point: DrillGridPoint): FieldPoint {
-  const physical = drillGridToPhysicalPoint(point, NFHS_FIELD);
+export function drillGridPointToFieldPoint(
+  point: DrillGridPoint,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
+): FieldPoint {
+  const physical = drillGridToPhysicalPoint(
+    point,
+    resolveMarchingField(fieldInput),
+  );
   return Object.freeze({
     xMeters: physical.xMeters,
     yMeters: physical.yMeters,
   });
 }
 
-export function fieldPointToDrillGridPoint(point: FieldPoint): DrillGridPoint {
+export function fieldPointToDrillGridPoint(
+  point: FieldPoint,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
+): DrillGridPoint {
   assertFiniteFieldPoint(point);
-  return physicalPointToDrillGrid(point, NFHS_FIELD);
+  return physicalPointToDrillGrid(point, resolveMarchingField(fieldInput));
 }
 
 export const fieldPointToMarching = fieldPointToMarchingCoordinate;
@@ -387,14 +443,36 @@ function formatSideCoordinate(coordinate: MarchingSideCoordinate): string {
   return `Side ${coordinate.side}: ${steps} ${coordinate.relation} ${line}`;
 }
 
-function lateralReferenceText(reference: FieldLateralReference): string {
+function hashReferencePrefix(field: ResolvedFieldDefinition): string {
+  switch (field.id) {
+    case "football-nfhs":
+      return "HS";
+    case "football-ncaa":
+      return "NCAA";
+    case "football-texas-uil":
+      return "UIL";
+    case "football-nfl":
+      return "NFL";
+    case "custom":
+      return "";
+  }
+}
+
+function lateralReferenceText(
+  reference: FieldLateralReference,
+  field: ResolvedFieldDefinition,
+): string {
   switch (reference) {
     case "front-sideline":
       return "Front Sideline";
-    case "front-hash":
-      return "HS FH";
-    case "back-hash":
-      return "HS BH";
+    case "front-hash": {
+      const prefix = hashReferencePrefix(field);
+      return prefix ? `${prefix} FH` : "Front Hash";
+    }
+    case "back-hash": {
+      const prefix = hashReferencePrefix(field);
+      return prefix ? `${prefix} BH` : "Back Hash";
+    }
     case "back-sideline":
       return "Back Sideline";
   }
@@ -402,8 +480,9 @@ function lateralReferenceText(reference: FieldLateralReference): string {
 
 function formatFrontBackCoordinate(
   coordinate: MarchingFrontBackCoordinate,
+  field: ResolvedFieldDefinition,
 ): string {
-  const reference = lateralReferenceText(coordinate.reference);
+  const reference = lateralReferenceText(coordinate.reference, field);
   if (coordinate.relation === "on") return `On ${reference}`;
   return `${stepWord(coordinate.offsetSteps)} ${
     coordinate.relation === "behind" ? "behind" : "in front of"
@@ -418,27 +497,32 @@ export const formatMarchingSideCoordinate = formatMarchingSide;
 
 export function formatMarchingFrontBack(
   coordinate: MarchingFrontBackCoordinate,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): string {
-  return formatFrontBackCoordinate(coordinate);
+  return formatFrontBackCoordinate(
+    coordinate,
+    resolveMarchingField(fieldInput),
+  );
 }
 
 export const formatMarchingFrontBackCoordinate = formatMarchingFrontBack;
 
 export function formatMarchingCoordinate(
   coordinateOrPoint: MarchingCoordinate | FieldPoint | DrillGridPoint,
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  fieldInput: MarchingFieldInput = NFHS_FIELD,
 ): string {
+  const field = resolveMarchingField(fieldInput);
   let coordinate: MarchingCoordinate;
   if ("side" in coordinateOrPoint) {
     coordinate = coordinateOrPoint;
   } else if ("xSteps" in coordinateOrPoint) {
-    coordinate = drillGridPointToMarchingCoordinate(coordinateOrPoint);
+    coordinate = drillGridPointToMarchingCoordinate(coordinateOrPoint, field);
   } else {
-    coordinate = fieldPointToMarchingCoordinate(coordinateOrPoint, template);
+    coordinate = fieldPointToMarchingCoordinate(coordinateOrPoint, field);
   }
   const parts = [
     formatSideCoordinate(coordinate.side),
-    formatFrontBackCoordinate(coordinate.frontBack),
+    formatFrontBackCoordinate(coordinate.frontBack, field),
   ];
   const formatted = parts.join("; ");
   return coordinate.outOfBounds?.length

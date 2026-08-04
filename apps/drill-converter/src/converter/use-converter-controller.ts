@@ -128,7 +128,7 @@ export function useConverterController() {
         pages.every((page) => page.items.length === 0)
       ) {
         throw new Error(
-          "The PDF contains no extractable text. Scanned/image-only coordinate sheets are not supported in v1.",
+          "The PDF contains no extractable text. Scanned/image-only coordinate sheets are not currently supported.",
         );
       }
       setExtractedPages(pages);

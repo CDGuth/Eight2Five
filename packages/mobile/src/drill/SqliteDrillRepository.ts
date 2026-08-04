@@ -1,12 +1,13 @@
 import {
   formatSetName,
+  isFieldPresetId,
   type DrillGridPoint,
+  type FieldPresetId,
   type MeasureRange,
   type SetKind,
 } from "@eight2five/drill-schema";
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import { drillGridPointToFieldPoint } from "../field/marching";
 import {
   APP_SETTINGS_TABLE,
   DRILLS_TABLE,
@@ -24,7 +25,7 @@ export interface CreateDrillInput {
   readonly name: string;
   readonly createdAt?: number;
   readonly updatedAt?: number;
-  readonly fieldPreset?: "football-nfhs";
+  readonly fieldPreset?: FieldPresetId;
 }
 
 export interface CreateDrillSetDetails {
@@ -173,10 +174,8 @@ export class SqliteDrillRepository implements DrillRepository {
     );
     const id = assertId(input.id ?? this.idFactory(), "Drill id");
     const fieldPreset = input.fieldPreset ?? "football-nfhs";
-    if (fieldPreset !== "football-nfhs") {
-      throw invalidInput(
-        "The mobile MVP currently supports the NFHS field preset.",
-      );
+    if (!isFieldPresetId(fieldPreset)) {
+      throw invalidInput(`Unsupported field preset ${String(fieldPreset)}.`);
     }
 
     await this.db.runAsync(
@@ -297,6 +296,7 @@ export class SqliteDrillRepository implements DrillRepository {
       throw invalidInput("The first set must have zero counts from previous.");
     }
 
+    await this.requireDrill(current.drillId);
     await this.db.withTransactionAsync(async () => {
       await this.updateSetRow(next);
       await this.validateSetStructure(current.drillId);
@@ -511,14 +511,12 @@ export class SqliteDrillRepository implements DrillRepository {
   private async insertSetRow(
     set: NormalizedCreateSet & { id: string; ordinal: number },
   ) {
-    const physical = drillGridPointToFieldPoint(set.position);
-    const label = formatSetName(set);
     await this.db.runAsync(
       `INSERT INTO ${DRILL_SETS_TABLE}
        (id, drill_id, ordinal, set_number, set_suffix, set_kind,
         counts_from_previous, measure_start, measure_end,
-        x_steps, y_steps, facing_degrees, label, x_meters, y_meters)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        x_steps, y_steps, facing_degrees)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         set.id,
         set.drillId,
@@ -532,20 +530,16 @@ export class SqliteDrillRepository implements DrillRepository {
         set.position.xSteps,
         set.position.ySteps,
         set.facingDegrees ?? null,
-        label,
-        physical.xMeters,
-        physical.yMeters,
       ],
     );
   }
 
   private async updateSetRow(set: DrillSet): Promise<void> {
-    const physical = drillGridPointToFieldPoint(set.position);
     await this.db.runAsync(
       `UPDATE ${DRILL_SETS_TABLE}
        SET set_number = ?, set_suffix = ?, set_kind = ?, counts_from_previous = ?,
            measure_start = ?, measure_end = ?, x_steps = ?, y_steps = ?,
-           facing_degrees = ?, label = ?, x_meters = ?, y_meters = ?
+           facing_degrees = ?
        WHERE id = ?`,
       [
         set.number,
@@ -557,9 +551,6 @@ export class SqliteDrillRepository implements DrillRepository {
         set.position.xSteps,
         set.position.ySteps,
         set.facingDegrees ?? null,
-        formatSetName(set),
-        physical.xMeters,
-        physical.yMeters,
         set.id,
       ],
     );
@@ -814,7 +805,7 @@ function nullableIdFromSql(value: SqlValue | undefined): string | null {
 
 function toDrill(row: Row): Drill {
   const fieldPreset = rowText(row.field_preset, "drill field_preset");
-  if (fieldPreset !== "football-nfhs") {
+  if (!isFieldPresetId(fieldPreset)) {
     throw new MobileRowError(`Unsupported mobile field preset ${fieldPreset}.`);
   }
   return {

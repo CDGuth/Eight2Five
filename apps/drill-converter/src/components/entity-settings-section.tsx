@@ -156,7 +156,7 @@ export function EntitySettingsSection({
 
       <ToggleRow
         title="Write explicit straight paths"
-        description="Normally omitted because a missing path means straight-line movement in Eight2Five v1. Enable this only when you want the JSON to contain every straight transition explicitly."
+        description="Normally omitted because a missing path means straight-line movement in the current Eight2Five schema. Enable this only when you want the JSON to contain every straight transition explicitly."
         value={settings.explicitStraightPaths}
         onChange={(explicitStraightPaths) =>
           onUpdate({ explicitStraightPaths })

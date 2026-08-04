@@ -5,6 +5,7 @@ import {
   CircleDashed,
   Code2,
   Database,
+  Grid3X3,
   MapPinned,
   RefreshCw,
   Radio,
@@ -89,6 +90,7 @@ export function DeveloperSettingsScreen() {
   const updateOverlay = async (partial: {
     showCachedAnchorGeometry?: boolean;
     showComfortableAnchorRange?: boolean;
+    showPerimeterStepGrid?: boolean;
     comfortableAnchorRangeMeters?: number;
   }) => {
     setOperationError(undefined);
@@ -213,6 +215,16 @@ export function DeveloperSettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="Field Overlays">
+        <SettingsSwitchRow
+          icon={Grid3X3}
+          title="Show perimeter step grid"
+          description="Continue the active marching coordinate grid beyond the physical field boundary."
+          value={settings.showPerimeterStepGrid}
+          onChange={(showPerimeterStepGrid) =>
+            void updateOverlay({ showPerimeterStepGrid })
+          }
+          testID="show-perimeter-step-grid-setting"
+        />
         <SettingsSwitchRow
           icon={MapPinned}
           title="Show cached anchor geometry"

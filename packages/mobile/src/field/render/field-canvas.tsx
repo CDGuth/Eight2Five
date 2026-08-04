@@ -10,9 +10,11 @@ import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { setFieldCamera } from "../camera/field-camera-math";
+import type { FieldPresetId } from "@eight2five/drill-schema";
+
 import {
-  STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
-  type StandardHighSchoolFieldTemplate,
+  createStandardFootballFieldTemplate,
+  type StandardFootballFieldTemplate,
 } from "../template";
 import type { FieldPoint } from "../types";
 import {
@@ -39,7 +41,8 @@ import {
 } from "./field-render-tokens";
 
 export interface FieldCanvasProps {
-  readonly template?: StandardHighSchoolFieldTemplate;
+  readonly template?: StandardFootballFieldTemplate;
+  readonly fieldPreset?: FieldPresetId;
   readonly camera?: FieldCamera;
   readonly defaultViewport?: FieldViewport;
   readonly onViewportChange?: (viewport: FieldViewport) => void;
@@ -49,6 +52,7 @@ export interface FieldCanvasProps {
   readonly guidanceVisible?: boolean;
   readonly anchors?: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions?: FieldAnchorOverlayOptions;
+  readonly showPerimeterStepGrid?: boolean;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string;
 }
@@ -56,7 +60,8 @@ export interface FieldCanvasProps {
 const EMPTY_FIELD_ANCHORS: readonly FieldAnchorGeometry[] = Object.freeze([]);
 
 export function FieldCanvas({
-  template = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  template: explicitTemplate,
+  fieldPreset = "football-nfhs",
   camera: externalCamera,
   defaultViewport,
   onViewportChange,
@@ -66,9 +71,14 @@ export function FieldCanvas({
   guidanceVisible = false,
   anchors = EMPTY_FIELD_ANCHORS,
   anchorOverlayOptions = HIDDEN_FIELD_ANCHOR_OVERLAY,
+  showPerimeterStepGrid = false,
   style,
   testID = "field-canvas",
 }: FieldCanvasProps) {
+  const template = React.useMemo(
+    () => explicitTemplate ?? createStandardFootballFieldTemplate(fieldPreset),
+    [explicitTemplate, fieldPreset],
+  );
   const midpoint = {
     xMeters: (template.bounds.minXMeters + template.bounds.maxXMeters) / 2,
     yMeters: (template.bounds.minYMeters + template.bounds.maxYMeters) / 2,
@@ -157,6 +167,7 @@ export function FieldCanvas({
             guidanceVisible={guidanceVisible}
             anchors={anchors}
             anchorOverlayOptions={anchorOverlayOptions}
+            showPerimeterStepGrid={showPerimeterStepGrid}
           />
         </Canvas>
       </View>

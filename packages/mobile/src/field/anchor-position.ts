@@ -1,8 +1,10 @@
+import type { FieldPresetId } from "@eight2five/drill-schema";
+
 import {
   marchingCoordinateToFieldPoint,
   type MarchingCoordinate,
 } from "./marching";
-import { STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE } from "./template";
+import { createStandardFootballFieldTemplate } from "./template";
 import type { AnchorFieldPosition, FieldPoint } from "./types";
 import {
   feetToMeters,
@@ -80,41 +82,56 @@ export interface ParsedAnchorPositionDraft {
 
 export const MAX_ANCHOR_HEIGHT_METERS = 100;
 
-const template = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
-const bounds = template.bounds;
-const centerXMeters = (bounds.minXMeters + bounds.maxXMeters) / 2;
-const centerYMeters = (bounds.minYMeters + bounds.maxYMeters) / 2;
-const point = (xMeters: number, yMeters: number): FieldPoint => ({
-  xMeters,
-  yMeters,
-});
+const REFERENCE_POINTS_CACHE = new Map<
+  FieldPresetId,
+  Readonly<Record<AnchorPositionReference, FieldPoint>>
+>();
 
-export const ANCHOR_POSITION_REFERENCE_POINTS: Readonly<
-  Record<AnchorPositionReference, FieldPoint>
-> = Object.freeze({
-  "center-field": point(centerXMeters, centerYMeters),
-  "center-front-sideline": point(centerXMeters, bounds.minYMeters),
-  "center-back-sideline": point(centerXMeters, bounds.maxYMeters),
-  "side-1-front-corner": point(bounds.minXMeters, bounds.minYMeters),
-  "side-1-back-corner": point(bounds.minXMeters, bounds.maxYMeters),
-  "side-2-front-corner": point(bounds.maxXMeters, bounds.minYMeters),
-  "side-2-back-corner": point(bounds.maxXMeters, bounds.maxYMeters),
-  "side-1-goal-line-center": point(bounds.minXMeters, centerYMeters),
-  "side-2-goal-line-center": point(bounds.maxXMeters, centerYMeters),
-  "front-hash-center": point(
-    centerXMeters,
-    template.frontHashLine.coordinateMeters,
-  ),
-  "back-hash-center": point(
-    centerXMeters,
-    template.backHashLine.coordinateMeters,
-  ),
-});
+const point = (xMeters: number, yMeters: number): FieldPoint =>
+  Object.freeze({ xMeters, yMeters });
+
+function getAnchorPositionReferencePoints(
+  fieldPreset: FieldPresetId,
+): Readonly<Record<AnchorPositionReference, FieldPoint>> {
+  const cached = REFERENCE_POINTS_CACHE.get(fieldPreset);
+  if (cached) return cached;
+
+  const template = createStandardFootballFieldTemplate(fieldPreset);
+  const bounds = template.bounds;
+  const centerXMeters = (bounds.minXMeters + bounds.maxXMeters) / 2;
+  const centerYMeters = (bounds.minYMeters + bounds.maxYMeters) / 2;
+  const references = Object.freeze({
+    "center-field": point(centerXMeters, centerYMeters),
+    "center-front-sideline": point(centerXMeters, bounds.minYMeters),
+    "center-back-sideline": point(centerXMeters, bounds.maxYMeters),
+    "side-1-front-corner": point(bounds.minXMeters, bounds.minYMeters),
+    "side-1-back-corner": point(bounds.minXMeters, bounds.maxYMeters),
+    "side-2-front-corner": point(bounds.maxXMeters, bounds.minYMeters),
+    "side-2-back-corner": point(bounds.maxXMeters, bounds.maxYMeters),
+    "side-1-goal-line-center": point(bounds.minXMeters, centerYMeters),
+    "side-2-goal-line-center": point(bounds.maxXMeters, centerYMeters),
+    "front-hash-center": point(
+      centerXMeters,
+      template.frontHashLine.coordinateMeters,
+    ),
+    "back-hash-center": point(
+      centerXMeters,
+      template.backHashLine.coordinateMeters,
+    ),
+  } satisfies Record<AnchorPositionReference, FieldPoint>);
+  REFERENCE_POINTS_CACHE.set(fieldPreset, references);
+  return references;
+}
+
+/** NFHS compatibility snapshot for callers that consume the constant directly. */
+export const ANCHOR_POSITION_REFERENCE_POINTS =
+  getAnchorPositionReferencePoints("football-nfhs");
 
 export function getAnchorPositionReferencePoint(
   reference: AnchorPositionReference,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): FieldPoint {
-  return ANCHOR_POSITION_REFERENCE_POINTS[reference];
+  return getAnchorPositionReferencePoints(fieldPreset)[reference];
 }
 
 export function anchorPositionUnitsToMeters(
@@ -150,8 +167,12 @@ export function convertAnchorPositionUnits(
 
 export function anchorFieldPositionFromStandard(
   input: StandardAnchorPositionInput,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorFieldPosition {
-  const reference = getAnchorPositionReferencePoint(input.reference);
+  const reference = getAnchorPositionReferencePoint(
+    input.reference,
+    fieldPreset,
+  );
   const position = {
     xMeters:
       reference.xMeters +
@@ -161,7 +182,7 @@ export function anchorFieldPositionFromStandard(
       anchorPositionUnitsToMeters(input.frontToBackOffset, input.unit),
     zMeters: anchorPositionUnitsToMeters(input.height, input.unit),
   };
-  assertValidAnchorFieldPosition(position);
+  assertValidAnchorFieldPosition(position, fieldPreset);
   return position;
 }
 
@@ -169,9 +190,10 @@ export function anchorFieldPositionToStandard(
   position: AnchorFieldPosition,
   reference: AnchorPositionReference,
   unit: AnchorPositionUnit,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): StandardAnchorPositionInput {
-  assertValidAnchorFieldPosition(position);
-  const origin = getAnchorPositionReferencePoint(reference);
+  assertValidAnchorFieldPosition(position, fieldPreset);
+  const origin = getAnchorPositionReferencePoint(reference, fieldPreset);
   return {
     reference,
     unit,
@@ -190,17 +212,19 @@ export function anchorFieldPositionToStandard(
 export function anchorFieldPositionFromMarchingCoordinate(
   coordinate: MarchingCoordinate,
   heightMeters: number,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorFieldPosition {
   const position = {
-    ...marchingCoordinateToFieldPoint(coordinate),
+    ...marchingCoordinateToFieldPoint(coordinate, fieldPreset),
     zMeters: heightMeters,
   };
-  assertValidAnchorFieldPosition(position);
+  assertValidAnchorFieldPosition(position, fieldPreset);
   return position;
 }
 
 export function parseAnchorPositionDraft(
   draft: StandardAnchorPositionDraft,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): ParsedAnchorPositionDraft {
   const errors: AnchorPositionDraftErrors = {};
   const sideToSideOffset = parseFiniteDraftNumber(
@@ -235,13 +259,16 @@ export function parseAnchorPositionDraft(
   try {
     return {
       errors,
-      value: anchorFieldPositionFromStandard({
-        reference: draft.reference,
-        unit: draft.unit,
-        sideToSideOffset,
-        frontToBackOffset,
-        height,
-      }),
+      value: anchorFieldPositionFromStandard(
+        {
+          reference: draft.reference,
+          unit: draft.unit,
+          sideToSideOffset,
+          frontToBackOffset,
+          height,
+        },
+        fieldPreset,
+      ),
     };
   } catch (cause) {
     return {
@@ -255,6 +282,7 @@ export function parseAnchorPositionDraft(
 
 export function validateAnchorFieldPosition(
   position: unknown,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorPositionDraftErrors {
   if (!position || typeof position !== "object") {
     return { position: "Anchor field position is required." };
@@ -267,6 +295,7 @@ export function validateAnchorFieldPosition(
   ) {
     return { position: "Anchor coordinates must be finite." };
   }
+  const bounds = createStandardFootballFieldTemplate(fieldPreset).bounds;
   if (
     value.xMeters! < bounds.minXMeters ||
     value.xMeters! > bounds.maxXMeters ||
@@ -290,8 +319,9 @@ export function validateAnchorFieldPosition(
 
 export function assertValidAnchorFieldPosition(
   position: unknown,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): asserts position is AnchorFieldPosition {
-  const message = validateAnchorFieldPosition(position).position;
+  const message = validateAnchorFieldPosition(position, fieldPreset).position;
   if (message) throw new RangeError(message);
 }
 

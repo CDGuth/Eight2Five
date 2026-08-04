@@ -34,6 +34,12 @@ import {
 } from "@eight2five/ui/theme";
 
 import {
+  getFieldPreset,
+  getGridReference,
+  type FieldPresetId,
+} from "@eight2five/drill-schema";
+
+import {
   YARD_LINES,
   previewCoordinate,
   validatePageDraft,
@@ -57,12 +63,42 @@ const SIDE_RELATION_CHOICES = [
   { label: "Outside", value: "outside" },
 ] as const;
 
-const FRONT_BACK_CHOICES = [
-  { label: "Front Sideline", value: "front-sideline" },
-  { label: "HS FH", value: "front-hash" },
-  { label: "HS BH", value: "back-hash" },
-  { label: "Back Sideline", value: "back-sideline" },
-] as const;
+function frontBackChoices(fieldPreset: FieldPresetId) {
+  const hashPrefix = fieldHashPrefix(fieldPreset);
+  return [
+    { label: "Front Sideline", value: "front-sideline" },
+    { label: `${hashPrefix} FH`, value: "front-hash" },
+    { label: `${hashPrefix} BH`, value: "back-hash" },
+    { label: "Back Sideline", value: "back-sideline" },
+  ] as const;
+}
+
+function fieldHashPrefix(fieldPreset: FieldPresetId): string {
+  switch (fieldPreset) {
+    case "football-nfhs":
+      return "HS";
+    case "football-ncaa":
+      return "NCAA";
+    case "football-texas-uil":
+      return "UIL";
+    case "football-nfl":
+      return "NFL";
+  }
+}
+
+function frontBackHelper(fieldPreset: FieldPresetId): string {
+  const field = getFieldPreset(fieldPreset);
+  const frontHash = getGridReference(field, "front-hash")?.coordinateSteps;
+  const backHash = getGridReference(field, "back-hash")?.coordinateSteps;
+  if (frontHash === undefined || backHash === undefined) {
+    return "Offsets use the active field's marching-grid references.";
+  }
+  return `This field uses front hash ${formatStepReference(frontHash)} and back hash ${formatStepReference(backHash)}.`;
+}
+
+function formatStepReference(value: number): string {
+  return Number(value.toFixed(3)).toString();
+}
 
 const FRONT_BACK_RELATION_CHOICES = [
   { label: "On", value: "on" },
@@ -72,18 +108,21 @@ const FRONT_BACK_RELATION_CHOICES = [
 
 export function MarchingCoordinateForm({
   draft,
+  fieldPreset = "football-nfhs",
   showDetails = true,
   disabled,
   onChange,
 }: {
   draft: MarchingCoordinateDraft;
+  fieldPreset?: FieldPresetId;
   showDetails?: boolean;
   disabled: boolean;
   onChange(draft: MarchingCoordinateDraft): void;
 }) {
   const theme = useEight2FiveTheme();
-  const validation = validatePageDraft(draft);
-  const preview = previewCoordinate(draft);
+  const validation = validatePageDraft(draft, fieldPreset);
+  const preview = previewCoordinate(draft, fieldPreset);
+  const frontBackReferenceChoices = frontBackChoices(fieldPreset);
   const update = <Key extends keyof MarchingCoordinateDraft>(
     key: Key,
     value: MarchingCoordinateDraft[Key],
@@ -140,7 +179,7 @@ export function MarchingCoordinateForm({
             error={validation.errors.measureStart}
             disabled={disabled}
             numeric
-            helper="Optional. Measures are performer-facing reference information in v1."
+            helper="Optional. Measures are performer-facing reference information."
             onChangeText={(value) => update("measureStart", value)}
           />
           <TextField
@@ -236,7 +275,7 @@ export function MarchingCoordinateForm({
         <SelectField
           label="Reference"
           value={draft.frontBackReference}
-          choices={FRONT_BACK_CHOICES}
+          choices={frontBackReferenceChoices}
           disabled={disabled}
           onChange={(value) => update("frontBackReference", value)}
         />
@@ -259,7 +298,7 @@ export function MarchingCoordinateForm({
           error={validation.errors.frontBackOffsetSteps}
           disabled={disabled || draft.frontBackRelation === "on"}
           numeric
-          helper="NFHS marching references use front hash 28 and back hash 56."
+          helper={frontBackHelper(fieldPreset)}
           onChangeText={(value) =>
             onChange({
               ...draft,

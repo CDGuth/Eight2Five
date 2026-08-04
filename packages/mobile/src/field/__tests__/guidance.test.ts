@@ -1,14 +1,21 @@
-import { calculateFieldGuidance, standardStepsToMeters } from "../index";
+import { FIELD_PRESET_IDS } from "@eight2five/drill-schema";
+
+import { calculateFieldGuidance, drillGridPointToFieldPoint } from "../index";
+
+const PRESETS = FIELD_PRESET_IDS;
 
 describe("field guidance", () => {
-  test("returns signed field-relative axis guidance and straight-line distance", () => {
-    const guidance = calculateFieldGuidance(
-      { xMeters: standardStepsToMeters(10), yMeters: standardStepsToMeters(5) },
-      {
-        xMeters: standardStepsToMeters(2.5),
-        yMeters: standardStepsToMeters(8),
-      },
+  test("returns signed field-relative axis guidance and straight-line grid distance", () => {
+    const current = drillGridPointToFieldPoint(
+      { xSteps: 10, ySteps: 5 },
+      "football-nfhs",
     );
+    const target = drillGridPointToFieldPoint(
+      { xSteps: 2.5, ySteps: 8 },
+      "football-nfhs",
+    );
+    const guidance = calculateFieldGuidance(current, target, "football-nfhs");
+
     expect(guidance.xDisplacementSteps).toBeCloseTo(-7.5);
     expect(guidance.yDisplacementSteps).toBeCloseTo(3);
     expect(guidance.distanceSteps).toBeCloseTo(Math.hypot(7.5, 3));
@@ -18,14 +25,33 @@ describe("field guidance", () => {
 
   test("uses front-sideline wording for negative Y and no phone heading", () => {
     const guidance = calculateFieldGuidance(
-      { xMeters: 0, yMeters: standardStepsToMeters(3) },
-      { xMeters: 0, yMeters: 0 },
+      drillGridPointToFieldPoint({ xSteps: 0, ySteps: 3 }),
+      drillGridPointToFieldPoint({ xSteps: 0, ySteps: 0 }),
     );
-    expect(guidance.yDisplacementSteps).toBe(-3);
+    expect(guidance.yDisplacementSteps).toBeCloseTo(-3);
     expect(guidance.yLabel).toBe("3 steps toward the front sideline");
     expect(guidance).not.toHaveProperty("heading");
     expect(guidance).not.toHaveProperty("bearing");
   });
+
+  test.each(PRESETS)(
+    "%s reports exactly 84 marching steps sideline to sideline",
+    (preset) => {
+      const front = drillGridPointToFieldPoint(
+        { xSteps: 0, ySteps: 0 },
+        preset,
+      );
+      const back = drillGridPointToFieldPoint(
+        { xSteps: 0, ySteps: 84 },
+        preset,
+      );
+      const guidance = calculateFieldGuidance(front, back, preset);
+
+      expect(guidance.xDisplacementSteps).toBeCloseTo(0);
+      expect(guidance.yDisplacementSteps).toBeCloseTo(84);
+      expect(guidance.distanceSteps).toBeCloseTo(84);
+    },
+  );
 
   test("returns zero-axis guidance without inventing a direction", () => {
     const guidance = calculateFieldGuidance(

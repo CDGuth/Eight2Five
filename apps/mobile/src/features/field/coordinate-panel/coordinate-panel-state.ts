@@ -7,6 +7,7 @@ import {
 } from "@eight2five/mobile/field";
 import { formatSetName, type DrillSet } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 import { getTransitionPresentation } from "../../drill/transition-presentation";
 
@@ -47,16 +48,18 @@ export function areCoordinatePanelControlsDisabled({
 
 export function formatDrillCoordinateLines(
   position: DrillSet["position"],
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): CoordinateLines {
-  const coordinate = drillGridPointToMarchingCoordinate(position);
+  const coordinate = drillGridPointToMarchingCoordinate(position, fieldPreset);
   return {
     side: formatMarchingSide(coordinate.side),
-    frontBack: formatMarchingFrontBack(coordinate.frontBack),
+    frontBack: formatMarchingFrontBack(coordinate.frontBack, fieldPreset),
   };
 }
 
 export function getLiveCoordinatePresentation(
   live: FieldLivePositionState,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): LiveCoordinatePresentation {
   if (!live.position) {
     return {
@@ -68,11 +71,11 @@ export function getLiveCoordinatePresentation(
       muted: true,
     };
   }
-  const coordinate = fieldPointToMarchingCoordinate(live.position);
+  const coordinate = fieldPointToMarchingCoordinate(live.position, fieldPreset);
   return {
     ...(live.isStale ? { statusLabel: "Last known position" } : {}),
     primary: formatMarchingSide(coordinate.side),
-    secondary: formatMarchingFrontBack(coordinate.frontBack),
+    secondary: formatMarchingFrontBack(coordinate.frontBack, fieldPreset),
     muted: live.isStale,
   };
 }
@@ -81,11 +84,13 @@ export function getDrillCoordinatePresentation({
   page,
   previousPage,
   metricMode,
+  fieldPreset = "football-nfhs",
 }: {
   readonly page?: DrillSet;
   readonly previousPage?: DrillSet;
   readonly metricMode: TransitionMetricMode;
-  /** @deprecated Sets are the only v2 terminology. */
+  readonly fieldPreset?: FieldPresetId;
+  /** @deprecated Sets are the only supported terminology. */
   readonly terminology?: unknown;
 }): DrillCoordinatePresentation {
   const metricLabel = metricMode === "step-size" ? "Step Size" : "xCounts";
@@ -116,6 +121,6 @@ export function getDrillCoordinatePresentation({
       metricMode === "step-size"
         ? transition.stepSize
         : transition.crossingCounts,
-    coordinate: formatDrillCoordinateLines(page.position),
+    coordinate: formatDrillCoordinateLines(page.position, fieldPreset),
   };
 }

@@ -1,4 +1,3 @@
-import { formatMarchingCoordinate } from "@eight2five/mobile/field";
 import type { FieldPoint } from "@eight2five/mobile/field";
 import type { PansPositionStreamSample } from "@eight2five/mobile/pans-manager";
 import type { SharedValue } from "react-native-reanimated";
@@ -25,7 +24,6 @@ export class MobilePansPositionPublisher {
   private positionValue?: SharedValue<FieldPoint | null>;
   private staleTimer?: ReturnType<typeof setTimeout>;
   private lastHudPublicationAt = 0;
-  private lastHudKey?: string;
   private sampleTimes: number[] = [];
 
   constructor(private readonly host: PositionPublisherHost) {}
@@ -49,14 +47,9 @@ export class MobilePansPositionPublisher {
     );
     this.sampleTimes.push(receivedAt);
     this.scheduleStale(generation);
-    const hudKey = formatMarchingCoordinate(fieldPoint);
-    if (
-      hudKey === this.lastHudKey &&
-      receivedAt - this.lastHudPublicationAt < HUD_PUBLICATION_INTERVAL_MS
-    ) {
+    if (receivedAt - this.lastHudPublicationAt < HUD_PUBLICATION_INTERVAL_MS) {
       return;
     }
-    this.lastHudKey = hudKey;
     this.lastHudPublicationAt = receivedAt;
     const snapshot = this.host.getSnapshot();
     this.host.publish({
@@ -90,7 +83,6 @@ export class MobilePansPositionPublisher {
 
   resetStreamState(): void {
     this.sampleTimes = [];
-    this.lastHudKey = undefined;
     this.lastHudPublicationAt = 0;
     this.cancelStaleTimer();
     const snapshot = this.host.getSnapshot();

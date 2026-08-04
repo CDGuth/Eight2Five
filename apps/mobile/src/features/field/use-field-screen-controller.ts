@@ -9,6 +9,7 @@ import {
   useAppSettingsSnapshot,
   useAppSettingsStore,
 } from "../../state/app-settings-store";
+import { resolveEffectiveFieldPreset } from "./effective-field-preset";
 
 let committedFieldViewport: FieldViewport | undefined;
 
@@ -137,6 +138,10 @@ export function useFieldScreenController() {
     (page) => page.id === effectiveSelectedPageId,
   );
   const selectedPage = selectedIndex >= 0 ? pages[selectedIndex] : undefined;
+  const fieldPreset = resolveEffectiveFieldPreset(
+    activeDrill,
+    snapshot.settings.defaultFieldPreset,
+  );
 
   return {
     width,
@@ -152,6 +157,7 @@ export function useFieldScreenController() {
     selectedIndex,
     selectedPage,
     previousPage: selectedIndex > 0 ? pages[selectedIndex - 1] : undefined,
+    fieldPreset,
     loadingDrills,
     selectionBusy,
     error: fieldError ?? snapshot.error,

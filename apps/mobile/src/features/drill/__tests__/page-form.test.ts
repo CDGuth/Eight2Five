@@ -74,6 +74,43 @@ describe("structured marching coordinate form", () => {
     );
   });
 
+  test.each([
+    ["football-nfhs", 28],
+    ["football-ncaa", 32],
+    ["football-texas-uil", 32],
+  ] as const)(
+    "%s uses its schema-defined front-hash marching reference",
+    (fieldPreset, expectedFrontHashSteps) => {
+      const result = validatePageDraft(
+        {
+          ...VALID_DRAFT,
+          frontBackRelation: "on",
+          frontBackOffsetSteps: "0",
+        },
+        fieldPreset,
+      );
+      expect(result.value?.position.ySteps).toBeCloseTo(
+        expectedFrontHashSteps,
+        8,
+      );
+    },
+  );
+
+  test("NFL uses its schema-defined fractional front-hash marching reference", () => {
+    const result = validatePageDraft(
+      {
+        ...VALID_DRAFT,
+        frontBackRelation: "on",
+        frontBackOffsetSteps: "0",
+      },
+      "football-nfl",
+    );
+    expect(result.value?.position.ySteps).toBeCloseTo(
+      ((70 + 9 / 12) / 160) * 84,
+      8,
+    );
+  });
+
   test("initializes controls through inverse grid conversion and round trips", () => {
     const position = marchingCoordinateToDrillGridPoint({
       side: { side: 1, yardLine: 35, relation: "outside", offsetSteps: 1.25 },

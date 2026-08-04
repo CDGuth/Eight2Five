@@ -1,8 +1,17 @@
+import {
+  drillGridToPhysicalPoint,
+  FIELD_PRESET_IDS,
+} from "@eight2five/drill-schema";
+
 import { createFieldPaths } from "../render/create-field-paths";
-import { STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE } from "../template";
-import { STANDARD_STEP_METERS, yardsToMeters } from "../units";
+import {
+  createStandardFootballFieldTemplate,
+  STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+} from "../template";
+import { yardsToMeters } from "../units";
 
 const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
+const PRESETS = FIELD_PRESET_IDS;
 
 describe("aggregate field paths", () => {
   test("returns one immutable, memoized path set per template", () => {
@@ -32,66 +41,154 @@ describe("aggregate field paths", () => {
       field: paths.fieldExtent,
       grid: paths.gridExtent,
     });
-    expect(paths.stepGridSpacingMeters).toBe(STANDARD_STEP_METERS);
-    expect(paths.counts.stepGrid.spacingMeters).toBe(STANDARD_STEP_METERS);
+    expect(paths.stepGridSpacingSteps).toBe(1);
+    expect(paths.fourStepGridSpacingSteps).toBe(4);
+    expect(paths.counts.stepGrid.spacingSteps).toBe(1);
   });
 
-  test("clips the fixed-spacing step grid at the exact padded extent", () => {
-    const paths = createFieldPaths(field);
-    const { minXMeters, maxXMeters, minYMeters, maxYMeters } = paths.gridExtent;
+  test.each(PRESETS)(
+    "%s projects the canonical 160 by 84 one-step marching grid onto the field",
+    (preset) => {
+      const template = createStandardFootballFieldTemplate(preset);
+      const paths = createFieldPaths(template);
+      const bounds = template.fieldDefinition.marchingGrid.bounds;
 
-    expect(paths.stepGridPath).toContain(
-      segment(minXMeters, minYMeters, minXMeters, maxYMeters),
-    );
-    expect(paths.stepGridPath).toContain(
-      segment(minXMeters, minYMeters, maxXMeters, minYMeters),
-    );
-    expect(paths.stepGridPath.split(" M ").length).toBe(
-      paths.counts.stepGrid.verticalLineCount +
-        paths.counts.stepGrid.horizontalLineCount,
-    );
+      expect(bounds).toEqual({
+        minXSteps: -80,
+        maxXSteps: 80,
+        minYSteps: 0,
+        maxYSteps: 84,
+      });
+      expect(paths.counts.stepGrid).toMatchObject({
+        spacingSteps: 1,
+        verticalLineCount: 161,
+        horizontalLineCount: 85,
+      });
+      expect(subpathCount(paths.stepGridPath)).toBe(246);
 
-    const verticalX = Array.from(
-      paths.stepGridPath.matchAll(/M (-?\d+(?:\.\d+)?) /g),
-      (match) => Number(match[1]),
-    ).slice(0, paths.counts.stepGrid.verticalLineCount);
-    for (let index = 1; index < verticalX.length; index += 1) {
-      expect(verticalX[index] - verticalX[index - 1]).toBeCloseTo(
-        STANDARD_STEP_METERS,
-        6,
+      const frontHash = gridPoint(
+        template,
+        0,
+        gridReference(template, "front-hash"),
       );
-    }
+      const backHash = gridPoint(
+        template,
+        0,
+        gridReference(template, "back-hash"),
+      );
+      const backSideline = gridPoint(template, 0, 84);
+      expect(frontHash.yMeters).toBeCloseTo(
+        template.frontHashLine.coordinateMeters,
+        8,
+      );
+      expect(backHash.yMeters).toBeCloseTo(
+        template.backHashLine.coordinateMeters,
+        8,
+      );
+      expect(backSideline.yMeters).toBeCloseTo(template.bounds.maxYMeters, 8);
+
+      const frontHashSteps = gridReference(template, "front-hash");
+      const backHashSteps = gridReference(template, "back-hash");
+      if (Number.isInteger(frontHashSteps)) {
+        expect(paths.stepGridPath).toContain(
+          horizontalSegment(
+            template.bounds.minXMeters,
+            frontHash.yMeters,
+            template.bounds.maxXMeters,
+          ),
+        );
+      }
+      if (Number.isInteger(backHashSteps)) {
+        expect(paths.stepGridPath).toContain(
+          horizontalSegment(
+            template.bounds.minXMeters,
+            backHash.yMeters,
+            template.bounds.maxXMeters,
+          ),
+        );
+      }
+    },
+  );
+
+  test("NFHS hashes are exactly 28, 28, 28 marching steps apart", () => {
+    const template = createStandardFootballFieldTemplate("football-nfhs");
+    expect(gridReference(template, "front-sideline")).toBe(0);
+    expect(gridReference(template, "front-hash")).toBe(28);
+    expect(gridReference(template, "back-hash")).toBe(56);
+    expect(gridReference(template, "back-sideline")).toBe(84);
   });
 
-  test("clips the five-yard grid to the field and includes both axes", () => {
-    const paths = createFieldPaths(field);
-    const coordinates = parseCoordinates(paths.fiveYardGridPath);
+  test.each(PRESETS)(
+    "%s renders the blue overlay as four marching-step boxes",
+    (preset) => {
+      const template = createStandardFootballFieldTemplate(preset);
+      const paths = createFieldPaths(template);
+      const coordinates = parseCoordinates(paths.fourStepGridPath);
 
-    for (const { xMeters, yMeters } of coordinates) {
-      expect(xMeters).toBeGreaterThanOrEqual(field.bounds.minXMeters);
-      expect(xMeters).toBeLessThanOrEqual(field.bounds.maxXMeters);
-      expect(yMeters).toBeGreaterThanOrEqual(field.bounds.minYMeters);
-      expect(yMeters).toBeLessThanOrEqual(field.bounds.maxYMeters);
-    }
+      for (const { xMeters, yMeters } of coordinates) {
+        expect(xMeters).toBeGreaterThanOrEqual(
+          template.bounds.minXMeters - 1e-6,
+        );
+        expect(xMeters).toBeLessThanOrEqual(template.bounds.maxXMeters + 1e-6);
+        expect(yMeters).toBeGreaterThanOrEqual(
+          template.bounds.minYMeters - 1e-6,
+        );
+        expect(yMeters).toBeLessThanOrEqual(template.bounds.maxYMeters + 1e-6);
+      }
 
-    expect(paths.counts.fiveYardGrid).toMatchObject({
-      spacingMeters: yardsToMeters(5),
-      verticalSubdivisionCount: 21,
-      horizontalSubdivisionCount: 11,
-      segmentCount: 32,
-      clippedToField: true,
-    });
-    expect(paths.fiveYardGridPath).toContain(
-      segment(
-        field.bounds.minXMeters,
-        field.bounds.minYMeters,
-        field.bounds.maxXMeters,
-        field.bounds.minYMeters,
-      ),
-    );
-  });
+      expect(paths.counts.fourStepGrid).toMatchObject({
+        spacingSteps: 4,
+        verticalSubdivisionCount: 41,
+        horizontalSubdivisionCount: 22,
+        segmentCount: 63,
+        clippedToField: true,
+      });
+      expect(subpathCount(paths.fourStepGridPath)).toBe(63);
+      expect(paths.fourStepGridPath).toContain(
+        horizontalSegment(
+          template.bounds.minXMeters,
+          gridPoint(template, 0, 84).yMeters,
+          template.bounds.maxXMeters,
+        ),
+      );
+    },
+  );
 
-  test("keeps football marks aggregate and exposes stable shape counts", () => {
+  test.each(PRESETS)(
+    "%s optional one-step perimeter grid extends beyond every field edge",
+    (preset) => {
+      const template = createStandardFootballFieldTemplate(preset);
+      const paths = createFieldPaths(template);
+      const subpaths = parseSubpaths(paths.perimeterStepGridPath);
+
+      expect(paths.counts.perimeterStepGrid.spacingSteps).toBe(1);
+      expect(paths.counts.perimeterStepGrid.clippedByFieldBackground).toBe(
+        true,
+      );
+      expect(
+        subpaths.some(
+          ({ x1, x2 }) => x1 === x2 && x1 < template.bounds.minXMeters,
+        ),
+      ).toBe(true);
+      expect(
+        subpaths.some(
+          ({ x1, x2 }) => x1 === x2 && x1 > template.bounds.maxXMeters,
+        ),
+      ).toBe(true);
+      expect(
+        subpaths.some(
+          ({ y1, y2 }) => y1 === y2 && y1 < template.bounds.minYMeters,
+        ),
+      ).toBe(true);
+      expect(
+        subpaths.some(
+          ({ y1, y2 }) => y1 === y2 && y1 > template.bounds.maxYMeters,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("keeps physical football marks aggregate and exposes stable shape counts", () => {
     const paths = createFieldPaths(field);
 
     expect(subpathCount(paths.yardLinesPath)).toBe(19);
@@ -109,13 +206,33 @@ describe("aggregate field paths", () => {
   });
 });
 
-function segment(
-  startXMeters: number,
-  startYMeters: number,
-  endXMeters: number,
-  endYMeters: number,
+function gridReference(
+  template: ReturnType<typeof createStandardFootballFieldTemplate>,
+  id: string,
+): number {
+  const reference = template.fieldDefinition.marchingGrid.referenceLines.find(
+    (line) => line.id === id,
+  );
+  if (!reference) throw new Error(`Missing grid reference ${id}.`);
+  return reference.coordinateSteps;
+}
+
+function gridPoint(
+  template: ReturnType<typeof createStandardFootballFieldTemplate>,
+  xSteps: number,
+  ySteps: number,
+) {
+  return drillGridToPhysicalPoint({ xSteps, ySteps }, template.fieldDefinition);
+}
+
+function horizontalSegment(
+  minXMeters: number,
+  yMeters: number,
+  maxXMeters: number,
 ): string {
-  return `M ${format(startXMeters)} ${format(startYMeters)} L ${format(endXMeters)} ${format(endYMeters)}`;
+  return `M ${format(minXMeters)} ${format(yMeters)} L ${format(
+    maxXMeters,
+  )} ${format(yMeters)}`;
 }
 
 function parseCoordinates(path: string): {
@@ -128,6 +245,25 @@ function parseCoordinates(path: string): {
     coordinates.push({ xMeters: values[index], yMeters: values[index + 1] });
   }
   return coordinates;
+}
+
+function parseSubpaths(path: string): {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}[] {
+  return Array.from(
+    path.matchAll(
+      /M (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) L (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g,
+    ),
+    (match) => ({
+      x1: Number(match[1]),
+      y1: Number(match[2]),
+      x2: Number(match[3]),
+      y2: Number(match[4]),
+    }),
+  );
 }
 
 function subpathCount(path: string): number {

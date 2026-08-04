@@ -3,15 +3,16 @@ import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBol
 import { Group, Path, Rect, Text, useFont } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
-import type { StandardHighSchoolFieldTemplate } from "../template";
+import type { StandardFootballFieldTemplate } from "../template";
 import type { FieldPaths } from "./create-field-paths";
 import type { FieldRenderPalette } from "./field-render-tokens";
 
 interface FieldStaticLayerProps {
-  readonly template: StandardHighSchoolFieldTemplate;
+  readonly template: StandardFootballFieldTemplate;
   readonly paths: FieldPaths;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
+  readonly showPerimeterStepGrid: boolean;
 }
 
 export const FieldStaticLayer = React.memo(function FieldStaticLayer({
@@ -19,9 +20,10 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   paths,
   metersPerPixel,
   palette,
+  showPerimeterStepGrid,
 }: FieldStaticLayerProps) {
   const stepGridStroke = useDerivedValue(() => metersPerPixel.value * 0.7);
-  const fiveYardStroke = useDerivedValue(() => metersPerPixel.value * 1.1);
+  const fourStepStroke = useDerivedValue(() => metersPerPixel.value * 1.1);
   const fieldLineStroke = useDerivedValue(() => metersPerPixel.value * 1.4);
   const boundaryStroke = useDerivedValue(() => metersPerPixel.value * 2);
   const numberFont = useFont(
@@ -34,23 +36,39 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
     width: template.goalToGoalMeters,
     height: template.widthMeters,
   };
+  const perimeterClip = {
+    x: paths.gridExtent.minXMeters,
+    y: paths.gridExtent.minYMeters,
+    width: paths.gridExtent.maxXMeters - paths.gridExtent.minXMeters,
+    height: paths.gridExtent.maxYMeters - paths.gridExtent.minYMeters,
+  };
 
   return (
     <>
-      <Path
-        path={paths.stepGridPath}
-        color={palette.stepGrid}
-        style="stroke"
-        strokeWidth={stepGridStroke}
-      />
+      {showPerimeterStepGrid ? (
+        <Group clip={perimeterClip}>
+          <Path
+            path={paths.perimeterStepGridPath}
+            color={palette.stepGrid}
+            style="stroke"
+            strokeWidth={stepGridStroke}
+          />
+        </Group>
+      ) : null}
       <Rect {...fieldClip} color={palette.fieldBackground} />
       <Group clip={fieldClip}>
         <Path
-          path={paths.fiveYardGridPath}
-          color={palette.fiveYardGrid}
+          path={paths.stepGridPath}
+          color={palette.stepGrid}
+          style="stroke"
+          strokeWidth={stepGridStroke}
+        />
+        <Path
+          path={paths.fourStepGridPath}
+          color={palette.fourStepGrid}
           opacity={0.46}
           style="stroke"
-          strokeWidth={fiveYardStroke}
+          strokeWidth={fourStepStroke}
         />
       </Group>
       <Path

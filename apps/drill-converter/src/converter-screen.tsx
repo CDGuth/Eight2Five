@@ -96,15 +96,15 @@ export function ConverterScreen() {
             selectable
             style={{ color: colors.textMuted, fontSize: 11, lineHeight: 16 }}
           >
-            Eight2Five drill schema v1.0.0 · No account, backend, database,
-            analytics, or PDF upload.
+            Eight2Five drill schema · No account, backend, database, analytics,
+            or PDF upload.
           </Text>
           <Text
             selectable
             style={{ color: colors.textMuted, fontSize: 11, lineHeight: 16 }}
           >
-            v1 expects PDFs with extractable text. OCR and image-only coordinate
-            sheets are intentionally out of scope.
+            The current parser expects PDFs with extractable text. OCR and
+            image-only coordinate sheets are intentionally out of scope.
           </Text>
         </View>
       </View>

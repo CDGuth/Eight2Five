@@ -66,7 +66,7 @@ function crossingCounts(
 
 /**
  * Derives transition metrics from drill-grid positions and incoming counts.
- * Counts remain performer-facing metadata in v1; these convenience metrics do
+ * Counts remain performer-facing metadata; these convenience metrics do
  * not create a musical timeline or persisted step-size field.
  */
 export function analyzeTransition(

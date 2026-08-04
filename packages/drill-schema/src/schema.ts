@@ -4,6 +4,7 @@ import { SET_SUFFIX_PATTERN } from "./sets";
 import {
   DRILL_SCHEMA_URL,
   DRILL_SCHEMA_VERSION,
+  FIELD_PRESET_IDS,
   type DrillDocument,
 } from "./types";
 
@@ -266,12 +267,7 @@ const marchingGridSchema = z
 const presetFieldSchema = z
   .object({
     type: z.literal("preset"),
-    preset: z.enum([
-      "football-nfhs",
-      "football-ncaa",
-      "football-texas-uil",
-      "football-nfl",
-    ]),
+    preset: z.enum(FIELD_PRESET_IDS),
   })
   .strict();
 
@@ -549,7 +545,7 @@ export const drillDocumentSchema: z.ZodType<DrillDocument> = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["paths", index, "toSetId"],
-          message: "Version 1 paths may only connect consecutive set entries.",
+          message: "Paths may only connect consecutive set entries.",
         });
       }
       if (

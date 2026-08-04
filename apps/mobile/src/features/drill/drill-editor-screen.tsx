@@ -56,6 +56,7 @@ export function DrillEditorScreen({ drillId }: { drillId?: string }) {
         page={item}
         previousPage={controller.pages[index - 1]}
         terms={controller.terms}
+        fieldPreset={controller.drill?.fieldPreset ?? "football-nfhs"}
         selected={controller.selectedPageId === item.id}
         busy={controller.busyPageId === item.id}
         first={index === 0}

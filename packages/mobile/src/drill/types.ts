@@ -2,6 +2,7 @@ import type {
   DrillGridPoint,
   MeasureRange,
   SetKind,
+  FieldPresetId,
 } from "@eight2five/drill-schema";
 
 /**
@@ -13,7 +14,7 @@ export interface Drill {
   readonly name: string;
   readonly createdAt: number;
   readonly updatedAt: number;
-  readonly fieldPreset: "football-nfhs";
+  readonly fieldPreset: FieldPresetId;
 }
 
 /**
@@ -37,5 +38,5 @@ export interface DrillSet {
   readonly facingDegrees?: number;
 }
 
-/** @deprecated Use DrillSet. Kept as a source-compatibility alias during v1 migration. */
+/** @deprecated Use DrillSet. Kept temporarily for source compatibility. */
 export type DrillPage = DrillSet;

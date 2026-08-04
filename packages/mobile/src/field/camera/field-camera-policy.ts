@@ -1,6 +1,6 @@
 import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
-  type StandardHighSchoolFieldTemplate,
+  type StandardFootballFieldTemplate,
 } from "../template";
 import { yardsToMeters } from "../units";
 import type {
@@ -16,7 +16,7 @@ export const FIELD_ZOOM_OUT_BREATHING_ROOM = 1.2;
 export const FIELD_INITIAL_BREATHING_ROOM = 1.06;
 
 export function getFieldGridBounds(
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
 ): FieldCameraBounds {
   const padding = yardsToMeters(FIELD_GRID_PERIMETER_YARDS);
   return {
@@ -28,7 +28,7 @@ export function getFieldGridBounds(
 }
 
 export function getFieldCameraBounds(
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
 ): FieldCameraBounds {
   const gridBounds = getFieldGridBounds(template);
   const margin = yardsToMeters(FIELD_CAMERA_BLANK_MARGIN_YARDS);
@@ -66,7 +66,7 @@ export function getFieldMaximumMetersPerPixel(
 
 export function getInitialFieldViewport(
   size: FieldViewportSize,
-  template: StandardHighSchoolFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
 ): FieldViewport {
   const bounds = getFieldGridBounds(template);
   return {

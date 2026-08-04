@@ -1,4 +1,5 @@
 import type { Drill, DrillRepository } from "@eight2five/mobile/drill";
+import type { FieldPresetId } from "@eight2five/drill-schema";
 
 export const DRILL_NAME_MAX_LENGTH = 80;
 
@@ -37,10 +38,14 @@ export async function loadDrillList(
 export async function createNamedDrill(
   repository: DrillRepository,
   value: string,
+  fieldPreset: FieldPresetId = "football-nfhs",
 ): Promise<Drill> {
   const error = validateDrillName(value);
   if (error) throw new Error(error);
-  return await repository.createDrill(normalizeDrillName(value));
+  return await repository.createDrill({
+    name: normalizeDrillName(value),
+    fieldPreset,
+  });
 }
 
 export async function renameNamedDrill(

@@ -62,6 +62,7 @@ export function PageEditorScreen({
         {controller.draft ? (
           <MarchingCoordinateForm
             draft={controller.draft}
+            fieldPreset={controller.fieldPreset}
             disabled={controller.saving}
             onChange={controller.setDraft}
           />
