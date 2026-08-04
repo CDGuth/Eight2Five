@@ -1,14 +1,11 @@
 import React from "react";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { Plus } from "lucide-react-native";
 import type { Drill } from "@eight2five/mobile/drill";
-import {
-  Button,
-  ButtonIcon,
-  ButtonText,
-} from "@eight2five/ui/components/button";
 import { FlatList } from "@eight2five/ui/components/flat-list";
 import { Heading } from "@eight2five/ui/components/heading";
+import { Icon } from "@eight2five/ui/components/icon";
+import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -73,82 +70,95 @@ export function DrillListScreen() {
   };
 
   return (
-    <VStack className="flex-1" style={{ backgroundColor: theme.background }}>
-      <FlatList
-        data={controller.entries}
-        keyExtractor={(entry) => entry.drill.id}
-        renderItem={renderItem}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{
-          flexGrow: 1,
-          gap: eight2FiveSpacing.sm,
-          padding: eight2FiveSpacing.md,
-          paddingBottom: eight2FiveSpacing.xxl,
-        }}
-        ListHeaderComponent={
-          <VStack style={{ gap: eight2FiveSpacing.md, marginBottom: 8 }}>
-            <Heading
+    <>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable
+              onPress={() => router.push("/(tabs)/drill/upload")}
+              accessibilityRole="button"
+              accessibilityLabel="Upload Drill"
+              hitSlop={8}
               style={{
-                color: theme.text,
-                fontFamily: eight2FiveFonts.styleBold,
+                width: 40,
+                height: 40,
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              Drills
-            </Heading>
-            {controller.entries.length > 0 ? (
-              <Button
-                onPress={() => router.push("/(tabs)/drill/new")}
-                accessibilityLabel="Create Drill"
+              <Icon as={Plus} size="xl" style={{ color: theme.accent }} />
+            </Pressable>
+          ),
+        }}
+      />
+      <VStack className="flex-1" style={{ backgroundColor: theme.background }}>
+        <FlatList
+          data={controller.entries}
+          keyExtractor={(entry) => entry.drill.id}
+          renderItem={renderItem}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            flexGrow: 1,
+            gap: eight2FiveSpacing.sm,
+            padding: eight2FiveSpacing.md,
+            paddingBottom: eight2FiveSpacing.xxl,
+          }}
+          ListHeaderComponent={
+            <VStack style={{ gap: eight2FiveSpacing.md, marginBottom: 8 }}>
+              <Heading
+                style={{
+                  color: theme.text,
+                  fontFamily: eight2FiveFonts.styleBold,
+                }}
               >
-                <ButtonIcon as={Plus} />
-                <ButtonText>Create Drill</ButtonText>
-              </Button>
-            ) : null}
-            {controller.loading ? (
-              <Text style={{ color: theme.textMuted }}>Loading drills…</Text>
-            ) : null}
-            {controller.error ? (
-              <SettingsMessage tone="error">
-                {controller.error.message}
-              </SettingsMessage>
-            ) : null}
-          </VStack>
-        }
-        ListEmptyComponent={
-          controller.loading ? null : (
-            <DrillEmptyState
-              terms={controller.terms}
-              onCreate={() => router.push("/(tabs)/drill/new")}
-            />
-          )
-        }
-      />
-
-      <DrillActionsSheet
-        drill={actionDrill}
-        active={controller.activeDrillId === actionDrill?.id}
-        onClose={() => setActionDrill(undefined)}
-        onMakeActive={() => {
-          const drill = actionDrill;
-          setActionDrill(undefined);
-          if (drill) {
-            void controller.makeActive(drill).catch(() => undefined);
+                Drills
+              </Heading>
+              {controller.loading ? (
+                <Text style={{ color: theme.textMuted }}>Loading drills…</Text>
+              ) : null}
+              {controller.error ? (
+                <SettingsMessage tone="error">
+                  {controller.error.message}
+                </SettingsMessage>
+              ) : null}
+            </VStack>
           }
-        }}
-        onRename={beginRename}
-        onDelete={beginDelete}
-      />
-      <DrillNameDialog
-        isOpen={Boolean(renameDrill)}
-        initialValue={renameDrill?.name ?? ""}
-        saving={controller.busyDrillId === renameDrill?.id}
-        onClose={() => setRenameDrill(undefined)}
-        onSave={async (name) => {
-          if (!renameDrill) return;
-          await controller.rename(renameDrill, name);
-          setRenameDrill(undefined);
-        }}
-      />
-    </VStack>
+          ListEmptyComponent={
+            controller.loading ? null : (
+              <DrillEmptyState
+                terms={controller.terms}
+                onUpload={() => router.push("/(tabs)/drill/upload")}
+              />
+            )
+          }
+        />
+
+        <DrillActionsSheet
+          drill={actionDrill}
+          active={controller.activeDrillId === actionDrill?.id}
+          onClose={() => setActionDrill(undefined)}
+          onMakeActive={() => {
+            const drill = actionDrill;
+            setActionDrill(undefined);
+            if (drill) {
+              void controller.makeActive(drill).catch(() => undefined);
+            }
+          }}
+          onRename={beginRename}
+          onDelete={beginDelete}
+        />
+        <DrillNameDialog
+          isOpen={Boolean(renameDrill)}
+          initialValue={renameDrill?.name ?? ""}
+          saving={controller.busyDrillId === renameDrill?.id}
+          onClose={() => setRenameDrill(undefined)}
+          onSave={async (name) => {
+            if (!renameDrill) return;
+            await controller.rename(renameDrill, name);
+            setRenameDrill(undefined);
+          }}
+        />
+      </VStack>
+    </>
   );
 }

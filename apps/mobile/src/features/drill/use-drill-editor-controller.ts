@@ -11,7 +11,6 @@ import {
   useAppSettingsStore,
 } from "../../state/app-settings-store";
 import {
-  createNamedDrill,
   deleteDrillAndRefreshSettings,
   renameNamedDrill,
   toError,
@@ -22,19 +21,19 @@ import {
   type PageMoveDirection,
 } from "./page-management";
 
-export function useDrillEditorController(drillId?: string) {
+export function useDrillEditorController(drillId: string) {
   const snapshot = useAppSettingsSnapshot();
   const store = useAppSettingsStore();
   const [drill, setDrill] = React.useState<Drill>();
   const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
-  const [loading, setLoading] = React.useState(Boolean(drillId));
+  const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [busyPageId, setBusyPageId] = React.useState<string>();
   const [error, setError] = React.useState<Error>();
   const operationInFlight = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
-    if (!drillId || snapshot.status !== "ready") return;
+    if (snapshot.status !== "ready") return;
     try {
       const repository = store.getDrillRepository();
       const [nextDrill, nextPages] = await Promise.all([
@@ -68,13 +67,7 @@ export function useDrillEditorController(drillId?: string) {
       setError(undefined);
       try {
         const repository = store.getDrillRepository();
-        const saved = drillId
-          ? await renameNamedDrill(repository, drillId, name)
-          : await createNamedDrill(
-              repository,
-              name,
-              snapshot.settings.defaultFieldPreset,
-            );
+        const saved = await renameNamedDrill(repository, drillId, name);
         setDrill(saved);
         return saved;
       } catch (cause) {
@@ -86,7 +79,7 @@ export function useDrillEditorController(drillId?: string) {
         setSaving(false);
       }
     },
-    [drillId, snapshot.settings.defaultFieldPreset, store],
+    [drillId, store],
   );
 
   const makeActive = React.useCallback(async () => {

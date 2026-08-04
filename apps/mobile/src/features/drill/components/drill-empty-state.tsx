@@ -1,4 +1,4 @@
-import { NotebookTabs, Plus } from "lucide-react-native";
+import { FileUp, NotebookTabs } from "lucide-react-native";
 import type { DrillTerms } from "@eight2five/mobile/drill";
 import {
   Button,
@@ -18,10 +18,10 @@ import {
 
 export function DrillEmptyState({
   terms,
-  onCreate,
+  onUpload,
 }: {
   terms: DrillTerms;
-  onCreate(): void;
+  onUpload(): void;
 }) {
   const theme = useEight2FiveTheme();
   return (
@@ -38,12 +38,12 @@ export function DrillEmptyState({
           No drills yet
         </Heading>
         <Text className="text-center" style={{ color: theme.textMuted }}>
-          Drills are entered manually. Create one to start adding{" "}
+          Upload an Eight2Five drill file to start working with its{" "}
           {terms.lowercasePlural}.
         </Text>
-        <Button onPress={onCreate} accessibilityLabel="Create Drill">
-          <ButtonIcon as={Plus} />
-          <ButtonText>Create Drill</ButtonText>
+        <Button onPress={onUpload} accessibilityLabel="Upload Drill">
+          <ButtonIcon as={FileUp} />
+          <ButtonText>Upload Drill</ButtonText>
         </Button>
       </VStack>
     </Center>

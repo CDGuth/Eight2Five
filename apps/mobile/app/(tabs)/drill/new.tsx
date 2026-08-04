@@ -1,5 +1,5 @@
-import { DrillEditorScreen } from "../../../src/features/drill/drill-editor-screen";
+import { Redirect } from "expo-router";
 
-export default function NewDrillRoute() {
-  return <DrillEditorScreen />;
+export default function LegacyNewDrillRoute() {
+  return <Redirect href="/(tabs)/drill/upload" />;
 }

@@ -29,7 +29,8 @@ export default function DrillLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Drill" }} />
-      <Stack.Screen name="new" options={{ title: "Create Drill" }} />
+      <Stack.Screen name="upload" options={{ title: "Upload Drill" }} />
+      <Stack.Screen name="new" options={{ title: "Upload Drill" }} />
       <Stack.Screen name="[drillId]/index" options={{ title: "Drill" }} />
       <Stack.Screen
         name="[drillId]/page/[pageId]"

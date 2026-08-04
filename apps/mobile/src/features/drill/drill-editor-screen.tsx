@@ -11,7 +11,6 @@ import {
 import { Card } from "@eight2five/ui/components/card";
 import { FlatList } from "@eight2five/ui/components/flat-list";
 import { Heading } from "@eight2five/ui/components/heading";
-import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -29,10 +28,9 @@ import {
 } from "./components/drill-page-actions";
 import { DrillPageListItem } from "./components/drill-page-list-item";
 import { DrillNameDialog } from "./components/drill-name-dialog";
-import { DrillNameForm } from "./components/drill-name-form";
 import { useDrillEditorController } from "./use-drill-editor-controller";
 
-export function DrillEditorScreen({ drillId }: { drillId?: string }) {
+export function DrillEditorScreen({ drillId }: { drillId: string }) {
   const router = useRouter();
   const theme = useEight2FiveTheme();
   const controller = useDrillEditorController(drillId);
@@ -73,34 +71,6 @@ export function DrillEditorScreen({ drillId }: { drillId?: string }) {
     ),
     [controller, openPage],
   );
-
-  if (!drillId) {
-    return (
-      <ScrollView
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-        style={{ backgroundColor: theme.background }}
-        contentContainerStyle={{
-          gap: eight2FiveSpacing.md,
-          padding: eight2FiveSpacing.md,
-        }}
-      >
-        <Heading style={{ color: theme.text }}>Create Drill</Heading>
-        <Text style={{ color: theme.textMuted }}>
-          Name the drill before entering {controller.terms.lowercasePlural}.
-        </Text>
-        <DrillNameForm
-          submitLabel="Create Drill"
-          saving={controller.saving || controller.loading}
-          onSubmit={async (name) => {
-            const created = await controller.saveName(name);
-            router.replace(`/(tabs)/drill/${created.id}`);
-          }}
-        />
-      </ScrollView>
-    );
-  }
 
   const drill = controller.drill;
   const deleteDrill = () => {
