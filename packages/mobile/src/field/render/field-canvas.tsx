@@ -11,6 +11,7 @@ import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { setFieldCamera } from "../camera/field-camera-math";
 import type { FieldPresetId } from "@eight2five/drill-schema";
+import type { DrillRenderScene } from "../../drill/render-scene";
 
 import {
   createStandardFootballFieldTemplate,
@@ -49,6 +50,7 @@ export interface FieldCanvasProps {
   readonly palette?: FieldRenderPalette;
   readonly livePosition?: SharedValue<FieldPoint | null>;
   readonly targetPosition?: FieldPoint;
+  readonly drillScene?: DrillRenderScene;
   readonly guidanceVisible?: boolean;
   readonly anchors?: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions?: FieldAnchorOverlayOptions;
@@ -69,6 +71,7 @@ export function FieldCanvas({
   palette = DEFAULT_FIELD_RENDER_PALETTE,
   livePosition: externalLivePosition,
   targetPosition,
+  drillScene,
   guidanceVisible = false,
   anchors = EMPTY_FIELD_ANCHORS,
   anchorOverlayOptions = HIDDEN_FIELD_ANCHOR_OVERLAY,
@@ -166,6 +169,7 @@ export function FieldCanvas({
             palette={palette}
             livePosition={livePosition}
             targetPosition={targetPosition}
+            drillScene={drillScene}
             guidanceVisible={guidanceVisible}
             anchors={anchors}
             anchorOverlayOptions={anchorOverlayOptions}

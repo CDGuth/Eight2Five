@@ -18,6 +18,8 @@ import type {
   FieldAnchorOverlayOptions,
 } from "./field-overlay-types";
 import type { FieldRenderPalette } from "./field-render-tokens";
+import type { DrillRenderScene } from "../../drill/render-scene";
+import { FieldDrillLayer } from "./field-drill-layer";
 
 interface FieldSceneProps {
   readonly camera: FieldCamera;
@@ -27,6 +29,7 @@ interface FieldSceneProps {
   readonly palette: FieldRenderPalette;
   readonly livePosition: SharedValue<FieldPoint | null>;
   readonly targetPosition?: FieldPoint;
+  readonly drillScene?: DrillRenderScene;
   readonly guidanceVisible: boolean;
   readonly anchors: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions: FieldAnchorOverlayOptions;
@@ -42,6 +45,7 @@ export function FieldScene({
   palette,
   livePosition,
   targetPosition,
+  drillScene,
   guidanceVisible,
   anchors,
   anchorOverlayOptions,
@@ -73,6 +77,12 @@ export function FieldScene({
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
       />
+      <FieldDrillLayer
+        scene={drillScene}
+        fallbackTargetPosition={targetPosition}
+        metersPerPixel={camera.metersPerPixel}
+        palette={palette}
+      />
       {guidanceVisible && targetPosition ? (
         <FieldGuidanceLayer
           livePosition={livePosition}
@@ -83,7 +93,6 @@ export function FieldScene({
       ) : null}
       <FieldPositionLayer
         livePosition={livePosition}
-        targetPosition={targetPosition}
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
       />

@@ -2,7 +2,15 @@ import React from "react";
 import { useFocusEffect } from "expo-router";
 import { useWindowDimensions } from "react-native";
 import type { FieldViewport } from "@eight2five/mobile/field";
-import type { Drill, DrillSet } from "@eight2five/mobile/drill";
+import {
+  buildDrillRenderScene,
+  resolveSelectedSourceSetId,
+  shouldBuildDrillRenderScene,
+  type Drill,
+  type DrillDocument,
+  type DrillSet,
+  type DrillRenderScene,
+} from "@eight2five/mobile/drill";
 
 import { useFieldOrientation } from "../../navigation/use-field-orientation";
 import {
@@ -26,6 +34,8 @@ export function useFieldScreenController() {
   const [initialViewport] = React.useState(() => committedFieldViewport);
   const [drills, setDrills] = React.useState<readonly Drill[]>([]);
   const [activeDrill, setActiveDrill] = React.useState<Drill>();
+  const [activeDrillDocument, setActiveDrillDocument] =
+    React.useState<DrillDocument>();
   const [pages, setPages] = React.useState<readonly DrillSet[]>([]);
   const [loadingDrills, setLoadingDrills] = React.useState(true);
   const [fieldError, setFieldError] = React.useState<Error>();
@@ -47,14 +57,19 @@ export function useFieldScreenController() {
     try {
       const repository = store.getDrillRepository();
       const activeDrillId = snapshot.settings.activeDrillId;
-      const [nextDrills, nextActiveDrill, nextPages] = await Promise.all([
-        repository.listDrills(),
-        activeDrillId ? repository.getDrill(activeDrillId) : undefined,
-        activeDrillId ? repository.listSets(activeDrillId) : [],
-      ]);
+      const [nextDrills, nextActiveDrill, nextPages, nextDocument] =
+        await Promise.all([
+          repository.listDrills(),
+          activeDrillId ? repository.getDrill(activeDrillId) : undefined,
+          activeDrillId ? repository.listSets(activeDrillId) : [],
+          activeDrillId
+            ? repository.getDrillDocument(activeDrillId)
+            : undefined,
+        ]);
       if (generation !== refreshGeneration.current) return;
       setDrills(nextDrills);
       setActiveDrill(nextActiveDrill);
+      setActiveDrillDocument(nextDocument);
       setPages(nextPages);
       setFieldError(undefined);
     } catch (cause) {
@@ -142,6 +157,48 @@ export function useFieldScreenController() {
     activeDrill,
     snapshot.settings.defaultFieldPreset,
   );
+  const selectedSourceSetId = resolveSelectedSourceSetId(selectedPage);
+  const selectedPerformerEntityId = activeDrill?.selectedPerformerEntityId;
+  const drillScene = React.useMemo<DrillRenderScene | undefined>(() => {
+    if (
+      !shouldBuildDrillRenderScene(snapshot.settings.drillFeaturesEnabled) ||
+      !activeDrillDocument ||
+      selectedSourceSetId === undefined ||
+      selectedPerformerEntityId === undefined
+    ) {
+      return undefined;
+    }
+    return buildDrillRenderScene({
+      document: activeDrillDocument,
+      field: fieldPreset,
+      selectedPerformerEntityId,
+      selectedSourceSetId,
+      settings: {
+        showPerformerLabels: snapshot.settings.showPerformerLabels,
+        showPerformerNames: snapshot.settings.showPerformerNames,
+        showPropLabels: snapshot.settings.showPropLabels,
+        showPropNames: snapshot.settings.showPropNames,
+        markerEnabled: snapshot.settings.showTransitionMarkers,
+        showAll: snapshot.settings.showAllTransitionSets,
+        previousTotalCount: snapshot.settings.previousTransitionSetCount,
+        nextTotalCount: snapshot.settings.nextTransitionSetCount,
+      },
+    });
+  }, [
+    activeDrillDocument,
+    fieldPreset,
+    selectedPerformerEntityId,
+    selectedSourceSetId,
+    snapshot.settings.nextTransitionSetCount,
+    snapshot.settings.previousTransitionSetCount,
+    snapshot.settings.drillFeaturesEnabled,
+    snapshot.settings.showAllTransitionSets,
+    snapshot.settings.showPerformerLabels,
+    snapshot.settings.showPerformerNames,
+    snapshot.settings.showPropLabels,
+    snapshot.settings.showPropNames,
+    snapshot.settings.showTransitionMarkers,
+  ]);
 
   return {
     width,
@@ -153,6 +210,8 @@ export function useFieldScreenController() {
     settings: snapshot.settings,
     drills,
     activeDrill,
+    activeDrillDocument,
+    drillScene,
     pages,
     selectedIndex,
     selectedPage,

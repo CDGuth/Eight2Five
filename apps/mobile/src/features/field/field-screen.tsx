@@ -2,8 +2,9 @@ import React from "react";
 import {
   EMPTY_FIELD_LIVE_POSITION_STATE,
   drillGridPointToFieldPoint,
-  shouldShowFieldGuidance,
+  shouldShowFieldGuidanceForScene,
   shouldShowFieldTarget,
+  resolveCurrentTargetPosition,
   type FieldAnchorGeometry,
   type FieldAnchorOverlayOptions,
   type FieldLivePositionInput,
@@ -71,13 +72,31 @@ export function FieldScreen({
     hasLivePosition: Boolean(liveState.position) && !liveState.isStale,
     guidanceEnabled: controller.settings.guidanceEnabled,
   };
-  const targetPosition =
+  const fallbackTargetPosition =
     shouldShowFieldTarget(drillOverlayState) && controller.selectedPage
       ? drillGridPointToFieldPoint(
           controller.selectedPage.position,
           controller.fieldPreset,
         )
       : undefined;
+  const drillScene = controller.settings.drillFeaturesEnabled
+    ? controller.drillScene
+    : undefined;
+  const targetPolicy = {
+    fullDrillSceneAvailable: drillScene !== undefined,
+    sceneHasCurrent:
+      drillScene?.current !== undefined && drillScene?.current !== null,
+    legacyFallbackAvailable: fallbackTargetPosition !== undefined,
+  } as const;
+  const targetPosition = resolveCurrentTargetPosition({
+    fullDrillSceneAvailable: targetPolicy.fullDrillSceneAvailable,
+    sceneCurrent: drillScene?.current,
+    legacyFallback: fallbackTargetPosition,
+  });
+  const guidanceVisible = shouldShowFieldGuidanceForScene(
+    drillOverlayState,
+    targetPolicy,
+  );
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
@@ -87,7 +106,6 @@ export function FieldScreen({
       fieldLines: theme.textMuted,
       fieldNumbers: theme.textMuted,
       livePosition: theme.accent,
-      target: "#D29B22",
       guidance: theme.accent,
       anchor: theme.accent,
       anchorRange: colorWithAlpha(theme.accent, "24"),
@@ -108,7 +126,8 @@ export function FieldScreen({
           fieldPreset={controller.fieldPreset}
           livePosition={livePositionValue}
           targetPosition={targetPosition}
-          guidanceVisible={shouldShowFieldGuidance(drillOverlayState)}
+          drillScene={drillScene}
+          guidanceVisible={guidanceVisible}
           anchors={anchors}
           anchorOverlayOptions={anchorOverlayOptions}
           showAuxiliaryFieldMarks={controller.settings.showAuxiliaryFieldMarks}

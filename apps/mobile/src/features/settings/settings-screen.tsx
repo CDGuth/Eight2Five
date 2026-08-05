@@ -33,6 +33,7 @@ import {
 } from "../../state/app-settings-store";
 import { ResetSettingsControl } from "./reset-settings-control";
 import { updateDrillFeatures } from "./settings-actions";
+import { shouldShowTransitionCountControls } from "./settings-screen-policy";
 import {
   SettingsMessage,
   SettingsNavigationRow,
@@ -68,6 +69,11 @@ const TRANSITION_CHOICES = [
   { label: "Step Size", value: "step-size" },
   { label: "xCounts", value: "crossing-counts" },
 ] as const;
+
+const TRANSITION_COUNT_CHOICES = Array.from({ length: 51 }, (_, count) => ({
+  label: String(count),
+  value: String(count),
+}));
 
 export function SettingsScreen() {
   const router = useRouter();
@@ -206,6 +212,97 @@ export function SettingsScreen() {
           }
           disabled={disabled}
           testID="transition-metric-setting"
+        />
+        <SettingsSwitchRow
+          icon={ListChecks}
+          title="Transition markers"
+          description="Show the selected performer's previous, next, and additional position markers."
+          value={settings.showTransitionMarkers}
+          onChange={(showTransitionMarkers) =>
+            void update({ showTransitionMarkers })
+          }
+          disabled={disabled}
+          testID="show-transition-markers-setting"
+        />
+        <SettingsSwitchRow
+          icon={Rows3}
+          title="Show all transition sets"
+          description="Show every available previous and next position."
+          value={settings.showAllTransitionSets}
+          onChange={(showAllTransitionSets) =>
+            void update({ showAllTransitionSets })
+          }
+          disabled={disabled}
+          testID="show-all-transition-sets-setting"
+        />
+        {shouldShowTransitionCountControls(settings.showAllTransitionSets) ? (
+          <>
+            <SettingsSelectRow<string>
+              icon={Route}
+              title="Previous transition positions"
+              description="Total positions, including the immediate previous marker."
+              value={String(settings.previousTransitionSetCount)}
+              choices={TRANSITION_COUNT_CHOICES}
+              onChange={(value) =>
+                void update({ previousTransitionSetCount: Number(value) })
+              }
+              disabled={disabled}
+              testID="previous-transition-set-count-setting"
+            />
+            <SettingsSelectRow<string>
+              icon={Route}
+              title="Next transition positions"
+              description="Total positions, including the immediate next marker."
+              value={String(settings.nextTransitionSetCount)}
+              choices={TRANSITION_COUNT_CHOICES}
+              onChange={(value) =>
+                void update({ nextTransitionSetCount: Number(value) })
+              }
+              disabled={disabled}
+              testID="next-transition-set-count-setting"
+            />
+          </>
+        ) : null}
+      </SettingsSection>
+
+      <SettingsSection title="Drill entities">
+        <SettingsSwitchRow
+          icon={Eye}
+          title="Performer labels"
+          description="Show labels for other performers on the field."
+          value={settings.showPerformerLabels}
+          onChange={(showPerformerLabels) =>
+            void update({ showPerformerLabels })
+          }
+          disabled={disabled}
+          testID="show-performer-labels-setting"
+        />
+        <SettingsSwitchRow
+          icon={Rows3}
+          title="Performer names"
+          description="Show an optional performer name below the label."
+          value={settings.showPerformerNames}
+          onChange={(showPerformerNames) => void update({ showPerformerNames })}
+          disabled={disabled}
+          testID="show-performer-names-setting"
+        />
+        <SettingsSwitchRow
+          icon={Eye}
+          title="Prop labels"
+          description="Show labels for props on the field."
+          value={settings.showPropLabels}
+          onChange={(showPropLabels) => void update({ showPropLabels })}
+          disabled={disabled}
+          testID="show-prop-labels-setting"
+        />
+        <SettingsSwitchRow
+          icon={Rows3}
+          title="Prop names"
+          description="Show an optional prop name below the label."
+          value={settings.showPropNames}
+          onChange={(showPropNames) => void update({ showPropNames })}
+          disabled={disabled}
+          testID="show-prop-names-setting"
         />
       </SettingsSection>
 
