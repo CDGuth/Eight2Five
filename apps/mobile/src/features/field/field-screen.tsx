@@ -126,7 +126,7 @@ export function FieldScreen({
           activeDrill={controller.activeDrill}
           selectedPage={controller.selectedPage}
           previousPage={controller.previousPage}
-          terminology="sets"
+          terminology={controller.settings.drillTerminology}
           metricMode={controller.settings.transitionMetricMode}
           fieldPreset={controller.fieldPreset}
           controlsDisabled={areCoordinatePanelControlsDisabled({
@@ -153,7 +153,7 @@ export function FieldScreen({
                     : undefined
                 }
                 pageCount={controller.pages.length}
-                terminology="sets"
+                terminology={controller.settings.drillTerminology}
                 activeColor={theme.accent}
                 trackColor={FIELD_FOUR_STEP_GRID_COLOR}
                 onSelectIndex={(index) =>

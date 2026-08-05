@@ -211,7 +211,7 @@ export function useDrillEditorController(drillId: string) {
     busyPageId,
     active: snapshot.settings.activeDrillId === drillId,
     selectedPageId: snapshot.settings.selectedDrillSetId,
-    terms: getDrillTerms("sets"),
+    terms: getDrillTerms(snapshot.settings.drillTerminology),
     error: error ?? snapshot.error,
     refresh,
     saveName,

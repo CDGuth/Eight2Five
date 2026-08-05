@@ -118,7 +118,7 @@ export function useDrillListController() {
     error: error ?? snapshot.error,
     busyDrillId,
     activeDrillId: snapshot.settings.activeDrillId,
-    terms: getDrillTerms("sets"),
+    terms: getDrillTerms(snapshot.settings.drillTerminology),
     refresh,
     rename,
     makeActive,

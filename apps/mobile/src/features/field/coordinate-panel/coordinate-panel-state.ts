@@ -5,7 +5,12 @@ import {
   formatMarchingSide,
   type FieldLivePositionState,
 } from "@eight2five/mobile/field";
-import { formatSetName, type DrillSet } from "@eight2five/mobile/drill";
+import {
+  formatSetName,
+  getDrillTerms,
+  type DrillSet,
+  type DrillTerminology,
+} from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 import type { FieldPresetId } from "@eight2five/drill-schema";
 
@@ -24,7 +29,7 @@ export interface LiveCoordinatePresentation {
 }
 
 export interface DrillCoordinatePresentation {
-  readonly term: "Set";
+  readonly term: "Page" | "Set";
   readonly set: string;
   readonly counts: string;
   readonly measures: string;
@@ -85,30 +90,31 @@ export function getDrillCoordinatePresentation({
   previousPage,
   metricMode,
   fieldPreset = "football-nfhs",
+  terminology,
 }: {
   readonly page?: DrillSet;
   readonly previousPage?: DrillSet;
   readonly metricMode: TransitionMetricMode;
   readonly fieldPreset?: FieldPresetId;
-  /** @deprecated Sets are the only supported terminology. */
-  readonly terminology?: unknown;
+  readonly terminology: DrillTerminology;
 }): DrillCoordinatePresentation {
+  const terms = getDrillTerms(terminology);
   const metricLabel = metricMode === "step-size" ? "Step Size" : "xCounts";
   if (!page) {
     return {
-      term: "Set",
+      term: terms.singular,
       set: "–",
       counts: "–",
       measures: "–",
       metricLabel,
       metric: "–",
       coordinate: null,
-      emptyMessage: "No drill set selected",
+      emptyMessage: `No drill ${terms.lowercaseSingular} selected`,
     };
   }
   const transition = getTransitionPresentation(previousPage, page);
   return {
-    term: "Set",
+    term: terms.singular,
     set: formatSetName(page),
     counts: String(page.countsFromPrevious),
     measures: page.measureRange

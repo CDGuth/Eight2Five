@@ -135,7 +135,7 @@ export function usePageEditorController(
     fieldPreset,
     loading: snapshot.status === "loading" || loading,
     saving,
-    terms: getDrillTerms("sets"),
+    terms: getDrillTerms(snapshot.settings.drillTerminology),
     error: error ?? snapshot.error,
     save,
   } as const;

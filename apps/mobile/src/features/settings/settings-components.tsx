@@ -227,6 +227,8 @@ export function SettingsSelectRow<T extends string>({
     <VStack>
       <SettingsRowContent icon={icon} title={title} description={description} />
       <Host
+        testID={testID}
+        accessibilityLabel={title}
         colorScheme={themeName}
         seedColor={theme.accent}
         matchContents={{ vertical: true }}
@@ -242,7 +244,7 @@ export function SettingsSelectRow<T extends string>({
           onValueChange={onChange}
           enabled={!disabled}
           appearance="menu"
-          testID={testID}
+          testID={testID ? `${testID}-picker` : undefined}
         >
           {choices.map((choice) => (
             <Picker.Item

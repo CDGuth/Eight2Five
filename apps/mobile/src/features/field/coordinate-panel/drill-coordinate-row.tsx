@@ -59,7 +59,7 @@ function DrillCoordinate({
 export function DrillCoordinateRow({
   page,
   previousPage,
-  terminology: _terminology,
+  terminology,
   metricMode,
   fieldPreset,
   landscape,
@@ -68,8 +68,7 @@ export function DrillCoordinateRow({
 }: {
   readonly page?: DrillSet;
   readonly previousPage?: DrillSet;
-  /** @deprecated Sets are the only terminology; kept for call-site compatibility. */
-  readonly terminology?: DrillTerminology;
+  readonly terminology: DrillTerminology;
   readonly metricMode: TransitionMetricMode;
   readonly fieldPreset: FieldPresetId;
   readonly landscape: boolean;
@@ -81,10 +80,11 @@ export function DrillCoordinateRow({
     previousPage,
     metricMode,
     fieldPreset,
+    terminology,
   });
   const metadata = (
     <HStack className="min-h-12 flex-1 items-stretch">
-      <MetadataCell label="Set" value={presentation.set} />
+      <MetadataCell label={presentation.term} value={presentation.set} />
       <MetadataCell label="Counts" value={presentation.counts} />
       <MetadataCell label="Measures" value={presentation.measures} />
       <TransitionMetricCell

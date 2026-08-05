@@ -36,7 +36,7 @@ export function PageEditorScreen({
     placement,
     relativePageId,
   );
-  const title = `${pageId === "new" ? "Add" : "Edit"} Set`;
+  const title = `${pageId === "new" ? "Add" : "Edit"} ${controller.terms.singular}`;
 
   return (
     <VStack className="flex-1" style={{ backgroundColor: theme.background }}>
@@ -52,7 +52,9 @@ export function PageEditorScreen({
         }}
       >
         {controller.loading ? (
-          <Text style={{ color: theme.textMuted }}>Loading set…</Text>
+          <Text style={{ color: theme.textMuted }}>
+            Loading {controller.terms.lowercaseSingular}…
+          </Text>
         ) : null}
         {controller.error ? (
           <SettingsMessage tone="error">
@@ -63,6 +65,7 @@ export function PageEditorScreen({
           <MarchingCoordinateForm
             draft={controller.draft}
             fieldPreset={controller.fieldPreset}
+            terms={controller.terms}
             disabled={controller.saving}
             onChange={controller.setDraft}
           />
@@ -92,7 +95,7 @@ export function PageEditorScreen({
             }}
           >
             {controller.saving ? <ButtonSpinner /> : <ButtonIcon as={Save} />}
-            <ButtonText>Save Set</ButtonText>
+            <ButtonText>Save {controller.terms.singular}</ButtonText>
           </Button>
         </HStack>
       </ScrollView>

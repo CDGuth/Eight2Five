@@ -57,10 +57,11 @@ describe("coordinate panel state", () => {
     ).toMatchObject({ statusLabel: "Last known position", muted: true });
   });
 
-  test("uses fixed Set terminology and separate count/measure fields", () => {
+  test("uses the selected terminology and separate count/measure fields", () => {
     expect(
       getDrillCoordinatePresentation({
         metricMode: "step-size",
+        terminology: "sets",
       }),
     ).toEqual({
       term: "Set",
@@ -72,6 +73,15 @@ describe("coordinate panel state", () => {
       coordinate: null,
       emptyMessage: "No drill set selected",
     });
+    expect(
+      getDrillCoordinatePresentation({
+        metricMode: "step-size",
+        terminology: "pages",
+      }),
+    ).toMatchObject({
+      term: "Page",
+      emptyMessage: "No drill page selected",
+    });
   });
 
   test("toggles between step-size and crossing-count metrics", () => {
@@ -79,11 +89,13 @@ describe("coordinate panel state", () => {
       page: second,
       previousPage: first,
       metricMode: "step-size",
+      terminology: "sets",
     });
     const crossingCounts = getDrillCoordinatePresentation({
       page: second,
       previousPage: first,
       metricMode: "crossing-counts",
+      terminology: "sets",
     });
 
     expect(stepSize).toMatchObject({
@@ -102,6 +114,7 @@ describe("coordinate panel state", () => {
       getDrillCoordinatePresentation({
         page: first,
         metricMode: "step-size",
+        terminology: "sets",
       }).counts,
     ).toBe("0");
   });

@@ -38,6 +38,7 @@ import {
   getGridReference,
   type FieldPresetId,
 } from "@eight2five/drill-schema";
+import { getDrillTerms, type DrillTerms } from "@eight2five/mobile/drill";
 
 import {
   YARD_LINES,
@@ -45,11 +46,6 @@ import {
   validatePageDraft,
   type MarchingCoordinateDraft,
 } from "../page-form";
-
-const SET_KIND_CHOICES = [
-  { label: "Set", value: "set" },
-  { label: "Subset", value: "subset" },
-] as const;
 
 const SIDE_CHOICES = [
   { label: "Side 1", value: "1" },
@@ -109,12 +105,14 @@ const FRONT_BACK_RELATION_CHOICES = [
 export function MarchingCoordinateForm({
   draft,
   fieldPreset = "football-nfhs",
+  terms = getDrillTerms("sets"),
   showDetails = true,
   disabled,
   onChange,
 }: {
   draft: MarchingCoordinateDraft;
   fieldPreset?: FieldPresetId;
+  terms?: DrillTerms;
   showDetails?: boolean;
   disabled: boolean;
   onChange(draft: MarchingCoordinateDraft): void;
@@ -123,6 +121,10 @@ export function MarchingCoordinateForm({
   const validation = validatePageDraft(draft, fieldPreset);
   const preview = previewCoordinate(draft, fieldPreset);
   const frontBackReferenceChoices = frontBackChoices(fieldPreset);
+  const setKindChoices = [
+    { label: terms.singular, value: "set" },
+    { label: "Subset", value: "subset" },
+  ] as const;
   const update = <Key extends keyof MarchingCoordinateDraft>(
     key: Key,
     value: MarchingCoordinateDraft[Key],
@@ -131,20 +133,20 @@ export function MarchingCoordinateForm({
   return (
     <VStack style={{ gap: eight2FiveSpacing.lg }}>
       {showDetails ? (
-        <FormSection title="Set details">
+        <FormSection title={`${terms.singular} details`}>
           <TextField
-            label="Set number"
+            label={`${terms.singular} number`}
             value={draft.setNumber}
             error={validation.errors.setNumber}
             disabled={disabled}
             numeric
-            helper="The printed set number. Subsets share the number of their primary set."
+            helper={`The printed ${terms.lowercaseSingular} number. Subsets share the number of their primary ${terms.lowercaseSingular}.`}
             onChangeText={(value) => update("setNumber", value)}
           />
           <SelectField
             label="Type"
             value={draft.setKind}
-            choices={SET_KIND_CHOICES}
+            choices={setKindChoices}
             disabled={disabled}
             onChange={(value) =>
               onChange({

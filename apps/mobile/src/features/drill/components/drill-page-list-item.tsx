@@ -34,7 +34,7 @@ import { TransitionSummary } from "./transition-summary";
 export const DrillPageListItem = React.memo(function DrillPageListItem({
   page,
   previousPage,
-  terms: _terms,
+  terms,
   fieldPreset,
   selected,
   busy,
@@ -47,8 +47,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
 }: {
   page: DrillSet;
   previousPage?: DrillSet;
-  /** @deprecated Sets are now the only user-facing terminology. */
-  terms?: DrillTerms;
+  terms: DrillTerms;
   fieldPreset: FieldPresetId;
   selected: boolean;
   busy: boolean;
@@ -67,7 +66,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
   const side = formatMarchingSide(coordinate.side);
   const frontBack = formatMarchingFrontBack(coordinate.frontBack, fieldPreset);
   const setName = formatSetName(page);
-  const title = `Set ${setName}`;
+  const title = `${terms.singular} ${setName}`;
   const measures = page.measureRange
     ? page.measureRange.start === page.measureRange.end
       ? `Measure ${page.measureRange.start}`
@@ -90,7 +89,7 @@ export const DrillPageListItem = React.memo(function DrillPageListItem({
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={`${title}. ${page.countsFromPrevious} counts.${measures ? ` ${measures}.` : ""} ${side}. ${frontBack}.${selected ? " Selected." : ""}`}
-          accessibilityHint="Edits this set"
+          accessibilityHint={`Edits this ${terms.lowercaseSingular}`}
           accessibilityState={{ selected, disabled: busy }}
         >
           <VStack
