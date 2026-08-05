@@ -15,7 +15,7 @@ describe("mobile app SQLite schema preparation", () => {
 
     const sql = executed.join("\n");
     expect(MOBILE_DB_NAME).toBe("eight2five-mobile.db");
-    expect(MOBILE_SCHEMA_VERSION).toBe(4);
+    expect(MOBILE_SCHEMA_VERSION).toBe(5);
     expect(sql).toContain("PRAGMA journal_mode = WAL");
     expect(sql).toContain("PRAGMA foreign_keys = OFF");
     expect(sql).toContain("DROP TABLE IF EXISTS app_settings");
@@ -29,6 +29,10 @@ describe("mobile app SQLite schema preparation", () => {
     expect(sql).toContain("set_number INTEGER NOT NULL");
     expect(sql).toContain("x_steps REAL NOT NULL");
     expect(sql).not.toContain("x_meters REAL");
+    expect(sql).toContain("metadata_title TEXT NOT NULL");
+    expect(sql).toContain("source_document_json TEXT");
+    expect(sql).toContain("selected_performer_entity_id INTEGER");
+    expect(sql).toContain("source_set_id INTEGER");
     expect(sql).not.toContain("y_meters REAL");
     expect(sql).toContain("CREATE TABLE app_settings");
     expect(sql).toContain("appearance_mode TEXT NOT NULL DEFAULT 'system'");

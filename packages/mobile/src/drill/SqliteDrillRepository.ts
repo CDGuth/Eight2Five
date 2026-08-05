@@ -1,6 +1,9 @@
 import {
   formatSetName,
   isFieldPresetId,
+  parseDrillDocument,
+  type DrillDocument,
+  type DrillMetadata,
   type DrillGridPoint,
   type FieldPresetId,
   type MeasureRange,
@@ -26,6 +29,21 @@ export interface CreateDrillInput {
   readonly createdAt?: number;
   readonly updatedAt?: number;
   readonly fieldPreset?: FieldPresetId;
+  /** Small metadata summary kept in columns for list/detail queries. */
+  readonly metadata?: DrillMetadata;
+}
+
+/**
+ * Atomic imported-drill creation input. The repository creates the drill and
+ * its selected-performer projection in one SQLite transaction.
+ */
+export interface CreateImportedDrillInput {
+  readonly id?: string;
+  /** Must be the document returned by the validated import boundary. */
+  readonly sourceDocument: DrillDocument;
+  readonly selectedPerformerEntityId: number;
+  readonly createdAt?: number;
+  readonly updatedAt?: number;
 }
 
 export interface CreateDrillSetDetails {
@@ -37,6 +55,7 @@ export interface CreateDrillSetDetails {
   readonly measureRange?: MeasureRange;
   readonly position: DrillGridPoint;
   readonly facingDegrees?: number;
+  readonly sourceSetId?: number;
 }
 
 export interface CreateDrillSetInput extends CreateDrillSetDetails {
@@ -69,8 +88,12 @@ export interface DrillRepository {
   listDrills(): Promise<Drill[]>;
   getDrill(id: string): Promise<Drill | undefined>;
   createDrill(input: CreateDrillInput | string): Promise<Drill>;
+  /** Creates an imported drill and its local selected-performer projection atomically. */
+  createImportedDrill(input: CreateImportedDrillInput): Promise<Drill>;
   renameDrill(id: string, name: string, updatedAt?: number): Promise<Drill>;
   deleteDrill(id: string): Promise<void>;
+  getDrillDocument(drillId: string): Promise<DrillDocument | undefined>;
+  setSelectedPerformer(drillId: string, entityId: number): Promise<Drill>;
   setActiveDrill(id: string | null): Promise<AppSettings>;
 
   listSets(drillId: string): Promise<DrillSet[]>;
@@ -142,7 +165,10 @@ export class SqliteDrillRepository implements DrillRepository {
 
   async listDrills(): Promise<Drill[]> {
     const rows = await this.db.getAllAsync<Row>(
-      `SELECT id, name, field_preset, created_at, updated_at
+      `SELECT id, name, field_preset, created_at, updated_at,
+              metadata_title, metadata_created_at, metadata_drill_writer,
+              metadata_ensemble, metadata_description, metadata_lucide_icon,
+              selected_performer_entity_id
        FROM ${DRILLS_TABLE}
        ORDER BY created_at ASC, id ASC`,
     );
@@ -152,7 +178,10 @@ export class SqliteDrillRepository implements DrillRepository {
   async getDrill(id: string): Promise<Drill | undefined> {
     const drillId = assertId(id, "Drill id");
     const row = await this.db.getFirstAsync<Row>(
-      `SELECT id, name, field_preset, created_at, updated_at
+      `SELECT id, name, field_preset, created_at, updated_at,
+              metadata_title, metadata_created_at, metadata_drill_writer,
+              metadata_ensemble, metadata_description, metadata_lucide_icon,
+              selected_performer_entity_id
        FROM ${DRILLS_TABLE}
        WHERE id = ?`,
       [drillId],
@@ -160,9 +189,50 @@ export class SqliteDrillRepository implements DrillRepository {
     return row ? toDrill(row) : undefined;
   }
 
+  /**
+   * Read and validate the complete imported document. List/detail drill
+   * queries intentionally do not select or parse this potentially large JSON
+   * column; callers opt in through this method when they need source data.
+   */
+  async getDrillDocument(id: string): Promise<DrillDocument | undefined> {
+    const drillId = assertId(id, "Drill id");
+    const row = await this.db.getFirstAsync<Row>(
+      `SELECT source_document_json FROM ${DRILLS_TABLE} WHERE id = ?`,
+      [drillId],
+    );
+    if (!row) return undefined;
+    const sourceDocumentJson = row.source_document_json;
+    if (sourceDocumentJson === null || sourceDocumentJson === undefined) {
+      return undefined;
+    }
+    if (typeof sourceDocumentJson !== "string") {
+      throw new MobileRowError("drill source_document_json is not a string.");
+    }
+    try {
+      return parseDrillDocument(JSON.parse(sourceDocumentJson) as unknown);
+    } catch (cause) {
+      throw new MobileRowError(
+        `The persisted source document for drill ${drillId} is invalid.`,
+        cause,
+      );
+    }
+  }
+
   async createDrill(inputOrName: CreateDrillInput | string): Promise<Drill> {
     const input: CreateDrillInput =
       typeof inputOrName === "string" ? { name: inputOrName } : inputOrName;
+    const importedFields = input as CreateDrillInput & {
+      readonly sourceDocument?: DrillDocument;
+      readonly selectedPerformerEntityId?: number | null;
+    };
+    if (
+      importedFields.sourceDocument !== undefined ||
+      importedFields.selectedPerformerEntityId !== undefined
+    ) {
+      throw invalidInput(
+        "Imported drills must be created with createImportedDrill so their projection is atomic.",
+      );
+    }
     const name = assertText(input.name, "Drill name");
     const createdAt = assertTimestamp(
       input.createdAt ?? this.timeFactory(),
@@ -177,13 +247,66 @@ export class SqliteDrillRepository implements DrillRepository {
     if (!isFieldPresetId(fieldPreset)) {
       throw invalidInput(`Unsupported field preset ${String(fieldPreset)}.`);
     }
+    const metadata = normalizeMetadata(input.metadata, name, createdAt);
 
-    await this.db.runAsync(
-      `INSERT INTO ${DRILLS_TABLE}
-       (id, name, field_preset, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, name, fieldPreset, createdAt, updatedAt],
+    await this.insertDrillRow({
+      id,
+      name,
+      fieldPreset,
+      createdAt,
+      updatedAt,
+      metadata,
+    });
+    return requireValue(await this.getDrill(id), "drill", id);
+  }
+
+  async createImportedDrill(input: CreateImportedDrillInput): Promise<Drill> {
+    // The importer validates this document before crossing the repository
+    // boundary. Keep the repository on the trusted path so validation happens
+    // once, while persisted reads still validate untrusted SQLite data.
+    const sourceDocument = input.sourceDocument;
+    const selectedPerformerEntityId = assertNonNegativeInteger(
+      input.selectedPerformerEntityId,
+      "Selected performer entity id",
     );
+    const projectedSets = projectSelectedPerformerSets(
+      sourceDocument,
+      selectedPerformerEntityId,
+    );
+    const id = assertId(input.id ?? this.idFactory(), "Drill id");
+    const metadata = sourceDocument.metadata;
+    const createdAt = assertTimestamp(
+      input.createdAt ?? parseDocumentTimestamp(sourceDocument),
+      "Drill createdAt",
+    );
+    const updatedAt = assertTimestamp(
+      input.updatedAt ?? createdAt,
+      "Drill updatedAt",
+    );
+    const fieldPreset = getPresetFromDocument(sourceDocument);
+    const sourceDocumentJson = serializeValidatedDrillDocument(sourceDocument);
+
+    await this.db.withTransactionAsync(async () => {
+      await this.insertDrillRow({
+        id,
+        name: sourceDocument.metadata.title,
+        fieldPreset,
+        createdAt,
+        updatedAt,
+        metadata,
+        sourceDocumentJson,
+        selectedPerformerEntityId,
+      });
+      for (const [ordinal, set] of projectedSets.entries()) {
+        await this.insertSetRow({
+          ...normalizeCreateSet({ drillId: id, ...set }),
+          id: assertId(this.idFactory(), "Drill set id"),
+          ordinal,
+        });
+      }
+      await this.validateSetStructure(id);
+    });
+
     return requireValue(await this.getDrill(id), "drill", id);
   }
 
@@ -199,11 +322,121 @@ export class SqliteDrillRepository implements DrillRepository {
       "Drill updatedAt",
     );
     await this.requireDrill(id);
-    await this.db.runAsync(
-      `UPDATE ${DRILLS_TABLE} SET name = ?, updated_at = ? WHERE id = ?`,
-      [nextName, nextUpdatedAt, id],
-    );
+    const sourceDocument = await this.getDrillDocument(id);
+    if (sourceDocument) {
+      const nextDocument: DrillDocument = {
+        ...sourceDocument,
+        metadata: { ...sourceDocument.metadata, title: nextName },
+      };
+      await this.db.withTransactionAsync(async () => {
+        await this.db.runAsync(
+          `UPDATE ${DRILLS_TABLE}
+           SET name = ?, metadata_title = ?, source_document_json = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            nextName,
+            nextName,
+            serializeValidatedDrillDocument(nextDocument),
+            nextUpdatedAt,
+            id,
+          ],
+        );
+      });
+    } else {
+      await this.db.runAsync(
+        `UPDATE ${DRILLS_TABLE}
+         SET name = ?, metadata_title = ?, updated_at = ? WHERE id = ?`,
+        [nextName, nextName, nextUpdatedAt, id],
+      );
+    }
     return requireValue(await this.getDrill(id), "drill", id);
+  }
+
+  /**
+   * Change the selected performer while rebuilding the indexed local set
+   * projection. The portable source document is never mutated.
+   */
+  async setSelectedPerformer(
+    drillIdValue: string,
+    entityIdValue: number,
+  ): Promise<Drill> {
+    const drillId = assertId(drillIdValue, "Drill id");
+    const entityId = assertNonNegativeInteger(
+      entityIdValue,
+      "Selected performer entity id",
+    );
+    await this.requireDrill(drillId);
+    const sourceDocument = await this.getDrillDocument(drillId);
+    if (!sourceDocument) {
+      throw new DrillRepositoryError(
+        "INVALID_SELECTION",
+        "Only imported drills can select a performer.",
+      );
+    }
+    const projectedSets = projectSelectedPerformerSets(
+      sourceDocument,
+      entityId,
+    );
+
+    await this.db.withTransactionAsync(async () => {
+      await this.ensureSettingsRow();
+      const settings = await this.db.getFirstAsync<{
+        active_drill_id: SqlValue | undefined;
+        selected_drill_page_id: SqlValue | undefined;
+      }>(
+        `SELECT active_drill_id, selected_drill_page_id
+         FROM ${APP_SETTINGS_TABLE} WHERE singleton_id = ?`,
+        [1],
+      );
+      const activeDrillId = nullableIdFromSql(settings?.active_drill_id);
+      const selectedSetId = nullableIdFromSql(settings?.selected_drill_page_id);
+      const previousSelectedSourceSetId = await this.findSourceSetId(
+        selectedSetId,
+        drillId,
+      );
+
+      await this.db.runAsync(
+        `DELETE FROM ${DRILL_SETS_TABLE} WHERE drill_id = ?`,
+        [drillId],
+      );
+      const localSetIdsBySourceSetId = new Map<number, string>();
+      for (const [ordinal, set] of projectedSets.entries()) {
+        const localSetId = assertId(this.idFactory(), "Drill set id");
+        localSetIdsBySourceSetId.set(set.sourceSetId, localSetId);
+        await this.insertSetRow({
+          ...normalizeCreateSet({ drillId, ...set }),
+          id: localSetId,
+          ordinal,
+        });
+      }
+
+      await this.db.runAsync(
+        `UPDATE ${DRILLS_TABLE}
+         SET selected_performer_entity_id = ? WHERE id = ?`,
+        [entityId, drillId],
+      );
+
+      if (activeDrillId === drillId) {
+        const sourceSetId =
+          previousSelectedSourceSetId !== null &&
+          localSetIdsBySourceSetId.has(previousSelectedSourceSetId)
+            ? previousSelectedSourceSetId
+            : projectedSets[0]?.sourceSetId;
+        const nextSelectedSetId =
+          sourceSetId === undefined
+            ? null
+            : (localSetIdsBySourceSetId.get(sourceSetId) ?? null);
+        await this.db.runAsync(
+          `UPDATE ${APP_SETTINGS_TABLE}
+           SET selected_drill_page_id = ? WHERE singleton_id = ?`,
+          [nextSelectedSetId, 1],
+        );
+      }
+
+      await this.validateSetStructure(drillId);
+    });
+
+    return requireValue(await this.getDrill(drillId), "drill", drillId);
   }
 
   async deleteDrill(id: string): Promise<void> {
@@ -227,19 +460,24 @@ export class SqliteDrillRepository implements DrillRepository {
       const currentActive = nullableIdFromSql(current?.active_drill_id);
       await this.db.runAsync(
         `UPDATE ${APP_SETTINGS_TABLE}
-         SET active_drill_id = ?,
-             selected_drill_page_id = CASE
-               WHEN active_drill_id IS ? THEN selected_drill_page_id
-               ELSE NULL
-             END
+         SET active_drill_id = ?
          WHERE singleton_id = ?`,
-        [activeDrillId, activeDrillId, 1],
+        [activeDrillId, 1],
       );
-      if (currentActive !== activeDrillId && activeDrillId === null) {
+      if (currentActive !== activeDrillId || activeDrillId === null) {
+        let firstSetId: string | null = null;
+        if (activeDrillId !== null) {
+          const firstSet = await this.db.getFirstAsync<{ id: SqlValue }>(
+            `SELECT id FROM ${DRILL_SETS_TABLE}
+             WHERE drill_id = ? ORDER BY ordinal ASC, id ASC LIMIT 1`,
+            [activeDrillId],
+          );
+          firstSetId = nullableIdFromSql(firstSet?.id);
+        }
         await this.db.runAsync(
           `UPDATE ${APP_SETTINGS_TABLE}
-           SET selected_drill_page_id = NULL WHERE singleton_id = ?`,
-          [1],
+           SET selected_drill_page_id = ? WHERE singleton_id = ?`,
+          [firstSetId, 1],
         );
       }
     });
@@ -265,6 +503,7 @@ export class SqliteDrillRepository implements DrillRepository {
 
   async createSet(input: CreateDrillSetInput): Promise<DrillSet> {
     const normalized = normalizeCreateSet(input);
+    await this.requireEditableDrill(normalized.drillId);
     const createdId = assertId(
       normalized.id ?? this.idFactory(),
       "Drill set id",
@@ -290,6 +529,7 @@ export class SqliteDrillRepository implements DrillRepository {
     const id = assertId(idValue, "Drill set id");
     const current = await this.getSet(id);
     if (!current) throw setNotFound(id);
+    await this.requireEditableDrill(current.drillId);
 
     const next = normalizeExistingSet(current, changes);
     if (next.ordinal === 0 && next.countsFromPrevious !== 0) {
@@ -306,6 +546,9 @@ export class SqliteDrillRepository implements DrillRepository {
 
   async deleteSet(idValue: string): Promise<void> {
     const id = assertId(idValue, "Drill set id");
+    const existing = await this.getSet(id);
+    if (!existing) return;
+    await this.requireEditableDrill(existing.drillId);
     await this.db.withTransactionAsync(async () => {
       const set = await this.getSet(id);
       if (!set) return;
@@ -341,6 +584,7 @@ export class SqliteDrillRepository implements DrillRepository {
   ): Promise<DrillSet> {
     const normalized = normalizeCreateSet({ ...details, drillId });
     const ordinal = assertOrdinal(ordinalValue, "Set ordinal");
+    await this.requireEditableDrill(normalized.drillId);
     const id = assertId(normalized.id ?? this.idFactory(), "Drill set id");
     await this.db.withTransactionAsync(async () => {
       await this.requireDrill(normalized.drillId);
@@ -377,6 +621,7 @@ export class SqliteDrillRepository implements DrillRepository {
         "A set may appear only once in a reorder operation.",
       );
     }
+    await this.requireEditableDrill(parentId);
 
     await this.db.withTransactionAsync(async () => {
       const rows = await this.db.getAllAsync<{ id: string }>(
@@ -488,6 +733,62 @@ export class SqliteDrillRepository implements DrillRepository {
     return this.setSelectedDrillSet(id);
   }
 
+  private async insertDrillRow(input: InsertDrillRow): Promise<void> {
+    await this.db.runAsync(
+      `INSERT INTO ${DRILLS_TABLE}
+       (id, name, field_preset, created_at, updated_at,
+        metadata_title, metadata_created_at, metadata_drill_writer,
+        metadata_ensemble, metadata_description, metadata_lucide_icon,
+        source_document_json, selected_performer_entity_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.id,
+        input.name,
+        input.fieldPreset,
+        input.createdAt,
+        input.updatedAt,
+        input.metadata.title,
+        input.metadata.createdAt,
+        input.metadata.drillWriter ?? null,
+        input.metadata.ensemble ?? null,
+        input.metadata.description ?? null,
+        input.metadata.lucideIcon ?? null,
+        input.sourceDocumentJson ?? null,
+        input.selectedPerformerEntityId ?? null,
+      ],
+    );
+  }
+
+  private async findSourceSetId(
+    selectedSetId: string | null,
+    drillId: string,
+  ): Promise<number | null> {
+    if (selectedSetId === null) return null;
+    const row = await this.db.getFirstAsync<{
+      drill_id: SqlValue | undefined;
+      source_set_id: SqlValue | undefined;
+    }>(`SELECT drill_id, source_set_id FROM ${DRILL_SETS_TABLE} WHERE id = ?`, [
+      selectedSetId,
+    ]);
+    if (rowTextOrNull(row?.drill_id) !== drillId) return null;
+    return rowNullableInteger(row?.source_set_id, "source_set_id");
+  }
+
+  private async requireEditableDrill(drillId: string): Promise<void> {
+    await this.requireDrill(drillId);
+    const row = await this.db.getFirstAsync<{
+      source_document_json: SqlValue | undefined;
+    }>(`SELECT source_document_json FROM ${DRILLS_TABLE} WHERE id = ?`, [
+      drillId,
+    ]);
+    if (
+      row?.source_document_json !== null &&
+      row?.source_document_json !== undefined
+    ) {
+      throw importedProjectionMutationError(drillId);
+    }
+  }
+
   private async requireDrill(id: string): Promise<Drill> {
     const drill = await this.getDrill(id);
     if (!drill) throw drillNotFound(id);
@@ -514,9 +815,9 @@ export class SqliteDrillRepository implements DrillRepository {
     await this.db.runAsync(
       `INSERT INTO ${DRILL_SETS_TABLE}
        (id, drill_id, ordinal, set_number, set_suffix, set_kind,
-        counts_from_previous, measure_start, measure_end,
-        x_steps, y_steps, facing_degrees)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         counts_from_previous, measure_start, measure_end,
+         x_steps, y_steps, facing_degrees, source_set_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         set.id,
         set.drillId,
@@ -530,6 +831,7 @@ export class SqliteDrillRepository implements DrillRepository {
         set.position.xSteps,
         set.position.ySteps,
         set.facingDegrees ?? null,
+        set.sourceSetId ?? null,
       ],
     );
   }
@@ -537,10 +839,10 @@ export class SqliteDrillRepository implements DrillRepository {
   private async updateSetRow(set: DrillSet): Promise<void> {
     await this.db.runAsync(
       `UPDATE ${DRILL_SETS_TABLE}
-       SET set_number = ?, set_suffix = ?, set_kind = ?, counts_from_previous = ?,
-           measure_start = ?, measure_end = ?, x_steps = ?, y_steps = ?,
-           facing_degrees = ?
-       WHERE id = ?`,
+        SET set_number = ?, set_suffix = ?, set_kind = ?, counts_from_previous = ?,
+            measure_start = ?, measure_end = ?, x_steps = ?, y_steps = ?,
+            facing_degrees = ?, source_set_id = ?
+        WHERE id = ?`,
       [
         set.number,
         set.suffix ?? null,
@@ -551,6 +853,7 @@ export class SqliteDrillRepository implements DrillRepository {
         set.position.xSteps,
         set.position.ySteps,
         set.facingDegrees ?? null,
+        set.sourceSetId ?? null,
         set.id,
       ],
     );
@@ -624,7 +927,8 @@ export class SqliteDrillRepository implements DrillRepository {
 }
 
 const SET_SELECT = `SELECT id, drill_id, ordinal, set_number, set_suffix, set_kind,
-  counts_from_previous, measure_start, measure_end, x_steps, y_steps, facing_degrees
+  counts_from_previous, measure_start, measure_end, x_steps, y_steps,
+  facing_degrees, source_set_id
   FROM ${DRILL_SETS_TABLE}`;
 
 interface NormalizedCreateSet {
@@ -637,6 +941,18 @@ interface NormalizedCreateSet {
   readonly measureRange?: MeasureRange;
   readonly position: DrillGridPoint;
   readonly facingDegrees?: number;
+  readonly sourceSetId?: number;
+}
+
+interface InsertDrillRow {
+  readonly id: string;
+  readonly name: string;
+  readonly fieldPreset: FieldPresetId;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly metadata: DrillMetadata;
+  readonly sourceDocumentJson?: string;
+  readonly selectedPerformerEntityId?: number;
 }
 
 function normalizeCreateSet(input: CreateDrillSetInput): NormalizedCreateSet {
@@ -661,7 +977,124 @@ function normalizeCreateSet(input: CreateDrillSetInput): NormalizedCreateSet {
     ...(input.facingDegrees === undefined
       ? {}
       : { facingDegrees: assertFacing(input.facingDegrees) }),
+    ...(input.sourceSetId === undefined
+      ? {}
+      : {
+          sourceSetId: assertNonNegativeInteger(
+            input.sourceSetId,
+            "Source set id",
+          ),
+        }),
   };
+}
+
+interface ProjectedSetDetails extends CreateDrillSetDetails {
+  readonly sourceSetId: number;
+}
+
+function projectSelectedPerformerSets(
+  document: DrillDocument,
+  performerEntityId: number,
+): readonly ProjectedSetDetails[] {
+  assertSelectedPerformer(document, performerEntityId);
+  const positionsBySetId = new Map(
+    document.positions
+      .filter((position) => position.entityId === performerEntityId)
+      .map((position) => [position.setId, position] as const),
+  );
+  return document.sets.map((set) => {
+    const position = positionsBySetId.get(set.id);
+    if (!position) {
+      const performer = document.entities.find(
+        (entity) => entity.id === performerEntityId,
+      );
+      throw invalidInput(
+        `Drill position ${set.number}${set.suffix ?? ""} is missing ${performer?.label ?? `entity ${performerEntityId}`}'s coordinate.`,
+      );
+    }
+    return {
+      number: set.number,
+      ...(set.suffix === undefined ? {} : { suffix: set.suffix }),
+      kind: set.kind,
+      countsFromPrevious: set.countsFromPrevious,
+      ...(set.measureRange === undefined
+        ? {}
+        : { measureRange: set.measureRange }),
+      position: {
+        xSteps: position.xSteps,
+        ySteps: position.ySteps,
+      },
+      ...(position.facingDegrees === undefined
+        ? {}
+        : { facingDegrees: position.facingDegrees }),
+      sourceSetId: set.id,
+    };
+  });
+}
+
+function getPresetFromDocument(document: DrillDocument): FieldPresetId {
+  if (document.field.type !== "preset") {
+    throw invalidInput(
+      "Custom field definitions are not supported in the mobile app yet.",
+    );
+  }
+  return document.field.preset;
+}
+
+function parseDocumentTimestamp(document: DrillDocument): number {
+  const timestamp = Date.parse(document.metadata.createdAt);
+  if (!Number.isFinite(timestamp)) {
+    throw invalidInput("Drill metadata createdAt must be a valid date.");
+  }
+  return timestamp;
+}
+
+/** The caller supplies a document already validated at the import boundary. */
+function serializeValidatedDrillDocument(document: DrillDocument): string {
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+function normalizeMetadata(
+  metadata: DrillMetadata | undefined,
+  name: string,
+  createdAt: number,
+): DrillMetadata {
+  const title = assertText(metadata?.title ?? name, "Drill metadata title");
+  const metadataCreatedAt = assertText(
+    metadata?.createdAt ?? timestampToIso(createdAt),
+    "Drill metadata createdAt",
+  );
+  return {
+    title,
+    createdAt: metadataCreatedAt,
+    ...(metadata?.drillWriter === undefined
+      ? {}
+      : { drillWriter: metadata.drillWriter }),
+    ...(metadata?.ensemble === undefined
+      ? {}
+      : { ensemble: metadata.ensemble }),
+    ...(metadata?.description === undefined
+      ? {}
+      : { description: metadata.description }),
+    ...(metadata?.lucideIcon === undefined
+      ? {}
+      : { lucideIcon: metadata.lucideIcon }),
+  };
+}
+
+function assertSelectedPerformer(
+  document: DrillDocument,
+  entityId: number,
+): void {
+  const entity = document.entities.find(
+    (candidate) => candidate.id === entityId,
+  );
+  if (!entity || entity.type !== "performer") {
+    throw new DrillRepositoryError(
+      "INVALID_SELECTION",
+      `Entity ${entityId} is not a performer in this drill document.`,
+    );
+  }
 }
 
 function normalizeExistingSet(
@@ -808,12 +1241,56 @@ function toDrill(row: Row): Drill {
   if (!isFieldPresetId(fieldPreset)) {
     throw new MobileRowError(`Unsupported mobile field preset ${fieldPreset}.`);
   }
+  const name = rowText(row.name, "drill name");
+  const createdAt = rowNumber(row.created_at, "drill created_at");
+  const metadataCreatedAt =
+    typeof row.metadata_created_at === "string" &&
+    row.metadata_created_at.trim().length > 0
+      ? row.metadata_created_at
+      : timestampToIso(createdAt);
+  const metadataTitle =
+    typeof row.metadata_title === "string" &&
+    row.metadata_title.trim().length > 0
+      ? row.metadata_title
+      : name;
+  const selectedPerformerEntityId = rowNullableInteger(
+    row.selected_performer_entity_id,
+    "drill selected_performer_entity_id",
+  );
+  const drillWriter = rowOptionalText(
+    row.metadata_drill_writer,
+    "drill metadata writer",
+  );
+  const ensemble = rowOptionalText(
+    row.metadata_ensemble,
+    "drill metadata ensemble",
+  );
+  const description = rowOptionalText(
+    row.metadata_description,
+    "drill metadata description",
+  );
+  const lucideIcon = rowOptionalText(
+    row.metadata_lucide_icon,
+    "drill metadata lucide icon",
+  );
+  const metadata: DrillMetadata = {
+    title: metadataTitle,
+    createdAt: metadataCreatedAt,
+    ...(drillWriter === undefined ? {} : { drillWriter }),
+    ...(ensemble === undefined ? {} : { ensemble }),
+    ...(description === undefined ? {} : { description }),
+    ...(lucideIcon === undefined ? {} : { lucideIcon }),
+  };
   return {
     id: rowText(row.id, "drill id"),
-    name: rowText(row.name, "drill name"),
+    name,
     fieldPreset,
-    createdAt: rowNumber(row.created_at, "drill created_at"),
+    createdAt,
     updatedAt: rowNumber(row.updated_at, "drill updated_at"),
+    metadata,
+    ...(selectedPerformerEntityId === null
+      ? {}
+      : { selectedPerformerEntityId }),
   };
 }
 
@@ -827,6 +1304,7 @@ function toSet(row: Row): DrillSet {
   const measureStart = rowNullableNumber(row.measure_start, "measure_start");
   const measureEnd = rowNullableNumber(row.measure_end, "measure_end");
   const facingDegrees = rowNullableNumber(row.facing_degrees, "facing_degrees");
+  const sourceSetId = rowNullableInteger(row.source_set_id, "source_set_id");
   return {
     id: rowText(row.id, "drill set id"),
     drillId: rowText(row.drill_id, "drill set drill_id"),
@@ -846,6 +1324,7 @@ function toSet(row: Row): DrillSet {
       ySteps: rowNumber(row.y_steps, "drill set y_steps"),
     },
     ...(facingDegrees === null ? {} : { facingDegrees }),
+    ...(sourceSetId === null ? {} : { sourceSetId }),
   };
 }
 
@@ -853,6 +1332,12 @@ function rowText(value: SqlValue | undefined, name: string): string {
   if (typeof value !== "string")
     throw new MobileRowError(`${name} is not a string.`);
   return value;
+}
+
+function rowTextOrNull(value: SqlValue | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function rowNumber(value: SqlValue | undefined, name: string): number {
@@ -881,10 +1366,37 @@ function rowNullableNumber(
   return rowNumber(value, name);
 }
 
+function timestampToIso(value: number): string {
+  try {
+    return new Date(value).toISOString();
+  } catch {
+    return new Date(0).toISOString();
+  }
+}
+
+function rowNullableInteger(
+  value: SqlValue | undefined,
+  name: string,
+): number | null {
+  if (value === null || value === undefined) return null;
+  return rowInteger(value, name);
+}
+
+function rowOptionalText(
+  value: SqlValue | undefined,
+  name: string,
+): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return rowText(value, name);
+}
+
 class MobileRowError extends Error {
-  constructor(message: string) {
+  readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
     super(message);
     this.name = "MobileRowError";
+    if (cause !== undefined) this.cause = cause;
   }
 }
 
@@ -895,6 +1407,14 @@ function requireValue<T>(value: T | undefined, entity: string, id: string): T {
 
 function invalidInput(message: string): DrillRepositoryError {
   return new DrillRepositoryError("INVALID_INPUT", message);
+}
+
+function importedProjectionMutationError(
+  drillId: string,
+): DrillRepositoryError {
+  return invalidInput(
+    `Imported drill ${drillId} sets are an authoritative source projection and cannot be edited.`,
+  );
 }
 
 function drillNotFound(id: string): DrillRepositoryError {

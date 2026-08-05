@@ -75,59 +75,12 @@ export async function importEight2FiveDrillDocument(
 ): Promise<Drill> {
   assertMobileDocumentSupport(document);
   const performer = resolveSelectedPerformer(document, performerEntityId);
-  assertSelectedPerformerSupport(document, performer);
+  assertSelectedPerformerPositions(document, performer);
 
-  const fieldPreset = document.field.preset;
-  const positionsBySet = new Map(
-    document.positions
-      .filter((position) => position.entityId === performer.id)
-      .map((position) => [position.setId, position] as const),
-  );
-  const createdAt = Date.parse(document.metadata.createdAt);
-
-  const drill = await repository.createDrill({
-    name: document.metadata.title,
-    fieldPreset,
-    createdAt,
-    updatedAt: createdAt,
+  return await repository.createImportedDrill({
+    sourceDocument: document,
+    selectedPerformerEntityId: performer.id,
   });
-
-  try {
-    for (const set of document.sets) {
-      const position = positionsBySet.get(set.id);
-      if (!position) {
-        throw new Error(
-          `Drill position ${set.number}${set.suffix ?? ""} is missing ${performer.label}'s coordinate.`,
-        );
-      }
-
-      await repository.createSet({
-        drillId: drill.id,
-        number: set.number,
-        ...(set.suffix !== undefined ? { suffix: set.suffix } : {}),
-        kind: set.kind,
-        countsFromPrevious: set.countsFromPrevious,
-        ...(set.measureRange ? { measureRange: set.measureRange } : {}),
-        position: {
-          xSteps: position.xSteps,
-          ySteps: position.ySteps,
-        },
-        ...(position.facingDegrees !== undefined
-          ? { facingDegrees: position.facingDegrees }
-          : {}),
-      });
-    }
-  } catch (cause) {
-    try {
-      await repository.deleteDrill(drill.id);
-    } catch {
-      // Preserve the original import failure. The repository normally cascades
-      // drill deletion to any sets already inserted.
-    }
-    throw cause;
-  }
-
-  return drill;
 }
 
 function assertMobileDocumentSupport(
@@ -169,7 +122,7 @@ function resolveSelectedPerformer(
   return performer;
 }
 
-function assertSelectedPerformerSupport(
+function assertSelectedPerformerPositions(
   document: DrillDocument,
   performer: DrillEntity,
 ): void {
@@ -181,16 +134,6 @@ function assertSelectedPerformerSupport(
   if (document.sets.some((set) => !positionedSetIds.has(set.id))) {
     throw new Error(
       `Every drill position must include a coordinate for ${performer.label}.`,
-    );
-  }
-
-  if (
-    document.paths?.some(
-      (path) => path.entityId === performer.id && path.kind !== "straight",
-    )
-  ) {
-    throw new Error(
-      `${performer.label} uses polyline or Bézier drill paths, which are not supported in the mobile app yet.`,
     );
   }
 }

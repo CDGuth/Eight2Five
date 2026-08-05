@@ -85,9 +85,7 @@ function createRepository() {
     updatedAt: Date.parse(VALID_DOCUMENT.metadata.createdAt),
   };
   const repository = {
-    createDrill: jest.fn(async () => created),
-    createSet: jest.fn(async (input) => ({ id: "set", ...input })),
-    deleteDrill: jest.fn(async () => undefined),
+    createImportedDrill: jest.fn(async () => created),
   } as unknown as DrillRepository;
   return { created, repository };
 }
@@ -106,29 +104,10 @@ describe("Eight2Five drill import", () => {
       importEight2FiveDrillJson(repository, JSON.stringify(VALID_DOCUMENT)),
     ).resolves.toBe(created);
 
-    expect(repository.createDrill).toHaveBeenCalledWith({
-      name: "Part 4 Finale",
-      fieldPreset: "football-nfhs",
-      createdAt: Date.parse("2026-08-03T18:00:00.000Z"),
-      updatedAt: Date.parse("2026-08-03T18:00:00.000Z"),
+    expect(repository.createImportedDrill).toHaveBeenCalledWith({
+      sourceDocument: VALID_DOCUMENT,
+      selectedPerformerEntityId: 42,
     });
-    expect(repository.createSet).toHaveBeenNthCalledWith(1, {
-      drillId: "drill-1",
-      number: 1,
-      kind: "set",
-      countsFromPrevious: 0,
-      position: { xSteps: -8, ySteps: 0 },
-    });
-    expect(repository.createSet).toHaveBeenNthCalledWith(2, {
-      drillId: "drill-1",
-      number: 2,
-      kind: "set",
-      countsFromPrevious: 16,
-      measureRange: { start: 12, end: 15 },
-      position: { xSteps: 4, ySteps: 32 },
-      facingDegrees: 90,
-    });
-    expect(repository.deleteDrill).not.toHaveBeenCalled();
   });
 
   test("accepts multi-performer files with props and groups selectable performers by symbol", () => {
@@ -151,23 +130,15 @@ describe("Eight2Five drill import", () => {
     ]);
   });
 
-  test("imports only the coordinates for the performer selected from a multi-performer file", async () => {
+  test("passes the selected performer to atomic imported-drill creation", async () => {
     const { repository } = createRepository();
 
     await importEight2FiveDrillDocument(repository, MULTI_ENTITY_DOCUMENT, 43);
 
-    expect(repository.createSet).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        position: { xSteps: 10, ySteps: 12 },
-      }),
-    );
-    expect(repository.createSet).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        position: { xSteps: 14, ySteps: 20 },
-      }),
-    );
+    expect(repository.createImportedDrill).toHaveBeenCalledWith({
+      sourceDocument: MULTI_ENTITY_DOCUMENT,
+      selectedPerformerEntityId: 43,
+    });
   });
 
   test("requires an explicit performer selection when a file has multiple performers", async () => {
@@ -176,10 +147,10 @@ describe("Eight2Five drill import", () => {
     await expect(
       importEight2FiveDrillDocument(repository, MULTI_ENTITY_DOCUMENT),
     ).rejects.toThrow("Select your performer");
-    expect(repository.createDrill).not.toHaveBeenCalled();
+    expect(repository.createImportedDrill).not.toHaveBeenCalled();
   });
 
-  test("allows unsupported path geometry on other entities but rejects it for the selected performer", async () => {
+  test("accepts polyline and Bézier paths without losing the import", async () => {
     const otherEntityCurved: DrillDocument = {
       ...MULTI_ENTITY_DOCUMENT,
       paths: [
@@ -212,8 +183,11 @@ describe("Eight2Five drill import", () => {
     const secondRepository = createRepository().repository;
     await expect(
       importEight2FiveDrillDocument(secondRepository, selectedCurved, 43),
-    ).rejects.toThrow("polyline or Bézier");
-    expect(secondRepository.createDrill).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
+    expect(secondRepository.createImportedDrill).toHaveBeenCalledWith({
+      sourceDocument: selectedCurved,
+      selectedPerformerEntityId: 43,
+    });
   });
 
   test("rejects custom fields and files without any performers", () => {
@@ -270,25 +244,19 @@ describe("Eight2Five drill import", () => {
     );
   });
 
-  test("rolls back a partially-created drill if a set insert fails", async () => {
+  test("propagates atomic import failures without a cleanup fallback", async () => {
     const repository = {
-      createDrill: jest.fn(async () => ({
-        id: "drill-1",
-        name: "Part 4 Finale",
-        fieldPreset: "football-nfhs" as const,
-        createdAt: 1,
-        updatedAt: 1,
-      })),
-      createSet: jest
+      createImportedDrill: jest
         .fn()
-        .mockResolvedValueOnce({ id: "set-1" })
         .mockRejectedValueOnce(new Error("database failed")),
-      deleteDrill: jest.fn(async () => undefined),
     } as unknown as DrillRepository;
 
     await expect(
       importEight2FiveDrillJson(repository, JSON.stringify(VALID_DOCUMENT)),
     ).rejects.toThrow("database failed");
-    expect(repository.deleteDrill).toHaveBeenCalledWith("drill-1");
+    expect(repository.createImportedDrill).toHaveBeenCalledWith({
+      sourceDocument: VALID_DOCUMENT,
+      selectedPerformerEntityId: 42,
+    });
   });
 });

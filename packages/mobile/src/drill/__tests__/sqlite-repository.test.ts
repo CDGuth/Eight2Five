@@ -1,6 +1,75 @@
-import { FIELD_PRESET_IDS, type FieldPresetId } from "@eight2five/drill-schema";
+import {
+  DRILL_SCHEMA_URL,
+  DRILL_SCHEMA_VERSION,
+  FIELD_PRESET_IDS,
+  type DrillDocument,
+  type FieldPresetId,
+} from "@eight2five/drill-schema";
 import type { SQLiteDatabase } from "expo-sqlite";
-import { SqliteDrillRepository } from "../SqliteDrillRepository";
+import {
+  SqliteDrillRepository,
+  type CreateDrillInput,
+} from "../SqliteDrillRepository";
+
+const IMPORTED_DOCUMENT: DrillDocument = {
+  schema: DRILL_SCHEMA_URL,
+  schemaVersion: DRILL_SCHEMA_VERSION,
+  metadata: {
+    title: "Imported Finale",
+    createdAt: "2026-08-03T18:00:00.000Z",
+    drillWriter: "A. Writer",
+    ensemble: "The Ensemble",
+    description: "Full document round trip",
+    lucideIcon: "music-2",
+  },
+  field: { type: "preset", preset: "football-nfhs" },
+  entityRules: {
+    bySymbol: { B: { appearance: { color: "#E53935" } } },
+  },
+  entities: [
+    { id: 10, type: "performer", symbol: "B", label: "B1" },
+    { id: 11, type: "performer", symbol: "B", label: "B2" },
+    { id: 99, type: "prop", symbol: "P", label: "Flag" },
+  ],
+  sets: [
+    { id: 0, number: 1, kind: "set", countsFromPrevious: 0 },
+    { id: 1, number: 2, kind: "set", countsFromPrevious: 8 },
+  ],
+  positions: [
+    { entityId: 10, setId: 0, xSteps: 0, ySteps: 0 },
+    { entityId: 10, setId: 1, xSteps: 8, ySteps: 0 },
+    { entityId: 11, setId: 0, xSteps: 0, ySteps: 8 },
+    { entityId: 11, setId: 1, xSteps: 8, ySteps: 8 },
+    { entityId: 99, setId: 0, xSteps: 4, ySteps: 4 },
+    { entityId: 99, setId: 1, xSteps: 12, ySteps: 4 },
+  ],
+  paths: [
+    {
+      entityId: 10,
+      fromSetId: 0,
+      toSetId: 1,
+      kind: "polyline",
+      waypoints: [{ xSteps: 4, ySteps: 3 }],
+    },
+    {
+      entityId: 11,
+      fromSetId: 0,
+      toSetId: 1,
+      kind: "bezier",
+      controlPoints: [
+        { xSteps: 2, ySteps: 10 },
+        { xSteps: 6, ySteps: 10 },
+      ],
+    },
+  ],
+  provenance: {
+    source: { kind: "coordinate-sheet", fileName: "finale.pdf" },
+    importer: { name: "test", version: "1" },
+    importedAt: "2026-08-03T18:01:00.000Z",
+    references: [{ target: { type: "entity", entityId: 10 }, page: 1 }],
+  },
+  extensions: { custom: { retained: true } },
+};
 
 describe("SqliteDrillRepository", () => {
   test("uses stable factories and deterministic drill/set ordering", async () => {
@@ -80,6 +149,278 @@ describe("SqliteDrillRepository", () => {
       ]);
     },
   );
+
+  test("round-trips the full imported document and summary metadata", async () => {
+    const fake = new DrillFakeDatabase();
+    const ids = ["full-0", "full-1"];
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => ids.shift()!,
+      timeFactory: () => 1,
+    });
+
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+
+    expect(await repository.getDrillDocument(drill.id)).toEqual(
+      IMPORTED_DOCUMENT,
+    );
+    expect(fake.drills.get(drill.id)?.source_document_json).toBe(
+      `${JSON.stringify(IMPORTED_DOCUMENT, null, 2)}\n`,
+    );
+    expect(drill).toMatchObject({
+      name: "Imported Finale",
+      selectedPerformerEntityId: 10,
+      metadata: IMPORTED_DOCUMENT.metadata,
+    });
+    expect(await repository.listDrills()).toEqual([
+      expect.objectContaining({
+        id: "imported",
+        metadata: IMPORTED_DOCUMENT.metadata,
+      }),
+    ]);
+
+    fake.drills.get(drill.id)!.source_document_json = "not-json";
+    await expect(repository.listDrills()).resolves.toHaveLength(1);
+    await expect(repository.getDrillDocument(drill.id)).rejects.toThrow(
+      "source document",
+    );
+  });
+
+  test("rejects imported fields passed through manual drill creation", async () => {
+    const fake = new DrillFakeDatabase();
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => "manual",
+      timeFactory: () => 1,
+    });
+
+    await expect(
+      repository.createDrill({
+        name: IMPORTED_DOCUMENT.metadata.title,
+        sourceDocument: IMPORTED_DOCUMENT,
+        selectedPerformerEntityId: 10,
+      } as unknown as CreateDrillInput),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(fake.drills.size).toBe(0);
+  });
+
+  test("maps local projected sets to source set ids and reprojections preserve source data", async () => {
+    const fake = new DrillFakeDatabase();
+    const ids = ["local-0", "local-1", "reprojected-0", "reprojected-1"];
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => ids.shift()!,
+      timeFactory: () => 1,
+    });
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+
+    expect(
+      (await repository.listSets(drill.id)).map((set) => [
+        set.id,
+        set.sourceSetId,
+      ]),
+    ).toEqual([
+      ["local-0", 0],
+      ["local-1", 1],
+    ]);
+    await repository.setActiveDrill(drill.id);
+    await repository.setSelectedDrillSet("local-1");
+
+    await repository.setSelectedPerformer(drill.id, 11);
+
+    expect(await repository.getDrillDocument(drill.id)).toEqual(
+      IMPORTED_DOCUMENT,
+    );
+    expect(await repository.getDrill(drill.id)).toMatchObject({
+      selectedPerformerEntityId: 11,
+    });
+    expect(
+      (await repository.listSets(drill.id)).map((set) => ({
+        id: set.id,
+        sourceSetId: set.sourceSetId,
+        position: set.position,
+      })),
+    ).toEqual([
+      {
+        id: "reprojected-0",
+        sourceSetId: 0,
+        position: { xSteps: 0, ySteps: 8 },
+      },
+      {
+        id: "reprojected-1",
+        sourceSetId: 1,
+        position: { xSteps: 8, ySteps: 8 },
+      },
+    ]);
+    expect(fake.settings.selected_drill_page_id).toBe("reprojected-1");
+  });
+
+  test("rejects all set mutations for imported projections, including page aliases", async () => {
+    const fake = new DrillFakeDatabase();
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: (() => {
+        const ids = ["local-0", "local-1"];
+        return () => ids.shift()!;
+      })(),
+      timeFactory: () => 1,
+    });
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+    const beforeSets = await repository.listSets(drill.id);
+
+    const expectRejected = async (operation: Promise<unknown>) => {
+      await expect(operation).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    };
+    await expectRejected(
+      repository.createSet({
+        drillId: drill.id,
+        number: 3,
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(
+      repository.updateSet(beforeSets[0].id, {
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(repository.deleteSet(beforeSets[0].id));
+    await expectRejected(
+      repository.insertSet(drill.id, 1, {
+        number: 1,
+        suffix: "A",
+        kind: "subset",
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(
+      repository.reorderSets(
+        drill.id,
+        beforeSets.map((set) => set.id).reverse(),
+      ),
+    );
+
+    await expectRejected(
+      repository.createPage({
+        drillId: drill.id,
+        number: 3,
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(
+      repository.updatePage(beforeSets[0].id, {
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(repository.deletePage(beforeSets[0].id));
+    await expectRejected(
+      repository.insertPage(drill.id, 1, {
+        number: 1,
+        suffix: "A",
+        kind: "subset",
+        position: { xSteps: 1, ySteps: 1 },
+      }),
+    );
+    await expectRejected(
+      repository.reorderPages(
+        drill.id,
+        beforeSets.map((set) => set.id).reverse(),
+      ),
+    );
+
+    expect(await repository.listSets(drill.id)).toEqual(beforeSets);
+    expect(await repository.getDrillDocument(drill.id)).toEqual(
+      IMPORTED_DOCUMENT,
+    );
+  });
+
+  test("rejects an invalid performer entity without changing the projection", async () => {
+    const fake = new DrillFakeDatabase();
+    const ids = ["local-0", "local-1"];
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => ids.shift()!,
+      timeFactory: () => 1,
+    });
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+    const before = await repository.listSets(drill.id);
+
+    await expect(
+      repository.setSelectedPerformer(drill.id, 99),
+    ).rejects.toMatchObject({
+      code: "INVALID_SELECTION",
+    });
+    expect(await repository.listSets(drill.id)).toEqual(before);
+    expect(
+      (await repository.getDrill(drill.id))?.selectedPerformerEntityId,
+    ).toBe(10);
+  });
+
+  test("rolls back the drill and projection when an imported set insert fails", async () => {
+    const fake = new DrillFakeDatabase();
+    fake.failOnSetInsert = true;
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => "set-that-fails",
+      timeFactory: () => 1,
+    });
+
+    await expect(
+      repository.createImportedDrill({
+        id: "imported",
+        sourceDocument: IMPORTED_DOCUMENT,
+        selectedPerformerEntityId: 10,
+      }),
+    ).rejects.toThrow("set insert failed");
+    expect(fake.drills.size).toBe(0);
+    expect(fake.sets.size).toBe(0);
+  });
+
+  test("selects the first set when activating a different drill and clears it on deactivation", async () => {
+    const fake = new DrillFakeDatabase();
+    const ids = ["drill-a", "drill-b", "set-a-0", "set-b-0", "set-b-1"];
+    const repository = new SqliteDrillRepository(fake.database, {
+      idFactory: () => ids.shift()!,
+      timeFactory: () => 1,
+    });
+    const drillA = await repository.createDrill("A");
+    const drillB = await repository.createDrill("B");
+    const setA = await repository.createSet({
+      drillId: drillA.id,
+      number: 1,
+      position: { xSteps: 0, ySteps: 0 },
+    });
+    const setB = await repository.createSet({
+      drillId: drillB.id,
+      number: 1,
+      position: { xSteps: 1, ySteps: 1 },
+    });
+    await repository.createSet({
+      drillId: drillB.id,
+      number: 2,
+      countsFromPrevious: 8,
+      position: { xSteps: 2, ySteps: 2 },
+    });
+
+    await repository.setActiveDrill(drillA.id);
+    expect(fake.settings.selected_drill_page_id).toBe(setA.id);
+    await repository.setActiveDrill(drillB.id);
+    expect(fake.settings.selected_drill_page_id).toBe(setB.id);
+    await repository.setActiveDrill(null);
+    expect(fake.settings.active_drill_id).toBeNull();
+    expect(fake.settings.selected_drill_page_id).toBeNull();
+    await repository.setActiveDrill(drillA.id);
+    expect(fake.settings.selected_drill_page_id).toBe(setA.id);
+  });
 
   test("inserts, reorders, updates, and deletes sets through transactions", async () => {
     const fake = new DrillFakeDatabase();
@@ -260,6 +601,14 @@ type FakeDrillRow = {
   field_preset: FieldPresetId;
   created_at: number;
   updated_at: number;
+  metadata_title?: string;
+  metadata_created_at?: string;
+  metadata_drill_writer?: string | null;
+  metadata_ensemble?: string | null;
+  metadata_description?: string | null;
+  metadata_lucide_icon?: string | null;
+  source_document_json?: string | null;
+  selected_performer_entity_id?: number | null;
 };
 
 type FakeSetRow = {
@@ -275,11 +624,13 @@ type FakeSetRow = {
   x_steps: number;
   y_steps: number;
   facing_degrees: number | null;
+  source_set_id: number | null;
 };
 
 class DrillFakeDatabase {
   readonly drills = new Map<string, FakeDrillRow>();
   readonly sets = new Map<string, FakeSetRow>();
+  failOnSetInsert = false;
   readonly settings = {
     drill_features_enabled: 1,
     drill_terminology: "sets",
@@ -394,12 +745,34 @@ class DrillFakeDatabase {
 
   private async run(sql: string, params: unknown[]): Promise<unknown> {
     if (sql.includes("INSERT INTO drills")) {
-      const [id, name, fieldPreset, createdAt, updatedAt] = params as [
+      const [
+        id,
+        name,
+        fieldPreset,
+        createdAt,
+        updatedAt,
+        metadataTitle,
+        metadataCreatedAt,
+        metadataWriter,
+        metadataEnsemble,
+        metadataDescription,
+        metadataLucideIcon,
+        sourceDocumentJson,
+        selectedPerformerEntityId,
+      ] = params as [
         string,
         string,
         FieldPresetId,
         number,
         number,
+        string,
+        string,
+        string | null,
+        string | null,
+        string | null,
+        string | null,
+        string | null,
+        number | null,
       ];
       this.drills.set(id, {
         id,
@@ -407,8 +780,17 @@ class DrillFakeDatabase {
         field_preset: fieldPreset,
         created_at: createdAt,
         updated_at: updatedAt,
+        metadata_title: metadataTitle,
+        metadata_created_at: metadataCreatedAt,
+        metadata_drill_writer: metadataWriter,
+        metadata_ensemble: metadataEnsemble,
+        metadata_description: metadataDescription,
+        metadata_lucide_icon: metadataLucideIcon,
+        source_document_json: sourceDocumentJson,
+        selected_performer_entity_id: selectedPerformerEntityId,
       });
     } else if (sql.includes("INSERT INTO drill_sets")) {
+      if (this.failOnSetInsert) throw new Error("set insert failed");
       const [
         id,
         drillId,
@@ -422,6 +804,7 @@ class DrillFakeDatabase {
         xSteps,
         ySteps,
         facingDegrees,
+        sourceSetId,
       ] = params as [
         string,
         string,
@@ -434,6 +817,7 @@ class DrillFakeDatabase {
         number | null,
         number,
         number,
+        number | null,
         number | null,
       ];
       this.sets.set(id, {
@@ -449,6 +833,7 @@ class DrillFakeDatabase {
         x_steps: xSteps,
         y_steps: ySteps,
         facing_degrees: facingDegrees,
+        source_set_id: sourceSetId,
       });
     } else if (sql.includes("INSERT OR IGNORE INTO app_settings")) {
       // Singleton already exists in this fake.
@@ -468,15 +853,46 @@ class DrillFakeDatabase {
         this.settings.selected_drill_page_id = null;
       }
     } else if (sql.includes("DELETE FROM drill_sets")) {
-      const id = String(params[0]);
-      this.sets.delete(id);
-      if (this.settings.selected_drill_page_id === id) {
-        this.settings.selected_drill_page_id = null;
+      if (sql.includes("WHERE drill_id = ?")) {
+        const drillId = String(params[0]);
+        for (const [setId, set] of this.sets) {
+          if (set.drill_id === drillId) {
+            this.sets.delete(setId);
+            if (this.settings.selected_drill_page_id === setId) {
+              this.settings.selected_drill_page_id = null;
+            }
+          }
+        }
+      } else {
+        const id = String(params[0]);
+        this.sets.delete(id);
+        if (this.settings.selected_drill_page_id === id) {
+          this.settings.selected_drill_page_id = null;
+        }
+      }
+    } else if (
+      sql.includes("UPDATE drills") &&
+      sql.includes("selected_performer_entity_id")
+    ) {
+      const [selectedPerformerEntityId, id] = params as [number, string];
+      const row = this.drills.get(id);
+      if (row) {
+        this.drills.set(id, {
+          ...row,
+          selected_performer_entity_id: selectedPerformerEntityId,
+        });
       }
     } else if (sql.includes("UPDATE drills")) {
       const [name, updatedAt, id] = params as [string, number, string];
       const row = this.drills.get(id);
-      if (row) this.drills.set(id, { ...row, name, updated_at: updatedAt });
+      if (row) {
+        this.drills.set(id, {
+          ...row,
+          name,
+          metadata_title: name,
+          updated_at: updatedAt,
+        });
+      }
     } else if (sql.includes("UPDATE app_settings")) {
       this.updateSettings(sql, params);
     } else if (sql.includes("UPDATE drill_sets")) {
@@ -568,6 +984,7 @@ class DrillFakeDatabase {
         xSteps,
         ySteps,
         facingDegrees,
+        sourceSetId,
         id,
       ] = params as [
         number,
@@ -578,6 +995,7 @@ class DrillFakeDatabase {
         number | null,
         number,
         number,
+        number | null,
         number | null,
         string,
       ];
@@ -593,6 +1011,7 @@ class DrillFakeDatabase {
           x_steps: xSteps,
           y_steps: ySteps,
           facing_degrees: facingDegrees,
+          source_set_id: sourceSetId,
         });
       }
     }

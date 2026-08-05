@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 4;
+export const MOBILE_SCHEMA_VERSION = 5;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -84,7 +84,20 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
       field_preset TEXT NOT NULL DEFAULT 'football-nfhs'
         CHECK (field_preset IN (${FIELD_PRESET_SQL_LIST})),
       created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      metadata_title TEXT NOT NULL CHECK (length(trim(metadata_title)) > 0),
+      metadata_created_at TEXT NOT NULL,
+      metadata_drill_writer TEXT,
+      metadata_ensemble TEXT,
+      metadata_description TEXT,
+      metadata_lucide_icon TEXT,
+      source_document_json TEXT,
+      selected_performer_entity_id INTEGER
+        CHECK (
+          selected_performer_entity_id IS NULL OR
+          (selected_performer_entity_id >= 0 AND
+           selected_performer_entity_id = CAST(selected_performer_entity_id AS INTEGER))
+        )
     );
 
     CREATE INDEX idx_drills_created_at
@@ -110,6 +123,8 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
       y_steps REAL NOT NULL CHECK (y_steps = y_steps),
       facing_degrees REAL
         CHECK (facing_degrees IS NULL OR (facing_degrees >= 0 AND facing_degrees < 360)),
+      source_set_id INTEGER
+        CHECK (source_set_id IS NULL OR (source_set_id >= 0 AND source_set_id = CAST(source_set_id AS INTEGER))),
       CHECK (
         (set_kind = 'set' AND set_suffix IS NULL) OR
         (set_kind = 'subset' AND set_suffix IS NOT NULL)
@@ -125,6 +140,9 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
 
     CREATE INDEX idx_drill_sets_drill
       ON ${DRILL_SETS_TABLE}(drill_id, ordinal, id);
+
+    CREATE INDEX idx_drill_sets_source
+      ON ${DRILL_SETS_TABLE}(drill_id, source_set_id);
 
     CREATE TABLE ${APP_SETTINGS_TABLE} (
       singleton_id INTEGER PRIMARY KEY NOT NULL CHECK (singleton_id = 1),

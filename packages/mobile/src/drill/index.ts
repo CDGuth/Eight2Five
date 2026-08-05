@@ -1,6 +1,8 @@
 export {
   formatSetName,
+  type DrillDocument,
   type DrillGridPoint,
+  type DrillMetadata,
   type MeasureRange,
   type SetKind,
 } from "@eight2five/drill-schema";
