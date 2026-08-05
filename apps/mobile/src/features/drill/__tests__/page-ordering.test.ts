@@ -118,7 +118,7 @@ describe("set ordering and transition presentation", () => {
     expect(order).toEqual(["delete", "reload"]);
   });
 
-  test("formats unavailable, Halt, Step Size, and xCounts values", () => {
+  test("formats unavailable, Hold, Step Size, and xCounts values", () => {
     const base: TransitionAnalysis = {
       distanceSteps: 8,
       stepSizeToFive: 6.5,
@@ -143,7 +143,7 @@ describe("set ordering and transition presentation", () => {
         true,
         16,
       ).stepSize,
-    ).toBe("Halt");
+    ).toBe("Hold");
   });
 
   test("recalculates both transitions neighboring a changed middle set", () => {
@@ -158,7 +158,7 @@ describe("set ordering and transition presentation", () => {
 
     expect(originalMiddle.stepSize).toBe("8 to 5");
     expect(originalFollowing.stepSize).toBe("8 to 5");
-    expect(nextMiddle.stepSize).toBe("Halt");
+    expect(nextMiddle.stepSize).toBe("Hold");
     expect(nextFollowing.stepSize).toBe("4 to 5");
   });
 });

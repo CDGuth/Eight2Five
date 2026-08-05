@@ -111,6 +111,7 @@ export function FieldScreen({
           guidanceVisible={shouldShowFieldGuidance(drillOverlayState)}
           anchors={anchors}
           anchorOverlayOptions={anchorOverlayOptions}
+          showAuxiliaryFieldMarks={controller.settings.showAuxiliaryFieldMarks}
           showPerimeterStepGrid={
             controller.settings.developerModeEnabled &&
             controller.settings.showPerimeterStepGrid

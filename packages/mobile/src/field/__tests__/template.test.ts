@@ -1,4 +1,5 @@
 import {
+  createStandardFootballFieldTemplate,
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   getStandardFieldDimensionsInFeet,
   getStandardFieldDimensionsInYards,
@@ -41,17 +42,59 @@ describe("standard high-school field template", () => {
     expect(field.fiveYardLines[18].start.xMeters).toBeCloseTo(41.148);
   });
 
-  test("includes two dimensioned numbers for each standard number position", () => {
+  test("includes both number rows from goal line zero through the 50", () => {
     const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
-    expect(field.yardNumbers).toHaveLength(18);
+    expect(field.yardNumbers).toHaveLength(22);
+    expect(
+      field.yardNumbers.filter((number) => number.label === "0"),
+    ).toHaveLength(4);
     expect(
       field.yardNumbers.filter((number) => number.label === "50"),
     ).toHaveLength(2);
+    expect(
+      field.yardNumbers
+        .filter((number) => number.side === "front")
+        .map((number) => number.label),
+    ).toEqual(["0", "10", "20", "30", "40", "50", "40", "30", "20", "10", "0"]);
+    expect(
+      field.yardNumbers.every(
+        (number) =>
+          number.xMeters ===
+          field.allFiveYardLines.find(
+            (line) => line.coordinateMeters === number.xMeters,
+          )?.coordinateMeters,
+      ),
+    ).toBe(true);
     expect(field.yardNumbers.every((number) => number.widthMeters > 0)).toBe(
       true,
     );
     expect(field.yardNumbers.every((number) => number.heightMeters > 0)).toBe(
       true,
+    );
+  });
+
+  test.each([
+    ["football-nfhs", 24],
+    ["football-ncaa", 24],
+    ["football-texas-uil", 24],
+    ["football-nfl", 39],
+  ] as const)("%s uses schema-defined number centers", (preset, centerFeet) => {
+    const field = createStandardFootballFieldTemplate(preset);
+    const front = field.yardNumbers.find((number) => number.side === "front")!;
+    const back = field.yardNumbers.find((number) => number.side === "back")!;
+
+    expect(field.dimensions.yardNumberHeightFeet).toBeCloseTo(6);
+    expect(field.dimensions.yardNumberCenterFromFrontSidelineFeet).toBeCloseTo(
+      centerFeet,
+    );
+    expect(field.dimensions.yardNumberCenterFromBackSidelineFeet).toBeCloseTo(
+      centerFeet,
+    );
+    expect(front.yMeters - field.bounds.minYMeters).toBeCloseTo(
+      field.fieldDefinition.markings.yardNumbers.centerFromFrontSidelineMeters,
+    );
+    expect(field.bounds.maxYMeters - back.yMeters).toBeCloseTo(
+      field.fieldDefinition.markings.yardNumbers.centerFromBackSidelineMeters,
     );
   });
 

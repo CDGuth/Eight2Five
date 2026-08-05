@@ -31,6 +31,7 @@ interface FieldSceneProps {
   readonly anchors: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions: FieldAnchorOverlayOptions;
   readonly showPerimeterStepGrid: boolean;
+  readonly showAuxiliaryFieldMarks: boolean;
 }
 
 export function FieldScene({
@@ -45,6 +46,7 @@ export function FieldScene({
   anchors,
   anchorOverlayOptions,
   showPerimeterStepGrid,
+  showAuxiliaryFieldMarks,
 }: FieldSceneProps) {
   const cameraTransform = useDerivedValue(() => [
     { translateX: canvasSize.value.width / 2 },
@@ -63,6 +65,7 @@ export function FieldScene({
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
         showPerimeterStepGrid={showPerimeterStepGrid}
+        showAuxiliaryFieldMarks={showAuxiliaryFieldMarks}
       />
       <FieldAnchorLayer
         anchors={anchors}

@@ -188,22 +188,87 @@ describe("aggregate field paths", () => {
     },
   );
 
-  test("keeps physical football marks aggregate and exposes stable shape counts", () => {
+  test("renders perpendicular inbounds hashes without treating guides as ticks", () => {
     const paths = createFieldPaths(field);
+    const hashSegments = parseSubpaths(paths.hashMarksPath);
 
     expect(subpathCount(paths.yardLinesPath)).toBe(19);
     expect(paths.counts.yardLines.lineCount).toBe(19);
-    expect(subpathCount(paths.hashMarksPath)).toBe(198);
+    expect(hashSegments).toHaveLength(198);
+    expect(
+      hashSegments.every(
+        ({ x1, y1, x2, y2 }) =>
+          y1 === y2 &&
+          Math.abs(
+            x2 -
+              x1 -
+              field.fieldDefinition.markings.inboundsHashMarks.lengthMeters,
+          ) < 1e-6,
+      ),
+    ).toBe(true);
     expect(paths.counts.hashMarks).toMatchObject({
       rowCount: 2,
       ticksPerRow: 99,
       tickCount: 198,
-      spacingMeters: yardsToMeters(1),
+      spacingMeters:
+        field.fieldDefinition.markings.inboundsHashMarks.spacingMeters,
+      tickLengthMeters:
+        field.fieldDefinition.markings.inboundsHashMarks.lengthMeters,
     });
+    expect(subpathCount(paths.hashGuideLinesPath)).toBe(2);
+    expect(paths.counts.hashGuideLines.lineCount).toBe(2);
     expect(subpathCount(paths.boundaryPath)).toBe(1);
     expect(paths.boundaryPath.endsWith(" Z")).toBe(true);
     expect(paths.counts.boundary.segmentCount).toBe(1);
   });
+
+  test.each(PRESETS)(
+    "%s renders preset sideline marks at one-yard positions between full yard lines",
+    (preset) => {
+      const template = createStandardFootballFieldTemplate(preset);
+      const paths = createFieldPaths(template);
+      const segments = parseSubpaths(paths.sidelineHashMarksPath);
+      const markings = template.fieldDefinition.markings.sidelineHashMarks;
+
+      expect(segments).toHaveLength(160);
+      expect(paths.counts.sidelineHashMarks).toEqual({
+        spacingMeters: markings.spacingMeters,
+        markLengthMeters: markings.lengthMeters,
+        insetFromSidelineMeters: markings.insetFromSidelineMeters,
+        rowCount: 2,
+        marksPerRow: 80,
+        markCount: 160,
+      });
+      expect(
+        segments.every(
+          ({ x1, y1, x2, y2 }) =>
+            x1 === x2 &&
+            Math.abs(Math.abs(y2 - y1) - markings.lengthMeters) < 1e-6,
+        ),
+      ).toBe(true);
+      expect(
+        segments.every(({ x1 }) => {
+          const yardsFromGoalLine =
+            (x1 - template.bounds.minXMeters) / yardsToMeters(1);
+          return Math.abs(yardsFromGoalLine % 5) > 1e-6;
+        }),
+      ).toBe(true);
+      const front = segments.find(
+        ({ y1, y2 }) =>
+          y1 < template.widthMeters / 2 && y2 < template.widthMeters / 2,
+      )!;
+      const back = segments.find(
+        ({ y1, y2 }) =>
+          y1 > template.widthMeters / 2 && y2 > template.widthMeters / 2,
+      )!;
+      expect(front.y1 - template.bounds.minYMeters).toBeCloseTo(
+        markings.insetFromSidelineMeters,
+      );
+      expect(template.bounds.maxYMeters - back.y2).toBeCloseTo(
+        markings.insetFromSidelineMeters,
+      );
+    },
+  );
 });
 
 function gridReference(

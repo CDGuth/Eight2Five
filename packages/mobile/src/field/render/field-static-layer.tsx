@@ -6,6 +6,7 @@ import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 import type { StandardFootballFieldTemplate } from "../template";
 import type { FieldPaths } from "./create-field-paths";
 import type { FieldRenderPalette } from "./field-render-tokens";
+import { createYardNumberTextLayout } from "./yard-number-layout";
 
 interface FieldStaticLayerProps {
   readonly template: StandardFootballFieldTemplate;
@@ -13,6 +14,7 @@ interface FieldStaticLayerProps {
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
   readonly showPerimeterStepGrid: boolean;
+  readonly showAuxiliaryFieldMarks: boolean;
 }
 
 export const FieldStaticLayer = React.memo(function FieldStaticLayer({
@@ -21,6 +23,7 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   metersPerPixel,
   palette,
   showPerimeterStepGrid,
+  showAuxiliaryFieldMarks,
 }: FieldStaticLayerProps) {
   const stepGridStroke = useDerivedValue(() => metersPerPixel.value * 0.7);
   const fourStepStroke = useDerivedValue(() => metersPerPixel.value * 1.1);
@@ -85,6 +88,24 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
         style="stroke"
         strokeWidth={fieldLineStroke}
       />
+      {showAuxiliaryFieldMarks ? (
+        <>
+          <Path
+            path={paths.hashGuideLinesPath}
+            color={palette.fieldLines}
+            opacity={0.74}
+            style="stroke"
+            strokeWidth={fieldLineStroke}
+          />
+          <Path
+            path={paths.sidelineHashMarksPath}
+            color={palette.fieldLines}
+            opacity={0.74}
+            style="stroke"
+            strokeWidth={fieldLineStroke}
+          />
+        </>
+      ) : null}
       <Path
         path={paths.boundaryPath}
         color={palette.fieldLines}
@@ -93,24 +114,34 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
       />
       {numberFont
         ? template.yardNumbers.map((number) => {
-            const width = numberFont.measureText(number.label).width;
+            const layout = createYardNumberTextLayout(
+              numberFont.measureText(number.label),
+              number.heightMeters,
+              number.side,
+            );
             return (
               <Group
                 key={`${number.side}-${number.xMeters}`}
                 transform={[
                   { translateX: number.xMeters },
                   { translateY: number.yMeters },
-                  { scaleY: -1 },
                 ]}
               >
-                <Text
-                  x={-width / 2}
-                  y={template.dimensions.yardNumberHeightMeters / 2}
-                  text={number.label}
-                  font={numberFont}
-                  color={palette.fieldNumbers}
-                  opacity={0.72}
-                />
+                <Group
+                  transform={[
+                    { scaleX: layout.scaleX },
+                    { scaleY: layout.scaleY },
+                  ]}
+                >
+                  <Text
+                    x={layout.x}
+                    y={layout.y}
+                    text={number.label}
+                    font={numberFont}
+                    color={palette.fieldNumbers}
+                    opacity={0.72}
+                  />
+                </Group>
               </Group>
             );
           })

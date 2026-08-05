@@ -9,13 +9,19 @@ import {
   fieldWorldToScreen,
 } from "../camera/field-camera-math";
 import {
+  FIELD_CAMERA_BLANK_MARGIN_YARDS,
+  FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS,
+  FIELD_GRID_PERIMETER_YARDS,
   FIELD_MIN_METERS_PER_PIXEL,
   getFieldCameraBounds,
   getFieldGridBounds,
   getFieldMaximumMetersPerPixel,
 } from "../camera/field-camera-policy";
+import { STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE } from "../template";
+import { metersToYards } from "../units";
 
 const size = { width: 800, height: 400 };
+const portraitSize = { width: 400, height: 800 };
 const viewport = {
   centerXMeters: 45,
   centerYMeters: 20,
@@ -84,6 +90,32 @@ describe("field camera math", () => {
     ).toMatchObject({ centerXMeters: 50, centerYMeters: 25 });
   });
 
+  test("clamps panning to the exterior camera allowance in both orientations", () => {
+    const bounds = getFieldCameraBounds();
+    const metersPerPixel = 0.1;
+
+    for (const currentSize of [size, portraitSize]) {
+      const clamped = clampFieldViewport(
+        {
+          centerXMeters: bounds.minXMeters - 100,
+          centerYMeters: bounds.maxYMeters + 100,
+          metersPerPixel,
+        },
+        currentSize,
+        bounds,
+      );
+
+      expect(clamped.centerXMeters).toBeCloseTo(
+        bounds.minXMeters + (currentSize.width * metersPerPixel) / 2,
+        10,
+      );
+      expect(clamped.centerYMeters).toBeCloseTo(
+        bounds.maxYMeters - (currentSize.height * metersPerPixel) / 2,
+        10,
+      );
+    }
+  });
+
   test("rebases pan translation after a pinch pointer transition", () => {
     const current = { xMeters: 30, yMeters: 12 };
     const rebased = createFieldPanBaseline(current, 84, -20, 0.1);
@@ -104,5 +136,29 @@ describe("field camera math", () => {
     expect(maximum).toBeGreaterThan(FIELD_MIN_METERS_PER_PIXEL);
     expect(cameraBounds.minXMeters).toBeLessThan(gridBounds.minXMeters);
     expect(cameraBounds.maxYMeters).toBeGreaterThan(gridBounds.maxYMeters);
+  });
+
+  test("keeps the rendered grid at 10 yards and allows 30 yards outside the field", () => {
+    const gridBounds = getFieldGridBounds();
+    const cameraBounds = getFieldCameraBounds();
+
+    expect(FIELD_GRID_PERIMETER_YARDS).toBe(10);
+    expect(FIELD_CAMERA_BLANK_MARGIN_YARDS).toBe(20);
+    expect(FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS).toBe(30);
+    expect(
+      metersToYards(
+        STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE.bounds.minXMeters -
+          gridBounds.minXMeters,
+      ),
+    ).toBeCloseTo(FIELD_GRID_PERIMETER_YARDS, 10);
+    expect(
+      metersToYards(
+        STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE.bounds.minXMeters -
+          cameraBounds.minXMeters,
+      ),
+    ).toBeCloseTo(FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS, 10);
+    expect(
+      metersToYards(gridBounds.minXMeters - cameraBounds.minXMeters),
+    ).toBeCloseTo(FIELD_CAMERA_BLANK_MARGIN_YARDS, 10);
   });
 });

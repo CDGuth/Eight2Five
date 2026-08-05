@@ -1,5 +1,6 @@
 import {
   getFieldPreset,
+  type FieldMarkingDefinition,
   type FieldPresetId,
   type ResolvedFieldDefinition,
 } from "@eight2five/drill-schema";
@@ -31,11 +32,12 @@ export interface FieldLine {
 
 export interface FieldYardNumber {
   readonly label: string;
-  /** Side-relative number printed on the field (10, 20, 30, 40, or 50). */
+  /** Side-relative number printed on the field (0, 10, 20, 30, 40, or 50). */
   readonly yardLineYards: number;
   readonly xMeters: number;
   readonly yMeters: number;
   readonly side: "front" | "back";
+  /** Reference width only; rendering preserves the font's natural aspect ratio. */
   readonly widthMeters: number;
   readonly heightMeters: number;
 }
@@ -53,7 +55,13 @@ export interface StandardFootballFieldDimensions {
   readonly highSchoolHashFromSidelineFeet: number;
   /** @deprecated Use hashFromSidelineMeters. */
   readonly highSchoolHashFromSidelineMeters: number;
+  readonly yardNumberCenterFromFrontSidelineFeet: number;
+  readonly yardNumberCenterFromFrontSidelineMeters: number;
+  readonly yardNumberCenterFromBackSidelineFeet: number;
+  readonly yardNumberCenterFromBackSidelineMeters: number;
+  /** @deprecated Use yardNumberCenterFromFrontSidelineFeet. */
   readonly yardNumberInsetFromSidelineFeet: number;
+  /** @deprecated Use yardNumberCenterFromFrontSidelineMeters. */
   readonly yardNumberInsetFromSidelineMeters: number;
   readonly yardNumberWidthFeet: number;
   readonly yardNumberHeightFeet: number;
@@ -99,12 +107,6 @@ const FIELD_LENGTH_YARDS = 100 as const;
 const FIELD_WIDTH_YARDS = 160 / 3;
 const FIELD_LENGTH_METERS = yardsToMeters(FIELD_LENGTH_YARDS);
 const FIELD_WIDTH_METERS = feetToMeters(160);
-const YARD_NUMBER_INSET_FEET = 12;
-const YARD_NUMBER_INSET_METERS = feetToMeters(YARD_NUMBER_INSET_FEET);
-const YARD_NUMBER_WIDTH_FEET = 4;
-const YARD_NUMBER_HEIGHT_FEET = 6;
-const YARD_NUMBER_WIDTH_METERS = feetToMeters(YARD_NUMBER_WIDTH_FEET);
-const YARD_NUMBER_HEIGHT_METERS = feetToMeters(YARD_NUMBER_HEIGHT_FEET);
 
 export const STANDARD_FIELD_LENGTH_YARDS = FIELD_LENGTH_YARDS;
 export const STANDARD_FIELD_WIDTH_YARDS = FIELD_WIDTH_YARDS;
@@ -165,17 +167,20 @@ function yLine(
 
 function makeYardNumbers(
   bounds: StandardFootballFieldTemplate["bounds"],
+  markings: FieldMarkingDefinition,
 ): readonly FieldYardNumber[] {
   const numbers: FieldYardNumber[] = [];
-  for (const xYards of [-40, -30, -20, -10, 0, 10, 20, 30, 40]) {
+  for (const xYards of [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]) {
     const sideRelativeYards = xYards === 0 ? 50 : 50 - Math.abs(xYards);
     const label = String(sideRelativeYards);
     const xMeters = yardsToMeters(xYards);
     for (const side of ["front", "back"] as const) {
       const yMeters =
         side === "front"
-          ? bounds.minYMeters + YARD_NUMBER_INSET_METERS
-          : bounds.maxYMeters - YARD_NUMBER_INSET_METERS;
+          ? bounds.minYMeters +
+            markings.yardNumbers.centerFromFrontSidelineMeters
+          : bounds.maxYMeters -
+            markings.yardNumbers.centerFromBackSidelineMeters;
       numbers.push(
         Object.freeze({
           label,
@@ -183,8 +188,8 @@ function makeYardNumbers(
           xMeters,
           yMeters,
           side,
-          widthMeters: YARD_NUMBER_WIDTH_METERS,
-          heightMeters: YARD_NUMBER_HEIGHT_METERS,
+          widthMeters: markings.yardNumbers.nominalWidthMeters,
+          heightMeters: markings.yardNumbers.heightMeters,
         }),
       );
     }
@@ -222,6 +227,7 @@ export function createStandardFootballFieldTemplate(
   const frontHashMeters = findReference(fieldDefinition, "front-hash");
   const backHashMeters = findReference(fieldDefinition, "back-hash");
   const frontHashFromSidelineMeters = frontHashMeters - bounds.minYMeters;
+  const markings = fieldDefinition.markings;
   const prefix = hashPrefix(fieldPreset);
 
   const goalLines = Object.freeze([
@@ -267,12 +273,25 @@ export function createStandardFootballFieldTemplate(
     hashFromSidelineMeters: frontHashFromSidelineMeters,
     highSchoolHashFromSidelineFeet: metersToFeet(frontHashFromSidelineMeters),
     highSchoolHashFromSidelineMeters: frontHashFromSidelineMeters,
-    yardNumberInsetFromSidelineFeet: YARD_NUMBER_INSET_FEET,
-    yardNumberInsetFromSidelineMeters: YARD_NUMBER_INSET_METERS,
-    yardNumberWidthFeet: YARD_NUMBER_WIDTH_FEET,
-    yardNumberHeightFeet: YARD_NUMBER_HEIGHT_FEET,
-    yardNumberWidthMeters: YARD_NUMBER_WIDTH_METERS,
-    yardNumberHeightMeters: YARD_NUMBER_HEIGHT_METERS,
+    yardNumberCenterFromFrontSidelineFeet: metersToFeet(
+      markings.yardNumbers.centerFromFrontSidelineMeters,
+    ),
+    yardNumberCenterFromFrontSidelineMeters:
+      markings.yardNumbers.centerFromFrontSidelineMeters,
+    yardNumberCenterFromBackSidelineFeet: metersToFeet(
+      markings.yardNumbers.centerFromBackSidelineMeters,
+    ),
+    yardNumberCenterFromBackSidelineMeters:
+      markings.yardNumbers.centerFromBackSidelineMeters,
+    yardNumberInsetFromSidelineFeet: metersToFeet(
+      markings.yardNumbers.centerFromFrontSidelineMeters,
+    ),
+    yardNumberInsetFromSidelineMeters:
+      markings.yardNumbers.centerFromFrontSidelineMeters,
+    yardNumberWidthFeet: metersToFeet(markings.yardNumbers.nominalWidthMeters),
+    yardNumberHeightFeet: metersToFeet(markings.yardNumbers.heightMeters),
+    yardNumberWidthMeters: markings.yardNumbers.nominalWidthMeters,
+    yardNumberHeightMeters: markings.yardNumbers.heightMeters,
   });
 
   const template: StandardFootballFieldTemplate = Object.freeze({
@@ -293,7 +312,7 @@ export function createStandardFootballFieldTemplate(
     fiveYardLines,
     allFiveYardLines,
     yardLines: fiveYardLines,
-    yardNumbers: makeYardNumbers(bounds),
+    yardNumbers: makeYardNumbers(bounds, markings),
   });
   TEMPLATE_CACHE.set(fieldPreset, template);
   return template;

@@ -53,6 +53,7 @@ export interface FieldCanvasProps {
   readonly anchors?: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions?: FieldAnchorOverlayOptions;
   readonly showPerimeterStepGrid?: boolean;
+  readonly showAuxiliaryFieldMarks?: boolean;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string;
 }
@@ -72,6 +73,7 @@ export function FieldCanvas({
   anchors = EMPTY_FIELD_ANCHORS,
   anchorOverlayOptions = HIDDEN_FIELD_ANCHOR_OVERLAY,
   showPerimeterStepGrid = false,
+  showAuxiliaryFieldMarks = true,
   style,
   testID = "field-canvas",
 }: FieldCanvasProps) {
@@ -168,6 +170,7 @@ export function FieldCanvas({
             anchors={anchors}
             anchorOverlayOptions={anchorOverlayOptions}
             showPerimeterStepGrid={showPerimeterStepGrid}
+            showAuxiliaryFieldMarks={showAuxiliaryFieldMarks}
           />
         </Canvas>
       </View>

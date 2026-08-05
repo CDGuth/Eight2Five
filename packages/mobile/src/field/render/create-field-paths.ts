@@ -7,11 +7,9 @@ import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   type StandardFootballFieldTemplate,
 } from "../template";
-import { feetToMeters, yardsToMeters } from "../units";
+import { yardsToMeters } from "../units";
 
 const GRID_PADDING_YARDS = 10;
-const HASH_MARK_SPACING_METERS = yardsToMeters(1);
-const HASH_MARK_LENGTH_METERS = feetToMeters(2);
 const PATH_NUMBER_PRECISION = 1_000_000;
 const COORDINATE_EPSILON = 1e-9;
 const FOUR_STEP_INTERVAL = 4;
@@ -53,6 +51,19 @@ export interface HashMarksPathMetadata {
   readonly tickCount: number;
 }
 
+export interface HashGuideLinesPathMetadata {
+  readonly lineCount: 2;
+}
+
+export interface SidelineHashMarksPathMetadata {
+  readonly spacingMeters: number;
+  readonly markLengthMeters: number;
+  readonly insetFromSidelineMeters: number;
+  readonly rowCount: 2;
+  readonly marksPerRow: number;
+  readonly markCount: number;
+}
+
 export interface BoundaryPathMetadata {
   readonly segmentCount: 1;
 }
@@ -63,6 +74,8 @@ export interface FieldPathCounts {
   readonly fourStepGrid: FourStepGridPathMetadata;
   readonly yardLines: YardLinesPathMetadata;
   readonly hashMarks: HashMarksPathMetadata;
+  readonly hashGuideLines: HashGuideLinesPathMetadata;
+  readonly sidelineHashMarks: SidelineHashMarksPathMetadata;
   readonly boundary: BoundaryPathMetadata;
 }
 
@@ -75,7 +88,10 @@ export interface FieldPaths {
   /** Four marching-grid steps, clipped to the physical field. */
   readonly fourStepGridPath: string;
   readonly yardLinesPath: string;
+  /** Perpendicular inbounds hashes that remain visible with auxiliaries off. */
   readonly hashMarksPath: string;
+  readonly hashGuideLinesPath: string;
+  readonly sidelineHashMarksPath: string;
   readonly boundaryPath: string;
   readonly fieldExtent: FieldPathExtent;
   readonly gridExtent: FieldPathExtent;
@@ -92,6 +108,8 @@ export interface FieldPaths {
   readonly fourStepGrid: string;
   readonly yardLines: string;
   readonly hashMarks: string;
+  readonly hashGuideLines: string;
+  readonly sidelineHashMarks: string;
   readonly boundary: string;
 }
 
@@ -185,21 +203,67 @@ export function createFieldPaths(
     template.frontHashLine.coordinateMeters,
     template.backHashLine.coordinateMeters,
   ] as const;
+  const inboundsMarkings = template.fieldDefinition.markings.inboundsHashMarks;
   const hashMarks: string[] = [];
-  const ticksPerRow = Math.max(0, Math.ceil(template.goalToGoalYards) - 1);
+  const inboundsXCoordinates = spacedInteriorCoordinates(
+    fieldExtent.minXMeters,
+    fieldExtent.maxXMeters,
+    inboundsMarkings.spacingMeters,
+  );
   for (const yMeters of hashYCoordinates) {
-    for (let yard = 1; yard < template.goalToGoalYards; yard += 1) {
-      const xMeters = fieldExtent.minXMeters + yard * HASH_MARK_SPACING_METERS;
+    for (const xMeters of inboundsXCoordinates) {
       hashMarks.push(
-        verticalSegment(
-          xMeters,
-          yMeters - HASH_MARK_LENGTH_METERS / 2,
-          yMeters + HASH_MARK_LENGTH_METERS / 2,
+        horizontalSegment(
+          xMeters - inboundsMarkings.lengthMeters / 2,
+          yMeters,
+          xMeters + inboundsMarkings.lengthMeters / 2,
         ),
       );
     }
   }
   const hashMarksPath = hashMarks.join(" ");
+  const hashGuideLinesPath = template.hashLines
+    .map((line) =>
+      horizontalSegment(
+        fieldExtent.minXMeters,
+        line.coordinateMeters,
+        fieldExtent.maxXMeters,
+      ),
+    )
+    .join(" ");
+
+  const sidelineMarkings = template.fieldDefinition.markings.sidelineHashMarks;
+  const sidelineXCoordinates = spacedInteriorCoordinates(
+    fieldExtent.minXMeters,
+    fieldExtent.maxXMeters,
+    sidelineMarkings.spacingMeters,
+  ).filter(
+    (xMeters) =>
+      !isMultipleOfSpacing(
+        xMeters - fieldExtent.minXMeters,
+        template.dimensions.fiveYardLineSpacingMeters,
+      ),
+  );
+  const sidelineHashMarks: string[] = [];
+  for (const xMeters of sidelineXCoordinates) {
+    const frontStart =
+      fieldExtent.minYMeters + sidelineMarkings.insetFromSidelineMeters;
+    const backStart =
+      fieldExtent.maxYMeters - sidelineMarkings.insetFromSidelineMeters;
+    sidelineHashMarks.push(
+      verticalSegment(
+        xMeters,
+        frontStart,
+        frontStart + sidelineMarkings.lengthMeters,
+      ),
+      verticalSegment(
+        xMeters,
+        backStart - sidelineMarkings.lengthMeters,
+        backStart,
+      ),
+    );
+  }
+  const sidelineHashMarksPath = sidelineHashMarks.join(" ");
 
   const boundaryPath = rectanglePath(fieldExtent);
   const extents = Object.freeze({ field: fieldExtent, grid: gridExtent });
@@ -224,11 +288,20 @@ export function createFieldPaths(
     }),
     yardLines: Object.freeze({ lineCount: template.yardLines.length }),
     hashMarks: Object.freeze({
-      spacingMeters: HASH_MARK_SPACING_METERS,
-      tickLengthMeters: HASH_MARK_LENGTH_METERS,
+      spacingMeters: inboundsMarkings.spacingMeters,
+      tickLengthMeters: inboundsMarkings.lengthMeters,
       rowCount: 2,
-      ticksPerRow,
+      ticksPerRow: inboundsXCoordinates.length,
       tickCount: hashMarks.length,
+    }),
+    hashGuideLines: Object.freeze({ lineCount: 2 }),
+    sidelineHashMarks: Object.freeze({
+      spacingMeters: sidelineMarkings.spacingMeters,
+      markLengthMeters: sidelineMarkings.lengthMeters,
+      insetFromSidelineMeters: sidelineMarkings.insetFromSidelineMeters,
+      rowCount: 2,
+      marksPerRow: sidelineXCoordinates.length,
+      markCount: sidelineHashMarks.length,
     }),
     boundary: Object.freeze({ segmentCount: 1 }),
   });
@@ -239,6 +312,8 @@ export function createFieldPaths(
     fourStepGridPath,
     yardLinesPath,
     hashMarksPath,
+    hashGuideLinesPath,
+    sidelineHashMarksPath,
     boundaryPath,
     fieldExtent,
     gridExtent,
@@ -251,6 +326,8 @@ export function createFieldPaths(
     fourStepGrid: fourStepGridPath,
     yardLines: yardLinesPath,
     hashMarks: hashMarksPath,
+    hashGuideLines: hashGuideLinesPath,
+    sidelineHashMarks: sidelineHashMarksPath,
     boundary: boundaryPath,
   });
   PATH_CACHE.set(template, paths);
@@ -364,6 +441,27 @@ function stepIntervalCoordinates(
     coordinates.push(maximum);
   }
   return Object.freeze(coordinates);
+}
+
+function spacedInteriorCoordinates(
+  minimum: number,
+  maximum: number,
+  spacing: number,
+): readonly number[] {
+  const coordinates: number[] = [];
+  for (
+    let coordinate = minimum + spacing;
+    coordinate < maximum - COORDINATE_EPSILON;
+    coordinate += spacing
+  ) {
+    coordinates.push(coordinate);
+  }
+  return coordinates;
+}
+
+function isMultipleOfSpacing(distance: number, spacing: number): boolean {
+  const quotient = distance / spacing;
+  return Math.abs(quotient - Math.round(quotient)) <= COORDINATE_EPSILON;
 }
 
 function freezeExtent(extent: FieldPathExtent): FieldPathExtent {

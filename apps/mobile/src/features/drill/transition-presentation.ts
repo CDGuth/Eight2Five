@@ -19,7 +19,7 @@ export function formatTransitionAnalysis(
   }
   return {
     stepSize: analysis.isHalt
-      ? "Halt"
+      ? "Hold"
       : analysis.stepSizeToFive === undefined
         ? "–"
         : `${formatMetricNumber(analysis.stepSizeToFive)} to 5`,
