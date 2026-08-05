@@ -117,8 +117,8 @@ export function useConverterController() {
     setSettings((current) => ({
       ...current,
       title: inferTitleFromFileName(nextAsset.name),
-      propSymbols: [],
       rules: [],
+      setOverrides: [],
     }));
 
     try {
@@ -149,8 +149,8 @@ export function useConverterController() {
     setSettings((current) => ({
       ...current,
       title: "",
-      propSymbols: [],
       rules: [],
+      setOverrides: [],
     }));
   }, []);
 
@@ -173,13 +173,47 @@ export function useConverterController() {
     [],
   );
 
+  const addLabelOverride = React.useCallback((label: string) => {
+    const key = label.trim();
+    if (!key) return;
+    setSettings((current) => {
+      const existing = current.rules.find(
+        (rule) => rule.target === "label" && rule.key.trim() === key,
+      );
+      if (existing) {
+        return {
+          ...current,
+          rules: [
+            existing,
+            ...current.rules.filter((rule) => rule.id !== existing.id),
+          ],
+        };
+      }
+      return {
+        ...current,
+        rules: [
+          {
+            ...createEmptyRuleDraft(`rule-${nextRuleId++}`),
+            target: "label",
+            key,
+          },
+          ...current.rules,
+        ],
+      };
+    });
+  }, []);
+
   const updateRule = React.useCallback(
     (id: string, patch: Partial<Omit<EntityRuleDraft, "id">>) => {
       setSettings((current) => ({
         ...current,
-        rules: current.rules.map((rule) =>
-          rule.id === id ? { ...rule, ...patch } : rule,
-        ),
+        rules: current.rules.map((rule) => {
+          if (rule.id !== id) return rule;
+          const nextRule = { ...rule, ...patch };
+          return nextRule.entityType === "prop"
+            ? { ...nextRule, section: "", instrument: "" }
+            : nextRule;
+        }),
       }));
     },
     [],
@@ -192,14 +226,35 @@ export function useConverterController() {
     }));
   }, []);
 
-  const togglePropSymbol = React.useCallback((symbol: string) => {
-    setSettings((current) => ({
-      ...current,
-      propSymbols: current.propSymbols.includes(symbol)
-        ? current.propSymbols.filter((candidate) => candidate !== symbol)
-        : [...current.propSymbols, symbol],
-    }));
-  }, []);
+  const updateSet = React.useCallback(
+    (setOverride: DrillDocument["sets"][number]): string | undefined => {
+      if (!importResult?.document) return "Parse a PDF before editing sets.";
+      if (
+        !importResult.document.sets.some((set) => set.id === setOverride.id)
+      ) {
+        return `Unknown set id ${setOverride.id}.`;
+      }
+
+      const nextSettings: ConverterSettings = {
+        ...settings,
+        setOverrides: [
+          ...settings.setOverrides.filter((set) => set.id !== setOverride.id),
+          setOverride,
+        ],
+      };
+      const validation = validateConverterSettings(nextSettings);
+      try {
+        applyConverterSettings(importResult.document, nextSettings, validation);
+      } catch (cause) {
+        return cause instanceof Error
+          ? cause.message
+          : "The set edit is invalid.";
+      }
+      setSettings(nextSettings);
+      return undefined;
+    },
+    [importResult, settings],
+  );
 
   const download = React.useCallback(() => {
     if (!outputDocument) return;
@@ -226,9 +281,10 @@ export function useConverterController() {
     clearPdf,
     updateSettings,
     addRule,
+    addLabelOverride,
     updateRule,
     removeRule,
-    togglePropSymbol,
+    updateSet,
     download,
   };
 }

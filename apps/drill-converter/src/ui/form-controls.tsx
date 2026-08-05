@@ -49,9 +49,11 @@ export function FormField({
           borderRadius: radius.sm,
           paddingHorizontal: 12,
           paddingVertical: multiline ? 10 : 8,
-          backgroundColor: colors.surface,
-          color: colors.text,
+          backgroundColor:
+            props.editable === false ? colors.surfaceMuted : colors.surface,
+          color: props.editable === false ? colors.textMuted : colors.text,
           fontSize: 15,
+          opacity: props.editable === false ? 0.7 : 1,
           ...(multiline ? { textAlignVertical: "top" as const } : {}),
         }}
         accessibilityLabel={label}

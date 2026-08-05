@@ -3,6 +3,20 @@ export const DRILL_SCHEMA_VERSION = "1.0.0" as const;
 
 export type SetKind = "set" | "subset";
 export type DrillEntityType = "performer" | "prop";
+export const PROP_SIZE_UNITS = Object.freeze([
+  "8-to-5-steps",
+  "feet",
+  "inches",
+  "meters",
+] as const);
+export type PropSizeUnit = (typeof PROP_SIZE_UNITS)[number];
+
+export interface PropSize {
+  readonly length: number;
+  readonly width: number;
+  readonly unit: PropSizeUnit;
+}
+
 export type EntityIcon =
   | "dot"
   | "square"
@@ -57,12 +71,16 @@ export interface DrillEntity {
   readonly name?: string;
   readonly section?: string;
   readonly instrument?: string;
+  readonly size?: PropSize;
   readonly appearance?: EntityAppearance;
 }
 
 export interface EntityRuleValues {
+  readonly type?: DrillEntityType;
+  readonly name?: string;
   readonly section?: string;
   readonly instrument?: string;
+  readonly size?: PropSize;
   readonly appearance?: EntityAppearance;
 }
 

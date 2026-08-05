@@ -15,10 +15,12 @@
   "dependencies": {
     "@eight2five/drill-importers": "0.0.0",
     "@eight2five/drill-schema": "0.0.0",
+    "@eight2five/ui": "0.0.0",
     "@expo/metro-runtime": "~57.0.8",
     "expo": "~57.0.9",
     "expo-document-picker": "~57.0.1",
     "expo-router": "~57.0.9",
+    "lucide-react-native": "^1.22.0",
     "react": "19.2.3",
     "react-dom": "^19.2.3",
     "react-native": "0.86.2",

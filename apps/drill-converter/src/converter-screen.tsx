@@ -10,14 +10,29 @@ import { colors, spacing } from "./ui/theme";
 
 export function ConverterScreen() {
   const controller = useConverterController();
+  const { addLabelOverride } = controller;
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const [rulesSectionY, setRulesSectionY] = React.useState(0);
+  const [rulesFocusRequestKey, setRulesFocusRequestKey] = React.useState(0);
   const { width } = useWindowDimensions();
-  const contentWidth = Math.min(
-    1040,
-    Math.max(0, width - (width < 720 ? 28 : 64)),
+
+  const editEntityLabel = React.useCallback(
+    (label: string) => {
+      addLabelOverride(label);
+      setRulesFocusRequestKey((key) => key + 1);
+      requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, rulesSectionY - spacing.md),
+          animated: true,
+        });
+      });
+    },
+    [addLabelOverride, rulesSectionY],
   );
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: colors.page }}
       contentContainerStyle={{
@@ -26,7 +41,7 @@ export function ConverterScreen() {
         paddingVertical: width < 720 ? 24 : 40,
       }}
     >
-      <View style={{ width: contentWidth, maxWidth: "100%", gap: spacing.xl }}>
+      <View style={{ width: "100%", maxWidth: 1040, gap: spacing.xl }}>
         <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
           <Text
             selectable
@@ -71,16 +86,20 @@ export function ConverterScreen() {
           onUpdate={controller.updateSettings}
         />
 
-        <EntitySettingsSection
-          settings={controller.settings}
-          availableSymbols={controller.availableSymbols}
-          errors={controller.settingsErrors}
-          onUpdate={controller.updateSettings}
-          onTogglePropSymbol={controller.togglePropSymbol}
-          onAddRule={controller.addRule}
-          onUpdateRule={controller.updateRule}
-          onRemoveRule={controller.removeRule}
-        />
+        <View
+          onLayout={(event) => setRulesSectionY(event.nativeEvent.layout.y)}
+        >
+          <EntitySettingsSection
+            settings={controller.settings}
+            availableSymbols={controller.availableSymbols}
+            errors={controller.settingsErrors}
+            focusRequestKey={rulesFocusRequestKey}
+            onUpdate={controller.updateSettings}
+            onAddRule={controller.addRule}
+            onUpdateRule={controller.updateRule}
+            onRemoveRule={controller.removeRule}
+          />
+        </View>
 
         <PreviewSection
           importResult={controller.importResult}
@@ -88,6 +107,8 @@ export function ConverterScreen() {
           settingsErrors={controller.settingsErrors}
           summary={controller.summary}
           canDownload={controller.canDownload}
+          onEditEntityLabel={editEntityLabel}
+          onUpdateSet={controller.updateSet}
           onDownload={controller.download}
         />
 

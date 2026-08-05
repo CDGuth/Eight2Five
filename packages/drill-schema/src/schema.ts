@@ -5,6 +5,7 @@ import {
   DRILL_SCHEMA_URL,
   DRILL_SCHEMA_VERSION,
   FIELD_PRESET_IDS,
+  PROP_SIZE_UNITS,
   type DrillDocument,
 } from "./types";
 
@@ -14,6 +15,7 @@ const safeNonNegativeInteger = z
   .min(0)
   .max(Number.MAX_SAFE_INTEGER);
 const finiteNumber = z.number().finite();
+const positiveFiniteNumber = finiteNumber.gt(0);
 const nonEmptyText = z.string().trim().min(1);
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const symbol = z.string().trim().min(1).max(16);
@@ -80,6 +82,14 @@ export const entityAppearanceSchema = z
   })
   .strict();
 
+export const propSizeSchema = z
+  .object({
+    length: positiveFiniteNumber,
+    width: positiveFiniteNumber,
+    unit: z.enum(PROP_SIZE_UNITS),
+  })
+  .strict();
+
 export const drillEntitySchema = z
   .object({
     id: safeNonNegativeInteger,
@@ -89,17 +99,73 @@ export const drillEntitySchema = z
     name: nonEmptyText.optional(),
     section: nonEmptyText.optional(),
     instrument: nonEmptyText.optional(),
+    size: propSizeSchema.optional(),
     appearance: entityAppearanceSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((entity, context) => {
+    if (entity.type !== "prop") {
+      if (entity.size !== undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["size"],
+          message: "Only props can define a size.",
+        });
+      }
+      return;
+    }
+    if (entity.section !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["section"],
+        message: "Props cannot define a section.",
+      });
+    }
+    if (entity.instrument !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["instrument"],
+        message: "Props cannot define an instrument.",
+      });
+    }
+  });
 
 export const entityRuleValuesSchema = z
   .object({
+    type: z.enum(["performer", "prop"]).optional(),
+    name: nonEmptyText.optional(),
     section: nonEmptyText.optional(),
     instrument: nonEmptyText.optional(),
+    size: propSizeSchema.optional(),
     appearance: entityAppearanceSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((rule, context) => {
+    if (rule.type !== "prop") {
+      if (rule.size !== undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["size"],
+          message: "Only prop rules can define a size.",
+        });
+      }
+      return;
+    }
+    if (rule.section !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["section"],
+        message: "Prop rules cannot define a section.",
+      });
+    }
+    if (rule.instrument !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["instrument"],
+        message: "Prop rules cannot define an instrument.",
+      });
+    }
+  });
 
 const ruleMapSchema = z.record(entityRuleValuesSchema);
 

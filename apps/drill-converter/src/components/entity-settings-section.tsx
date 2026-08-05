@@ -1,5 +1,9 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import {
+  convertPropSizeValue,
+  type PropSizeUnit,
+} from "@eight2five/drill-schema";
 
 import {
   ChoiceChips,
@@ -22,18 +26,31 @@ const TARGET_OPTIONS = Object.freeze([
   { value: "id", label: "ID" },
 ] as const);
 
+const ENTITY_TYPE_OPTIONS = Object.freeze([
+  { value: "", label: "Default (Performer)" },
+  { value: "performer", label: "Performer" },
+  { value: "prop", label: "Prop" },
+] as const);
+
 const LABEL_OPTIONS = Object.freeze([
-  { value: "inherit", label: "Default" },
+  { value: "inherit", label: "Default (Show)" },
   { value: "visible", label: "Show" },
   { value: "hidden", label: "Hide" },
 ] as const);
+
+const PROP_SIZE_UNIT_OPTIONS = Object.freeze([
+  { value: "8-to-5-steps", label: "8:5 steps" },
+  { value: "feet", label: "Feet" },
+  { value: "inches", label: "Inches" },
+  { value: "meters", label: "Meters" },
+] as const satisfies readonly { value: PropSizeUnit; label: string }[]);
 
 export function EntitySettingsSection({
   settings,
   availableSymbols,
   errors,
+  focusRequestKey = 0,
   onUpdate,
-  onTogglePropSymbol,
   onAddRule,
   onUpdateRule,
   onRemoveRule,
@@ -41,8 +58,8 @@ export function EntitySettingsSection({
   readonly settings: ConverterSettings;
   readonly availableSymbols: readonly string[];
   readonly errors: readonly string[];
+  readonly focusRequestKey?: number;
   readonly onUpdate: (patch: Partial<ConverterSettings>) => void;
-  readonly onTogglePropSymbol: (symbol: string) => void;
   readonly onAddRule: (target?: EntityRuleDraft["target"]) => void;
   readonly onUpdateRule: (
     id: string,
@@ -53,50 +70,15 @@ export function EntitySettingsSection({
   const ruleErrors = errors.filter(
     (error) => error.startsWith("Rule ") || error.startsWith("Duplicate "),
   );
+
   return (
     <Disclosure
+      key={`entity-rules-${focusRequestKey}`}
       title="Performer, prop, and appearance rules"
       description="Optional. Use symbol rules for broad defaults, then label or ID rules for exceptions. Specific entity data remains highest priority."
+      initiallyOpen={focusRequestKey > 0}
     >
       <View style={{ gap: spacing.md }}>
-        <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>
-          Entity type by symbol
-        </Text>
-        {availableSymbols.length === 0 ? (
-          <Text
-            selectable
-            style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
-          >
-            Select and parse a PDF first. Every extracted symbol defaults to a
-            performer; mark prop symbols here when needed.
-          </Text>
-        ) : (
-          <View style={{ gap: spacing.xs }}>
-            {availableSymbols.map((symbol) => (
-              <ToggleRow
-                key={symbol}
-                title={`${symbol} is a prop`}
-                description={
-                  settings.propSymbols.includes(symbol)
-                    ? "Props default to square field icons."
-                    : "Performers default to dot field icons."
-                }
-                value={settings.propSymbols.includes(symbol)}
-                onChange={() => onTogglePropSymbol(symbol)}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View
-        style={{
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          paddingTop: spacing.lg,
-          gap: spacing.md,
-        }}
-      >
         <View style={{ gap: 3 }}>
           <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>
             Rules and overrides
@@ -106,7 +88,8 @@ export function EntitySettingsSection({
             style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
           >
             Precedence is symbol → label → ID → explicit entity values. Leave a
-            field blank to inherit the broader rule or schema default.
+            field on its Default value to inherit the broader rule or schema
+            default.
           </Text>
         </View>
 
@@ -190,6 +173,9 @@ function RuleEditor({
   const colorMatchesPreset = COLOR_PRESET_OPTIONS.some(
     (option) => option.value.toLowerCase() === rule.color.toLowerCase(),
   );
+  const isProp = rule.entityType === "prop";
+  const defaultIcon = isProp ? "Square" : "Dot";
+
   return (
     <View
       style={{
@@ -257,6 +243,109 @@ function RuleEditor({
               : "1595433022185"
         }
       />
+
+      <ChoiceChips
+        label="Entity type"
+        value={rule.entityType}
+        options={ENTITY_TYPE_OPTIONS}
+        onChange={(entityType) =>
+          onUpdate(
+            entityType === "prop"
+              ? {
+                  entityType,
+                  section: "",
+                  instrument: "",
+                  sizeLength: rule.sizeLength.trim() ? rule.sizeLength : "1",
+                  sizeWidth: rule.sizeWidth.trim() ? rule.sizeWidth : "1",
+                }
+              : { entityType },
+          )
+        }
+      />
+
+      <FormField
+        label="Name"
+        value={rule.name}
+        onChangeText={(name) => onUpdate({ name })}
+        placeholder="Optional"
+      />
+
+      {isProp ? (
+        <View
+          style={{
+            gap: spacing.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.sm,
+            padding: spacing.md,
+            backgroundColor: colors.surfaceMuted,
+          }}
+        >
+          <View style={{ gap: 3 }}>
+            <Text
+              style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}
+            >
+              Prop size
+            </Text>
+            <Text
+              selectable
+              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
+            >
+              Default is 1 × 1 8:5 steps. One 8:5 step is 22.5 in (1.875 ft /
+              0.5715 m).
+            </Text>
+          </View>
+
+          <ChoiceChips
+            label="Units"
+            value={rule.sizeUnit}
+            options={PROP_SIZE_UNIT_OPTIONS}
+            onChange={(sizeUnit) =>
+              onUpdate({
+                sizeUnit,
+                sizeLength: convertSizeDraftValue(
+                  rule.sizeLength,
+                  rule.sizeUnit,
+                  sizeUnit,
+                ),
+                sizeWidth: convertSizeDraftValue(
+                  rule.sizeWidth,
+                  rule.sizeUnit,
+                  sizeUnit,
+                ),
+              })
+            }
+          />
+
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: spacing.md,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 180 }}>
+              <FormField
+                label="Length"
+                value={rule.sizeLength}
+                onChangeText={(sizeLength) => onUpdate({ sizeLength })}
+                inputMode="decimal"
+                placeholder="1"
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 180 }}>
+              <FormField
+                label="Width"
+                value={rule.sizeWidth}
+                onChangeText={(sizeWidth) => onUpdate({ sizeWidth })}
+                inputMode="decimal"
+                placeholder="1"
+              />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       <View
         style={{
           flexDirection: "row",
@@ -269,7 +358,9 @@ function RuleEditor({
             label="Section"
             value={rule.section}
             onChangeText={(section) => onUpdate({ section })}
-            placeholder="Optional"
+            placeholder={isProp ? "Unavailable for props" : "Optional"}
+            editable={!isProp}
+            helper={isProp ? "Props cannot define a section." : undefined}
           />
         </View>
         <View style={{ flex: 1, minWidth: 220 }}>
@@ -277,7 +368,9 @@ function RuleEditor({
             label="Instrument"
             value={rule.instrument}
             onChangeText={(instrument) => onUpdate({ instrument })}
-            placeholder="Optional"
+            placeholder={isProp ? "Unavailable for props" : "Optional"}
+            editable={!isProp}
+            helper={isProp ? "Props cannot define an instrument." : undefined}
           />
         </View>
       </View>
@@ -286,7 +379,7 @@ function RuleEditor({
         label="Field icon"
         value={rule.icon}
         options={[
-          { value: "", label: "Default" },
+          { value: "", label: `Default (${defaultIcon})` },
           ...ENTITY_ICON_OPTIONS.map((icon) => ({
             value: icon,
             label: titleCase(icon),
@@ -303,7 +396,7 @@ function RuleEditor({
           style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
         >
           <ColorChip
-            label="Default"
+            label="Default (Grey)"
             color={undefined}
             selected={!rule.color}
             onPress={() => onUpdate({ color: "" })}
@@ -324,8 +417,8 @@ function RuleEditor({
           onChangeText={(color) => onUpdate({ color })}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="#3c6ec8"
-          helper="Leave blank for the selected preset/default. Any six-digit hex color is valid."
+          placeholder="#3C6EC8"
+          helper="Leave blank for Default (Grey) or the selected preset. Any six-digit hex color is valid."
         />
       </View>
 
@@ -394,6 +487,17 @@ function ColorChip({
       </Text>
     </Pressable>
   );
+}
+
+function convertSizeDraftValue(
+  value: string,
+  fromUnit: PropSizeUnit,
+  toUnit: PropSizeUnit,
+): string {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return value;
+  const converted = convertPropSizeValue(parsed, fromUnit, toUnit);
+  return String(Number(converted.toFixed(6)));
 }
 
 function titleCase(value: string): string {

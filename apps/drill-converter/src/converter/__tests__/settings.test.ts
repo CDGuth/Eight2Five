@@ -76,8 +76,17 @@ describe("drill converter settings", () => {
       ...createEmptyRuleDraft("rule-2"),
       target: "label" as const,
       key: "B1",
+      name: "Lead Baritone",
       color: COLOR_PRESETS.green,
       labelVisibility: "hidden" as const,
+    };
+    const propRule = {
+      ...createEmptyRuleDraft("rule-3"),
+      key: "X",
+      entityType: "prop" as const,
+      sizeLength: "45",
+      sizeWidth: "22.5",
+      sizeUnit: "inches" as const,
     };
     const settings = {
       ...createDefaultConverterSettings(),
@@ -86,8 +95,15 @@ describe("drill converter settings", () => {
       ensemble: "UHS",
       description: "Final movement",
       lucideIcon: "music-2",
-      propSymbols: ["X"],
-      rules: [symbolRule, labelRule],
+      rules: [symbolRule, labelRule, propRule],
+      setOverrides: [
+        {
+          ...source.sets[1],
+          number: 3,
+          countsFromPrevious: 12,
+          measureRange: { start: 10, end: 12 },
+        },
+      ],
       includeSourceReferences: false,
       explicitStraightPaths: true,
     };
@@ -103,14 +119,85 @@ describe("drill converter settings", () => {
       lucideIcon: "music-2",
     });
     expect(result.entities[1].type).toBe("prop");
+    expect(
+      resolveDrillEntity(result.entities[1], result.entityRules),
+    ).toMatchObject({
+      size: { length: 45, width: 22.5, unit: "inches" },
+    });
+    expect(result.sets[1]).toMatchObject({
+      number: 3,
+      countsFromPrevious: 12,
+      measureRange: { start: 10, end: 12 },
+    });
     expect(result.provenance?.references).toBeUndefined();
     expect(result.paths).toHaveLength(2);
     expect(
       resolveDrillEntity(result.entities[0], result.entityRules),
     ).toMatchObject({
+      name: "Lead Baritone",
       instrument: "Baritone",
       appearance: { color: COLOR_PRESETS.green, labelVisible: false },
     });
+  });
+
+  test("defaults prop rules to 1 by 1 8-to-5 steps", () => {
+    const rule = {
+      ...createEmptyRuleDraft("prop-rule"),
+      key: "X",
+      entityType: "prop" as const,
+    };
+    const settings = {
+      ...createDefaultConverterSettings(),
+      title: "Part 4",
+      rules: [rule],
+    };
+    const validation = validateConverterSettings(settings);
+    expect(validation.errors).toEqual([]);
+    expect(validation.entityRules?.bySymbol?.X?.size).toEqual({
+      length: 1,
+      width: 1,
+      unit: "8-to-5-steps",
+    });
+  });
+
+  test("rejects invalid prop sizes", () => {
+    const settings = {
+      ...createDefaultConverterSettings(),
+      title: "Part 4",
+      rules: [
+        {
+          ...createEmptyRuleDraft("prop-rule"),
+          key: "X",
+          entityType: "prop" as const,
+          sizeLength: "0",
+        },
+      ],
+    };
+    expect(validateConverterSettings(settings).errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("prop length must be greater than zero"),
+      ]),
+    );
+  });
+
+  test("rejects prop rules that define performer-only fields", () => {
+    const settings = {
+      ...createDefaultConverterSettings(),
+      title: "Part 4",
+      rules: [
+        {
+          ...createEmptyRuleDraft("prop-rule"),
+          key: "X",
+          entityType: "prop" as const,
+          section: "Guard",
+        },
+      ],
+    };
+    expect(validateConverterSettings(settings).errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("props cannot define section or instrument"),
+      ]),
+    );
   });
 
   test("rejects malformed custom fields and duplicate rule targets", () => {

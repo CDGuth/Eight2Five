@@ -1,8 +1,10 @@
 import {
   COLOR_PRESETS,
+  DEFAULT_PROP_SIZE,
   FIELD_PRESETS,
   FIELD_PRESET_IDS,
   countPrimarySets,
+  convertPropSizeValue,
   drillGridToPhysicalPoint,
   formatSetName,
   getFieldPreset,
@@ -11,6 +13,8 @@ import {
   parseDrillDocument,
   physicalPointToDrillGrid,
   resolveDrillEntity,
+  resolveEntityRuleValues,
+  resolvePropSize,
   serializeDrillDocument,
   type DrillDocument,
 } from "..";
@@ -132,14 +136,155 @@ describe("drill schema", () => {
     ).not.toThrow();
   });
 
-  it("resolves appearance rules from broad to specific", () => {
-    const entity = resolveDrillEntity(fixture.entities[0], fixture.entityRules);
+  it("resolves entity rules from broad to specific", () => {
+    const rules = {
+      ...fixture.entityRules,
+      byLabel: {
+        B1: {
+          name: "Lead Baritone",
+          appearance: { color: COLOR_PRESETS.green },
+        },
+      },
+    };
+    const entity = resolveDrillEntity(fixture.entities[0], rules);
+    expect(entity.name).toBe("Lead Baritone");
     expect(entity.instrument).toBe("Baritone");
     expect(entity.appearance).toEqual({
       icon: "dot",
       color: COLOR_PRESETS.green,
       labelVisible: true,
     });
+    expect(resolveEntityRuleValues(fixture.entities[0], rules)).toMatchObject({
+      name: "Lead Baritone",
+      instrument: "Baritone",
+    });
+  });
+
+  it("allows names on both performers and props but rejects performer-only prop fields", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entities: [
+          {
+            id: 1595433022185,
+            type: "prop",
+            symbol: "P",
+            label: "P1",
+            name: "Podium",
+          },
+        ],
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entities: [
+          {
+            id: 1595433022185,
+            type: "prop",
+            symbol: "P",
+            label: "P1",
+            name: "Podium",
+            section: "Guard",
+          },
+        ],
+      }),
+    ).toThrow(/Props cannot define a section/);
+
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entityRules: {
+          bySymbol: {
+            P: { type: "prop", instrument: "Flag" },
+          },
+        },
+      }),
+    ).toThrow(/Prop rules cannot define an instrument/);
+  });
+
+  it("defaults prop size to 1 by 1 8-to-5 steps and supports unit conversion", () => {
+    const prop = {
+      ...fixture.entities[0],
+      type: "prop" as const,
+      symbol: "P",
+      label: "P1",
+    };
+    expect(resolvePropSize(prop)).toEqual(DEFAULT_PROP_SIZE);
+    expect(resolveDrillEntity(prop).size).toEqual(DEFAULT_PROP_SIZE);
+    expect(convertPropSizeValue(1, "8-to-5-steps", "inches")).toBeCloseTo(
+      22.5,
+      8,
+    );
+    expect(convertPropSizeValue(1, "8-to-5-steps", "feet")).toBeCloseTo(
+      1.875,
+      8,
+    );
+    expect(convertPropSizeValue(1, "8-to-5-steps", "meters")).toBeCloseTo(
+      0.5715,
+      8,
+    );
+  });
+
+  it.each(["8-to-5-steps", "feet", "inches", "meters"] as const)(
+    "accepts prop size in %s",
+    (unit) => {
+      expect(() =>
+        parseDrillDocument({
+          ...fixture,
+          entities: [
+            {
+              id: 1595433022185,
+              type: "prop",
+              symbol: "P",
+              label: "P1",
+              size: { length: 2.5, width: 1.25, unit },
+            },
+          ],
+        }),
+      ).not.toThrow();
+    },
+  );
+
+  it("rejects size on performers and non-prop rules", () => {
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entities: [
+          {
+            ...fixture.entities[0],
+            size: { length: 1, width: 1, unit: "8-to-5-steps" },
+          },
+        ],
+      }),
+    ).toThrow(/Only props can define a size/);
+
+    expect(() =>
+      parseDrillDocument({
+        ...fixture,
+        entityRules: {
+          bySymbol: {
+            B: {
+              type: "performer",
+              size: { length: 1, width: 1, unit: "feet" },
+            },
+          },
+        },
+      }),
+    ).toThrow(/Only prop rules can define a size/);
+  });
+
+  it("exposes the canonical color presets without indigo or violet", () => {
+    expect(COLOR_PRESETS).toMatchObject({
+      lightBlue: "#64B5F6",
+      darkBlue: "#1E3A8A",
+      purple: "#8E44AD",
+      pink: "#EC4899",
+      black: "#000000",
+    });
+    expect("indigo" in COLOR_PRESETS).toBe(false);
+    expect("violet" in COLOR_PRESETS).toBe(false);
   });
 
   it("exposes all field preset ids from one canonical registry", () => {

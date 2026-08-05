@@ -184,10 +184,41 @@
         },
         "color": {
           "type": "string",
-          "pattern": "^#[0-9A-Fa-f]{6}$"
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "examples": [
+            "#808080",
+            "#E53935",
+            "#FB8C00",
+            "#FDD835",
+            "#43A047",
+            "#64B5F6",
+            "#3C6EC8",
+            "#1E3A8A",
+            "#8E44AD",
+            "#EC4899",
+            "#000000"
+          ]
         },
         "labelVisible": {
           "type": "boolean"
+        }
+      }
+    },
+    "propSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length", "width", "unit"],
+      "properties": {
+        "length": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "enum": ["8-to-5-steps", "feet", "inches", "meters"]
         }
       }
     },
@@ -223,15 +254,56 @@
           "type": "string",
           "minLength": 1
         },
+        "size": {
+          "$ref": "#/$defs/propSize",
+          "default": {
+            "length": 1,
+            "width": 1,
+            "unit": "8-to-5-steps"
+          },
+          "description": "Prop footprint. If omitted for a prop, the semantic default is 1 by 1 8-to-5 steps; one 8-to-5 step equals 22.5 inches."
+        },
         "appearance": {
           "$ref": "#/$defs/appearance"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "prop"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["section"] },
+                { "required": ["instrument"] }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": ["size"]
+            }
+          }
+        }
+      ]
     },
     "entityRuleValues": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "enum": ["performer", "prop"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
         "section": {
           "type": "string",
           "minLength": 1
@@ -240,10 +312,43 @@
           "type": "string",
           "minLength": 1
         },
+        "size": {
+          "$ref": "#/$defs/propSize",
+          "default": {
+            "length": 1,
+            "width": 1,
+            "unit": "8-to-5-steps"
+          }
+        },
         "appearance": {
           "$ref": "#/$defs/appearance"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "prop"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["section"] },
+                { "required": ["instrument"] }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": ["size"]
+            }
+          }
+        }
+      ]
     },
     "entityRules": {
       "type": "object",

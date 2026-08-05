@@ -2,16 +2,21 @@ import {
   COLOR_PRESETS,
   FIELD_PRESET_IDS,
   countPrimarySets,
+  drillSetSchema,
   fieldDefinitionSchema,
   getFieldPreset,
   parseDrillDocument,
+  resolveEntityRuleValues,
   type DrillDocument,
+  type DrillEntityType,
   type DrillPath,
+  type DrillSet,
   type EntityIcon,
   type EntityRuleValues,
   type EntityRules,
   type FieldDefinition,
   type FieldPresetId,
+  type PropSizeUnit,
 } from "@eight2five/drill-schema";
 
 export const FIELD_PRESET_OPTIONS = Object.freeze(
@@ -40,9 +45,12 @@ export const COLOR_PRESET_OPTIONS = Object.freeze([
   { label: "Orange", value: COLOR_PRESETS.orange },
   { label: "Yellow", value: COLOR_PRESETS.yellow },
   { label: "Green", value: COLOR_PRESETS.green },
+  { label: "Light blue", value: COLOR_PRESETS.lightBlue },
   { label: "Blue", value: COLOR_PRESETS.blue },
-  { label: "Indigo", value: COLOR_PRESETS.indigo },
-  { label: "Violet", value: COLOR_PRESETS.violet },
+  { label: "Dark blue", value: COLOR_PRESETS.darkBlue },
+  { label: "Purple", value: COLOR_PRESETS.purple },
+  { label: "Pink", value: COLOR_PRESETS.pink },
+  { label: "Black", value: COLOR_PRESETS.black },
 ] as const);
 
 export type RuleTarget = "symbol" | "label" | "id";
@@ -52,8 +60,13 @@ export interface EntityRuleDraft {
   readonly id: string;
   readonly target: RuleTarget;
   readonly key: string;
+  readonly entityType: "" | DrillEntityType;
+  readonly name: string;
   readonly section: string;
   readonly instrument: string;
+  readonly sizeLength: string;
+  readonly sizeWidth: string;
+  readonly sizeUnit: PropSizeUnit;
   readonly icon: "" | EntityIcon;
   readonly color: string;
   readonly labelVisibility: LabelVisibility;
@@ -67,8 +80,8 @@ export interface ConverterSettings {
   readonly lucideIcon: string;
   readonly fieldMode: FieldPresetId | "custom";
   readonly customFieldJson: string;
-  readonly propSymbols: readonly string[];
   readonly rules: readonly EntityRuleDraft[];
+  readonly setOverrides: readonly DrillSet[];
   readonly includeSourceReferences: boolean;
   readonly explicitStraightPaths: boolean;
 }
@@ -88,8 +101,8 @@ export function createDefaultConverterSettings(): ConverterSettings {
     lucideIcon: "",
     fieldMode: "football-nfhs",
     customFieldJson: createDefaultCustomFieldJson(),
-    propSymbols: [],
     rules: [],
+    setOverrides: [],
     includeSourceReferences: true,
     explicitStraightPaths: false,
   };
@@ -114,8 +127,13 @@ export function createEmptyRuleDraft(id: string): EntityRuleDraft {
     id,
     target: "symbol",
     key: "",
+    entityType: "",
+    name: "",
     section: "",
     instrument: "",
+    sizeLength: "1",
+    sizeWidth: "1",
+    sizeUnit: "8-to-5-steps",
     icon: "",
     color: "",
     labelVisibility: "inherit",
@@ -157,8 +175,21 @@ export function validateConverterSettings(
   }
 
   const entityRules = buildEntityRules(settings.rules, errors);
-  for (const symbol of settings.propSymbols) {
-    if (!symbol.trim()) errors.push("Prop symbols cannot be blank.");
+  const seenSetOverrideIds = new Set<number>();
+  for (const [index, set] of settings.setOverrides.entries()) {
+    if (seenSetOverrideIds.has(set.id)) {
+      errors.push(`Duplicate set override for set id ${set.id}.`);
+      continue;
+    }
+    seenSetOverrideIds.add(set.id);
+    const parsed = drillSetSchema.safeParse(set);
+    if (!parsed.success) {
+      errors.push(
+        `Set override ${index + 1} is invalid: ${
+          parsed.error.issues[0]?.message ?? "unknown validation error"
+        }`,
+      );
+    }
   }
 
   return {
@@ -177,13 +208,22 @@ export function applyConverterSettings(
     throw new Error(validation.errors[0] ?? "Converter settings are invalid.");
   }
 
-  const propSymbols = new Set(settings.propSymbols);
-  const entities = source.entities.map((entity) => ({
-    ...entity,
-    type: propSymbols.has(entity.symbol) ? ("prop" as const) : entity.type,
-  }));
+  const entities = source.entities.map((entity) => {
+    const ruleValues = resolveEntityRuleValues(entity, validation.entityRules);
+    const type = ruleValues.type ?? entity.type;
+    if (type === "prop") {
+      const { section: _section, instrument: _instrument, ...rest } = entity;
+      return { ...rest, type };
+    }
+    const { size: _size, ...rest } = entity;
+    return { ...rest, type };
+  });
+  const setOverrides = new Map(
+    settings.setOverrides.map((set) => [set.id, set] as const),
+  );
+  const sets = source.sets.map((set) => setOverrides.get(set.id) ?? set);
   const paths = settings.explicitStraightPaths
-    ? createStraightPaths(source)
+    ? createStraightPaths({ ...source, sets })
     : source.paths;
   const provenance = source.provenance
     ? {
@@ -209,6 +249,7 @@ export function applyConverterSettings(
       ? { entityRules: validation.entityRules }
       : { entityRules: undefined }),
     entities,
+    sets,
     ...(paths && paths.length > 0 ? { paths } : { paths: undefined }),
     ...(provenance ? { provenance } : { provenance: undefined }),
   });
@@ -285,6 +326,31 @@ function buildEntityRules(
       continue;
     }
 
+    if (
+      draft.entityType === "prop" &&
+      (draft.section.trim() || draft.instrument.trim())
+    ) {
+      errors.push(
+        `Rule ${index + 1} props cannot define section or instrument.`,
+      );
+      continue;
+    }
+
+    let size: EntityRuleValues["size"];
+    if (draft.entityType === "prop") {
+      const length = Number(draft.sizeLength);
+      const width = Number(draft.sizeWidth);
+      if (!Number.isFinite(length) || length <= 0) {
+        errors.push(`Rule ${index + 1} prop length must be greater than zero.`);
+        continue;
+      }
+      if (!Number.isFinite(width) || width <= 0) {
+        errors.push(`Rule ${index + 1} prop width must be greater than zero.`);
+        continue;
+      }
+      size = { length, width, unit: draft.sizeUnit };
+    }
+
     const appearance = {
       ...(draft.icon ? { icon: draft.icon } : {}),
       ...(color ? { color } : {}),
@@ -293,8 +359,11 @@ function buildEntityRules(
         : { labelVisible: draft.labelVisibility === "visible" }),
     };
     const values: EntityRuleValues = {
+      ...(draft.entityType ? { type: draft.entityType } : {}),
+      ...optionalText("name", draft.name),
       ...optionalText("section", draft.section),
       ...optionalText("instrument", draft.instrument),
+      ...(size ? { size } : {}),
       ...(Object.keys(appearance).length > 0 ? { appearance } : {}),
     };
     if (Object.keys(values).length === 0) continue;
