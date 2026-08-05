@@ -5,11 +5,12 @@ import {
   drillSetSchema,
   formatSetName,
   type DrillDocument,
+  type DrillEntity,
   type DrillSet,
 } from "@eight2five/drill-schema";
 import { Divider } from "@eight2five/ui/components/divider";
 import { Icon } from "@eight2five/ui/components/icon";
-import { Pencil } from "lucide-react-native";
+import { ListPlus, Pencil } from "lucide-react-native";
 
 import {
   FormField,
@@ -25,7 +26,8 @@ export function PreviewSection({
   settingsErrors,
   summary,
   canDownload,
-  onEditEntityLabel,
+  onAddEntityLabelRule,
+  onUpdateEntityIdentity,
   onUpdateSet,
   onDownload,
 }: {
@@ -40,10 +42,14 @@ export function PreviewSection({
     readonly positions: number;
   };
   readonly canDownload: boolean;
-  readonly onEditEntityLabel: (label: string) => void;
+  readonly onAddEntityLabelRule: (label: string) => void;
+  readonly onUpdateEntityIdentity: (
+    entity: Pick<DrillEntity, "id" | "label" | "symbol">,
+  ) => string | undefined;
   readonly onUpdateSet: (set: DrillSet) => string | undefined;
   readonly onDownload: () => void;
 }) {
+  const [editingEntity, setEditingEntity] = React.useState<DrillEntity>();
   const [editingSet, setEditingSet] = React.useState<DrillSet>();
   const diagnostics = importResult?.diagnostics ?? [];
   const errors = [
@@ -104,8 +110,10 @@ export function PreviewSection({
                   {index > 0 ? <PreviewDivider /> : null}
                   <PreviewRow
                     text={`${entity.label} · ${entity.type} · symbol ${entity.symbol}`}
-                    editLabel={`Edit ${entity.label}`}
-                    onEdit={() => onEditEntityLabel(entity.label)}
+                    addRuleLabel={`Add label rule for ${entity.label}`}
+                    onAddRule={() => onAddEntityLabelRule(entity.label)}
+                    editLabel={`Edit label and symbol for ${entity.label}`}
+                    onEdit={() => setEditingEntity(entity)}
                   />
                 </React.Fragment>
               ))}
@@ -158,6 +166,15 @@ export function PreviewSection({
           disabled={!canDownload}
         />
       </View>
+
+      {editingEntity ? (
+        <EntityIdentityEditModal
+          key={`${editingEntity.id}-${editingEntity.label}-${editingEntity.symbol}`}
+          entity={editingEntity}
+          onClose={() => setEditingEntity(undefined)}
+          onSave={onUpdateEntityIdentity}
+        />
+      ) : null}
 
       {editingSet ? (
         <SetEditModal
@@ -255,10 +272,14 @@ function PreviewDivider() {
 
 function PreviewRow({
   text,
+  addRuleLabel,
+  onAddRule,
   editLabel,
   onEdit,
 }: {
   readonly text: string;
+  readonly addRuleLabel?: string;
+  readonly onAddRule?: () => void;
   readonly editLabel: string;
   readonly onEdit: () => void;
 }) {
@@ -278,6 +299,24 @@ function PreviewRow({
       >
         {text}
       </Text>
+      {onAddRule && addRuleLabel ? (
+        <Pressable
+          onPress={onAddRule}
+          accessibilityRole="button"
+          accessibilityLabel={addRuleLabel}
+          hitSlop={6}
+          style={({ pressed }) => ({
+            width: 30,
+            height: 30,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: radius.sm,
+            backgroundColor: pressed ? colors.accentSoft : "transparent",
+          })}
+        >
+          <Icon as={ListPlus} size="sm" color={colors.accentText} />
+        </Pressable>
+      ) : null}
       <Pressable
         onPress={onEdit}
         accessibilityRole="button"
@@ -295,6 +334,132 @@ function PreviewRow({
         <Icon as={Pencil} size="sm" color={colors.accentText} />
       </Pressable>
     </View>
+  );
+}
+
+function EntityIdentityEditModal({
+  entity,
+  onClose,
+  onSave,
+}: {
+  readonly entity: DrillEntity;
+  readonly onClose: () => void;
+  readonly onSave: (
+    entity: Pick<DrillEntity, "id" | "label" | "symbol">,
+  ) => string | undefined;
+}) {
+  const [label, setLabel] = React.useState(entity.label);
+  const [symbol, setSymbol] = React.useState(entity.symbol);
+  const [error, setError] = React.useState<string>();
+
+  const save = () => {
+    const trimmedLabel = label.trim();
+    const trimmedSymbol = symbol.trim();
+    if (!trimmedLabel) {
+      setError("Entity label cannot be empty.");
+      return;
+    }
+    if (!trimmedSymbol || trimmedSymbol.length > 16) {
+      setError("Entity symbol must be 1-16 characters.");
+      return;
+    }
+
+    const documentError = onSave({
+      id: entity.id,
+      label: trimmedLabel,
+      symbol: trimmedSymbol,
+    });
+    if (documentError) {
+      setError(documentError);
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: spacing.xl,
+          backgroundColor: "rgba(15, 23, 42, 0.42)",
+        }}
+      >
+        <View
+          style={{
+            width: 520,
+            maxWidth: "100%",
+            gap: spacing.lg,
+            borderRadius: radius.lg,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing.xl,
+            backgroundColor: colors.surface,
+            boxShadow: "0 18px 60px rgba(15, 23, 42, 0.22)",
+          }}
+        >
+          <View style={{ gap: 3 }}>
+            <Text
+              style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}
+            >
+              Edit entity {entity.label}
+            </Text>
+            <Text
+              selectable
+              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
+            >
+              Change this entity&apos;s explicit label or symbol. Its numeric ID
+              stays {entity.id}.
+            </Text>
+          </View>
+
+          <View style={{ gap: spacing.md }}>
+            <FormField
+              label="Label"
+              value={label}
+              onChangeText={setLabel}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="B1"
+            />
+            <FormField
+              label="Symbol"
+              value={symbol}
+              onChangeText={setSymbol}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="B"
+              helper="1-16 characters. Symbol and label rules use the edited values after saving."
+            />
+          </View>
+
+          {error ? (
+            <Text
+              selectable
+              accessibilityRole="alert"
+              style={{ color: colors.danger, fontSize: 12, lineHeight: 17 }}
+            >
+              {error}
+            </Text>
+          ) : null}
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: spacing.sm,
+            }}
+          >
+            <SecondaryButton label="Cancel" onPress={onClose} />
+            <View style={{ minWidth: 128 }}>
+              <PrimaryButton label="Save entity" onPress={save} />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 

@@ -16,7 +16,7 @@ export function ConverterScreen() {
   const [rulesFocusRequestKey, setRulesFocusRequestKey] = React.useState(0);
   const { width } = useWindowDimensions();
 
-  const editEntityLabel = React.useCallback(
+  const addEntityLabelRule = React.useCallback(
     (label: string) => {
       addLabelOverride(label);
       setRulesFocusRequestKey((key) => key + 1);
@@ -107,7 +107,8 @@ export function ConverterScreen() {
           settingsErrors={controller.settingsErrors}
           summary={controller.summary}
           canDownload={controller.canDownload}
-          onEditEntityLabel={editEntityLabel}
+          onAddEntityLabelRule={addEntityLabelRule}
+          onUpdateEntityIdentity={controller.updateEntityIdentity}
           onUpdateSet={controller.updateSet}
           onDownload={controller.download}
         />

@@ -20,6 +20,7 @@ import {
   inferTitleFromFileName,
   validateConverterSettings,
   type ConverterSettings,
+  type EntityIdentityOverride,
   type EntityRuleDraft,
 } from "./settings";
 import { extractPdfText, getPdfJsVersion } from "../pdf/pdf-text-extractor.web";
@@ -90,13 +91,16 @@ export function useConverterController() {
   const availableSymbols = React.useMemo(
     () =>
       Array.from(
-        new Set(
-          (importResult?.sheets ?? [])
+        new Set([
+          ...(importResult?.sheets ?? [])
             .map((sheet) => sheet.sourceSymbol.trim())
             .filter(Boolean),
-        ),
+          ...(outputDocument?.entities ?? [])
+            .map((entity) => entity.symbol.trim())
+            .filter(Boolean),
+        ]),
       ).sort((left, right) => left.localeCompare(right)),
-    [importResult?.sheets],
+    [importResult?.sheets, outputDocument?.entities],
   );
 
   const pickPdf = React.useCallback(async () => {
@@ -118,6 +122,7 @@ export function useConverterController() {
       ...current,
       title: inferTitleFromFileName(nextAsset.name),
       rules: [],
+      entityOverrides: [],
       setOverrides: [],
     }));
 
@@ -150,6 +155,7 @@ export function useConverterController() {
       ...current,
       title: "",
       rules: [],
+      entityOverrides: [],
       setOverrides: [],
     }));
   }, []);
@@ -226,6 +232,45 @@ export function useConverterController() {
     }));
   }, []);
 
+  const updateEntityIdentity = React.useCallback(
+    (override: EntityIdentityOverride): string | undefined => {
+      if (!importResult?.document)
+        return "Parse a PDF before editing entities.";
+      if (
+        !importResult.document.entities.some(
+          (entity) => entity.id === override.id,
+        )
+      ) {
+        return `Unknown entity id ${override.id}.`;
+      }
+
+      const nextSettings: ConverterSettings = {
+        ...settings,
+        entityOverrides: [
+          ...settings.entityOverrides.filter(
+            (entity) => entity.id !== override.id,
+          ),
+          {
+            ...override,
+            label: override.label.trim(),
+            symbol: override.symbol.trim(),
+          },
+        ],
+      };
+      const validation = validateConverterSettings(nextSettings);
+      try {
+        applyConverterSettings(importResult.document, nextSettings, validation);
+      } catch (cause) {
+        return cause instanceof Error
+          ? cause.message
+          : "The entity edit is invalid.";
+      }
+      setSettings(nextSettings);
+      return undefined;
+    },
+    [importResult, settings],
+  );
+
   const updateSet = React.useCallback(
     (setOverride: DrillDocument["sets"][number]): string | undefined => {
       if (!importResult?.document) return "Parse a PDF before editing sets.";
@@ -284,6 +329,7 @@ export function useConverterController() {
     addLabelOverride,
     updateRule,
     removeRule,
+    updateEntityIdentity,
     updateSet,
     download,
   };

@@ -8,6 +8,7 @@ import {
   parseDrillDocument,
   resolveEntityRuleValues,
   type DrillDocument,
+  type DrillEntity,
   type DrillEntityType,
   type DrillPath,
   type DrillSet,
@@ -72,6 +73,11 @@ export interface EntityRuleDraft {
   readonly labelVisibility: LabelVisibility;
 }
 
+export type EntityIdentityOverride = Pick<
+  DrillEntity,
+  "id" | "label" | "symbol"
+>;
+
 export interface ConverterSettings {
   readonly title: string;
   readonly drillWriter: string;
@@ -81,6 +87,7 @@ export interface ConverterSettings {
   readonly fieldMode: FieldPresetId | "custom";
   readonly customFieldJson: string;
   readonly rules: readonly EntityRuleDraft[];
+  readonly entityOverrides: readonly EntityIdentityOverride[];
   readonly setOverrides: readonly DrillSet[];
   readonly includeSourceReferences: boolean;
   readonly explicitStraightPaths: boolean;
@@ -102,6 +109,7 @@ export function createDefaultConverterSettings(): ConverterSettings {
     fieldMode: "football-nfhs",
     customFieldJson: createDefaultCustomFieldJson(),
     rules: [],
+    entityOverrides: [],
     setOverrides: [],
     includeSourceReferences: true,
     explicitStraightPaths: false,
@@ -175,6 +183,27 @@ export function validateConverterSettings(
   }
 
   const entityRules = buildEntityRules(settings.rules, errors);
+  const seenEntityOverrideIds = new Set<number>();
+  for (const [index, override] of settings.entityOverrides.entries()) {
+    if (seenEntityOverrideIds.has(override.id)) {
+      errors.push(`Duplicate entity override for entity id ${override.id}.`);
+      continue;
+    }
+    seenEntityOverrideIds.add(override.id);
+    if (!Number.isSafeInteger(override.id) || override.id < 0) {
+      errors.push(`Entity override ${index + 1} has an invalid entity id.`);
+    }
+    if (!override.label.trim()) {
+      errors.push(`Entity override ${index + 1} label cannot be empty.`);
+    }
+    const symbol = override.symbol.trim();
+    if (!symbol || symbol.length > 16) {
+      errors.push(
+        `Entity override ${index + 1} symbol must be 1-16 characters.`,
+      );
+    }
+  }
+
   const seenSetOverrideIds = new Set<number>();
   for (const [index, set] of settings.setOverrides.entries()) {
     if (seenSetOverrideIds.has(set.id)) {
@@ -208,14 +237,34 @@ export function applyConverterSettings(
     throw new Error(validation.errors[0] ?? "Converter settings are invalid.");
   }
 
+  const entityOverrides = new Map(
+    settings.entityOverrides.map(
+      (override) => [override.id, override] as const,
+    ),
+  );
   const entities = source.entities.map((entity) => {
-    const ruleValues = resolveEntityRuleValues(entity, validation.entityRules);
-    const type = ruleValues.type ?? entity.type;
+    const identityOverride = entityOverrides.get(entity.id);
+    const entityWithIdentity = identityOverride
+      ? {
+          ...entity,
+          label: identityOverride.label.trim(),
+          symbol: identityOverride.symbol.trim(),
+        }
+      : entity;
+    const ruleValues = resolveEntityRuleValues(
+      entityWithIdentity,
+      validation.entityRules,
+    );
+    const type = ruleValues.type ?? entityWithIdentity.type;
     if (type === "prop") {
-      const { section: _section, instrument: _instrument, ...rest } = entity;
+      const {
+        section: _section,
+        instrument: _instrument,
+        ...rest
+      } = entityWithIdentity;
       return { ...rest, type };
     }
-    const { size: _size, ...rest } = entity;
+    const { size: _size, ...rest } = entityWithIdentity;
     return { ...rest, type };
   });
   const setOverrides = new Map(

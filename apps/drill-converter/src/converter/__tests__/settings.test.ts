@@ -140,6 +140,48 @@ describe("drill converter settings", () => {
     });
   });
 
+  test("applies entity label and symbol edits before resolving rules", () => {
+    const settings = {
+      ...createDefaultConverterSettings(),
+      title: "Part 4",
+      entityOverrides: [{ id: 1, label: "T1", symbol: "T" }],
+      rules: [
+        {
+          ...createEmptyRuleDraft("edited-label-rule"),
+          target: "label" as const,
+          key: "T1",
+          name: "Edited Entity",
+        },
+      ],
+    };
+    const validation = validateConverterSettings(settings);
+    expect(validation.errors).toEqual([]);
+
+    const result = applyConverterSettings(source, settings, validation);
+    expect(result.entities[0]).toMatchObject({
+      id: 1,
+      label: "T1",
+      symbol: "T",
+    });
+    expect(
+      resolveDrillEntity(result.entities[0], result.entityRules),
+    ).toMatchObject({ name: "Edited Entity" });
+  });
+
+  test("rejects invalid entity identity overrides", () => {
+    const settings = {
+      ...createDefaultConverterSettings(),
+      title: "Part 4",
+      entityOverrides: [{ id: 1, label: " ", symbol: "ABCDEFGHIJKLMNOPQ" }],
+    };
+    expect(validateConverterSettings(settings).errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("label cannot be empty"),
+        expect.stringContaining("symbol must be 1-16 characters"),
+      ]),
+    );
+  });
+
   test("defaults prop rules to 1 by 1 8-to-5 steps", () => {
     const rule = {
       ...createEmptyRuleDraft("prop-rule"),
