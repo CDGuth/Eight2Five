@@ -45,6 +45,8 @@ describe("Developer Mode", () => {
       effectiveUpdateRateHz: 9.5,
       diagnosticMessages: [],
       knownAnchors: [],
+      networks: [],
+      discoveryRssiCutoff: -75,
     });
 
     expect(rows).toEqual(

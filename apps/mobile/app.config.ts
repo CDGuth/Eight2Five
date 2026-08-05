@@ -96,6 +96,13 @@ const config: ExpoConfig = {
       },
     ],
     [
+      "expo-sensors",
+      {
+        motionPermission:
+          "Allow $(PRODUCT_NAME) to use device motion for brief live-position prediction.",
+      },
+    ],
+    [
       "../../modules/expo-pans-ble-api/app.plugin.js",
       {
         bluetoothAlwaysUsageDescription:

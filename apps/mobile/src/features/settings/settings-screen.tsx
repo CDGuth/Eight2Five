@@ -1,6 +1,7 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import {
+  Activity,
   BookOpenText,
   Code2,
   Eye,
@@ -32,6 +33,7 @@ import {
   useAppSettingsStore,
 } from "../../state/app-settings-store";
 import { ResetSettingsControl } from "./reset-settings-control";
+import { ConnectionStatusRow } from "./connection-status-row";
 import { updateDrillFeatures } from "./settings-actions";
 import { shouldShowTransitionCountControls } from "./settings-screen-policy";
 import {
@@ -41,7 +43,6 @@ import {
   SettingsSection,
   SettingsSelectRow,
   SettingsSwitchRow,
-  SettingsValueRow,
 } from "./settings-components";
 
 const PERSPECTIVE_CHOICES = [
@@ -137,11 +138,7 @@ export function SettingsScreen() {
           onPress={() => router.push("/(tabs)/settings/tag")}
           testID="tag-connection-link"
         />
-        <SettingsValueRow
-          icon={Radio}
-          title="Connection state"
-          value={pans.connectionState}
-        />
+        <ConnectionStatusRow state={pans.connectionState} />
       </SettingsSection>
 
       <SettingsSection title="Drill">
@@ -197,6 +194,17 @@ export function SettingsScreen() {
           }
           disabled={disabled}
           testID="auxiliary-field-marks-setting"
+        />
+        <SettingsSwitchRow
+          icon={Activity}
+          title="Motion-assisted interpolation"
+          description="Briefly predict along recent accepted UWB movement. UWB remains authoritative; phone motion never becomes a position source."
+          value={settings.motionInterpolationEnabled}
+          onChange={(motionInterpolationEnabled) =>
+            void update({ motionInterpolationEnabled })
+          }
+          disabled={disabled}
+          testID="motion-interpolation-setting"
         />
       </SettingsSection>
 

@@ -42,5 +42,6 @@ export * from "./field/render/field-render-tokens";
 export * from "./field/render/field-overlay-types";
 export * from "./field/render/drill-shape-policy";
 export * from "./drill";
+export * from "./motion";
 export * from "./settings";
 export * from "./storage";

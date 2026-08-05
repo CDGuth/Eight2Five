@@ -65,6 +65,7 @@ export function ManagerSettingsScreen() {
     }
     try {
       await saveManagerSettings({
+        ...settings,
         discoveryStaleAfterMs: values[0],
         connectionTimeoutMs: values[1],
         positionLogMemoryCap: values[2],

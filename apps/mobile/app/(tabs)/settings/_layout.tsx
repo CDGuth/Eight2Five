@@ -27,6 +27,12 @@ export default function SettingsLayout() {
         name="developer-confirmation"
         options={{ title: "Enable Developer Mode" }}
       />
+      <Stack.Screen name="networks" options={{ title: "PANS Networks" }} />
+      <Stack.Screen name="network/[networkId]" options={{ title: "Network" }} />
+      <Stack.Screen
+        name="network/[networkId]/anchors"
+        options={{ title: "Network Anchors" }}
+      />
       <Stack.Screen name="anchors" options={{ title: "Cached Anchors" }} />
       <Stack.Screen name="anchor/[anchorId]" options={{ title: "Anchor" }} />
     </Stack>

@@ -270,21 +270,32 @@ export function SettingsMessage({
   tone,
   children,
 }: {
-  tone: "info" | "error";
+  tone: "info" | "error" | "warning";
   children: React.ReactNode;
 }) {
   const theme = useEight2FiveTheme();
+  const color =
+    tone === "error"
+      ? theme.danger
+      : tone === "warning"
+        ? theme.warning
+        : theme.text;
   return (
     <Card
       accessibilityRole="alert"
       style={{
         borderWidth: 0,
         borderRadius: eight2FiveRadii.sm,
-        backgroundColor: tone === "error" ? theme.dangerSoft : theme.accentSoft,
+        backgroundColor:
+          tone === "error"
+            ? theme.dangerSoft
+            : tone === "warning"
+              ? theme.warningSoft
+              : theme.accentSoft,
         padding: 12,
       }}
     >
-      <Text style={{ color: tone === "error" ? theme.danger : theme.text }}>
+      <Text selectable style={{ color }}>
         {children}
       </Text>
     </Card>

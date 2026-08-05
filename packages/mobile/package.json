@@ -10,6 +10,7 @@
     "./field": "./src/field/index.ts",
     "./field/render": "./src/field/render/index.ts",
     "./drill": "./src/drill/index.ts",
+    "./motion": "./src/motion/index.ts",
     "./settings": "./src/settings/index.ts",
     "./storage": "./src/storage/index.ts"
   },

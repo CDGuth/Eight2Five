@@ -41,13 +41,27 @@ export default function MobileRootLayout() {
       <SafeAreaProvider>
         <AppSettingsProvider>
           <MobileAppearance>
-            <MobilePansProvider>
+            <MobilePansWithSettings>
               <MobileNavigation />
-            </MobilePansProvider>
+            </MobilePansWithSettings>
           </MobileAppearance>
         </AppSettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function MobilePansWithSettings({ children }: { children: React.ReactNode }) {
+  const { status, settings } = useAppSettingsSnapshot();
+  return (
+    <MobilePansProvider
+      motionInterpolationEnabled={
+        status === "ready" && settings.motionInterpolationEnabled
+      }
+      developerModeEnabled={status === "ready" && settings.developerModeEnabled}
+    >
+      {children}
+    </MobilePansProvider>
   );
 }
 

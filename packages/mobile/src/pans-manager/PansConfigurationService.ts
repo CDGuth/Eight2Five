@@ -836,11 +836,18 @@ function buildSparseModePatch(
   changes: HardwareDeviceChanges,
   current: PansInspectionResult["operationMode"],
 ): PansOperationModePatch {
-  return Object.fromEntries(
+  const explicit = Object.fromEntries(
     sparseModeFields(changes)
       .filter((field) => !Object.is(current[field.modeKey], field.requested))
       .map((field) => [field.modeKey, field.requested]),
   ) as PansOperationModePatch;
+  if (changes.role === "tag" && current.initiatorEnabled) {
+    explicit.initiatorEnabled = false;
+  } else if (changes.role === "anchor") {
+    if (current.lowPowerModeEnabled) explicit.lowPowerModeEnabled = false;
+    if (current.locationEngineEnabled) explicit.locationEngineEnabled = false;
+  }
+  return explicit;
 }
 
 function validateHardwareChanges(

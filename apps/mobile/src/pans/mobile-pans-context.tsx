@@ -1,7 +1,11 @@
 import React from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
-import type { FieldPoint } from "@eight2five/mobile/field";
+import type { FieldPoint, FusedPositionOutput } from "@eight2five/mobile/field";
+import {
+  createExpoDeviceMotionAdapter,
+  type DeviceMotionAdapter,
+} from "@eight2five/mobile/motion";
 import type { ManagedDevice } from "@eight2five/mobile/pans-manager";
 
 import { MobilePansStore, type MobilePansSnapshot } from "./mobile-pans-store";
@@ -9,6 +13,7 @@ import { MobilePansStore, type MobilePansSnapshot } from "./mobile-pans-store";
 interface MobilePansContextValue {
   readonly store: MobilePansStore;
   readonly positionValue: SharedValue<FieldPoint | null>;
+  readonly fusionValue: SharedValue<FusedPositionOutput | null>;
 }
 
 const MobilePansContext = React.createContext<MobilePansContextValue | null>(
@@ -18,10 +23,16 @@ const MobilePansContext = React.createContext<MobilePansContextValue | null>(
 export function MobilePansProvider({
   children,
   store: injectedStore,
+  motionAdapter,
+  motionInterpolationEnabled,
+  developerModeEnabled,
   appState = AppState,
 }: {
   readonly children: React.ReactNode;
   readonly store?: MobilePansStore;
+  readonly motionAdapter?: DeviceMotionAdapter;
+  readonly motionInterpolationEnabled?: boolean;
+  readonly developerModeEnabled?: boolean;
   readonly appState?: {
     readonly currentState: AppStateStatus | null;
     addEventListener(
@@ -30,12 +41,33 @@ export function MobilePansProvider({
     ): { remove(): void };
   };
 }) {
-  const [ownedStore] = React.useState(() => new MobilePansStore());
+  const [ownedStore] = React.useState(
+    () =>
+      new MobilePansStore({
+        motionAdapter: motionAdapter ?? createExpoDeviceMotionAdapter(),
+        motionInterpolationEnabled: motionInterpolationEnabled ?? false,
+        developerModeEnabled: developerModeEnabled ?? false,
+      }),
+  );
   const store = injectedStore ?? ownedStore;
   const positionValue = useSharedValue<FieldPoint | null>(null);
+  const fusionValue = useSharedValue<FusedPositionOutput | null>(null);
+
+  React.useEffect(() => {
+    if (motionInterpolationEnabled !== undefined) {
+      store.setMotionInterpolationEnabled(motionInterpolationEnabled);
+    }
+  }, [motionInterpolationEnabled, store]);
+
+  React.useEffect(() => {
+    if (developerModeEnabled !== undefined) {
+      void store.setDeveloperModeEnabled(developerModeEnabled);
+    }
+  }, [developerModeEnabled, store]);
 
   React.useEffect(() => {
     store.attachPositionValue(positionValue);
+    store.attachFusionValue(fusionValue);
     store.setForeground(appState.currentState === "active");
     void store.initialize();
     const subscription = appState.addEventListener("change", (state) => {
@@ -45,11 +77,11 @@ export function MobilePansProvider({
       subscription.remove();
       void store.dispose();
     };
-  }, [appState, positionValue, store]);
+  }, [appState, fusionValue, positionValue, store]);
 
   const value = React.useMemo(
-    () => ({ store, positionValue }),
-    [positionValue, store],
+    () => ({ store, positionValue, fusionValue }),
+    [fusionValue, positionValue, store],
   );
   return (
     <MobilePansContext.Provider value={value}>
@@ -82,8 +114,9 @@ export function useFieldLivePosition() {
     () => ({
       state: livePosition,
       positionValue: context.positionValue,
+      fusionValue: context.fusionValue,
     }),
-    [context.positionValue, livePosition],
+    [context.fusionValue, context.positionValue, livePosition],
   );
 }
 

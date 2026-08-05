@@ -104,6 +104,11 @@ export function useAnchorEditorController(anchorId: string) {
     mode === "marching"
       ? validateMarchingAnchorDraft(marchingDraft, fieldPreset)
       : validateStandardAnchorDraft(standardDraft, fieldPreset);
+  const canWritePosition = Boolean(
+    anchor &&
+    (pans.connectionState === "connected" ||
+      (pans.activeNetworkId && anchor.networkId === pans.activeNetworkId)),
+  );
 
   const setMode = (nextMode: AnchorEditorMode) => {
     if (nextMode === mode) return;
@@ -183,6 +188,7 @@ export function useAnchorEditorController(anchorId: string) {
   return {
     developerModeEnabled: settings.settings.developerModeEnabled,
     connectionState: pans.connectionState,
+    canWritePosition,
     anchor,
     fieldPreset,
     mode,

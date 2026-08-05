@@ -1,5 +1,6 @@
 import type {
   PansConfigurationService,
+  PansCommissioningService,
   PansDeviceSessionManager,
   PansDiagnosticsService,
   PansDiscoveryService,
@@ -13,6 +14,7 @@ export interface MobilePansRuntime {
   readonly sessions: PansDeviceSessionManager;
   readonly stream: PansPositionStreamService;
   readonly configuration: PansConfigurationService;
+  readonly commissioning: PansCommissioningService;
   readonly diagnostics: PansDiagnosticsService;
   close(): Promise<void>;
 }
@@ -37,14 +39,19 @@ export const createDefaultMobilePansRuntime: CreateMobilePansRuntime =
         undefined,
         settings.connectionTimeoutMs,
       );
+      const configuration = new manager.PansConfigurationService(
+        sessions,
+        storage.repository,
+      );
       return {
         repository: storage.repository,
         discovery,
         sessions,
         stream: new manager.PansPositionStreamService(sessions),
-        configuration: new manager.PansConfigurationService(
-          sessions,
+        configuration,
+        commissioning: new manager.PansCommissioningService(
           storage.repository,
+          configuration,
         ),
         diagnostics: new manager.PansDiagnosticsService(sessions),
         close: async () => {

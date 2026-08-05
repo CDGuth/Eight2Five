@@ -7,8 +7,10 @@ import {
   Database,
   Grid3X3,
   MapPinned,
+  Network,
   RefreshCw,
   Radio,
+  SlidersHorizontal,
   Triangle,
 } from "lucide-react-native";
 import {
@@ -59,6 +61,9 @@ export function DeveloperSettingsScreen() {
   const [rangeDraft, setRangeDraft] = React.useState(() =>
     settings.comfortableAnchorRangeMeters.toString(),
   );
+  const [rssiDraft, setRssiDraft] = React.useState(() =>
+    pans.discoveryRssiCutoff.toString(),
+  );
   const rows = React.useMemo(() => buildDeveloperDiagnosticRows(pans), [pans]);
 
   const disable = async () => {
@@ -104,6 +109,9 @@ export function DeveloperSettingsScreen() {
   };
 
   const rangeValidation = parseComfortableAnchorRange(rangeDraft);
+  const parsedRssi = Number(rssiDraft);
+  const validRssi =
+    Number.isInteger(parsedRssi) && parsedRssi >= -100 && parsedRssi <= -30;
 
   if (!settings.developerModeEnabled) {
     return (
@@ -134,6 +142,11 @@ export function DeveloperSettingsScreen() {
       {settingsError || operationError ? (
         <SettingsMessage tone="error">
           {(operationError ?? settingsError)?.message}
+        </SettingsMessage>
+      ) : null}
+      {pans.commissioningWarning ? (
+        <SettingsMessage tone="warning">
+          {pans.commissioningWarning}
         </SettingsMessage>
       ) : null}
       <SettingsSection title="Developer Mode">
@@ -189,6 +202,36 @@ export function DeveloperSettingsScreen() {
         </VStack>
       </SettingsSection>
 
+      <SettingsSection title="Discovery">
+        <VStack style={{ gap: 12, padding: eight2FiveSpacing.md }}>
+          <AnchorNumberInput
+            label="Minimum signal (dBm)"
+            value={rssiDraft}
+            error={validRssi ? undefined : "Enter an integer from -100 to -30."}
+            helper="Nearby device rows below this signal are hidden."
+            disabled={false}
+            onChange={setRssiDraft}
+          />
+          <Button
+            variant="outline"
+            testID="apply-discovery-rssi-cutoff-button"
+            isDisabled={!validRssi || parsedRssi === pans.discoveryRssiCutoff}
+            onPress={() =>
+              void pansStore
+                .setDiscoveryRssiCutoff(parsedRssi)
+                .catch((cause) =>
+                  setOperationError(
+                    cause instanceof Error ? cause : new Error(String(cause)),
+                  ),
+                )
+            }
+          >
+            <ButtonIcon as={SlidersHorizontal} />
+            <ButtonText>Apply Signal Cutoff</ButtonText>
+          </Button>
+        </VStack>
+      </SettingsSection>
+
       <SettingsSection title="Data Sources">
         <SettingsValueRow
           icon={Activity}
@@ -205,6 +248,13 @@ export function DeveloperSettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="Anchor Configuration">
+        <SettingsNavigationRow
+          icon={Network}
+          title="Networks"
+          description="Create profiles, select the active network, and commission anchors."
+          onPress={() => router.push("/(tabs)/settings/networks" as never)}
+          testID="networks-link"
+        />
         <SettingsNavigationRow
           icon={Triangle}
           title="Cached Anchors"

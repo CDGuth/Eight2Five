@@ -398,13 +398,22 @@ export interface PansManagerSettings {
   positionLogFlushSize: number;
   /** Stable local device identity selected by the performer app. */
   rememberedTagDeviceId?: string;
+  /** Developer-only discovery override. Reset when Developer Mode is disabled. */
+  discoveryRssiCutoff: number;
+  /** Durable selected profile; selecting a profile does not rewrite hardware. */
+  activeNetworkId?: string;
 }
+
+export const DEFAULT_DISCOVERY_RSSI_CUTOFF = -75;
+export const MIN_DISCOVERY_RSSI_CUTOFF = -100;
+export const MAX_DISCOVERY_RSSI_CUTOFF = -30;
 
 export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
   discoveryStaleAfterMs: 10_000,
   connectionTimeoutMs: 10_000,
   positionLogMemoryCap: 1_000,
   positionLogFlushSize: 100,
+  discoveryRssiCutoff: DEFAULT_DISCOVERY_RSSI_CUTOFF,
 };
 
 export function normalizePansManagerSettings(
@@ -419,6 +428,21 @@ export function normalizePansManagerSettings(
       !compatible.rememberedTagDeviceId.trim())
   ) {
     delete compatible.rememberedTagDeviceId;
+  }
+  if (
+    compatible.activeNetworkId !== undefined &&
+    (typeof compatible.activeNetworkId !== "string" ||
+      !compatible.activeNetworkId.trim())
+  ) {
+    delete compatible.activeNetworkId;
+  }
+  if (
+    typeof compatible.discoveryRssiCutoff !== "number" ||
+    !Number.isInteger(compatible.discoveryRssiCutoff) ||
+    compatible.discoveryRssiCutoff < MIN_DISCOVERY_RSSI_CUTOFF ||
+    compatible.discoveryRssiCutoff > MAX_DISCOVERY_RSSI_CUTOFF
+  ) {
+    compatible.discoveryRssiCutoff = DEFAULT_DISCOVERY_RSSI_CUTOFF;
   }
   return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...compatible };
 }

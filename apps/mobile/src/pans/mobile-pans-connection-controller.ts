@@ -31,6 +31,7 @@ interface ConnectionControllerHost {
     state: TagConnectionState,
     changes?: Partial<MobilePansSnapshot>,
   ): void;
+  prepareTagForStreaming(): Promise<void>;
 }
 
 /** Coordinates one connection attempt and one bounded reconnect loop. */
@@ -83,6 +84,7 @@ export class MobilePansConnectionController {
   async disconnect(): Promise<void> {
     this.wantsConnection = false;
     this.invalidateConnection();
+    this.host.positionPublisher.stopMotion();
     const runtime = this.requireRuntime();
     await Promise.allSettled([runtime.stream.stop(), runtime.discovery.stop()]);
     const rememberedTag = this.host.getRememberedTag();
@@ -107,6 +109,7 @@ export class MobilePansConnectionController {
           runtime.discovery.stop(),
         ]);
       }
+      this.host.positionPublisher.stopMotion();
       if (this.wantsConnection) {
         this.host.publishState("reconnecting", {
           livePosition: staleLivePosition(
@@ -126,6 +129,7 @@ export class MobilePansConnectionController {
     this.connectionGeneration += 1;
     this.host.positionPublisher.resetStreamState();
     this.host.positionPublisher.clearLiveMarker();
+    this.host.positionPublisher.stopMotion();
     this.host.publishState("reconnecting", {
       livePosition: staleLivePosition(
         this.host.getSnapshot().livePosition,
@@ -166,6 +170,7 @@ export class MobilePansConnectionController {
       return;
     }
     this.host.positionPublisher.clearLiveMarker();
+    this.host.positionPublisher.stopMotion();
     this.host.publishState(
       this.wantsConnection ? "reconnecting" : "disconnected",
       {
@@ -209,6 +214,9 @@ export class MobilePansConnectionController {
       const available = await this.ensureDiscovered(tag, generation);
       if (!this.isConnectionCurrent(generation)) return;
       this.host.publishState(state);
+      await runtime.discovery.stop();
+      await this.host.prepareTagForStreaming();
+      if (!this.isConnectionCurrent(generation)) return;
       this.host.positionPublisher.resetStreamState();
       await runtime.stream.start({
         deviceId: tag.id,
@@ -227,6 +235,7 @@ export class MobilePansConnectionController {
         await runtime.stream.stop();
         return;
       }
+      void this.host.positionPublisher.startMotion(generation);
       await runtime.discovery.stop().catch(() => undefined);
       this.host.publishState("connected", {
         livePosition: {

@@ -5,12 +5,17 @@ import type {
   PansDiagnosticsResult,
   PansPosition,
   PansPositionStreamCounters,
+  ManagedNetwork,
 } from "@eight2five/mobile/pans-manager";
-import { normalizeTransportDeviceId } from "@eight2five/mobile/pans-manager";
+import {
+  DEFAULT_DISCOVERY_RSSI_CUTOFF,
+  normalizeTransportDeviceId,
+} from "@eight2five/mobile/pans-manager";
 import type {
   FieldLivePositionState,
   FieldPoint,
 } from "@eight2five/mobile/field";
+import type { DeviceMotionAdapter } from "@eight2five/mobile/motion";
 
 import type { CreateMobilePansRuntime } from "./mobile-pans-runtime";
 
@@ -37,18 +42,25 @@ export interface MobilePansSnapshot {
   readonly counters?: Readonly<PansPositionStreamCounters>;
   readonly hardwareDiagnostics?: PansDiagnosticsResult;
   readonly knownAnchors: readonly ManagedDevice[];
+  readonly networks: readonly ManagedNetwork[];
+  readonly activeNetworkId?: string;
+  readonly discoveryRssiCutoff: number;
+  readonly commissioningWarning?: string;
   readonly diagnosticMessages: readonly string[];
   readonly error?: ManagerError | Error;
 }
 
 export interface MobilePansStoreOptions {
   readonly createRuntime?: CreateMobilePansRuntime;
+  readonly motionAdapter?: DeviceMotionAdapter;
+  readonly motionInterpolationEnabled?: boolean;
   readonly now?: () => number;
   readonly schedule?: typeof setTimeout;
   readonly cancel?: typeof clearTimeout;
   readonly reconnectDelaysMs?: readonly number[];
   readonly staleAfterMs?: number;
   readonly discoveryTimeoutMs?: number;
+  readonly developerModeEnabled?: boolean;
 }
 
 export const EMPTY_DISCOVERIES: readonly DiscoveredDeviceSnapshot[] =
@@ -59,10 +71,16 @@ export const INITIAL_MOBILE_PANS_SNAPSHOT: MobilePansSnapshot = Object.freeze({
   initialization: "loading",
   connectionState: "idle",
   discoveries: EMPTY_DISCOVERIES,
-  livePosition: Object.freeze({ connectionState: "idle", isStale: false }),
+  livePosition: Object.freeze({
+    connectionState: "idle",
+    isStale: false,
+    interpolationActive: false,
+  }),
   effectiveUpdateRateHz: 0,
   diagnosticMessages: Object.freeze([]),
   knownAnchors: Object.freeze([]),
+  networks: Object.freeze([]),
+  discoveryRssiCutoff: DEFAULT_DISCOVERY_RSSI_CUTOFF,
 });
 
 /**
@@ -108,6 +126,7 @@ export function staleLivePosition(
     ...live,
     connectionState,
     isStale: Boolean(live.position),
+    interpolationActive: false,
     ...(errorMessage ? { errorMessage } : {}),
   };
 }

@@ -184,12 +184,12 @@ export function AnchorEditorScreen({
         ) : null}
       </Card>
 
-      {controller.connectionState !== "connected" ? (
+      {!controller.canWritePosition ? (
         <HStack style={{ gap: 10 }}>
           <Icon as={TriangleAlert} style={{ color: theme.warning }} />
           <Text style={{ color: theme.textMuted }}>
-            A live tag connection is required before the confirmed hardware
-            write.
+            Select this anchor&apos;s network as active or connect an associated
+            tag before the confirmed hardware write.
           </Text>
         </HStack>
       ) : null}
@@ -197,7 +197,7 @@ export function AnchorEditorScreen({
         testID="save-anchor-position-button"
         isDisabled={
           !controller.validation.position ||
-          controller.connectionState !== "connected" ||
+          !controller.canWritePosition ||
           controller.saving
         }
         onPress={() => {
