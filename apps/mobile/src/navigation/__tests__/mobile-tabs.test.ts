@@ -11,7 +11,21 @@ describe("mobile native tab navigation", () => {
       { name: "field", label: "Field" },
       { name: "drill", label: "Drill" },
       { name: "settings", label: "Settings" },
+      { name: "info", label: "Info" },
     ]);
+  });
+
+  test("uses native info icons and keeps Info available", () => {
+    const infoTab = MOBILE_TABS.find(({ name }) => name === "info");
+
+    expect(infoTab).toEqual({
+      name: "info",
+      label: "Info",
+      icon: {
+        sf: { default: "info.circle", selected: "info.circle.fill" },
+        md: "info",
+      },
+    });
   });
 
   test("hides the entire tab bar only for focused landscape Field", () => {

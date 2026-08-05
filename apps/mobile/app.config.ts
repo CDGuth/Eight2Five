@@ -1,10 +1,31 @@
+import { execFileSync } from "node:child_process";
 import type { ExpoConfig } from "expo/config";
+
+function resolveGitSha(): string {
+  const injectedSha = (
+    process.env.EIGHT2FIVE_GIT_SHA ??
+    process.env.EAS_BUILD_GIT_COMMIT_HASH ??
+    process.env.GITHUB_SHA
+  )?.trim();
+  if (injectedSha) return injectedSha;
+
+  try {
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      cwd: __dirname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 const buildId =
   process.env.E2F_BUILD_ID ??
   process.env.EAS_BUILD_GIT_COMMIT_HASH ??
   process.env.GITHUB_SHA ??
   "local";
+const gitSha = resolveGitSha();
 const requestedVersionCode = Number(
   process.env.E2F_ANDROID_VERSION_CODE ?? process.env.GITHUB_RUN_NUMBER ?? 1,
 );
@@ -12,6 +33,13 @@ const androidVersionCode =
   Number.isSafeInteger(requestedVersionCode) && requestedVersionCode > 0
     ? requestedVersionCode
     : 1;
+const requestedIosBuildNumber = Number(
+  process.env.E2F_IOS_BUILD_NUMBER ?? process.env.GITHUB_RUN_NUMBER ?? 1,
+);
+const iosBuildNumber =
+  Number.isSafeInteger(requestedIosBuildNumber) && requestedIosBuildNumber > 0
+    ? String(requestedIosBuildNumber)
+    : "1";
 
 const appVariant = process.env.APP_VARIANT;
 const isDevelopment = appVariant === "development";
@@ -35,7 +63,7 @@ const config: ExpoConfig = {
   slug: "eight2five",
   scheme: "eight2five",
   platforms: ["ios", "android"],
-  version: "0.0.0",
+  version: "0.1.0",
   // Field is the only route that opts into landscape; Drill and Settings
   // apply portrait locks through their nested native stacks.
   orientation: "default",
@@ -43,6 +71,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: appIdentifier,
+    buildNumber: iosBuildNumber,
     supportsTablet: false,
     icon: {
       light: "./assets/app-icons/mobile-ios-icon.png",
@@ -121,6 +150,7 @@ const config: ExpoConfig = {
   },
   extra: {
     buildId,
+    EIGHT2FIVE_GIT_SHA: gitSha,
     eas: {
       projectId: "a26bddc3-6439-460b-b15b-51143e499c8a",
     },
