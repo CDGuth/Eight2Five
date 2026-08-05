@@ -12,6 +12,7 @@ import {
   Radio,
   Route,
   Rows3,
+  RulerDimensionLine,
 } from "lucide-react-native";
 import type {
   AppearanceMode,
@@ -75,6 +76,15 @@ const TRANSITION_COUNT_CHOICES = Array.from({ length: 51 }, (_, count) => ({
   label: String(count),
   value: String(count),
 }));
+
+const DISTANCE_THRESHOLD_VALUES = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3];
+
+function distanceThresholdChoices(values: readonly number[]) {
+  return values.map((value) => ({
+    label: `${value} steps`,
+    value: String(value),
+  }));
+}
 
 export function SettingsScreen() {
   const router = useRouter();
@@ -220,6 +230,48 @@ export function SettingsScreen() {
           }
           disabled={disabled}
           testID="transition-metric-setting"
+        />
+        <SettingsSelectRow<string>
+          icon={RulerDimensionLine}
+          title="Green distance threshold"
+          description="Show target distance as green at or below this value."
+          value={String(settings.distanceGreenThresholdSteps)}
+          choices={distanceThresholdChoices(
+            Array.from(
+              new Set([
+                ...DISTANCE_THRESHOLD_VALUES.filter(
+                  (value) => value <= settings.distanceYellowThresholdSteps,
+                ),
+                settings.distanceGreenThresholdSteps,
+              ]),
+            ).sort((left, right) => left - right),
+          )}
+          onChange={(value) =>
+            void update({ distanceGreenThresholdSteps: Number(value) })
+          }
+          disabled={disabled}
+          testID="distance-green-threshold-setting"
+        />
+        <SettingsSelectRow<string>
+          icon={RulerDimensionLine}
+          title="Yellow distance threshold"
+          description="Show target distance as yellow through this value, then red."
+          value={String(settings.distanceYellowThresholdSteps)}
+          choices={distanceThresholdChoices(
+            Array.from(
+              new Set([
+                ...DISTANCE_THRESHOLD_VALUES.filter(
+                  (value) => value >= settings.distanceGreenThresholdSteps,
+                ),
+                settings.distanceYellowThresholdSteps,
+              ]),
+            ).sort((left, right) => left - right),
+          )}
+          onChange={(value) =>
+            void update({ distanceYellowThresholdSteps: Number(value) })
+          }
+          disabled={disabled}
+          testID="distance-yellow-threshold-setting"
         />
         <SettingsSwitchRow
           icon={ListChecks}
