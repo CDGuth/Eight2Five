@@ -1,3 +1,7 @@
+/// <reference types="node" />
+
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   eight2FiveDrillColors,
   eight2FiveThemes,
@@ -25,5 +29,14 @@ describe("app appearance", () => {
     expect(eight2FiveDrillColors).toBe(COLOR_PRESETS);
     expect(eight2FiveThemes.light.accent).toBe(COLOR_PRESETS.blue);
     expect(eight2FiveThemes.dark.accent).toBe(COLOR_PRESETS.blue);
+
+    const css = readFileSync(
+      path.resolve(__dirname, "../../../../../packages/ui/theme/theme.css"),
+      "utf8",
+    );
+    const red = Number.parseInt(COLOR_PRESETS.blue.slice(1, 3), 16);
+    const green = Number.parseInt(COLOR_PRESETS.blue.slice(3, 5), 16);
+    const blue = Number.parseInt(COLOR_PRESETS.blue.slice(5, 7), 16);
+    expect(css).toContain(`--eight2five-drill-blue: ${red} ${green} ${blue};`);
   });
 });
