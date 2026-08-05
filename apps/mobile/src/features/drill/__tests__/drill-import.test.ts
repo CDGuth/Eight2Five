@@ -2,6 +2,7 @@ import type { DrillRepository } from "@eight2five/mobile/drill";
 import {
   DRILL_SCHEMA_URL,
   DRILL_SCHEMA_VERSION,
+  getFieldPreset,
   type DrillDocument,
 } from "@eight2five/drill-schema";
 
@@ -249,6 +250,7 @@ describe("Eight2Five drill import", () => {
             { id: "back", name: "Back", axis: "y", coordinateSteps: 10 },
           ],
         },
+        markings: getFieldPreset("football-nfhs").markings,
       },
     } satisfies DrillDocument;
     expect(() =>

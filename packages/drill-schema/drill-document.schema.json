@@ -586,6 +586,48 @@
         }
       }
     },
+    "fieldMarkings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["yardNumbers", "inboundsHashMarks", "sidelineHashMarks"],
+      "properties": {
+        "yardNumbers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "heightMeters",
+            "nominalWidthMeters",
+            "centerFromFrontSidelineMeters",
+            "centerFromBackSidelineMeters"
+          ],
+          "properties": {
+            "heightMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "nominalWidthMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "centerFromFrontSidelineMeters": { "type": "number", "minimum": 0 },
+            "centerFromBackSidelineMeters": { "type": "number", "minimum": 0 }
+          }
+        },
+        "inboundsHashMarks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lengthMeters", "spacingMeters"],
+          "properties": {
+            "lengthMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "spacingMeters": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "sidelineHashMarks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lengthMeters", "spacingMeters", "insetFromSidelineMeters"],
+          "properties": {
+            "lengthMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "spacingMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "insetFromSidelineMeters": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
     "fieldDefinition": {
       "oneOf": [
         {
@@ -609,7 +651,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "name", "physicalGeometry", "marchingGrid"],
+          "required": ["type", "name", "physicalGeometry", "marchingGrid", "markings"],
           "properties": {
             "type": {
               "const": "custom"
@@ -651,6 +693,9 @@
                   }
                 }
               }
+            },
+            "markings": {
+              "$ref": "#/$defs/fieldMarkings"
             }
           }
         }

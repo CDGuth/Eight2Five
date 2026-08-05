@@ -6,12 +6,15 @@ import { SourceSans3_400Regular } from '@expo-google-fonts/source-sans-3/400Regu
 import { SourceSans3_500Medium } from '@expo-google-fonts/source-sans-3/500Medium';
 import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
 import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
+import { COLOR_PRESETS } from '@eight2five/drill-schema';
 import { useFonts } from 'expo-font';
 import React from 'react';
 import { useColorScheme, type ColorSchemeName } from 'react-native';
 
+export const eight2FiveDrillColors = COLOR_PRESETS;
+
 export const eight2FiveBaseColors = {
-  blue: '#3C6EC8',
+  blue: eight2FiveDrillColors.blue,
   blueSecondary: '#3264BE',
   white: '#FFFFFF',
   black: '#000000',

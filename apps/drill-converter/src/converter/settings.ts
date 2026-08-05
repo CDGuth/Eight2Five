@@ -124,6 +124,7 @@ export function createDefaultCustomFieldJson(): string {
       name: "Custom Football Field",
       physicalGeometry: preset.physicalGeometry,
       marchingGrid: preset.marchingGrid,
+      markings: preset.markings,
     } satisfies FieldDefinition,
     null,
     2,

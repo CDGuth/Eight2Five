@@ -1,6 +1,7 @@
 import {
   FIELD_PRESET_IDS,
   type FieldPresetId,
+  type FieldMarkingDefinition,
   type MarchingReferenceLine,
   type PhysicalReferenceLine,
   type ResolvedFieldDefinition,
@@ -10,6 +11,32 @@ const FEET_TO_METERS = 0.3048;
 const YARDS_TO_METERS = 0.9144;
 const FIELD_HALF_LENGTH_METERS = 50 * YARDS_TO_METERS;
 const FIELD_WIDTH_METERS = 160 * FEET_TO_METERS;
+
+function footballMarkings({
+  yardNumberCenterFeet,
+  sidelineInsetInches,
+}: {
+  yardNumberCenterFeet: number;
+  sidelineInsetInches: number;
+}): FieldMarkingDefinition {
+  return Object.freeze({
+    yardNumbers: Object.freeze({
+      heightMeters: 6 * FEET_TO_METERS,
+      nominalWidthMeters: 4 * FEET_TO_METERS,
+      centerFromFrontSidelineMeters: yardNumberCenterFeet * FEET_TO_METERS,
+      centerFromBackSidelineMeters: yardNumberCenterFeet * FEET_TO_METERS,
+    }),
+    inboundsHashMarks: Object.freeze({
+      lengthMeters: 2 * FEET_TO_METERS,
+      spacingMeters: YARDS_TO_METERS,
+    }),
+    sidelineHashMarks: Object.freeze({
+      lengthMeters: 2 * FEET_TO_METERS,
+      spacingMeters: YARDS_TO_METERS,
+      insetFromSidelineMeters: (sidelineInsetInches / 12) * FEET_TO_METERS,
+    }),
+  });
+}
 
 function xReferenceLines(): {
   physical: readonly PhysicalReferenceLine[];
@@ -50,12 +77,14 @@ function makeFootballPreset({
   physicalFrontHashFeet,
   gridFrontHashSteps,
   gridBackHashSteps,
+  markings,
 }: {
   id: FieldPresetId;
   name: string;
   physicalFrontHashFeet: number;
   gridFrontHashSteps: number;
   gridBackHashSteps: number;
+  markings: FieldMarkingDefinition;
 }): ResolvedFieldDefinition {
   const physicalFrontHashMeters = physicalFrontHashFeet * FEET_TO_METERS;
   const physicalBackHashMeters = FIELD_WIDTH_METERS - physicalFrontHashMeters;
@@ -139,6 +168,7 @@ function makeFootballPreset({
         ...marchingYReferences,
       ]),
     }),
+    markings,
   });
 }
 
@@ -164,6 +194,12 @@ export const FIELD_PRESETS: Readonly<Record<FieldPresetId, ResolvedFieldDefiniti
       physicalFrontHashFeet: 53 + 4 / 12,
       gridFrontHashSteps: 28,
       gridBackHashSteps: 56,
+      // The 2025 NFHS diagram retains two-foot marks just inside the sideline;
+      // use the established four-inch inside clearance convention.
+      markings: footballMarkings({
+        yardNumberCenterFeet: 24,
+        sidelineInsetInches: 4,
+      }),
     }),
     "football-ncaa": makeFootballPreset({
       id: "football-ncaa",
@@ -171,6 +207,10 @@ export const FIELD_PRESETS: Readonly<Record<FieldPresetId, ResolvedFieldDefiniti
       physicalFrontHashFeet: 60,
       gridFrontHashSteps: 32,
       gridBackHashSteps: 52,
+      markings: footballMarkings({
+        yardNumberCenterFeet: 24,
+        sidelineInsetInches: 4,
+      }),
     }),
     "football-texas-uil": makeFootballPreset({
       id: "football-texas-uil",
@@ -178,6 +218,10 @@ export const FIELD_PRESETS: Readonly<Record<FieldPresetId, ResolvedFieldDefiniti
       physicalFrontHashFeet: 60,
       gridFrontHashSteps: 32,
       gridBackHashSteps: 52,
+      markings: footballMarkings({
+        yardNumberCenterFeet: 24,
+        sidelineInsetInches: 4,
+      }),
     }),
     "football-nfl": makeFootballPreset({
       id: "football-nfl",
@@ -187,6 +231,10 @@ export const FIELD_PRESETS: Readonly<Record<FieldPresetId, ResolvedFieldDefiniti
       // Preserve the physical hash proportions on Eight2Five's 84-step grid.
       gridFrontHashSteps: ((70 + 9 / 12) / 160) * 84,
       gridBackHashSteps: 84 - ((70 + 9 / 12) / 160) * 84,
+      markings: footballMarkings({
+        yardNumberCenterFeet: 39,
+        sidelineInsetInches: 8,
+      }),
     }),
   });
 

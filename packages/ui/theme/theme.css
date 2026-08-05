@@ -1,6 +1,11 @@
+:root {
+  /* COLOR_PRESETS.blue (#3C6EC8), shared by drill entities and UI accents. */
+  --eight2five-drill-blue: 60 110 200;
+}
+
 @layer theme {
   :where(.light, .light *) {
-    --primary: 60 110 200;
+    --primary: var(--eight2five-drill-blue);
     --primary-foreground: 255 255 255;
     --card: 255 255 255;
     --secondary: 218 218 218;
@@ -14,14 +19,14 @@
     --foreground: 30 30 30;
     --border: 218 218 218;
     --input: 243 243 243;
-    --ring: 60 110 200;
+    --ring: var(--eight2five-drill-blue);
     --accent: 243 243 243;
     --accent-foreground: 30 30 30;
   }
 
   @media (prefers-color-scheme: light) {
     :root:not(:where(.light, .light *, .dark, .dark *)) {
-      --primary: 60 110 200;
+      --primary: var(--eight2five-drill-blue);
       --primary-foreground: 255 255 255;
       --card: 255 255 255;
       --secondary: 218 218 218;
@@ -35,14 +40,14 @@
       --foreground: 30 30 30;
       --border: 218 218 218;
       --input: 243 243 243;
-      --ring: 60 110 200;
+      --ring: var(--eight2five-drill-blue);
       --accent: 243 243 243;
       --accent-foreground: 30 30 30;
     }
   }
 
   :where(.dark, .dark *) {
-    --primary: 60 110 200;
+    --primary: var(--eight2five-drill-blue);
     --primary-foreground: 255 255 255;
     --card: 36 36 36;
     --secondary: 51 51 51;
@@ -56,14 +61,14 @@
     --foreground: 255 255 255;
     --border: 51 51 51;
     --input: 51 51 51;
-    --ring: 60 110 200;
+    --ring: var(--eight2five-drill-blue);
     --accent: 51 51 51;
     --accent-foreground: 255 255 255;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not(:where(.light, .light *, .dark, .dark *)) {
-      --primary: 60 110 200;
+      --primary: var(--eight2five-drill-blue);
       --primary-foreground: 255 255 255;
       --card: 36 36 36;
       --secondary: 51 51 51;
@@ -77,7 +82,7 @@
       --foreground: 255 255 255;
       --border: 51 51 51;
       --input: 51 51 51;
-      --ring: 60 110 200;
+      --ring: var(--eight2five-drill-blue);
       --accent: 51 51 51;
       --accent-foreground: 255 255 255;
     }

@@ -28,6 +28,7 @@ function resolveCustomField(field: CustomFieldDefinition): ResolvedFieldDefiniti
     name: field.name,
     physicalGeometry: field.physicalGeometry,
     marchingGrid: field.marchingGrid,
+    markings: field.markings,
   };
 }
 

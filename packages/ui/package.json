@@ -72,6 +72,7 @@
     "./theme": "./theme/index.tsx"
   },
   "dependencies": {
+    "@eight2five/drill-schema": "0.0.0",
     "@expo-google-fonts/montserrat": "^0.4.2",
     "@expo-google-fonts/source-sans-3": "^0.4.1",
     "@expo/html-elements": "^0.12.5",
@@ -86,9 +87,9 @@
     "@react-stately/toggle": "^3.10.1",
     "ai": "^6.0.214",
     "expo-document-picker": "~57.0.1",
+    "expo-font": "~57.0.1",
     "expo-glass-effect": "~57.0.1",
     "expo-image-picker": "~57.0.6",
-    "expo-font": "~57.0.1",
     "lucide-react-native": "^1.22.0",
     "react-dom": "^19.2.3",
     "react-native-gesture-handler": "~2.32.0",

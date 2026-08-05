@@ -16,6 +16,7 @@ const safeNonNegativeInteger = z
   .max(Number.MAX_SAFE_INTEGER);
 const finiteNumber = z.number().finite();
 const positiveFiniteNumber = finiteNumber.gt(0);
+const nonNegativeFiniteNumber = finiteNumber.min(0);
 const nonEmptyText = z.string().trim().min(1);
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const symbol = z.string().trim().min(1).max(16);
@@ -330,6 +331,32 @@ const marchingGridSchema = z
   })
   .strict();
 
+const fieldMarkingsSchema = z
+  .object({
+    yardNumbers: z
+      .object({
+        heightMeters: positiveFiniteNumber,
+        nominalWidthMeters: positiveFiniteNumber,
+        centerFromFrontSidelineMeters: nonNegativeFiniteNumber,
+        centerFromBackSidelineMeters: nonNegativeFiniteNumber,
+      })
+      .strict(),
+    inboundsHashMarks: z
+      .object({
+        lengthMeters: positiveFiniteNumber,
+        spacingMeters: positiveFiniteNumber,
+      })
+      .strict(),
+    sidelineHashMarks: z
+      .object({
+        lengthMeters: positiveFiniteNumber,
+        spacingMeters: positiveFiniteNumber,
+        insetFromSidelineMeters: nonNegativeFiniteNumber,
+      })
+      .strict(),
+  })
+  .strict();
+
 const presetFieldSchema = z
   .object({
     type: z.literal("preset"),
@@ -343,6 +370,7 @@ const customFieldSchema = z
     name: nonEmptyText,
     physicalGeometry: physicalGeometrySchema,
     marchingGrid: marchingGridSchema,
+    markings: fieldMarkingsSchema,
   })
   .strict()
   .superRefine((field, context) => {

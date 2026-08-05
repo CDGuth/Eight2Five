@@ -173,6 +173,26 @@ export interface MarchingGrid {
   readonly referenceLines: readonly MarchingReferenceLine[];
 }
 
+/** Physical football-marking dimensions consumed by field renderers. */
+export interface FieldMarkingDefinition {
+  readonly yardNumbers: {
+    readonly heightMeters: number;
+    readonly nominalWidthMeters: number;
+    readonly centerFromFrontSidelineMeters: number;
+    readonly centerFromBackSidelineMeters: number;
+  };
+  readonly inboundsHashMarks: {
+    readonly lengthMeters: number;
+    readonly spacingMeters: number;
+  };
+  readonly sidelineHashMarks: {
+    readonly lengthMeters: number;
+    readonly spacingMeters: number;
+    /** Clear distance from the inside edge of the sideline to each mark. */
+    readonly insetFromSidelineMeters: number;
+  };
+}
+
 export interface PresetFieldDefinition {
   readonly type: "preset";
   readonly preset: FieldPresetId;
@@ -183,6 +203,7 @@ export interface CustomFieldDefinition {
   readonly name: string;
   readonly physicalGeometry: PhysicalFieldGeometry;
   readonly marchingGrid: MarchingGrid;
+  readonly markings: FieldMarkingDefinition;
 }
 
 export type FieldDefinition = PresetFieldDefinition | CustomFieldDefinition;
@@ -192,6 +213,7 @@ export interface ResolvedFieldDefinition {
   readonly name: string;
   readonly physicalGeometry: PhysicalFieldGeometry;
   readonly marchingGrid: MarchingGrid;
+  readonly markings: FieldMarkingDefinition;
 }
 
 export type SourceReferenceTarget =

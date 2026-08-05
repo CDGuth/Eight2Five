@@ -1,7 +1,9 @@
 import {
+  eight2FiveDrillColors,
   eight2FiveThemes,
   resolveEight2FiveThemeName,
 } from "@eight2five/ui/theme";
+import { COLOR_PRESETS } from "@eight2five/drill-schema";
 
 describe("app appearance", () => {
   test("uses the OS appearance only in system mode", () => {
@@ -17,5 +19,11 @@ describe("app appearance", () => {
     expect(eight2FiveThemes.light.background).not.toBe(
       eight2FiveThemes.dark.background,
     );
+  });
+
+  test("shares the drill color presets with the UI theme", () => {
+    expect(eight2FiveDrillColors).toBe(COLOR_PRESETS);
+    expect(eight2FiveThemes.light.accent).toBe(COLOR_PRESETS.blue);
+    expect(eight2FiveThemes.dark.accent).toBe(COLOR_PRESETS.blue);
   });
 });

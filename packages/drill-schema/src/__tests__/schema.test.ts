@@ -293,6 +293,60 @@ describe("drill schema", () => {
     expect(isFieldPresetId("football-made-up")).toBe(false);
   });
 
+  it.each([
+    ["football-nfhs", 53 + 4 / 12, 24, 4],
+    ["football-ncaa", 60, 24, 4],
+    ["football-texas-uil", 60, 24, 4],
+    ["football-nfl", 70 + 9 / 12, 39, 8],
+  ] as const)(
+    "%s exposes its physical football markings",
+    (presetId, hashFeet, numberCenterFeet, sidelineInsetInches) => {
+      const field = getFieldPreset(presetId);
+      const frontHash = field.physicalGeometry.referenceLines.find(
+        (line) => line.id === "front-hash",
+      );
+      expect(frontHash?.coordinateMeters).toBeCloseTo(hashFeet * 0.3048, 8);
+      expect(field.markings).toMatchObject({
+        yardNumbers: {
+          heightMeters: 6 * 0.3048,
+          nominalWidthMeters: 4 * 0.3048,
+          centerFromFrontSidelineMeters: numberCenterFeet * 0.3048,
+          centerFromBackSidelineMeters: numberCenterFeet * 0.3048,
+        },
+        inboundsHashMarks: {
+          lengthMeters: 2 * 0.3048,
+          spacingMeters: 0.9144,
+        },
+        sidelineHashMarks: {
+          lengthMeters: 2 * 0.3048,
+          spacingMeters: 0.9144,
+          insetFromSidelineMeters: (sidelineInsetInches / 12) * 0.3048,
+        },
+      });
+      expect(field.markings.yardNumbers.centerFromFrontSidelineMeters).toBe(
+        field.markings.yardNumbers.centerFromBackSidelineMeters,
+      );
+    },
+  );
+
+  it("parses self-describing custom field markings", () => {
+    const preset = getFieldPreset("football-nfhs");
+    const parsed = parseDrillDocument({
+      ...fixture,
+      field: {
+        type: "custom",
+        name: "Custom Football Field",
+        physicalGeometry: preset.physicalGeometry,
+        marchingGrid: preset.marchingGrid,
+        markings: preset.markings,
+      },
+    });
+    expect(parsed.field).toMatchObject({
+      type: "custom",
+      markings: preset.markings,
+    });
+  });
+
   it.each(FIELD_PRESET_IDS)(
     "%s uses the canonical 160 by 84 marching-grid bounds",
     (preset) => {
