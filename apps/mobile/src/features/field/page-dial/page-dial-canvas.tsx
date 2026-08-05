@@ -1,27 +1,48 @@
 import { FieldPageDialCanvas } from "@eight2five/mobile/field/render";
+import { useMemo } from "react";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import {
-  normalizePageIndex,
+  getPageDialDividerSegments,
   PAGE_DIAL_START_ANGLE_DEGREES,
   PAGE_DIAL_USABLE_ARC_DEGREES,
 } from "./page-dial-math";
+import { getPageDialProportions } from "./page-dial-layout";
 
 export function PageDialCanvas({
   diameter,
   pageCount,
-  provisionalIndex,
+  provisionalProgress,
   activeColor,
   trackColor,
+  innerColor,
+  backgroundColor,
+  foregroundColor,
+  dividerColor,
 }: {
   readonly diameter: number;
   readonly pageCount: number;
-  readonly provisionalIndex: SharedValue<number>;
+  readonly provisionalProgress: SharedValue<number>;
   readonly activeColor: string;
   readonly trackColor: string;
+  readonly innerColor?: string;
+  readonly backgroundColor?: string;
+  readonly foregroundColor?: string;
+  readonly dividerColor?: string;
 }) {
-  const progress = useDerivedValue(() =>
-    normalizePageIndex(provisionalIndex.value, pageCount),
+  const progress = useDerivedValue(() => {
+    if (pageCount <= 0 || !Number.isFinite(provisionalProgress.value)) return 0;
+    return Math.min(1, Math.max(0, provisionalProgress.value));
+  });
+  const proportions = getPageDialProportions(diameter);
+  const dividerSegments = useMemo(
+    () =>
+      getPageDialDividerSegments(
+        diameter,
+        proportions.innerDiskDiameter,
+        proportions.centerDiskDiameter,
+      ),
+    [diameter, proportions.centerDiskDiameter, proportions.innerDiskDiameter],
   );
   return (
     <FieldPageDialCanvas
@@ -31,6 +52,11 @@ export function PageDialCanvas({
       usableArcDegrees={PAGE_DIAL_USABLE_ARC_DEGREES}
       activeColor={activeColor}
       trackColor={trackColor}
+      innerColor={innerColor}
+      backgroundColor={backgroundColor}
+      foregroundColor={foregroundColor}
+      dividerColor={dividerColor}
+      dividerSegments={dividerSegments}
     />
   );
 }

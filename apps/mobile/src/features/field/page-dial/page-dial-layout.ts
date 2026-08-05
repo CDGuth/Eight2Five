@@ -1,22 +1,52 @@
 import { getDrillTerms, type DrillTerminology } from "@eight2five/mobile/drill";
 
+import {
+  getPageDialCanvasOverscan,
+  getPageDialControlCenterOffset,
+  getPageDialControlSize,
+  getPageDialRingHitRegion,
+  getPageDialRingRadius,
+  PAGE_DIAL_CENTER_DISK_DIAMETER_RATIO,
+  PAGE_DIAL_INNER_DISK_DIAMETER_RATIO,
+  PAGE_DIAL_KNOB_DIAMETER_RATIO,
+  PAGE_DIAL_RING_THICKNESS_RATIO,
+} from "./page-dial-math";
+
 export interface PageDialProportions {
   readonly ringThickness: number;
+  readonly ringRadius: number;
   readonly innerDiskDiameter: number;
   readonly centerDiskDiameter: number;
+  /** Kept for callers that used the original proportions API. No outline is rendered. */
   readonly centerBorderWidth: number;
   readonly knobDiameter: number;
+  readonly knobRadius: number;
   readonly controlCenterOffset: number;
+  readonly controlButtonSize: number;
+  readonly ringHitInnerRadius: number;
+  readonly ringHitOuterRadius: number;
+  readonly canvasOverscan: number;
 }
 
 export function getPageDialProportions(diameter: number): PageDialProportions {
+  const ringThickness = diameter * PAGE_DIAL_RING_THICKNESS_RATIO;
+  const innerDiskDiameter = diameter * PAGE_DIAL_INNER_DISK_DIAMETER_RATIO;
+  const centerDiskDiameter = diameter * PAGE_DIAL_CENTER_DISK_DIAMETER_RATIO;
+  const knobDiameter = diameter * PAGE_DIAL_KNOB_DIAMETER_RATIO;
+  const ringHitRegion = getPageDialRingHitRegion(diameter);
   return {
-    ringThickness: diameter * 0.07,
-    innerDiskDiameter: diameter * 0.86,
-    centerDiskDiameter: diameter * 0.3,
-    centerBorderWidth: diameter * 0.018,
-    knobDiameter: diameter * 0.13,
-    controlCenterOffset: diameter * 0.29,
+    ringThickness,
+    ringRadius: getPageDialRingRadius(diameter, ringThickness),
+    innerDiskDiameter,
+    centerDiskDiameter,
+    centerBorderWidth: 0,
+    knobDiameter,
+    knobRadius: knobDiameter / 2,
+    controlCenterOffset: getPageDialControlCenterOffset(diameter),
+    controlButtonSize: getPageDialControlSize(diameter),
+    ringHitInnerRadius: ringHitRegion.innerRadius,
+    ringHitOuterRadius: ringHitRegion.outerRadius,
+    canvasOverscan: getPageDialCanvasOverscan(diameter),
   };
 }
 
