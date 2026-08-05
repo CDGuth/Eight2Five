@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import {
+  COLOR_PRESETS,
   convertPropSizeValue,
   type PropSizeUnit,
 } from "@eight2five/drill-schema";
@@ -417,7 +418,7 @@ function RuleEditor({
           onChangeText={(color) => onUpdate({ color })}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="#3C6EC8"
+          placeholder={COLOR_PRESETS.blue}
           helper="Leave blank for Default (Grey) or the selected preset. Any six-digit hex color is valid."
         />
       </View>

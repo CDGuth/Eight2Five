@@ -1,3 +1,5 @@
+import { COLOR_PRESETS } from "@eight2five/drill-schema";
+
 export const colors = Object.freeze({
   page: "#f4f6fa",
   surface: "#ffffff",
@@ -6,7 +8,7 @@ export const colors = Object.freeze({
   textMuted: "#64748b",
   border: "#d9e0ea",
   borderStrong: "#b8c4d4",
-  accent: "#3c6ec8",
+  accent: COLOR_PRESETS.blue,
   accentSoft: "#edf3ff",
   accentText: "#234b92",
   success: "#16794a",
