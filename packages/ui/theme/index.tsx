@@ -88,6 +88,13 @@ export const eight2FiveFonts = {
   utilityBold: 'SourceSans3_700Bold',
 } as const;
 
+function colorWithOpacity(color: `#${string}`, opacity: number): string {
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
+
 export const eight2FiveThemes = {
   light: {
     raw: eight2FiveLightColors,
@@ -102,7 +109,7 @@ export const eight2FiveThemes = {
     border: eight2FiveLightColors.secondary,
     accent: eight2FiveLightColors.blue,
     accentPressed: eight2FiveLightColors.blueSecondary,
-    accentSoft: 'rgba(60, 110, 200, 0.12)',
+    accentSoft: colorWithOpacity(eight2FiveDrillColors.blue, 0.12),
     danger: eight2FiveLightColors.danger,
     dangerSoft: 'rgba(200, 60, 60, 0.12)',
     warning: eight2FiveLightColors.warning,
@@ -125,7 +132,7 @@ export const eight2FiveThemes = {
     border: eight2FiveDarkColors.primary,
     accent: eight2FiveDarkColors.blue,
     accentPressed: eight2FiveDarkColors.blueSecondary,
-    accentSoft: 'rgba(60, 110, 200, 0.20)',
+    accentSoft: colorWithOpacity(eight2FiveDrillColors.blue, 0.2),
     danger: eight2FiveDarkColors.danger,
     dangerSoft: 'rgba(200, 60, 60, 0.18)',
     warning: eight2FiveDarkColors.warning,

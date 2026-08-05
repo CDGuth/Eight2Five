@@ -13,6 +13,7 @@ import {
   parseDrillDocument,
   physicalPointToDrillGrid,
   resolveDrillEntity,
+  resolveFieldDefinition,
   resolveEntityRuleValues,
   resolvePropSize,
   serializeDrillDocument,
@@ -21,7 +22,7 @@ import {
 
 const fixture: DrillDocument = {
   schema: "https://eight2five.com/schema/drill",
-  schemaVersion: "1.0.0",
+  schemaVersion: "2.0.0",
   metadata: {
     title: "Part 4",
     createdAt: "2026-08-02T17:30:00.000Z",
@@ -305,7 +306,14 @@ describe("drill schema", () => {
       const frontHash = field.physicalGeometry.referenceLines.find(
         (line) => line.id === "front-hash",
       );
+      const backHash = field.physicalGeometry.referenceLines.find(
+        (line) => line.id === "back-hash",
+      );
       expect(frontHash?.coordinateMeters).toBeCloseTo(hashFeet * 0.3048, 8);
+      expect(backHash?.coordinateMeters).toBeCloseTo(
+        160 * 0.3048 - hashFeet * 0.3048,
+        8,
+      );
       expect(field.markings).toMatchObject({
         yardNumbers: {
           heightMeters: 6 * 0.3048,
@@ -345,6 +353,9 @@ describe("drill schema", () => {
       type: "custom",
       markings: preset.markings,
     });
+    expect(resolveFieldDefinition(parsed.field).markings).toEqual(
+      preset.markings,
+    );
   });
 
   it.each(FIELD_PRESET_IDS)(

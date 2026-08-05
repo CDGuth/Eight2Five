@@ -1,5 +1,5 @@
 export const DRILL_SCHEMA_URL = "https://eight2five.com/schema/drill" as const;
-export const DRILL_SCHEMA_VERSION = "1.0.0" as const;
+export const DRILL_SCHEMA_VERSION = "2.0.0" as const;
 
 export type SetKind = "set" | "subset";
 export type DrillEntityType = "performer" | "prop";

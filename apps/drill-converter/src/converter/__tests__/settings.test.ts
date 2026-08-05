@@ -1,5 +1,6 @@
 import {
   COLOR_PRESETS,
+  DRILL_SCHEMA_VERSION,
   FIELD_PRESET_IDS,
   parseDrillDocument,
   resolveDrillEntity,
@@ -18,7 +19,7 @@ import {
 
 const source: DrillDocument = parseDrillDocument({
   schema: "https://eight2five.com/schema/drill",
-  schemaVersion: "1.0.0",
+  schemaVersion: DRILL_SCHEMA_VERSION,
   metadata: {
     title: "Imported",
     createdAt: "2026-08-02T18:00:00.000Z",
