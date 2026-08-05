@@ -9,4 +9,6 @@ export {
 export * from "./types";
 export * from "./terminology";
 export * from "./analysis";
+export * from "./transition-geometry";
+export * from "./transition-scene";
 export * from "./SqliteDrillRepository";
