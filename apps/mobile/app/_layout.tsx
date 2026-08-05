@@ -2,11 +2,15 @@ import React from "react";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { GluestackUIProvider } from "@eight2five/ui/components/gluestack-ui-provider";
-import { useEight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
+import {
+  Eight2FiveThemeProvider,
+  useEight2FiveFonts,
+  useEight2FiveTheme,
+  useEight2FiveThemeName,
+} from "@eight2five/ui/theme";
 
 import { TabBarVisibilityProvider } from "../src/navigation/tab-bar-visibility-context";
 import { useMobileOrientationLock } from "../src/navigation/use-mobile-orientation-lock";
@@ -25,7 +29,6 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function MobileRootLayout() {
   const [fontsLoaded, fontError] = useEight2FiveFonts();
-  const theme = useEight2FiveTheme();
 
   React.useEffect(() => {
     if (fontsLoaded || fontError) void SplashScreen.hideAsync();
@@ -35,36 +38,48 @@ export default function MobileRootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <GluestackUIProvider mode="system">
-        <SafeAreaProvider>
-          <AppSettingsProvider>
+      <SafeAreaProvider>
+        <AppSettingsProvider>
+          <MobileAppearance>
             <MobilePansProvider>
-              <MobileNavigation backgroundColor={theme.background} />
+              <MobileNavigation />
             </MobilePansProvider>
-          </AppSettingsProvider>
-        </SafeAreaProvider>
-      </GluestackUIProvider>
+          </MobileAppearance>
+        </AppSettingsProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
 
-function MobileNavigation({ backgroundColor }: { backgroundColor: string }) {
+function MobileAppearance({ children }: { children: React.ReactNode }) {
+  const { settings } = useAppSettingsSnapshot();
+  return (
+    <GluestackUIProvider mode={settings.appearanceMode}>
+      <Eight2FiveThemeProvider mode={settings.appearanceMode}>
+        {children}
+      </Eight2FiveThemeProvider>
+    </GluestackUIProvider>
+  );
+}
+
+function MobileNavigation() {
   useMobileOrientationLock();
   const { settings } = useAppSettingsSnapshot();
-  const colorScheme = useColorScheme();
+  const theme = useEight2FiveTheme();
+  const themeName = useEight2FiveThemeName();
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={themeName === "dark" ? DarkTheme : DefaultTheme}>
       <TabBarVisibilityProvider
         drillFeaturesEnabled={settings.drillFeaturesEnabled}
       >
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor },
+            contentStyle: { backgroundColor: theme.background },
           }}
         />
-        <StatusBar style="auto" />
+        <StatusBar style={themeName === "dark" ? "light" : "dark"} />
       </TabBarVisibilityProvider>
     </ThemeProvider>
   );

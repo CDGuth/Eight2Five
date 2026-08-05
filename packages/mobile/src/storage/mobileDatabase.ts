@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 3;
+export const MOBILE_SCHEMA_VERSION = 4;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -128,11 +128,13 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
 
     CREATE TABLE ${APP_SETTINGS_TABLE} (
       singleton_id INTEGER PRIMARY KEY NOT NULL CHECK (singleton_id = 1),
+      appearance_mode TEXT NOT NULL DEFAULT 'system'
+        CHECK (appearance_mode IN ('system', 'light', 'dark')),
       drill_features_enabled INTEGER NOT NULL DEFAULT 1
         CHECK (drill_features_enabled IN (0, 1)),
       drill_terminology TEXT NOT NULL DEFAULT 'sets'
-        CHECK (drill_terminology = 'sets'),
-      field_perspective TEXT NOT NULL DEFAULT 'director'
+        CHECK (drill_terminology IN ('sets', 'pages')),
+      field_perspective TEXT NOT NULL DEFAULT 'performer'
         CHECK (field_perspective IN ('director', 'performer')),
       default_field_preset TEXT NOT NULL DEFAULT 'football-nfhs'
         CHECK (default_field_preset IN (${FIELD_PRESET_SQL_LIST})),
@@ -148,6 +150,47 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
         CHECK (show_comfortable_anchor_range IN (0, 1)),
       show_perimeter_step_grid INTEGER NOT NULL DEFAULT 0
         CHECK (show_perimeter_step_grid IN (0, 1)),
+      show_auxiliary_field_marks INTEGER NOT NULL DEFAULT 1
+        CHECK (show_auxiliary_field_marks IN (0, 1)),
+      show_performer_labels INTEGER NOT NULL DEFAULT 1
+        CHECK (show_performer_labels IN (0, 1)),
+      show_performer_names INTEGER NOT NULL DEFAULT 0
+        CHECK (show_performer_names IN (0, 1)),
+      show_prop_labels INTEGER NOT NULL DEFAULT 1
+        CHECK (show_prop_labels IN (0, 1)),
+      show_prop_names INTEGER NOT NULL DEFAULT 0
+        CHECK (show_prop_names IN (0, 1)),
+      show_transition_markers INTEGER NOT NULL DEFAULT 1
+        CHECK (show_transition_markers IN (0, 1)),
+      show_all_transition_sets INTEGER NOT NULL DEFAULT 0
+        CHECK (show_all_transition_sets IN (0, 1)),
+      previous_transition_set_count INTEGER NOT NULL DEFAULT 1
+        CHECK (
+          previous_transition_set_count >= 0 AND
+          previous_transition_set_count <= 50 AND
+          previous_transition_set_count = CAST(previous_transition_set_count AS INTEGER)
+        ),
+      next_transition_set_count INTEGER NOT NULL DEFAULT 1
+        CHECK (
+          next_transition_set_count >= 0 AND
+          next_transition_set_count <= 50 AND
+          next_transition_set_count = CAST(next_transition_set_count AS INTEGER)
+        ),
+      distance_green_threshold_steps REAL NOT NULL DEFAULT 0.5
+        CHECK (
+          distance_green_threshold_steps >= 0 AND
+          distance_green_threshold_steps = distance_green_threshold_steps
+        ),
+      distance_yellow_threshold_steps REAL NOT NULL DEFAULT 1
+        CHECK (
+          distance_yellow_threshold_steps >= 0 AND
+          distance_yellow_threshold_steps = distance_yellow_threshold_steps
+        ),
+      CHECK (
+        distance_green_threshold_steps <= distance_yellow_threshold_steps
+      ),
+      motion_interpolation_enabled INTEGER NOT NULL DEFAULT 1
+        CHECK (motion_interpolation_enabled IN (0, 1)),
       comfortable_anchor_range_meters REAL NOT NULL DEFAULT 20
         CHECK (comfortable_anchor_range_meters > 0),
       active_drill_id TEXT

@@ -15,7 +15,7 @@ describe("mobile app SQLite schema preparation", () => {
 
     const sql = executed.join("\n");
     expect(MOBILE_DB_NAME).toBe("eight2five-mobile.db");
-    expect(MOBILE_SCHEMA_VERSION).toBe(3);
+    expect(MOBILE_SCHEMA_VERSION).toBe(4);
     expect(sql).toContain("PRAGMA journal_mode = WAL");
     expect(sql).toContain("PRAGMA foreign_keys = OFF");
     expect(sql).toContain("DROP TABLE IF EXISTS app_settings");
@@ -31,8 +31,28 @@ describe("mobile app SQLite schema preparation", () => {
     expect(sql).not.toContain("x_meters REAL");
     expect(sql).not.toContain("y_meters REAL");
     expect(sql).toContain("CREATE TABLE app_settings");
+    expect(sql).toContain("appearance_mode TEXT NOT NULL DEFAULT 'system'");
+    expect(sql).toContain("drill_terminology IN ('sets', 'pages')");
+    expect(sql).toContain(
+      "field_perspective TEXT NOT NULL DEFAULT 'performer'",
+    );
     expect(sql).toContain("default_field_preset TEXT NOT NULL");
     expect(sql).toContain("show_perimeter_step_grid INTEGER NOT NULL");
+    expect(sql).toContain(
+      "previous_transition_set_count INTEGER NOT NULL DEFAULT 1",
+    );
+    expect(sql).toContain(
+      "next_transition_set_count INTEGER NOT NULL DEFAULT 1",
+    );
+    expect(sql).toContain(
+      "distance_green_threshold_steps REAL NOT NULL DEFAULT 0.5",
+    );
+    expect(sql).toContain(
+      "distance_yellow_threshold_steps REAL NOT NULL DEFAULT 1",
+    );
+    expect(sql).toContain(
+      "motion_interpolation_enabled INTEGER NOT NULL DEFAULT 1",
+    );
     expect(sql).toContain("REFERENCES drills(id) ON DELETE CASCADE");
     expect(sql).toContain("REFERENCES drill_sets(id) ON DELETE SET NULL");
     expect(sql).toContain(`PRAGMA user_version = ${MOBILE_SCHEMA_VERSION}`);

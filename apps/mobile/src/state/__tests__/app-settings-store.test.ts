@@ -62,11 +62,11 @@ describe("AppSettingsStore", () => {
 
     await Promise.all([
       store.update({ guidanceEnabled: false }),
-      store.update({ fieldPerspective: "performer" }),
+      store.update({ appearanceMode: "dark" }),
     ]);
     expect(settingsRepository.update.mock.calls).toEqual([
       [{ guidanceEnabled: false }],
-      [{ fieldPerspective: "performer" }],
+      [{ appearanceMode: "dark" }],
     ]);
 
     await store.resetPreferences();

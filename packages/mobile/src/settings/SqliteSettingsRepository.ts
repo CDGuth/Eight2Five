@@ -38,12 +38,13 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
 
   async resetPreferences(): Promise<AppSettings> {
     await this.load();
-    // Deliberately omit both selection columns. The legacy physical
-    // drill_terminology column is pinned to "sets" and is no longer exposed.
+    // Deliberately omit both selection columns so resetPreferences preserves
+    // the user's active drill and selected set.
     await this.db.runAsync(
       `UPDATE ${APP_SETTINGS_TABLE}
-       SET drill_features_enabled = ?,
-           drill_terminology = 'sets',
+       SET appearance_mode = ?,
+           drill_features_enabled = ?,
+           drill_terminology = ?,
            field_perspective = ?,
            default_field_preset = ?,
            transition_metric_mode = ?,
@@ -52,10 +53,24 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
            show_cached_anchor_geometry = ?,
            show_comfortable_anchor_range = ?,
            show_perimeter_step_grid = ?,
+           show_auxiliary_field_marks = ?,
+           show_performer_labels = ?,
+           show_performer_names = ?,
+           show_prop_labels = ?,
+           show_prop_names = ?,
+           show_transition_markers = ?,
+           show_all_transition_sets = ?,
+           previous_transition_set_count = ?,
+           next_transition_set_count = ?,
+           distance_green_threshold_steps = ?,
+           distance_yellow_threshold_steps = ?,
+           motion_interpolation_enabled = ?,
            comfortable_anchor_range_meters = ?
        WHERE singleton_id = ?`,
       [
+        DEFAULT_APP_SETTINGS.appearanceMode,
         boolToSql(DEFAULT_APP_SETTINGS.drillFeaturesEnabled),
+        DEFAULT_APP_SETTINGS.drillTerminology,
         DEFAULT_APP_SETTINGS.fieldPerspective,
         DEFAULT_APP_SETTINGS.defaultFieldPreset,
         DEFAULT_APP_SETTINGS.transitionMetricMode,
@@ -64,6 +79,18 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         boolToSql(DEFAULT_APP_SETTINGS.showCachedAnchorGeometry),
         boolToSql(DEFAULT_APP_SETTINGS.showComfortableAnchorRange),
         boolToSql(DEFAULT_APP_SETTINGS.showPerimeterStepGrid),
+        boolToSql(DEFAULT_APP_SETTINGS.showAuxiliaryFieldMarks),
+        boolToSql(DEFAULT_APP_SETTINGS.showPerformerLabels),
+        boolToSql(DEFAULT_APP_SETTINGS.showPerformerNames),
+        boolToSql(DEFAULT_APP_SETTINGS.showPropLabels),
+        boolToSql(DEFAULT_APP_SETTINGS.showPropNames),
+        boolToSql(DEFAULT_APP_SETTINGS.showTransitionMarkers),
+        boolToSql(DEFAULT_APP_SETTINGS.showAllTransitionSets),
+        DEFAULT_APP_SETTINGS.previousTransitionSetCount,
+        DEFAULT_APP_SETTINGS.nextTransitionSetCount,
+        DEFAULT_APP_SETTINGS.distanceGreenThresholdSteps,
+        DEFAULT_APP_SETTINGS.distanceYellowThresholdSteps,
+        boolToSql(DEFAULT_APP_SETTINGS.motionInterpolationEnabled),
         DEFAULT_APP_SETTINGS.comfortableAnchorRangeMeters,
         1,
       ],
@@ -74,6 +101,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
   private async readRow(): Promise<AppSettingsRow | null> {
     return await this.db.getFirstAsync<AppSettingsRow>(
       `SELECT
+         appearance_mode,
          drill_features_enabled,
          drill_terminology,
          field_perspective,
@@ -84,6 +112,18 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
          show_perimeter_step_grid,
+         show_auxiliary_field_marks,
+         show_performer_labels,
+         show_performer_names,
+         show_prop_labels,
+         show_prop_names,
+         show_transition_markers,
+         show_all_transition_sets,
+         previous_transition_set_count,
+         next_transition_set_count,
+         distance_green_threshold_steps,
+         distance_yellow_threshold_steps,
+         motion_interpolation_enabled,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
@@ -98,6 +138,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
     await this.db.runAsync(
       `INSERT INTO ${APP_SETTINGS_TABLE} (
          singleton_id,
+         appearance_mode,
          drill_features_enabled,
          drill_terminology,
          field_perspective,
@@ -108,13 +149,26 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
          show_perimeter_step_grid,
+         show_auxiliary_field_marks,
+         show_performer_labels,
+         show_performer_names,
+         show_prop_labels,
+         show_prop_names,
+         show_transition_markers,
+         show_all_transition_sets,
+         previous_transition_set_count,
+         next_transition_set_count,
+         distance_green_threshold_steps,
+         distance_yellow_threshold_steps,
+         motion_interpolation_enabled,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, 'sets', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
+         appearance_mode = excluded.appearance_mode,
          drill_features_enabled = excluded.drill_features_enabled,
-         drill_terminology = 'sets',
+         drill_terminology = excluded.drill_terminology,
          field_perspective = excluded.field_perspective,
          default_field_preset = excluded.default_field_preset,
          transition_metric_mode = excluded.transition_metric_mode,
@@ -123,12 +177,26 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry = excluded.show_cached_anchor_geometry,
          show_comfortable_anchor_range = excluded.show_comfortable_anchor_range,
          show_perimeter_step_grid = excluded.show_perimeter_step_grid,
+         show_auxiliary_field_marks = excluded.show_auxiliary_field_marks,
+         show_performer_labels = excluded.show_performer_labels,
+         show_performer_names = excluded.show_performer_names,
+         show_prop_labels = excluded.show_prop_labels,
+         show_prop_names = excluded.show_prop_names,
+         show_transition_markers = excluded.show_transition_markers,
+         show_all_transition_sets = excluded.show_all_transition_sets,
+         previous_transition_set_count = excluded.previous_transition_set_count,
+         next_transition_set_count = excluded.next_transition_set_count,
+         distance_green_threshold_steps = excluded.distance_green_threshold_steps,
+         distance_yellow_threshold_steps = excluded.distance_yellow_threshold_steps,
+         motion_interpolation_enabled = excluded.motion_interpolation_enabled,
          comfortable_anchor_range_meters = excluded.comfortable_anchor_range_meters,
          active_drill_id = excluded.active_drill_id,
          selected_drill_page_id = excluded.selected_drill_page_id`,
       [
         1,
+        normalized.appearanceMode,
         boolToSql(normalized.drillFeaturesEnabled),
+        normalized.drillTerminology,
         normalized.fieldPerspective,
         normalized.defaultFieldPreset,
         normalized.transitionMetricMode,
@@ -137,6 +205,18 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         boolToSql(normalized.showCachedAnchorGeometry),
         boolToSql(normalized.showComfortableAnchorRange),
         boolToSql(normalized.showPerimeterStepGrid),
+        boolToSql(normalized.showAuxiliaryFieldMarks),
+        boolToSql(normalized.showPerformerLabels),
+        boolToSql(normalized.showPerformerNames),
+        boolToSql(normalized.showPropLabels),
+        boolToSql(normalized.showPropNames),
+        boolToSql(normalized.showTransitionMarkers),
+        boolToSql(normalized.showAllTransitionSets),
+        normalized.previousTransitionSetCount,
+        normalized.nextTransitionSetCount,
+        normalized.distanceGreenThresholdSteps,
+        normalized.distanceYellowThresholdSteps,
+        boolToSql(normalized.motionInterpolationEnabled),
         normalized.comfortableAnchorRangeMeters,
         normalized.activeDrillId,
         normalized.selectedDrillSetId,
@@ -152,7 +232,9 @@ export function normalizeAppSettingsRow(row: unknown): AppSettings {
 
 function fromRow(row: AppSettingsRow): AppSettings {
   return normalizeAppSettings({
+    appearanceMode: row.appearance_mode,
     drillFeaturesEnabled: sqliteBoolean(row.drill_features_enabled),
+    drillTerminology: row.drill_terminology,
     fieldPerspective: row.field_perspective,
     defaultFieldPreset: row.default_field_preset,
     transitionMetricMode: row.transition_metric_mode,
@@ -163,6 +245,18 @@ function fromRow(row: AppSettingsRow): AppSettings {
       row.show_comfortable_anchor_range,
     ),
     showPerimeterStepGrid: sqliteBoolean(row.show_perimeter_step_grid),
+    showAuxiliaryFieldMarks: sqliteBoolean(row.show_auxiliary_field_marks),
+    showPerformerLabels: sqliteBoolean(row.show_performer_labels),
+    showPerformerNames: sqliteBoolean(row.show_performer_names),
+    showPropLabels: sqliteBoolean(row.show_prop_labels),
+    showPropNames: sqliteBoolean(row.show_prop_names),
+    showTransitionMarkers: sqliteBoolean(row.show_transition_markers),
+    showAllTransitionSets: sqliteBoolean(row.show_all_transition_sets),
+    previousTransitionSetCount: row.previous_transition_set_count,
+    nextTransitionSetCount: row.next_transition_set_count,
+    distanceGreenThresholdSteps: row.distance_green_threshold_steps,
+    distanceYellowThresholdSteps: row.distance_yellow_threshold_steps,
+    motionInterpolationEnabled: sqliteBoolean(row.motion_interpolation_enabled),
     comfortableAnchorRangeMeters: row.comfortable_anchor_range_meters,
     activeDrillId: row.active_drill_id,
     selectedDrillSetId: row.selected_drill_page_id,
@@ -171,8 +265,9 @@ function fromRow(row: AppSettingsRow): AppSettings {
 
 function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
   return (
+    row.appearance_mode === settings.appearanceMode &&
     row.drill_features_enabled === boolToSql(settings.drillFeaturesEnabled) &&
-    row.drill_terminology === "sets" &&
+    row.drill_terminology === settings.drillTerminology &&
     row.field_perspective === settings.fieldPerspective &&
     row.default_field_preset === settings.defaultFieldPreset &&
     row.transition_metric_mode === settings.transitionMetricMode &&
@@ -184,6 +279,23 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
       boolToSql(settings.showComfortableAnchorRange) &&
     row.show_perimeter_step_grid ===
       boolToSql(settings.showPerimeterStepGrid) &&
+    row.show_auxiliary_field_marks ===
+      boolToSql(settings.showAuxiliaryFieldMarks) &&
+    row.show_performer_labels === boolToSql(settings.showPerformerLabels) &&
+    row.show_performer_names === boolToSql(settings.showPerformerNames) &&
+    row.show_prop_labels === boolToSql(settings.showPropLabels) &&
+    row.show_prop_names === boolToSql(settings.showPropNames) &&
+    row.show_transition_markers === boolToSql(settings.showTransitionMarkers) &&
+    row.show_all_transition_sets ===
+      boolToSql(settings.showAllTransitionSets) &&
+    row.previous_transition_set_count === settings.previousTransitionSetCount &&
+    row.next_transition_set_count === settings.nextTransitionSetCount &&
+    row.distance_green_threshold_steps ===
+      settings.distanceGreenThresholdSteps &&
+    row.distance_yellow_threshold_steps ===
+      settings.distanceYellowThresholdSteps &&
+    row.motion_interpolation_enabled ===
+      boolToSql(settings.motionInterpolationEnabled) &&
     row.comfortable_anchor_range_meters ===
       settings.comfortableAnchorRangeMeters &&
     row.active_drill_id === settings.activeDrillId &&

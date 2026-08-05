@@ -7,7 +7,8 @@ import { SourceSans3_500Medium } from '@expo-google-fonts/source-sans-3/500Mediu
 import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
 import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
 import { useFonts } from 'expo-font';
-import { useColorScheme } from 'react-native';
+import React from 'react';
+import { useColorScheme, type ColorSchemeName } from 'react-native';
 
 export const eight2FiveBaseColors = {
   blue: '#3C6EC8',
@@ -135,9 +136,48 @@ export const eight2FiveThemes = {
 
 export type Eight2FiveThemeName = keyof typeof eight2FiveThemes;
 export type Eight2FiveTheme = (typeof eight2FiveThemes)[Eight2FiveThemeName];
+export type Eight2FiveThemeMode = Eight2FiveThemeName | 'system';
+
+const Eight2FiveThemeNameContext = React.createContext<
+  Eight2FiveThemeName | undefined
+>(undefined);
+
+export function resolveEight2FiveThemeName(
+  mode: Eight2FiveThemeMode,
+  systemColorScheme: ColorSchemeName | null | undefined
+): Eight2FiveThemeName {
+  if (mode !== 'system') return mode;
+  return systemColorScheme === 'dark' ? 'dark' : 'light';
+}
+
+export function Eight2FiveThemeProvider({
+  mode,
+  children,
+}: {
+  mode: Eight2FiveThemeMode;
+  children: React.ReactNode;
+}) {
+  const systemColorScheme = useColorScheme();
+  const themeName = resolveEight2FiveThemeName(mode, systemColorScheme);
+
+  return (
+    <Eight2FiveThemeNameContext.Provider value={themeName}>
+      {children}
+    </Eight2FiveThemeNameContext.Provider>
+  );
+}
+
+export function useEight2FiveThemeName(): Eight2FiveThemeName {
+  const providedThemeName = React.useContext(Eight2FiveThemeNameContext);
+  const systemColorScheme = useColorScheme();
+  return (
+    providedThemeName ??
+    resolveEight2FiveThemeName('system', systemColorScheme)
+  );
+}
 
 export function useEight2FiveTheme(): Eight2FiveTheme {
-  return eight2FiveThemes[useColorScheme() === 'dark' ? 'dark' : 'light'];
+  return eight2FiveThemes[useEight2FiveThemeName()];
 }
 
 export function useEight2FiveFonts(): [boolean, Error | null] {

@@ -15,9 +15,10 @@ describe("app settings", () => {
 
     await expect(repository.load()).resolves.toEqual(DEFAULT_APP_SETTINGS);
     expect(fake.row).toMatchObject({
+      appearance_mode: "system",
       drill_features_enabled: 1,
       drill_terminology: "sets",
-      field_perspective: "director",
+      field_perspective: "performer",
       default_field_preset: "football-nfhs",
       transition_metric_mode: "step-size",
       guidance_enabled: 1,
@@ -25,16 +26,29 @@ describe("app settings", () => {
       show_cached_anchor_geometry: 0,
       show_comfortable_anchor_range: 0,
       show_perimeter_step_grid: 0,
+      show_auxiliary_field_marks: 1,
+      show_performer_labels: 1,
+      show_performer_names: 0,
+      show_prop_labels: 1,
+      show_prop_names: 0,
+      show_transition_markers: 1,
+      show_all_transition_sets: 0,
+      previous_transition_set_count: 1,
+      next_transition_set_count: 1,
+      distance_green_threshold_steps: 0.5,
+      distance_yellow_threshold_steps: 1,
+      motion_interpolation_enabled: 1,
       comfortable_anchor_range_meters: 20,
       active_drill_id: null,
       selected_drill_page_id: null,
     });
   });
 
-  test("normalizes invalid persisted values and pins terminology to sets", async () => {
+  test("normalizes invalid persisted values and rewrites a canonical row", async () => {
     const fake = new SettingsFakeDatabase({
+      appearance_mode: "sepia",
       drill_features_enabled: 2,
-      drill_terminology: "pages",
+      drill_terminology: "legacy",
       field_perspective: "unknown",
       default_field_preset: "unknown",
       transition_metric_mode: "unknown",
@@ -43,6 +57,18 @@ describe("app settings", () => {
       show_cached_anchor_geometry: 1,
       show_comfortable_anchor_range: 1,
       show_perimeter_step_grid: 1,
+      show_auxiliary_field_marks: "yes",
+      show_performer_labels: "yes",
+      show_performer_names: "yes",
+      show_prop_labels: "yes",
+      show_prop_names: "yes",
+      show_transition_markers: "yes",
+      show_all_transition_sets: "yes",
+      previous_transition_set_count: 1.5,
+      next_transition_set_count: Number.NaN,
+      distance_green_threshold_steps: Number.NaN,
+      distance_yellow_threshold_steps: 1,
+      motion_interpolation_enabled: "yes",
       comfortable_anchor_range_meters: Number.NaN,
       active_drill_id: 17,
       selected_drill_page_id: "",
@@ -57,7 +83,15 @@ describe("app settings", () => {
       showComfortableAnchorRange: true,
       showPerimeterStepGrid: true,
     });
-    expect(fake.row?.drill_terminology).toBe("sets");
+    expect(fake.row).toMatchObject({
+      appearance_mode: "system",
+      drill_terminology: "sets",
+      field_perspective: "performer",
+      previous_transition_set_count: 1,
+      next_transition_set_count: 1,
+      distance_green_threshold_steps: 0.5,
+      distance_yellow_threshold_steps: 1,
+    });
     expect(fake.database.runAsync).toHaveBeenCalled();
     expect(getEffectiveAppSettings(loaded)).toMatchObject({
       developerModeEnabled: false,
@@ -69,6 +103,7 @@ describe("app settings", () => {
 
   test("updates supplied fields while preserving drill/set selection", async () => {
     const fake = new SettingsFakeDatabase({
+      appearance_mode: "system",
       drill_features_enabled: 1,
       drill_terminology: "sets",
       field_perspective: "director",
@@ -79,6 +114,18 @@ describe("app settings", () => {
       show_cached_anchor_geometry: 1,
       show_comfortable_anchor_range: 1,
       show_perimeter_step_grid: 1,
+      show_auxiliary_field_marks: 0,
+      show_performer_labels: 0,
+      show_performer_names: 1,
+      show_prop_labels: 0,
+      show_prop_names: 1,
+      show_transition_markers: 0,
+      show_all_transition_sets: 1,
+      previous_transition_set_count: 2,
+      next_transition_set_count: 3,
+      distance_green_threshold_steps: 0.25,
+      distance_yellow_threshold_steps: 1.25,
+      motion_interpolation_enabled: 0,
       comfortable_anchor_range_meters: 30,
       active_drill_id: "drill-1",
       selected_drill_page_id: "set-1",
@@ -104,10 +151,61 @@ describe("app settings", () => {
     expect(updated.showPerimeterStepGrid).toBe(true);
   });
 
+  test("round trips every persisted preference field", async () => {
+    const fake = new SettingsFakeDatabase(
+      settingsRow({
+        active_drill_id: "drill-1",
+        selected_drill_page_id: "set-1",
+      }),
+    );
+    const repository = new SqliteSettingsRepository(fake.database);
+
+    const updated = await repository.update({
+      appearanceMode: "dark",
+      drillFeaturesEnabled: false,
+      drillTerminology: "pages",
+      fieldPerspective: "director",
+      defaultFieldPreset: "football-ncaa",
+      transitionMetricMode: "crossing-counts",
+      guidanceEnabled: false,
+      developerModeEnabled: true,
+      showCachedAnchorGeometry: true,
+      showComfortableAnchorRange: true,
+      showPerimeterStepGrid: true,
+      showAuxiliaryFieldMarks: false,
+      showPerformerLabels: false,
+      showPerformerNames: true,
+      showPropLabels: false,
+      showPropNames: true,
+      showTransitionMarkers: false,
+      showAllTransitionSets: true,
+      previousTransitionSetCount: 0,
+      nextTransitionSetCount: 50,
+      distanceGreenThresholdSteps: 0.75,
+      distanceYellowThresholdSteps: 1.5,
+      motionInterpolationEnabled: false,
+      comfortableAnchorRangeMeters: 30,
+    });
+
+    await expect(repository.load()).resolves.toEqual(updated);
+    expect(updated).toMatchObject({
+      appearanceMode: "dark",
+      drillTerminology: "pages",
+      previousTransitionSetCount: 0,
+      nextTransitionSetCount: 50,
+      distanceGreenThresholdSteps: 0.75,
+      distanceYellowThresholdSteps: 1.5,
+      activeDrillId: "drill-1",
+      selectedDrillSetId: "set-1",
+      selectedDrillPageId: "set-1",
+    });
+  });
+
   test("resetPreferences restores preference fields but preserves selection", async () => {
     const fake = new SettingsFakeDatabase({
+      appearance_mode: "dark",
       drill_features_enabled: 0,
-      drill_terminology: "sets",
+      drill_terminology: "pages",
       field_perspective: "performer",
       default_field_preset: "football-nfl",
       transition_metric_mode: "crossing-counts",
@@ -116,6 +214,18 @@ describe("app settings", () => {
       show_cached_anchor_geometry: 1,
       show_comfortable_anchor_range: 1,
       show_perimeter_step_grid: 1,
+      show_auxiliary_field_marks: 0,
+      show_performer_labels: 0,
+      show_performer_names: 1,
+      show_prop_labels: 0,
+      show_prop_names: 1,
+      show_transition_markers: 0,
+      show_all_transition_sets: 1,
+      previous_transition_set_count: 5,
+      next_transition_set_count: 6,
+      distance_green_threshold_steps: 0.75,
+      distance_yellow_threshold_steps: 1.5,
+      motion_interpolation_enabled: 0,
       comfortable_anchor_range_meters: 7,
       active_drill_id: "drill-1",
       selected_drill_page_id: "set-2",
@@ -131,6 +241,61 @@ describe("app settings", () => {
       selectedDrillPageId: "set-2",
     });
     expect(fake.row?.drill_terminology).toBe("sets");
+  });
+
+  test("normalizes appearance modes and accepts both terminology values", () => {
+    expect(normalizeAppSettings({ appearanceMode: "light" })).toMatchObject({
+      appearanceMode: "light",
+    });
+    expect(normalizeAppSettings({ appearanceMode: "unknown" })).toMatchObject({
+      appearanceMode: "system",
+    });
+    expect(
+      normalizeAppSettings({ drillTerminology: "sets" }).drillTerminology,
+    ).toBe("sets");
+    expect(
+      normalizeAppSettings({ drillTerminology: "pages" }).drillTerminology,
+    ).toBe("pages");
+    expect(normalizeAppSettings({}).fieldPerspective).toBe("performer");
+  });
+
+  test("bounds transition counts and preserves threshold invariants", () => {
+    expect(
+      normalizeAppSettings({
+        previousTransitionSetCount: -1,
+        nextTransitionSetCount: 51,
+      }),
+    ).toMatchObject({
+      previousTransitionSetCount: 0,
+      nextTransitionSetCount: 50,
+    });
+    expect(
+      normalizeAppSettings({
+        previousTransitionSetCount: 1.5,
+        nextTransitionSetCount: Number.NaN,
+      }),
+    ).toMatchObject({
+      previousTransitionSetCount: 1,
+      nextTransitionSetCount: 1,
+    });
+
+    const normalized = normalizeAppSettings({
+      distanceGreenThresholdSteps: 2,
+      distanceYellowThresholdSteps: 1,
+    });
+    expect(normalized.distanceGreenThresholdSteps).toBeLessThanOrEqual(
+      normalized.distanceYellowThresholdSteps,
+    );
+    expect(normalized.distanceGreenThresholdSteps).toBeGreaterThanOrEqual(0);
+    expect(
+      normalizeAppSettings({
+        distanceGreenThresholdSteps: Number.NaN,
+        distanceYellowThresholdSteps: Number.POSITIVE_INFINITY,
+      }),
+    ).toMatchObject({
+      distanceGreenThresholdSteps: 0.5,
+      distanceYellowThresholdSteps: 1,
+    });
   });
 
   test("the pure normalizer treats malformed input as defaults", () => {
@@ -194,44 +359,102 @@ class SettingsFakeDatabase {
   row: Record<string, unknown> | null;
 
   constructor(row: Record<string, unknown> | null) {
-    this.row = row;
+    this.row = row ? settingsRow(row) : null;
     this.database = {
       getFirstAsync: jest.fn(async () => (this.row ? { ...this.row } : null)),
       runAsync: jest.fn(async (sql: string, params: unknown[]) => {
         if (sql.includes("UPDATE app_settings")) {
           this.row = {
             ...(this.row ?? {}),
-            drill_features_enabled: params[0],
-            drill_terminology: "sets",
-            field_perspective: params[1],
-            default_field_preset: params[2],
-            transition_metric_mode: params[3],
-            guidance_enabled: params[4],
-            developer_mode_enabled: params[5],
-            show_cached_anchor_geometry: params[6],
-            show_comfortable_anchor_range: params[7],
-            show_perimeter_step_grid: params[8],
-            comfortable_anchor_range_meters: params[9],
+            appearance_mode: params[0],
+            drill_features_enabled: params[1],
+            drill_terminology: params[2],
+            field_perspective: params[3],
+            default_field_preset: params[4],
+            transition_metric_mode: params[5],
+            guidance_enabled: params[6],
+            developer_mode_enabled: params[7],
+            show_cached_anchor_geometry: params[8],
+            show_comfortable_anchor_range: params[9],
+            show_perimeter_step_grid: params[10],
+            show_auxiliary_field_marks: params[11],
+            show_performer_labels: params[12],
+            show_performer_names: params[13],
+            show_prop_labels: params[14],
+            show_prop_names: params[15],
+            show_transition_markers: params[16],
+            show_all_transition_sets: params[17],
+            previous_transition_set_count: params[18],
+            next_transition_set_count: params[19],
+            distance_green_threshold_steps: params[20],
+            distance_yellow_threshold_steps: params[21],
+            motion_interpolation_enabled: params[22],
+            comfortable_anchor_range_meters: params[23],
           };
         } else {
           this.row = {
-            drill_features_enabled: params[1],
-            drill_terminology: "sets",
-            field_perspective: params[2],
-            default_field_preset: params[3],
-            transition_metric_mode: params[4],
-            guidance_enabled: params[5],
-            developer_mode_enabled: params[6],
-            show_cached_anchor_geometry: params[7],
-            show_comfortable_anchor_range: params[8],
-            show_perimeter_step_grid: params[9],
-            comfortable_anchor_range_meters: params[10],
-            active_drill_id: params[11],
-            selected_drill_page_id: params[12],
+            appearance_mode: params[1],
+            drill_features_enabled: params[2],
+            drill_terminology: params[3],
+            field_perspective: params[4],
+            default_field_preset: params[5],
+            transition_metric_mode: params[6],
+            guidance_enabled: params[7],
+            developer_mode_enabled: params[8],
+            show_cached_anchor_geometry: params[9],
+            show_comfortable_anchor_range: params[10],
+            show_perimeter_step_grid: params[11],
+            show_auxiliary_field_marks: params[12],
+            show_performer_labels: params[13],
+            show_performer_names: params[14],
+            show_prop_labels: params[15],
+            show_prop_names: params[16],
+            show_transition_markers: params[17],
+            show_all_transition_sets: params[18],
+            previous_transition_set_count: params[19],
+            next_transition_set_count: params[20],
+            distance_green_threshold_steps: params[21],
+            distance_yellow_threshold_steps: params[22],
+            motion_interpolation_enabled: params[23],
+            comfortable_anchor_range_meters: params[24],
+            active_drill_id: params[25],
+            selected_drill_page_id: params[26],
           };
         }
         return { lastInsertRowId: 1, changes: 1 };
       }),
     } as unknown as SQLiteDatabase;
   }
+}
+
+function settingsRow(overrides: Record<string, unknown> = {}) {
+  return {
+    appearance_mode: "system",
+    drill_features_enabled: 1,
+    drill_terminology: "sets",
+    field_perspective: "performer",
+    default_field_preset: "football-nfhs",
+    transition_metric_mode: "step-size",
+    guidance_enabled: 1,
+    developer_mode_enabled: 0,
+    show_cached_anchor_geometry: 0,
+    show_comfortable_anchor_range: 0,
+    show_perimeter_step_grid: 0,
+    show_auxiliary_field_marks: 1,
+    show_performer_labels: 1,
+    show_performer_names: 0,
+    show_prop_labels: 1,
+    show_prop_names: 0,
+    show_transition_markers: 1,
+    show_all_transition_sets: 0,
+    previous_transition_set_count: 1,
+    next_transition_set_count: 1,
+    distance_green_threshold_steps: 0.5,
+    distance_yellow_threshold_steps: 1,
+    motion_interpolation_enabled: 1,
+    comfortable_anchor_range_meters: 20,
+    active_drill_id: null,
+    selected_drill_page_id: null,
+    ...overrides,
+  };
 }

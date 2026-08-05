@@ -1,19 +1,24 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import {
+  BookOpenText,
   Code2,
   Eye,
   ListChecks,
   Map,
   Navigation,
+  Palette,
   Radio,
   Route,
+  Rows3,
 } from "lucide-react-native";
 import type {
+  AppearanceMode,
   AppSettingsUpdate,
   FieldPerspective,
   TransitionMetricMode,
 } from "@eight2five/mobile/settings";
+import type { DrillTerminology } from "@eight2five/mobile/drill";
 import {
   FIELD_PRESET_IDS,
   getFieldPreset,
@@ -43,6 +48,17 @@ const PERSPECTIVE_CHOICES = [
   { label: "Performer", value: "performer" },
 ] as const;
 
+const APPEARANCE_CHOICES = [
+  { label: "System", value: "system" },
+  { label: "Light", value: "light" },
+  { label: "Dark", value: "dark" },
+] as const;
+
+const TERMINOLOGY_CHOICES = [
+  { label: "Sets", value: "sets" },
+  { label: "Pages", value: "pages" },
+] as const;
+
 const FIELD_PRESET_CHOICES = FIELD_PRESET_IDS.map((value) => ({
   label: getFieldPreset(value).name,
   value,
@@ -50,7 +66,7 @@ const FIELD_PRESET_CHOICES = FIELD_PRESET_IDS.map((value) => ({
 
 const TRANSITION_CHOICES = [
   { label: "Step Size", value: "step-size" },
-  { label: "Crossing Counts", value: "crossing-counts" },
+  { label: "xCounts", value: "crossing-counts" },
 ] as const;
 
 export function SettingsScreen() {
@@ -91,6 +107,19 @@ export function SettingsScreen() {
         </SettingsMessage>
       ) : null}
 
+      <SettingsSection title="Appearance">
+        <SettingsSelectRow<AppearanceMode>
+          icon={Palette}
+          title="App appearance"
+          description="Follow the system appearance or always use a light or dark theme."
+          value={settings.appearanceMode}
+          choices={APPEARANCE_CHOICES}
+          onChange={(appearanceMode) => void update({ appearanceMode })}
+          disabled={disabled}
+          testID="appearance-mode-setting"
+        />
+      </SettingsSection>
+
       <SettingsSection title="PANS">
         <SettingsNavigationRow
           icon={Radio}
@@ -119,6 +148,16 @@ export function SettingsScreen() {
           disabled={disabled}
           testID="drill-features-setting"
         />
+        <SettingsSelectRow<DrillTerminology>
+          icon={BookOpenText}
+          title="Drill terminology"
+          description="Choose whether drill positions are called Sets or Pages."
+          value={settings.drillTerminology}
+          choices={TERMINOLOGY_CHOICES}
+          onChange={(drillTerminology) => void update({ drillTerminology })}
+          disabled={disabled}
+          testID="drill-terminology-setting"
+        />
       </SettingsSection>
 
       <SettingsSection title="Field">
@@ -135,20 +174,31 @@ export function SettingsScreen() {
         <SettingsSelectRow<FieldPerspective>
           icon={Eye}
           title="Field perspective"
-          description="Choose the default semantic field view."
+          description="Choose how the field is oriented."
           value={settings.fieldPerspective}
           choices={PERSPECTIVE_CHOICES}
           onChange={(fieldPerspective) => void update({ fieldPerspective })}
           disabled={disabled}
           testID="field-perspective-setting"
         />
+        <SettingsSwitchRow
+          icon={Rows3}
+          title="Auxiliary field marks"
+          description="Show sideline one-yard extensions and the two long hash guide lines. Inbounds hash ticks remain visible."
+          value={settings.showAuxiliaryFieldMarks}
+          onChange={(showAuxiliaryFieldMarks) =>
+            void update({ showAuxiliaryFieldMarks })
+          }
+          disabled={disabled}
+          testID="auxiliary-field-marks-setting"
+        />
       </SettingsSection>
 
       <SettingsSection title="Transitions">
         <SettingsSelectRow<TransitionMetricMode>
           icon={Route}
-          title="Transition metric"
-          description="Show Step Size or yard-line crossing counts."
+          title="Step size metric"
+          description="Show Step Size or xCounts."
           value={settings.transitionMetricMode}
           choices={TRANSITION_CHOICES}
           onChange={(transitionMetricMode) =>

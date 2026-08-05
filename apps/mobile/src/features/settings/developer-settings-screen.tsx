@@ -2,7 +2,7 @@ import React from "react";
 import { useRouter } from "expo-router";
 import {
   Activity,
-  CircleDashed,
+  CircleDotDashed,
   Code2,
   Database,
   Grid3X3,
@@ -236,7 +236,7 @@ export function DeveloperSettingsScreen() {
           testID="show-cached-anchor-geometry-setting"
         />
         <SettingsSwitchRow
-          icon={CircleDashed}
+          icon={CircleDotDashed}
           title="Show comfortable anchor range"
           description="Draw an approximate planning range, not guaranteed RF coverage."
           value={
