@@ -172,7 +172,7 @@ export function MarchingCoordinateForm({
             error={validation.errors.countsFromPrevious}
             disabled={disabled}
             numeric
-            helper="Whole-number transition counts. The first set is always 0."
+            helper={`Whole-number transition counts. The first ${terms.lowercaseSingular} is always 0.`}
             onChangeText={(value) => update("countsFromPrevious", value)}
           />
           <TextField

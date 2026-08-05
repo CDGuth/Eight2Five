@@ -49,7 +49,7 @@ export async function savePageDraft({
   const validation = validatePageDraft(draft, fieldPreset);
   if (!validation.value) {
     const message =
-      Object.values(validation.errors)[0] ?? "Review the set form.";
+      Object.values(validation.errors)[0] ?? "Review the drill position form.";
     throw new Error(message);
   }
   const details = {
@@ -81,7 +81,7 @@ export function reorderedPageIds(
   direction: SetMoveDirection,
 ): readonly string[] | undefined {
   const index = sets.findIndex((set) => set.id === setId);
-  if (index < 0) throw new Error("The set to move no longer exists.");
+  if (index < 0) throw new Error("The position to move no longer exists.");
   const destination = direction === "up" ? index - 1 : index + 1;
   if (destination < 0 || destination >= sets.length) return undefined;
   const ids = sets.map((set) => set.id);

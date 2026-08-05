@@ -151,7 +151,7 @@ export function SettingsScreen() {
         <SettingsSelectRow<DrillTerminology>
           icon={BookOpenText}
           title="Drill terminology"
-          description="Choose whether drill positions are called Sets or Pages."
+          description="Choose the name used for drill positions."
           value={settings.drillTerminology}
           choices={TERMINOLOGY_CHOICES}
           onChange={(drillTerminology) => void update({ drillTerminology })}

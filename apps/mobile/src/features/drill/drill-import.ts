@@ -97,7 +97,7 @@ export async function importEight2FiveDrillDocument(
       const position = positionsBySet.get(set.id);
       if (!position) {
         throw new Error(
-          `Set ${set.number}${set.suffix ?? ""} is missing ${performer.label}'s position.`,
+          `Drill position ${set.number}${set.suffix ?? ""} is missing ${performer.label}'s coordinate.`,
         );
       }
 
@@ -180,7 +180,7 @@ function assertSelectedPerformerSupport(
   );
   if (document.sets.some((set) => !positionedSetIds.has(set.id))) {
     throw new Error(
-      `Every set must include a position for ${performer.label}.`,
+      `Every drill position must include a coordinate for ${performer.label}.`,
     );
   }
 
