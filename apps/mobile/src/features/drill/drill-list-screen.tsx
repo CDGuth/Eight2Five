@@ -1,44 +1,23 @@
 import React from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { Plus } from "lucide-react-native";
-import type { Drill } from "@eight2five/mobile/drill";
 import { FlatList } from "@eight2five/ui/components/flat-list";
-import { Heading } from "@eight2five/ui/components/heading";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
-import {
-  eight2FiveFonts,
-  eight2FiveSpacing,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { SettingsMessage } from "../settings/settings-components";
-import {
-  DrillActionsSheet,
-  confirmDeleteDrill,
-} from "./components/destructive-drill-actions";
 import { DrillEmptyState } from "./components/drill-empty-state";
 import { DrillListItem } from "./components/drill-list-item";
-import { DrillNameDialog } from "./components/drill-name-dialog";
+import { DrillPropertiesDialog } from "./components/drill-properties-dialog";
+import { PerformerSelectionDialog } from "./components/performer-selection-dialog";
 import { useDrillListController } from "./use-drill-list-controller";
 
 export function DrillListScreen() {
-  const router = useRouter();
   const theme = useEight2FiveTheme();
   const controller = useDrillListController();
-  const [actionDrill, setActionDrill] = React.useState<Drill>();
-  const [renameDrill, setRenameDrill] = React.useState<Drill>();
-
-  const openDrill = React.useCallback(
-    (drill: Drill) => router.push(`/(tabs)/drill/${drill.id}`),
-    [router],
-  );
-
-  const openActions = React.useCallback((drill: Drill) => {
-    setActionDrill(drill);
-  }, []);
 
   const renderItem = React.useCallback(
     ({ item }: { item: (typeof controller.entries)[number] }) => (
@@ -47,27 +26,18 @@ export function DrillListScreen() {
         pageCount={item.pageCount}
         terms={controller.terms}
         active={controller.activeDrillId === item.drill.id}
-        busy={controller.busyDrillId === item.drill.id}
-        onOpen={() => openDrill(item.drill)}
-        onOpenActions={() => openActions(item.drill)}
+        busy={controller.uploadBusy || controller.busyDrillId === item.drill.id}
+        onOpenInfo={() => void controller.openProperties(item.drill)}
+        onSelectPerformer={() =>
+          void controller.openPerformerSelection(item.drill)
+        }
+        onToggleActive={() =>
+          void controller.toggleActive(item.drill).catch(() => undefined)
+        }
       />
     ),
-    [controller, openActions, openDrill],
+    [controller],
   );
-
-  const beginRename = () => {
-    setRenameDrill(actionDrill);
-    setActionDrill(undefined);
-  };
-
-  const beginDelete = () => {
-    const drill = actionDrill;
-    setActionDrill(undefined);
-    if (!drill) return;
-    confirmDeleteDrill(drill, controller.terms, () => {
-      void controller.remove(drill).catch(() => undefined);
-    });
-  };
 
   return (
     <>
@@ -75,13 +45,13 @@ export function DrillListScreen() {
         options={{
           headerRight: () => (
             <Pressable
-              onPress={() => router.push("/(tabs)/drill/upload")}
+              onPress={() => void controller.pickFile()}
               accessibilityRole="button"
               accessibilityLabel="Upload Drill"
               hitSlop={8}
               style={{
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -104,58 +74,95 @@ export function DrillListScreen() {
             paddingBottom: eight2FiveSpacing.xxl,
           }}
           ListHeaderComponent={
-            <VStack style={{ gap: eight2FiveSpacing.md, marginBottom: 8 }}>
-              <Heading
-                style={{
-                  color: theme.text,
-                  fontFamily: eight2FiveFonts.styleBold,
-                }}
-              >
-                Drills
-              </Heading>
-              {controller.loading ? (
-                <Text style={{ color: theme.textMuted }}>Loading drills…</Text>
-              ) : null}
-              {controller.error ? (
-                <SettingsMessage tone="error">
-                  {controller.error.message}
-                </SettingsMessage>
-              ) : null}
-            </VStack>
+            controller.loading || controller.error ? (
+              <VStack style={{ gap: eight2FiveSpacing.sm, marginBottom: 8 }}>
+                {controller.loading ? (
+                  <Text style={{ color: theme.textMuted }}>
+                    Loading drills…
+                  </Text>
+                ) : null}
+                {controller.error ? (
+                  <SettingsMessage tone="error">
+                    {controller.error.message}
+                  </SettingsMessage>
+                ) : null}
+              </VStack>
+            ) : null
           }
           ListEmptyComponent={
             controller.loading ? null : (
               <DrillEmptyState
                 terms={controller.terms}
-                onUpload={() => router.push("/(tabs)/drill/upload")}
+                onUpload={() => void controller.pickFile()}
               />
             )
           }
         />
 
-        <DrillActionsSheet
-          drill={actionDrill}
-          active={controller.activeDrillId === actionDrill?.id}
-          onClose={() => setActionDrill(undefined)}
-          onMakeActive={() => {
-            const drill = actionDrill;
-            setActionDrill(undefined);
-            if (drill) {
-              void controller.makeActive(drill).catch(() => undefined);
+        <PerformerSelectionDialog
+          key={
+            controller.pendingImport
+              ? `import:${controller.pendingImport.fileName}`
+              : controller.performerDialog
+                ? `performer:${controller.performerDialog.drill?.id}:${controller.performerDialog.drill?.selectedPerformerEntityId ?? "none"}`
+                : "closed"
+          }
+          document={
+            controller.pendingImport?.document ??
+            controller.performerDialog?.document
+          }
+          isOpen={Boolean(
+            controller.pendingImport || controller.performerDialog,
+          )}
+          importing={
+            controller.importing || controller.busyDrillId !== undefined
+          }
+          error={
+            controller.pendingImport
+              ? controller.importError
+              : controller.performerError
+          }
+          selectedPerformerEntityId={
+            controller.performerDialog?.drill?.selectedPerformerEntityId
+          }
+          title={
+            controller.pendingImport ? "Select your dot" : "Change performer"
+          }
+          confirmLabel={controller.pendingImport ? "Use This Dot" : "Save"}
+          onClose={() => {
+            if (controller.pendingImport) controller.cancelPendingImport();
+            else controller.closePerformerSelection();
+          }}
+          onConfirm={async (performerEntityId) => {
+            if (controller.pendingImport) {
+              await controller.importPendingDocument(performerEntityId);
+            } else {
+              await controller.selectPerformer(performerEntityId);
             }
           }}
-          onRename={beginRename}
-          onDelete={beginDelete}
         />
-        <DrillNameDialog
-          isOpen={Boolean(renameDrill)}
-          initialValue={renameDrill?.name ?? ""}
-          saving={controller.busyDrillId === renameDrill?.id}
-          onClose={() => setRenameDrill(undefined)}
-          onSave={async (name) => {
-            if (!renameDrill) return;
-            await controller.rename(renameDrill, name);
-            setRenameDrill(undefined);
+
+        <DrillPropertiesDialog
+          key={
+            controller.propertiesDialog
+              ? `${controller.propertiesDialog.drill.id}:${controller.propertiesDialog.drill.updatedAt}`
+              : "closed"
+          }
+          drill={controller.propertiesDialog?.drill}
+          document={controller.propertiesDialog?.document}
+          terms={controller.terms}
+          isOpen={Boolean(controller.propertiesDialog)}
+          loading={controller.propertiesLoading}
+          saving={
+            controller.busyDrillId === controller.propertiesDialog?.drill.id
+          }
+          error={controller.propertiesError}
+          onClose={controller.closeProperties}
+          onSave={controller.updateProperties}
+          onDelete={async () => {
+            const drill = controller.propertiesDialog?.drill;
+            if (!drill) return;
+            await controller.remove(drill);
           }}
         />
       </VStack>

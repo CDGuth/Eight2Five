@@ -189,6 +189,72 @@ describe("SqliteDrillRepository", () => {
     );
   });
 
+  test("updates imported properties transactionally in the summary and document", async () => {
+    const fake = new DrillFakeDatabase();
+    const repository = new SqliteDrillRepository(fake.database, {
+      timeFactory: () => 123,
+    });
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+
+    await expect(
+      repository.updateDrillProperties(drill.id, {
+        name: "Updated Finale",
+        lucideIcon: "sparkles",
+      }),
+    ).resolves.toMatchObject({
+      name: "Updated Finale",
+      metadata: expect.objectContaining({
+        title: "Updated Finale",
+        lucideIcon: "sparkles",
+      }),
+      updatedAt: 123,
+    });
+    expect(await repository.getDrillDocument(drill.id)).toEqual({
+      ...IMPORTED_DOCUMENT,
+      metadata: {
+        ...IMPORTED_DOCUMENT.metadata,
+        title: "Updated Finale",
+        lucideIcon: "sparkles",
+      },
+    });
+    expect(fake.drills.get(drill.id)).toMatchObject({
+      name: "Updated Finale",
+      metadata_title: "Updated Finale",
+      metadata_lucide_icon: "sparkles",
+    });
+    expect(fake.database.withTransactionAsync).toHaveBeenCalled();
+
+    await repository.updateDrillProperties(drill.id, { lucideIcon: null });
+    expect((await repository.getDrillDocument(drill.id))?.metadata).toEqual({
+      createdAt: IMPORTED_DOCUMENT.metadata.createdAt,
+      drillWriter: IMPORTED_DOCUMENT.metadata.drillWriter,
+      ensemble: IMPORTED_DOCUMENT.metadata.ensemble,
+      description: IMPORTED_DOCUMENT.metadata.description,
+      title: "Updated Finale",
+    });
+  });
+
+  test("rejects invalid drill property values without changing the document", async () => {
+    const fake = new DrillFakeDatabase();
+    const repository = new SqliteDrillRepository(fake.database);
+    const drill = await repository.createImportedDrill({
+      id: "imported",
+      sourceDocument: IMPORTED_DOCUMENT,
+      selectedPerformerEntityId: 10,
+    });
+
+    await expect(
+      repository.updateDrillProperties(drill.id, { lucideIcon: "Not An Icon" }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(await repository.getDrillDocument(drill.id)).toEqual(
+      IMPORTED_DOCUMENT,
+    );
+  });
+
   test("rejects imported fields passed through manual drill creation", async () => {
     const fake = new DrillFakeDatabase();
     const repository = new SqliteDrillRepository(fake.database, {
@@ -881,6 +947,41 @@ class DrillFakeDatabase {
           ...row,
           selected_performer_entity_id: selectedPerformerEntityId,
         });
+      }
+    } else if (
+      sql.includes("UPDATE drills") &&
+      sql.includes("metadata_lucide_icon")
+    ) {
+      const row = this.drills.get(String(params[params.length - 1]));
+      if (row) {
+        const hasSourceDocument = sql.includes("source_document_json");
+        if (hasSourceDocument) {
+          const [name, metadataTitle, icon, sourceDocumentJson, updatedAt] =
+            params as [string, string, string | null, string, number, string];
+          this.drills.set(row.id, {
+            ...row,
+            name,
+            metadata_title: metadataTitle,
+            metadata_lucide_icon: icon,
+            source_document_json: sourceDocumentJson,
+            updated_at: updatedAt,
+          });
+        } else {
+          const [name, metadataTitle, icon, updatedAt] = params as [
+            string,
+            string,
+            string | null,
+            number,
+            string,
+          ];
+          this.drills.set(row.id, {
+            ...row,
+            name,
+            metadata_title: metadataTitle,
+            metadata_lucide_icon: icon,
+            updated_at: updatedAt,
+          });
+        }
       }
     } else if (sql.includes("UPDATE drills")) {
       const [name, updatedAt, id] = params as [string, number, string];

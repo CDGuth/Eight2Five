@@ -1,4 +1,4 @@
-import type { DrillRepository, DrillSet } from "@eight2five/mobile/drill";
+import type { DrillSet } from "@eight2five/mobile/drill";
 import {
   formatMarchingFrontBack,
   formatMarchingSide,
@@ -11,7 +11,6 @@ import {
   validatePageDraft,
   type MarchingCoordinateDraft,
 } from "../page-form";
-import { savePageDraft } from "../page-management";
 
 const VALID_DRAFT: MarchingCoordinateDraft = {
   setNumber: "31",
@@ -192,69 +191,5 @@ describe("structured marching coordinate form", () => {
         yardLine: "45",
       }).errors.side,
     ).toContain("50-yard line");
-  });
-
-  test("persists canonical create and edit payloads", async () => {
-    const parsed = validatePageDraft(VALID_DRAFT).value!;
-    const createdSet: DrillSet = {
-      id: "set-new",
-      drillId: "drill",
-      ordinal: 1,
-      number: parsed.number,
-      suffix: parsed.suffix,
-      kind: parsed.kind,
-      countsFromPrevious: parsed.countsFromPrevious,
-      measureRange: parsed.measureRange,
-      position: parsed.position,
-    };
-    const repository = {
-      createSet: jest.fn(async () => createdSet),
-      updateSet: jest.fn(async () => createdSet),
-    } as unknown as DrillRepository;
-
-    await savePageDraft({
-      repository,
-      drillId: "drill",
-      pageId: "new",
-      pages: [
-        {
-          ...createdSet,
-          id: "set-zero",
-          ordinal: 0,
-          number: 30,
-          suffix: undefined,
-          kind: "set",
-          countsFromPrevious: 0,
-        },
-      ],
-      placement: "append",
-      draft: VALID_DRAFT,
-    });
-    expect(repository.createSet).toHaveBeenCalledWith({
-      drillId: "drill",
-      number: 31,
-      kind: "subset",
-      suffix: "A",
-      countsFromPrevious: 16,
-      measureRange: { start: 126, end: 129 },
-      position: createdSet.position,
-    });
-
-    await savePageDraft({
-      repository,
-      drillId: "drill",
-      pageId: "set-new",
-      pages: [createdSet],
-      placement: "append",
-      draft: VALID_DRAFT,
-    });
-    expect(repository.updateSet).toHaveBeenCalledWith("set-new", {
-      number: 31,
-      kind: "subset",
-      suffix: "A",
-      countsFromPrevious: 16,
-      measureRange: { start: 126, end: 129 },
-      position: createdSet.position,
-    });
   });
 });

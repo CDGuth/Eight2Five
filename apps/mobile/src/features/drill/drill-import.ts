@@ -1,4 +1,8 @@
 import type { Drill, DrillRepository } from "@eight2five/mobile/drill";
+import type {
+  DocumentPickerAsset,
+  DocumentPickerResult,
+} from "expo-document-picker";
 import {
   safeParseDrillDocument,
   type DrillDocument,
@@ -7,6 +11,11 @@ import {
 
 export const EIGHT2FIVE_DRILL_FILE_SUFFIX = ".eight2five.json";
 export const MAX_DRILL_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+export interface ParsedDrillPickerResult {
+  readonly document: DrillDocument;
+  readonly fileName: string;
+}
 
 export interface PerformerSymbolGroup {
   readonly symbol: string;
@@ -19,6 +28,43 @@ export function isEight2FiveDrillFileName(fileName: string): boolean {
     normalized === "eight2five.json" ||
     normalized.endsWith(EIGHT2FIVE_DRILL_FILE_SUFFIX)
   );
+}
+
+/**
+ * Applies the existing file-name and size checks to a native picker asset,
+ * then reads and validates its JSON through the caller-provided Expo file
+ * reader. Keeping the reader injectable makes the import boundary testable
+ * without a native document picker or filesystem.
+ */
+export async function parseDrillPickerResult(
+  result: DocumentPickerResult,
+  readText: (uri: string) => Promise<string>,
+): Promise<ParsedDrillPickerResult | undefined> {
+  if (result.canceled) return undefined;
+  const asset = result.assets[0];
+  if (!asset) return undefined;
+  return {
+    document: await parseDrillPickerAsset(asset, readText),
+    fileName: asset.name,
+  };
+}
+
+export async function parseDrillPickerAsset(
+  asset: Pick<DocumentPickerAsset, "name" | "size" | "uri">,
+  readText: (uri: string) => Promise<string>,
+): Promise<DrillDocument> {
+  if (!isEight2FiveDrillFileName(asset.name)) {
+    throw new Error(`Select a file ending in ${EIGHT2FIVE_DRILL_FILE_SUFFIX}.`);
+  }
+  if (typeof asset.size === "number" && asset.size > MAX_DRILL_UPLOAD_BYTES) {
+    throw new Error("The selected drill file is too large to import.");
+  }
+
+  const json = await readText(asset.uri);
+  if (json.length > MAX_DRILL_UPLOAD_BYTES) {
+    throw new Error("The selected drill file is too large to import.");
+  }
+  return parseImportableDrillJson(json);
 }
 
 export function parseImportableDrillJson(json: string): DrillDocument {

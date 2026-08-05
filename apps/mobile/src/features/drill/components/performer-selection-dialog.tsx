@@ -34,6 +34,9 @@ interface PerformerSelectionDialogProps {
   readonly isOpen: boolean;
   readonly importing: boolean;
   readonly error?: Error;
+  readonly selectedPerformerEntityId?: number;
+  readonly title?: string;
+  readonly confirmLabel?: string;
   readonly onClose: () => void;
   readonly onConfirm: (performerEntityId: number) => Promise<void>;
 }
@@ -50,6 +53,9 @@ function PerformerSelectionDialogContent({
   isOpen,
   importing,
   error,
+  selectedPerformerEntityId,
+  title = "Select your dot",
+  confirmLabel = "Use This Dot",
   onClose,
   onConfirm,
 }: PerformerSelectionDialogProps & { readonly document: DrillDocument }) {
@@ -59,9 +65,15 @@ function PerformerSelectionDialogContent({
     () => getPerformerSymbolGroups(document),
     [document],
   );
-  const [selectedSymbol, setSelectedSymbol] = React.useState(groups[0]?.symbol);
-  const [selectedPerformer, setSelectedPerformer] =
-    React.useState<DrillEntity>();
+  const initiallySelectedPerformer = groups
+    .flatMap((group) => group.performers)
+    .find((performer) => performer.id === selectedPerformerEntityId);
+  const [selectedSymbol, setSelectedSymbol] = React.useState(
+    initiallySelectedPerformer?.symbol ?? groups[0]?.symbol,
+  );
+  const [selectedPerformer, setSelectedPerformer] = React.useState<
+    DrillEntity | undefined
+  >(initiallySelectedPerformer);
   const visiblePerformers =
     groups.find((group) => group.symbol === selectedSymbol)?.performers ?? [];
   const listHeight = Math.min(380, Math.max(230, height * 0.45));
@@ -77,7 +89,7 @@ function PerformerSelectionDialogContent({
       <ModalBackdrop />
       <ModalContent>
         <ModalHeader>
-          <Heading size="md">Select your dot</Heading>
+          <Heading size="md">{title}</Heading>
         </ModalHeader>
         <ModalBody>
           <VStack style={{ gap: eight2FiveSpacing.md }}>
@@ -225,7 +237,7 @@ function PerformerSelectionDialogContent({
             isDisabled={!selectedPerformer || importing}
           >
             {importing ? <ButtonSpinner /> : null}
-            <ButtonText>{importing ? "Importing…" : "Use This Dot"}</ButtonText>
+            <ButtonText>{importing ? "Saving…" : confirmLabel}</ButtonText>
           </Button>
         </ModalFooter>
       </ModalContent>

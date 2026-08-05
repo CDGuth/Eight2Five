@@ -1,5 +1,8 @@
-import type { Drill, DrillRepository } from "@eight2five/mobile/drill";
-import type { FieldPresetId } from "@eight2five/drill-schema";
+import {
+  type Drill,
+  type DrillRepository,
+  type DrillTerms,
+} from "@eight2five/mobile/drill";
 
 export const DRILL_NAME_MAX_LENGTH = 80;
 
@@ -21,6 +24,24 @@ export function validateDrillName(value: string): string | undefined {
   return undefined;
 }
 
+export function formatDrillCount(count: number, terms: DrillTerms): string {
+  return `${count} ${count === 1 ? terms.singular : terms.plural}`;
+}
+
+export function getDrillCardActionLabels(drillName: string): {
+  readonly info: string;
+  readonly performer: string;
+  readonly activate: string;
+  readonly deactivate: string;
+} {
+  return {
+    info: `Info for ${drillName}`,
+    performer: `Select performer for ${drillName}`,
+    activate: `Activate ${drillName}`,
+    deactivate: `Deactivate ${drillName}`,
+  };
+}
+
 export async function loadDrillList(
   repository: DrillRepository,
 ): Promise<readonly DrillListEntry[]> {
@@ -33,29 +54,6 @@ export async function loadDrillList(
     drill,
     pageCount: pageCounts[index],
   }));
-}
-
-export async function createNamedDrill(
-  repository: DrillRepository,
-  value: string,
-  fieldPreset: FieldPresetId = "football-nfhs",
-): Promise<Drill> {
-  const error = validateDrillName(value);
-  if (error) throw new Error(error);
-  return await repository.createDrill({
-    name: normalizeDrillName(value),
-    fieldPreset,
-  });
-}
-
-export async function renameNamedDrill(
-  repository: DrillRepository,
-  drillId: string,
-  value: string,
-): Promise<Drill> {
-  const error = validateDrillName(value);
-  if (error) throw new Error(error);
-  return await repository.renameDrill(drillId, normalizeDrillName(value));
 }
 
 export async function deleteDrillAndRefreshSettings(

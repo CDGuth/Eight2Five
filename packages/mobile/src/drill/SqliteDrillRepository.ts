@@ -72,6 +72,19 @@ export interface UpdateDrillSetInput {
   readonly facingDegrees?: number | null;
 }
 
+/**
+ * Updates the list-facing properties of a drill. Imported drills keep their
+ * canonical document and the query-friendly summary in sync in one
+ * transaction.
+ */
+export interface UpdateDrillPropertiesInput {
+  readonly name?: string;
+  /** Alias for name for callers that use the portable metadata vocabulary. */
+  readonly title?: string;
+  /** Pass null to remove the optional icon; omit it to keep the current icon. */
+  readonly lucideIcon?: string | null;
+}
+
 /** @deprecated Use CreateDrillSetDetails. */
 export type CreateDrillPageDetails = CreateDrillSetDetails;
 /** @deprecated Use CreateDrillSetInput. */
@@ -91,6 +104,11 @@ export interface DrillRepository {
   /** Creates an imported drill and its local selected-performer projection atomically. */
   createImportedDrill(input: CreateImportedDrillInput): Promise<Drill>;
   renameDrill(id: string, name: string, updatedAt?: number): Promise<Drill>;
+  updateDrillProperties(
+    id: string,
+    input: UpdateDrillPropertiesInput,
+    updatedAt?: number,
+  ): Promise<Drill>;
   deleteDrill(id: string): Promise<void>;
   getDrillDocument(drillId: string): Promise<DrillDocument | undefined>;
   setSelectedPerformer(drillId: string, entityId: number): Promise<Drill>;
@@ -349,6 +367,78 @@ export class SqliteDrillRepository implements DrillRepository {
         [nextName, nextName, nextUpdatedAt, id],
       );
     }
+    return requireValue(await this.getDrill(id), "drill", id);
+  }
+
+  async updateDrillProperties(
+    idValue: string,
+    input: UpdateDrillPropertiesInput,
+    updatedAt?: number,
+  ): Promise<Drill> {
+    const id = assertId(idValue, "Drill id");
+    const current = await this.requireDrill(id);
+    if (input.name !== undefined && input.title !== undefined) {
+      throw invalidInput("Use either drill name or title, not both.");
+    }
+    const requestedName = input.name ?? input.title;
+    const name =
+      requestedName === undefined
+        ? current.name
+        : assertText(requestedName, "Drill name");
+    const lucideIconChanged = input.lucideIcon !== undefined;
+    const lucideIcon = normalizeLucideIcon(
+      lucideIconChanged ? input.lucideIcon : current.metadata?.lucideIcon,
+    );
+    const nextUpdatedAt = assertTimestamp(
+      updatedAt ?? this.timeFactory(),
+      "Drill updatedAt",
+    );
+    const sourceDocument = await this.getDrillDocument(id);
+    const nextMetadata = updateMetadataProperties(
+      sourceDocument?.metadata ?? current.metadata,
+      name,
+      lucideIcon,
+      lucideIconChanged,
+    );
+    const sourceDocumentJson = sourceDocument
+      ? serializeValidatedDrillDocument({
+          ...sourceDocument,
+          metadata: nextMetadata,
+        })
+      : undefined;
+
+    await this.db.withTransactionAsync(async () => {
+      if (sourceDocumentJson === undefined) {
+        await this.db.runAsync(
+          `UPDATE ${DRILLS_TABLE}
+           SET name = ?, metadata_title = ?, metadata_lucide_icon = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            name,
+            nextMetadata.title,
+            nextMetadata.lucideIcon ?? null,
+            nextUpdatedAt,
+            id,
+          ],
+        );
+      } else {
+        await this.db.runAsync(
+          `UPDATE ${DRILLS_TABLE}
+           SET name = ?, metadata_title = ?, metadata_lucide_icon = ?,
+               source_document_json = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            name,
+            nextMetadata.title,
+            nextMetadata.lucideIcon ?? null,
+            sourceDocumentJson,
+            nextUpdatedAt,
+            id,
+          ],
+        );
+      }
+    });
+
     return requireValue(await this.getDrill(id), "drill", id);
   }
 
@@ -1080,6 +1170,44 @@ function normalizeMetadata(
       ? {}
       : { lucideIcon: metadata.lucideIcon }),
   };
+}
+
+function updateMetadataProperties(
+  metadata: DrillMetadata | undefined,
+  name: string,
+  lucideIcon: string | undefined,
+  lucideIconChanged: boolean,
+): DrillMetadata {
+  if (!metadata) {
+    return {
+      title: name,
+      createdAt: timestampToIso(Date.now()),
+      ...(lucideIcon === undefined ? {} : { lucideIcon }),
+    };
+  }
+  const existingMetadata =
+    lucideIconChanged && lucideIcon === undefined
+      ? (() => {
+          const { lucideIcon: _ignored, ...rest } = metadata;
+          return rest;
+        })()
+      : metadata;
+  return {
+    ...existingMetadata,
+    title: name,
+    ...(!lucideIconChanged || lucideIcon === undefined ? {} : { lucideIcon }),
+  };
+}
+
+function normalizeLucideIcon(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.trim())
+  ) {
+    throw invalidInput("Drill Lucide icon must be a kebab-case icon name.");
+  }
+  return value.trim();
 }
 
 function assertSelectedPerformer(

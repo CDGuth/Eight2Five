@@ -2,12 +2,13 @@ import type { DrillRepository } from "@eight2five/mobile/drill";
 
 import {
   DRILL_NAME_MAX_LENGTH,
-  createNamedDrill,
   deleteDrillAndRefreshSettings,
+  formatDrillCount,
+  getDrillCardActionLabels,
   loadDrillList,
-  renameNamedDrill,
   validateDrillName,
 } from "../drill-management";
+import { getDrillTerms } from "@eight2five/mobile/drill";
 
 describe("manual drill management", () => {
   test("loads deterministic drill rows with page counts and supports empty state", async () => {
@@ -43,50 +44,24 @@ describe("manual drill management", () => {
     await expect(loadDrillList(repository)).resolves.toEqual([]);
   });
 
-  test("trims and validates names for create and rename", async () => {
-    const created = { id: "new", name: "Show", createdAt: 1, updatedAt: 1 };
-    const repository = {
-      createDrill: jest.fn(async () => created),
-      renameDrill: jest.fn(async () => ({ ...created, name: "Finale" })),
-    } as unknown as DrillRepository;
-
-    await expect(createNamedDrill(repository, "  Show  ")).resolves.toBe(
-      created,
-    );
-    expect(repository.createDrill).toHaveBeenCalledWith({
-      name: "Show",
-      fieldPreset: "football-nfhs",
-    });
-    await renameNamedDrill(repository, "new", "  Finale ");
-    expect(repository.renameDrill).toHaveBeenCalledWith("new", "Finale");
-
+  test("validates names for properties editing", () => {
     expect(validateDrillName("   ")).toBe("Enter a drill name.");
     expect(validateDrillName("x".repeat(DRILL_NAME_MAX_LENGTH + 1))).toContain(
       String(DRILL_NAME_MAX_LENGTH),
     );
-    await expect(createNamedDrill(repository, " ")).rejects.toThrow(
-      "Enter a drill name",
-    );
   });
 
-  test("uses the selected default field preset for a new manual drill", async () => {
-    const created = {
-      id: "new",
-      name: "College Show",
-      fieldPreset: "football-ncaa" as const,
-      createdAt: 1,
-      updatedAt: 1,
-    };
-    const repository = {
-      createDrill: jest.fn(async () => created),
-    } as unknown as DrillRepository;
+  test("formats card counts using the selected terminology", () => {
+    expect(formatDrillCount(1, getDrillTerms("sets"))).toBe("1 Set");
+    expect(formatDrillCount(3, getDrillTerms("pages"))).toBe("3 Pages");
+  });
 
-    await expect(
-      createNamedDrill(repository, "College Show", "football-ncaa"),
-    ).resolves.toBe(created);
-    expect(repository.createDrill).toHaveBeenCalledWith({
-      name: "College Show",
-      fieldPreset: "football-ncaa",
+  test("provides accessible labels for the three card actions", () => {
+    expect(getDrillCardActionLabels("Finale")).toEqual({
+      info: "Info for Finale",
+      performer: "Select performer for Finale",
+      activate: "Activate Finale",
+      deactivate: "Deactivate Finale",
     });
   });
 

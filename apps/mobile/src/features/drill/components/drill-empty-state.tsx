@@ -1,4 +1,4 @@
-import { FileUp, NotebookTabs } from "lucide-react-native";
+import { FileUp } from "lucide-react-native";
 import type { DrillTerms } from "@eight2five/mobile/drill";
 import {
   Button,
@@ -7,7 +7,6 @@ import {
 } from "@eight2five/ui/components/button";
 import { Center } from "@eight2five/ui/components/center";
 import { Heading } from "@eight2five/ui/components/heading";
-import { Icon } from "@eight2five/ui/components/icon";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -30,7 +29,6 @@ export function DrillEmptyState({
         className="items-center"
         style={{ gap: eight2FiveSpacing.md, maxWidth: 420 }}
       >
-        <Icon as={NotebookTabs} size="xl" style={{ color: theme.accent }} />
         <Heading
           className="text-center"
           style={{ color: theme.text, fontFamily: eight2FiveFonts.styleBold }}

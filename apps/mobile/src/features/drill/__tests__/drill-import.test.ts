@@ -11,6 +11,7 @@ import {
   importEight2FiveDrillDocument,
   importEight2FiveDrillJson,
   isEight2FiveDrillFileName,
+  parseDrillPickerResult,
   parseImportableDrillJson,
 } from "../drill-import";
 
@@ -91,6 +92,46 @@ function createRepository() {
 }
 
 describe("Eight2Five drill import", () => {
+  test("treats a canceled native picker result as a no-op", async () => {
+    const readText = jest.fn(async () => JSON.stringify(VALID_DOCUMENT));
+
+    await expect(
+      parseDrillPickerResult(
+        { canceled: true, assets: null } as const,
+        readText,
+      ),
+    ).resolves.toBeUndefined();
+    expect(readText).not.toHaveBeenCalled();
+  });
+
+  test("preserves picker file rules while reading the selected asset", async () => {
+    const readText = jest.fn(async (uri: string) => {
+      expect(uri).toBe("file:///cache/finale.json");
+      return JSON.stringify(VALID_DOCUMENT);
+    });
+
+    await expect(
+      parseDrillPickerResult(
+        {
+          canceled: false,
+          assets: [
+            {
+              name: "finale.eight2five.json",
+              size: 128,
+              uri: "file:///cache/finale.json",
+              mimeType: "application/json",
+              lastModified: 0,
+            },
+          ],
+        },
+        readText,
+      ),
+    ).resolves.toEqual({
+      document: VALID_DOCUMENT,
+      fileName: "finale.eight2five.json",
+    });
+  });
+
   test("recognizes the converter drill file extension", () => {
     expect(isEight2FiveDrillFileName("finale.eight2five.json")).toBe(true);
     expect(isEight2FiveDrillFileName("EIGHT2FIVE.JSON")).toBe(true);
