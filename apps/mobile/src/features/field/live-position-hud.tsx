@@ -1,0 +1,311 @@
+import React from "react";
+import { Animated, Easing } from "react-native";
+import {
+  BluetoothConnected,
+  BluetoothOff,
+  LoaderCircle,
+  RulerDimensionLine,
+  TriangleAlert,
+} from "lucide-react-native";
+import type {
+  FieldConnectionState,
+  FieldLivePositionState,
+  FieldPoint,
+} from "@eight2five/mobile/field";
+import type { FieldPresetId } from "@eight2five/drill-schema";
+import { Divider } from "@eight2five/ui/components/divider";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Icon } from "@eight2five/ui/components/icon";
+import { Pressable } from "@eight2five/ui/components/pressable";
+import { Text } from "@eight2five/ui/components/text";
+import { VStack } from "@eight2five/ui/components/vstack";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
+
+import {
+  getLiveCoordinateLines,
+  getTargetDistancePresentation,
+  type DistanceTone,
+} from "./live-position-hud-state";
+
+export function LivePositionSquare({
+  diameter,
+  live,
+  target,
+  fieldPreset,
+  greenThresholdSteps,
+  yellowThresholdSteps,
+  onOpenTagConnection,
+}: {
+  readonly diameter: number;
+  readonly live: FieldLivePositionState;
+  readonly target?: FieldPoint;
+  readonly fieldPreset: FieldPresetId;
+  readonly greenThresholdSteps: number;
+  readonly yellowThresholdSteps: number;
+  readonly onOpenTagConnection: () => void;
+}) {
+  const theme = useEight2FiveTheme();
+  const distance = getTargetDistancePresentation({
+    live,
+    target,
+    greenThresholdSteps,
+    yellowThresholdSteps,
+  });
+  const distanceColor = colorForDistanceTone(distance.tone, theme);
+
+  return (
+    <VStack
+      style={{
+        width: diameter,
+        height: diameter,
+        overflow: "hidden",
+        borderRadius: Math.min(eight2FiveRadii.lg, diameter * 0.16),
+        borderCurve: "continuous",
+        backgroundColor: theme.surfaceRaised,
+        boxShadow: `0 5px 18px ${theme.shadowStrong}`,
+      }}
+      testID="live-position-square"
+    >
+      <LivePositionHeader
+        live={live}
+        fieldPreset={fieldPreset}
+        compact={diameter < 140}
+        onOpenTagConnection={onOpenTagConnection}
+      />
+      <Divider style={{ backgroundColor: theme.border }} />
+      <HStack
+        className="flex-1 items-center"
+        style={{
+          gap: eight2FiveSpacing.sm,
+          paddingHorizontal: Math.max(10, diameter * 0.09),
+        }}
+      >
+        <Icon
+          as={RulerDimensionLine}
+          size="lg"
+          style={{ color: distanceColor }}
+        />
+        <Text
+          className="flex-1 text-right"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={{
+            color: distanceColor,
+            fontFamily: eight2FiveFonts.utilitySemibold,
+            fontSize: Math.max(14, diameter * 0.11),
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {distance.value}
+        </Text>
+      </HStack>
+    </VStack>
+  );
+}
+
+export function LiveOnlyPill({
+  width,
+  live,
+  fieldPreset,
+  onOpenTagConnection,
+}: {
+  readonly width: number;
+  readonly live: FieldLivePositionState;
+  readonly fieldPreset: FieldPresetId;
+  readonly onOpenTagConnection: () => void;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <VStack
+      style={{
+        width,
+        minHeight: 76,
+        borderRadius: eight2FiveRadii.lg,
+        borderCurve: "continuous",
+        backgroundColor: theme.surfaceRaised,
+        boxShadow: `0 5px 18px ${theme.shadowStrong}`,
+      }}
+      testID="live-only-pill"
+    >
+      <LivePositionHeader
+        live={live}
+        fieldPreset={fieldPreset}
+        onOpenTagConnection={onOpenTagConnection}
+      />
+    </VStack>
+  );
+}
+
+function LivePositionHeader({
+  live,
+  fieldPreset,
+  compact = false,
+  onOpenTagConnection,
+}: {
+  readonly live: FieldLivePositionState;
+  readonly fieldPreset: FieldPresetId;
+  readonly compact?: boolean;
+  readonly onOpenTagConnection: () => void;
+}) {
+  const theme = useEight2FiveTheme();
+  const coordinate = getLiveCoordinateLines(live, fieldPreset);
+  return (
+    <HStack
+      className="flex-1 items-center"
+      style={{
+        gap: compact ? 6 : eight2FiveSpacing.sm,
+        paddingHorizontal: compact ? 8 : 12,
+        paddingVertical: 8,
+      }}
+    >
+      <BluetoothStatusButton
+        state={live.connectionState}
+        onPress={onOpenTagConnection}
+      />
+      <Text
+        className="flex-1 text-right"
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.68}
+        style={{
+          color: coordinate ? theme.text : theme.textMuted,
+          fontFamily: eight2FiveFonts.utilitySemibold,
+          fontSize: compact ? 13 : 16,
+          lineHeight: compact ? 16 : 19,
+        }}
+      >
+        {coordinate ? `${coordinate.side}\n${coordinate.frontBack}` : "–"}
+      </Text>
+    </HStack>
+  );
+}
+
+function BluetoothStatusButton({
+  state,
+  onPress,
+}: {
+  readonly state: FieldConnectionState;
+  readonly onPress: () => void;
+}) {
+  const theme = useEight2FiveTheme();
+  const [spin] = React.useState(() => new Animated.Value(0));
+  const animated = state === "connecting" || state === "reconnecting";
+  React.useEffect(() => {
+    if (!animated) {
+      spin.stopAnimation();
+      spin.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [animated, spin]);
+
+  const presentation = getConnectionIconPresentation(state);
+  const color =
+    presentation.tone === "success"
+      ? theme.success
+      : presentation.tone === "accent"
+        ? theme.accent
+        : presentation.tone === "danger"
+          ? theme.danger
+          : theme.textMuted;
+  const icon = <Icon as={presentation.icon} size="lg" style={{ color }} />;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${presentation.label}. Open tag connection`}
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        width: 44,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 22,
+        backgroundColor: theme.surface,
+      }}
+      testID="open-tag-connection"
+    >
+      {animated ? (
+        <Animated.View
+          style={{
+            transform: [
+              {
+                rotate: spin.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["0deg", "360deg"],
+                }),
+              },
+            ],
+          }}
+        >
+          {icon}
+        </Animated.View>
+      ) : (
+        icon
+      )}
+    </Pressable>
+  );
+}
+
+function getConnectionIconPresentation(state: FieldConnectionState) {
+  switch (state) {
+    case "connected":
+      return {
+        label: "Connected",
+        icon: BluetoothConnected,
+        tone: "success" as const,
+      };
+    case "connecting":
+    case "reconnecting":
+      return {
+        label: state === "connecting" ? "Connecting" : "Reconnecting",
+        icon: LoaderCircle,
+        tone: "accent" as const,
+      };
+    case "error":
+      return {
+        label: "Connection error",
+        icon: TriangleAlert,
+        tone: "danger" as const,
+      };
+    case "idle":
+    case "disconnected":
+      return {
+        label: "Disconnected",
+        icon: BluetoothOff,
+        tone: "muted" as const,
+      };
+  }
+}
+
+function colorForDistanceTone(
+  tone: DistanceTone,
+  theme: ReturnType<typeof useEight2FiveTheme>,
+): string {
+  switch (tone) {
+    case "success":
+      return theme.success;
+    case "warning":
+      return theme.warning;
+    case "danger":
+      return theme.danger;
+    case "muted":
+      return theme.textMuted;
+  }
+}

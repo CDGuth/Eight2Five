@@ -20,6 +20,7 @@ import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Input, InputField } from "@eight2five/ui/components/input";
 import { Pressable } from "@eight2five/ui/components/pressable";
+import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
@@ -57,7 +58,11 @@ export function TagConnectionScreen() {
 }
 
 /** Shared route/modal body. Discovery ownership follows focus lifecycle. */
-export function TagConnectionContent() {
+export function TagConnectionContent({
+  modal = false,
+}: {
+  readonly modal?: boolean;
+}) {
   const router = useRouter();
   const theme = useEight2FiveTheme();
   const store = useMobilePansStore();
@@ -93,7 +98,7 @@ export function TagConnectionContent() {
       return ownTagDiscoveryWhileFocused(
         store,
         snapshot.initialization === "ready",
-        false,
+        store.getSnapshot().connectionState === "connected",
         setError,
       );
     }, [snapshot.initialization, store]),
@@ -112,8 +117,8 @@ export function TagConnectionContent() {
     }
   };
 
-  return (
-    <SettingsScreenContainer>
+  const content = (
+    <>
       {snapshot.error || error ? (
         <SettingsMessage tone="error">
           {(error ?? snapshot.error)?.message}
@@ -246,12 +251,14 @@ export function TagConnectionContent() {
             disabled={operation}
             testID="active-network-setting"
           />
-          <SettingsNavigationRow
-            icon={Network}
-            title="Manage networks and anchors"
-            onPress={() => router.push("/(tabs)/settings/networks" as never)}
-            testID="network-management-link"
-          />
+          {!modal ? (
+            <SettingsNavigationRow
+              icon={Network}
+              title="Manage networks and anchors"
+              onPress={() => router.push("/(tabs)/settings/networks" as never)}
+              testID="network-management-link"
+            />
+          ) : null}
           {snapshot.rememberedTag ? (
             <VStack style={{ gap: 10, padding: eight2FiveSpacing.md }}>
               <Input>
@@ -296,7 +303,23 @@ export function TagConnectionContent() {
           </Text>
         </HStack>
       ) : null}
-    </SettingsScreenContainer>
+    </>
+  );
+
+  if (!modal)
+    return <SettingsScreenContainer>{content}</SettingsScreenContainer>;
+  return (
+    <ScrollView
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        gap: eight2FiveSpacing.lg,
+        paddingBottom: eight2FiveSpacing.md,
+      }}
+      testID="tag-connection-modal-content"
+    >
+      {content}
+    </ScrollView>
   );
 }
 

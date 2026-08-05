@@ -33,6 +33,9 @@ export function useFieldScreenController() {
   const store = useAppSettingsStore();
   const [initialViewport] = React.useState(() => committedFieldViewport);
   const [drills, setDrills] = React.useState<readonly Drill[]>([]);
+  const [drillEntries, setDrillEntries] = React.useState<
+    readonly { readonly drill: Drill; readonly pageCount: number }[]
+  >([]);
   const [activeDrill, setActiveDrill] = React.useState<Drill>();
   const [activeDrillDocument, setActiveDrillDocument] =
     React.useState<DrillDocument>();
@@ -57,17 +60,24 @@ export function useFieldScreenController() {
     try {
       const repository = store.getDrillRepository();
       const activeDrillId = snapshot.settings.activeDrillId;
-      const [nextDrills, nextActiveDrill, nextPages, nextDocument] =
+      const nextDrills = await repository.listDrills();
+      const [nextActiveDrill, nextPages, nextDocument, pageCounts] =
         await Promise.all([
-          repository.listDrills(),
           activeDrillId ? repository.getDrill(activeDrillId) : undefined,
           activeDrillId ? repository.listSets(activeDrillId) : [],
           activeDrillId
             ? repository.getDrillDocument(activeDrillId)
             : undefined,
+          Promise.all(
+            nextDrills.map(async (drill) => ({
+              drill,
+              pageCount: (await repository.listSets(drill.id)).length,
+            })),
+          ),
         ]);
       if (generation !== refreshGeneration.current) return;
       setDrills(nextDrills);
+      setDrillEntries(pageCounts);
       setActiveDrill(nextActiveDrill);
       setActiveDrillDocument(nextDocument);
       setPages(nextPages);
@@ -145,6 +155,31 @@ export function useFieldScreenController() {
     [pages, snapshot.settings.activeDrillId, snapshot.status, store],
   );
 
+  const selectPerformer = React.useCallback(
+    async (performerEntityId: number) => {
+      if (!activeDrill || selectionBusy || snapshot.status !== "ready") {
+        return false;
+      }
+      setSelectionBusy(true);
+      setFieldError(undefined);
+      try {
+        await store
+          .getDrillRepository()
+          .setSelectedPerformer(activeDrill.id, performerEntityId);
+        await refreshDrills();
+        return true;
+      } catch (cause) {
+        setFieldError(
+          cause instanceof Error ? cause : new Error(String(cause)),
+        );
+        return false;
+      } finally {
+        setSelectionBusy(false);
+      }
+    },
+    [activeDrill, refreshDrills, selectionBusy, snapshot.status, store],
+  );
+
   const effectiveSelectedPageId =
     optimisticSelection?.activeDrillId === snapshot.settings.activeDrillId
       ? optimisticSelection.pageId
@@ -209,6 +244,7 @@ export function useFieldScreenController() {
     settingsStatus: snapshot.status,
     settings: snapshot.settings,
     drills,
+    drillEntries,
     activeDrill,
     activeDrillDocument,
     drillScene,
@@ -223,6 +259,7 @@ export function useFieldScreenController() {
     selectActiveDrill,
     toggleMetricMode,
     selectPageAtIndex,
+    selectPerformer,
     refreshDrills,
   } as const;
 }

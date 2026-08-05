@@ -18,7 +18,9 @@ describe("Tag Connection discovery lifecycle", () => {
       startTagDiscovery: jest.fn(async () => undefined),
       stopManualDiscovery: jest.fn(),
     };
-    ownTagDiscoveryWhileFocused(store, true, true, jest.fn());
+    const cleanup = ownTagDiscoveryWhileFocused(store, true, true, jest.fn());
     expect(store.startTagDiscovery).not.toHaveBeenCalled();
+    cleanup();
+    expect(store.stopManualDiscovery).not.toHaveBeenCalled();
   });
 });

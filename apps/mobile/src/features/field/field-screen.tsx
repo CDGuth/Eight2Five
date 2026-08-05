@@ -10,7 +10,7 @@ import {
   type FieldLivePositionInput,
   type FieldPoint,
 } from "@eight2five/mobile/field";
-import { formatSetName } from "@eight2five/mobile/drill";
+import { formatSetName, getDrillTerms } from "@eight2five/mobile/drill";
 import {
   FIELD_FOUR_STEP_GRID_COLOR,
   FieldCanvas,
@@ -20,9 +20,16 @@ import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { FieldOverlayLayout } from "./field-overlay-layout";
 import { useFieldScreenController } from "./use-field-screen-controller";
-import { CoordinatePanel } from "./coordinate-panel/coordinate-panel";
-import { areCoordinatePanelControlsDisabled } from "./coordinate-panel/coordinate-panel-state";
+import { DrillSelectionDialog } from "../drill/components/drill-selection-dialog";
+import { PerformerSelectionDialog } from "../drill/components/performer-selection-dialog";
+import { DrillPill } from "./drill-pill/drill-pill";
+import {
+  INITIAL_FIELD_HUD_STATE,
+  reduceFieldHudState,
+} from "./field-hud-state";
+import { LiveOnlyPill, LivePositionSquare } from "./live-position-hud";
 import { PageDial } from "./page-dial/page-dial";
+import { TagConnectionDialog } from "./tag-connection-dialog";
 
 const EMPTY_ANCHORS: readonly FieldAnchorGeometry[] = Object.freeze([]);
 
@@ -44,6 +51,13 @@ export function FieldScreen({
 }) {
   const theme = useEight2FiveTheme();
   const controller = useFieldScreenController();
+  const [hudState, dispatchHud] = React.useReducer(
+    reduceFieldHudState,
+    INITIAL_FIELD_HUD_STATE,
+  );
+  const [drillDialogOpen, setDrillDialogOpen] = React.useState(false);
+  const [performerDialogOpen, setPerformerDialogOpen] = React.useState(false);
+  const [tagDialogOpen, setTagDialogOpen] = React.useState(false);
   const liveState = livePosition?.state ?? EMPTY_FIELD_LIVE_POSITION_STATE;
   const fallbackLivePosition = useSharedValue<FieldPoint | null>(
     liveState.position ?? null,
@@ -97,6 +111,11 @@ export function FieldScreen({
     drillOverlayState,
     targetPolicy,
   );
+  const controlsDisabled =
+    controller.settingsStatus !== "ready" ||
+    controller.loadingDrills ||
+    controller.selectionBusy;
+  const terms = getDrillTerms(controller.settings.drillTerminology);
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
@@ -114,76 +133,154 @@ export function FieldScreen({
   );
 
   return (
-    <FieldOverlayLayout
-      width={controller.width}
-      height={controller.height}
-      landscape={controller.landscape}
-      field={
-        <FieldCanvas
-          defaultViewport={controller.defaultViewport}
-          onViewportChange={controller.commitViewport}
-          palette={palette}
-          fieldPreset={controller.fieldPreset}
-          livePosition={livePositionValue}
-          targetPosition={targetPosition}
-          drillScene={drillScene}
-          guidanceVisible={guidanceVisible}
-          anchors={anchors}
-          anchorOverlayOptions={anchorOverlayOptions}
-          showAuxiliaryFieldMarks={controller.settings.showAuxiliaryFieldMarks}
-          showPerimeterStepGrid={
-            controller.settings.developerModeEnabled &&
-            controller.settings.showPerimeterStepGrid
-          }
-        />
-      }
-      hud={
-        <CoordinatePanel
-          landscape={controller.landscape}
-          live={liveState}
-          drillFeaturesEnabled={controller.settings.drillFeaturesEnabled}
-          drills={controller.drills}
-          activeDrill={controller.activeDrill}
-          selectedPage={controller.selectedPage}
-          previousPage={controller.previousPage}
-          terminology={controller.settings.drillTerminology}
-          metricMode={controller.settings.transitionMetricMode}
-          fieldPreset={controller.fieldPreset}
-          controlsDisabled={areCoordinatePanelControlsDisabled({
-            settingsReady: controller.settingsStatus === "ready",
-            loadingDrills: controller.loadingDrills,
-            selectionBusy: controller.selectionBusy,
-          })}
-          error={controller.error}
-          onSelectDrill={(drillId) =>
-            void controller.selectActiveDrill(drillId)
-          }
-          onToggleMetric={() => void controller.toggleMetricMode()}
-        />
-      }
-      dial={
-        controller.settings.drillFeaturesEnabled
-          ? (diameter) => (
-              <PageDial
-                diameter={diameter}
-                selectedIndex={controller.selectedIndex}
-                selectedLabel={
-                  controller.selectedPage
-                    ? formatSetName(controller.selectedPage)
-                    : undefined
-                }
-                pageCount={controller.pages.length}
-                terminology={controller.settings.drillTerminology}
-                activeColor={theme.accent}
-                trackColor={FIELD_FOUR_STEP_GRID_COLOR}
-                onSelectIndex={(index) =>
-                  void controller.selectPageAtIndex(index)
-                }
-              />
-            )
-          : undefined
-      }
-    />
+    <>
+      <FieldOverlayLayout
+        width={controller.width}
+        height={controller.height}
+        landscape={controller.landscape}
+        controlPairVisible={controller.settings.drillFeaturesEnabled}
+        field={
+          <FieldCanvas
+            defaultViewport={controller.defaultViewport}
+            onViewportChange={controller.commitViewport}
+            palette={palette}
+            fieldPreset={controller.fieldPreset}
+            livePosition={livePositionValue}
+            targetPosition={targetPosition}
+            drillScene={drillScene}
+            guidanceVisible={guidanceVisible}
+            anchors={anchors}
+            anchorOverlayOptions={anchorOverlayOptions}
+            showAuxiliaryFieldMarks={
+              controller.settings.showAuxiliaryFieldMarks
+            }
+            showPerimeterStepGrid={
+              controller.settings.developerModeEnabled &&
+              controller.settings.showPerimeterStepGrid
+            }
+          />
+        }
+        hud={(metrics) =>
+          controller.settings.drillFeaturesEnabled ? (
+            <DrillPill
+              width={metrics.hudWidth}
+              landscape={controller.landscape}
+              listMaxHeight={metrics.hudListMaxHeight}
+              pages={controller.pages}
+              selectedIndex={controller.selectedIndex}
+              terminology={controller.settings.drillTerminology}
+              countDisplayMode={hudState.countDisplayMode}
+              metricMode={controller.settings.transitionMetricMode}
+              fieldPreset={controller.fieldPreset}
+              expanded={hudState.drillPillExpanded}
+              controlsDisabled={controlsDisabled}
+              error={controller.error}
+              onToggleCounts={() =>
+                dispatchHud({ type: "toggle-count-display" })
+              }
+              onToggleMetric={() => void controller.toggleMetricMode()}
+              onToggleExpanded={() =>
+                dispatchHud({ type: "toggle-drill-pill" })
+              }
+              onSelectIndex={(index) =>
+                void controller.selectPageAtIndex(index)
+              }
+            />
+          ) : (
+            <LiveOnlyPill
+              width={metrics.hudWidth}
+              live={liveState}
+              fieldPreset={controller.fieldPreset}
+              onOpenTagConnection={() => setTagDialogOpen(true)}
+            />
+          )
+        }
+        live={
+          controller.settings.drillFeaturesEnabled
+            ? (diameter) => (
+                <LivePositionSquare
+                  diameter={diameter}
+                  live={liveState}
+                  target={targetPosition}
+                  fieldPreset={controller.fieldPreset}
+                  greenThresholdSteps={
+                    controller.settings.distanceGreenThresholdSteps
+                  }
+                  yellowThresholdSteps={
+                    controller.settings.distanceYellowThresholdSteps
+                  }
+                  onOpenTagConnection={() => setTagDialogOpen(true)}
+                />
+              )
+            : undefined
+        }
+        dial={
+          controller.settings.drillFeaturesEnabled
+            ? (diameter) => (
+                <PageDial
+                  diameter={diameter}
+                  selectedIndex={controller.selectedIndex}
+                  selectedLabel={
+                    controller.selectedPage
+                      ? formatSetName(controller.selectedPage)
+                      : undefined
+                  }
+                  pageCount={controller.pages.length}
+                  terminology={controller.settings.drillTerminology}
+                  activeColor={theme.accent}
+                  trackColor={theme.border}
+                  innerColor={theme.surfaceRaised}
+                  backgroundColor={theme.surface}
+                  foregroundColor={theme.text}
+                  dividerColor={theme.textSubtle}
+                  onSelectIndex={(index) =>
+                    void controller.selectPageAtIndex(index)
+                  }
+                  onSelectDrill={() => setDrillDialogOpen(true)}
+                  onSelectPerformer={
+                    controller.activeDrillDocument
+                      ? () => setPerformerDialogOpen(true)
+                      : undefined
+                  }
+                />
+              )
+            : undefined
+        }
+      />
+      <DrillSelectionDialog
+        entries={controller.drillEntries}
+        terms={terms}
+        activeDrillId={controller.settings.activeDrillId}
+        isOpen={controller.settings.drillFeaturesEnabled && drillDialogOpen}
+        disabled={controlsDisabled}
+        onClose={() => setDrillDialogOpen(false)}
+        onSelect={(drillId) => {
+          setDrillDialogOpen(false);
+          void controller.selectActiveDrill(drillId);
+        }}
+      />
+      <PerformerSelectionDialog
+        key={`field-performer:${controller.activeDrill?.id ?? "none"}:${controller.activeDrill?.selectedPerformerEntityId ?? "none"}`}
+        document={controller.activeDrillDocument}
+        isOpen={controller.settings.drillFeaturesEnabled && performerDialogOpen}
+        importing={controller.selectionBusy}
+        error={controller.error}
+        selectedPerformerEntityId={
+          controller.activeDrill?.selectedPerformerEntityId
+        }
+        title="Select performer"
+        confirmLabel="Save"
+        onClose={() => setPerformerDialogOpen(false)}
+        onConfirm={async (performerEntityId) => {
+          const saved = await controller.selectPerformer(performerEntityId);
+          if (saved) setPerformerDialogOpen(false);
+        }}
+      />
+      <TagConnectionDialog
+        isOpen={tagDialogOpen}
+        onClose={() => setTagDialogOpen(false)}
+      />
+    </>
   );
 }
 

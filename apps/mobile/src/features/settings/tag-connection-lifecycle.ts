@@ -9,12 +9,11 @@ export function ownTagDiscoveryWhileFocused(
   alreadyConnected: boolean,
   onError: (error: Error) => void,
 ): () => void {
-  if (servicesReady && !alreadyConnected) {
-    void store
-      .startTagDiscovery()
-      .catch((cause) =>
-        onError(cause instanceof Error ? cause : new Error(String(cause))),
-      );
-  }
+  if (!servicesReady || alreadyConnected) return () => undefined;
+  void store
+    .startTagDiscovery()
+    .catch((cause) =>
+      onError(cause instanceof Error ? cause : new Error(String(cause))),
+    );
   return () => store.stopManualDiscovery();
 }

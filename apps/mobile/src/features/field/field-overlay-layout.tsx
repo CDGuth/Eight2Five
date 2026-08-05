@@ -7,9 +7,15 @@ import {
 
 export interface FieldOverlayMetrics {
   readonly outerPadding: number;
-  readonly hudStyle: ViewStyle;
-  readonly dialStyle: ViewStyle;
+  readonly controlGap: number;
+  readonly controlDiameter: number;
+  /** @deprecated Use controlDiameter. */
   readonly dialDiameter: number;
+  readonly hudWidth: number;
+  readonly hudListMaxHeight: number;
+  readonly hudStyle: ViewStyle;
+  readonly liveStyle: ViewStyle;
+  readonly dialStyle: ViewStyle;
 }
 
 export function getFieldOverlayMetrics({
@@ -17,61 +23,111 @@ export function getFieldOverlayMetrics({
   height,
   landscape,
   insets,
+  controlPairVisible = true,
 }: {
   readonly width: number;
   readonly height: number;
   readonly landscape: boolean;
   readonly insets: EdgeInsets;
+  readonly controlPairVisible?: boolean;
 }): FieldOverlayMetrics {
-  const outerPadding = landscape ? 16 : 12;
-  const availableWidth = Math.max(0, width - insets.left - insets.right);
-  const dialDiameter = landscape
-    ? Math.min(172, Math.max(148, height * 0.42))
-    : Math.min(156, Math.max(140, width * 0.38));
+  const outerPadding = landscape ? 14 : 12;
+  const controlGap = landscape ? 16 : 18;
+  const safeWidth = Math.max(0, width - insets.left - insets.right);
+  const safeHeight = Math.max(0, height - insets.top - insets.bottom);
 
   if (landscape) {
+    const maximumFittingDiameter = Math.max(
+      0,
+      (safeHeight - outerPadding * 2 - controlGap) / 2,
+    );
+    const controlDiameter = Math.min(164, maximumFittingDiameter);
+    const stackHeight = controlDiameter * 2 + controlGap;
+    const stackTop =
+      insets.top +
+      outerPadding +
+      Math.max(0, (safeHeight - outerPadding * 2 - stackHeight) / 2);
     const right = insets.right + outerPadding;
+    const columnLeft = width - right - controlDiameter;
+    const hudLeft = insets.left + outerPadding;
+    const hudWidth = controlPairVisible
+      ? Math.max(0, Math.min(720, columnLeft - controlGap - hudLeft))
+      : Math.max(0, safeWidth - outerPadding * 2);
+    const hudTop = insets.top + outerPadding;
     return {
       outerPadding,
-      dialDiameter,
+      controlGap,
+      controlDiameter,
+      dialDiameter: controlDiameter,
+      hudWidth,
+      hudListMaxHeight: Math.min(
+        320,
+        Math.max(0, height - insets.bottom - outerPadding - hudTop - 82),
+      ),
       hudStyle: {
         position: "absolute",
-        top: insets.top + outerPadding,
-        left: insets.left + outerPadding,
-        width: Math.min(availableWidth * 0.72, 720),
-        maxHeight: 136,
+        top: hudTop,
+        left: hudLeft,
+        width: hudWidth,
+      },
+      liveStyle: {
+        position: "absolute",
+        right,
+        top: stackTop,
+        width: controlDiameter,
+        height: controlDiameter,
       },
       dialStyle: {
         position: "absolute",
         right,
-        top: Math.max(
-          insets.top + outerPadding,
-          (height - dialDiameter + insets.top - insets.bottom) / 2,
-        ),
-        width: dialDiameter,
-        height: dialDiameter,
+        top: stackTop + controlDiameter + controlGap,
+        width: controlDiameter,
+        height: controlDiameter,
       },
     };
   }
 
+  const maximumFittingDiameter = Math.max(
+    0,
+    (safeWidth - outerPadding * 2 - controlGap) / 2,
+  );
+  const controlDiameter = Math.min(156, maximumFittingDiameter);
+  const pairWidth = controlDiameter * 2 + controlGap;
+  const pairLeft = insets.left + Math.max(0, (safeWidth - pairWidth) / 2);
+  const controlsBottom = insets.bottom + outerPadding;
+  const controlsTop = height - controlsBottom - controlDiameter;
+  const hudLeft = insets.left + outerPadding;
+  const hudWidth = Math.max(0, safeWidth - outerPadding * 2);
+  const hudTop = insets.top + outerPadding;
   return {
     outerPadding,
-    dialDiameter,
+    controlGap,
+    controlDiameter,
+    dialDiameter: controlDiameter,
+    hudWidth,
+    hudListMaxHeight: Math.min(
+      360,
+      Math.max(0, controlsTop - controlGap - hudTop - 82),
+    ),
     hudStyle: {
       position: "absolute",
-      top: insets.top + outerPadding,
-      left: insets.left + outerPadding,
-      right: insets.right + outerPadding,
-      maxHeight: 196,
+      top: hudTop,
+      left: hudLeft,
+      width: hudWidth,
+    },
+    liveStyle: {
+      position: "absolute",
+      left: pairLeft,
+      bottom: controlsBottom,
+      width: controlDiameter,
+      height: controlDiameter,
     },
     dialStyle: {
       position: "absolute",
-      alignSelf: "center",
-      left:
-        insets.left + (width - insets.left - insets.right - dialDiameter) / 2,
-      bottom: insets.bottom + outerPadding,
-      width: dialDiameter,
-      height: dialDiameter,
+      left: pairLeft + controlDiameter + controlGap,
+      bottom: controlsBottom,
+      width: controlDiameter,
+      height: controlDiameter,
     },
   };
 }
@@ -80,8 +136,10 @@ interface FieldOverlayLayoutProps {
   readonly width: number;
   readonly height: number;
   readonly landscape: boolean;
+  readonly controlPairVisible?: boolean;
   readonly field: React.ReactNode;
-  readonly hud?: React.ReactNode;
+  readonly hud?: (metrics: FieldOverlayMetrics) => React.ReactNode;
+  readonly live?: (diameter: number) => React.ReactNode;
   readonly dial?: (diameter: number) => React.ReactNode;
 }
 
@@ -89,12 +147,20 @@ export function FieldOverlayLayout({
   width,
   height,
   landscape,
+  controlPairVisible = true,
   field,
   hud,
+  live,
   dial,
 }: FieldOverlayLayoutProps) {
   const insets = useSafeAreaInsets();
-  const metrics = getFieldOverlayMetrics({ width, height, landscape, insets });
+  const metrics = getFieldOverlayMetrics({
+    width,
+    height,
+    landscape,
+    insets,
+    controlPairVisible,
+  });
 
   return (
     <View
@@ -108,7 +174,16 @@ export function FieldOverlayLayout({
           style={metrics.hudStyle}
           testID="field-hud-slot"
         >
-          {hud}
+          {hud(metrics)}
+        </View>
+      ) : null}
+      {live ? (
+        <View
+          pointerEvents="box-none"
+          style={metrics.liveStyle}
+          testID="field-live-slot"
+        >
+          {live(metrics.controlDiameter)}
         </View>
       ) : null}
       {dial ? (
@@ -117,7 +192,7 @@ export function FieldOverlayLayout({
           style={metrics.dialStyle}
           testID="field-dial-slot"
         >
-          {dial(metrics.dialDiameter)}
+          {dial(metrics.controlDiameter)}
         </View>
       ) : null}
     </View>
