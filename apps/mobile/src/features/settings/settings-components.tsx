@@ -223,12 +223,19 @@ export function SettingsSelectRow<T extends string>({
 }) {
   const theme = useEight2FiveTheme();
   const themeName = useEight2FiveThemeName();
+  const selectedLabel =
+    choices.find((choice) => choice.value === value)?.label ?? value;
   return (
     <VStack>
       <SettingsRowContent icon={icon} title={title} description={description} />
       <Host
         testID={testID}
+        accessible
+        accessibilityRole="combobox"
         accessibilityLabel={title}
+        accessibilityHint="Opens a list of choices"
+        accessibilityValue={{ text: selectedLabel }}
+        accessibilityState={{ disabled }}
         colorScheme={themeName}
         seedColor={theme.accent}
         matchContents={{ vertical: true }}

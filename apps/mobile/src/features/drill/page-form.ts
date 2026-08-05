@@ -178,13 +178,13 @@ export function validatePageDraft(
   const errors: SetFormErrors = {};
   const setNumber = parseNonNegativeInteger(
     draft.setNumber,
-    "Enter a non-negative set number.",
+    "Enter a non-negative drill position number.",
   );
   if (typeof setNumber === "string") errors.setNumber = setNumber;
 
   const suffix = draft.setSuffix.trim();
   if (draft.setKind === "set" && suffix) {
-    errors.setSuffix = "Primary sets do not have a suffix.";
+    errors.setSuffix = "Primary drill positions do not have a suffix.";
   } else if (
     draft.setKind === "subset" &&
     !/^(?:[A-Z]|\.[0-9]+)$/.test(suffix)

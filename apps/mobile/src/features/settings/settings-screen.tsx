@@ -142,7 +142,7 @@ export function SettingsScreen() {
         <SettingsSwitchRow
           icon={ListChecks}
           title="Drill features"
-          description="Show drill sets, targets, guidance, and controls."
+          description="Show drill positions, targets, guidance, and controls."
           value={settings.drillFeaturesEnabled}
           onChange={(enabled) => void setDrillFeatures(enabled)}
           disabled={disabled}

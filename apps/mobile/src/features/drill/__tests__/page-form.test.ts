@@ -169,7 +169,7 @@ describe("structured marching coordinate form", () => {
     expect(result.value?.coordinate.frontBack.relation).toBe("on");
   });
 
-  test("returns actionable set, count, measure, relation, and bounds errors", () => {
+  test("returns actionable position, count, measure, relation, and bounds errors", () => {
     expect(
       validatePageDraft({
         ...VALID_DRAFT,
@@ -180,7 +180,7 @@ describe("structured marching coordinate form", () => {
         measureEnd: "129",
       }).errors,
     ).toMatchObject({
-      setNumber: expect.stringContaining("set number"),
+      setNumber: expect.stringContaining("position number"),
       setSuffix: expect.stringContaining("capital letter"),
       countsFromPrevious: expect.stringContaining("whole-number"),
       measureEnd: expect.stringContaining("after"),
