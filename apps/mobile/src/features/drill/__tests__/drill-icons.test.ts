@@ -10,6 +10,7 @@ describe("drill card icon registry", () => {
     expect(resolveDrillIcon("music-2")).toBe(DRILL_ICON_REGISTRY["music-2"]);
     expect(resolveDrillIcon("made-up-icon")).toBe(FALLBACK_DRILL_ICON);
     expect(resolveDrillIcon(undefined)).toBe(FALLBACK_DRILL_ICON);
+    expect(isSupportedDrillIcon("sparkle")).toBe(true);
     expect(isSupportedDrillIcon("sparkles")).toBe(true);
     expect(isSupportedDrillIcon("made-up-icon")).toBe(false);
   });
