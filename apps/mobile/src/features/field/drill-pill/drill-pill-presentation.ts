@@ -37,7 +37,7 @@ export function getTransitionMetricPresentation(
 ): AnimatedMetricPresentation {
   return {
     key: mode,
-    direction: mode === "step-size" ? 1 : -1,
+    direction: mode === "step-size" ? -1 : 1,
     label: presentation.metricLabel,
     value: presentation.metric,
   };

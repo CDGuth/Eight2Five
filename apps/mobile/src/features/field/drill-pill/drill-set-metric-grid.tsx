@@ -1,5 +1,6 @@
 import React from "react";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { Box } from "@eight2five/ui/components/box";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
@@ -28,7 +29,6 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
   columns,
   countDisplayMode,
   metricMode,
-  selected = false,
   header = false,
   expanded = false,
   onToggleCounts,
@@ -39,7 +39,6 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
   readonly columns: DrillPillColumnMetrics;
   readonly countDisplayMode: CountDisplayMode;
   readonly metricMode: TransitionMetricMode;
-  readonly selected?: boolean;
   readonly header?: boolean;
   readonly expanded?: boolean;
   readonly onToggleCounts?: () => void;
@@ -47,8 +46,8 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
   readonly onToggleExpanded?: () => void;
 }) {
   const theme = useEight2FiveTheme();
-  const labelColor = selected ? theme.raw.white : theme.textMuted;
-  const valueColor = selected ? theme.raw.white : theme.text;
+  const labelColor = theme.textMuted;
+  const valueColor = theme.text;
   const count = getCountMetricPresentation(presentation, countDisplayMode);
   const metric = getTransitionMetricPresentation(presentation, metricMode);
 
@@ -90,6 +89,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
             value={count.value}
             labelColor={labelColor}
             valueColor={valueColor}
+            modeIndex={countDisplayMode === "counts" ? 0 : 1}
           />
         </AnimatedValueSwitch>
       </Pressable>
@@ -115,6 +115,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
             value={metric.value}
             labelColor={labelColor}
             valueColor={valueColor}
+            modeIndex={metricMode === "step-size" ? 0 : 1}
           />
         </AnimatedValueSwitch>
       </Pressable>
@@ -174,15 +175,17 @@ function MetricCell({
   value,
   labelColor,
   valueColor,
+  modeIndex,
 }: {
   readonly width?: number;
   readonly label: string;
   readonly value: string;
   readonly labelColor: string;
   readonly valueColor: string;
+  readonly modeIndex?: 0 | 1;
 }) {
-  return (
-    <VStack style={width === undefined ? undefined : { width }}>
+  const content = (
+    <VStack className={modeIndex === undefined ? undefined : "flex-1"}>
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.4}
@@ -205,5 +208,42 @@ function MetricCell({
         {value}
       </Text>
     </VStack>
+  );
+
+  if (modeIndex === undefined) {
+    return (
+      <VStack style={width === undefined ? undefined : { width }}>
+        {content}
+      </VStack>
+    );
+  }
+
+  return (
+    <HStack
+      className="items-center"
+      style={{ gap: 6, ...(width === undefined ? null : { width }) }}
+    >
+      <VStack style={{ gap: 4 }} accessibilityElementsHidden>
+        <Box
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 2.5,
+            backgroundColor: modeIndex === 0 ? valueColor : labelColor,
+            opacity: modeIndex === 0 ? 1 : 0.5,
+          }}
+        />
+        <Box
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 2.5,
+            backgroundColor: modeIndex === 1 ? valueColor : labelColor,
+            opacity: modeIndex === 1 ? 1 : 0.5,
+          }}
+        />
+      </VStack>
+      {content}
+    </HStack>
   );
 }

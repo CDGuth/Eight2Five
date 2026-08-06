@@ -40,8 +40,8 @@ describe("drill pill metric modes", () => {
         getTransitionMetricPresentation(row, "crossing-counts"),
       ),
     ).toMatchObject([
-      { key: "crossing-counts", label: "xCounts", direction: -1 },
-      { key: "crossing-counts", label: "xCounts", direction: -1 },
+      { key: "crossing-counts", label: "xCounts", direction: 1 },
+      { key: "crossing-counts", label: "xCounts", direction: 1 },
     ]);
   });
 });

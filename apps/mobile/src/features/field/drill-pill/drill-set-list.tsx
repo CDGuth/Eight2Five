@@ -70,7 +70,7 @@ export function DrillSetList({
           style={{
             height: DRILL_SET_ROW_HEIGHT,
             justifyContent: "center",
-            backgroundColor: selected ? theme.accent : "transparent",
+            backgroundColor: selected ? theme.accentSoft : "transparent",
           }}
           testID={`drill-set-row-${index}`}
         >
@@ -79,7 +79,6 @@ export function DrillSetList({
             columns={columns}
             countDisplayMode={countDisplayMode}
             metricMode={metricMode}
-            selected={selected}
           />
         </Pressable>
       );
@@ -93,7 +92,7 @@ export function DrillSetList({
       pages,
       selectedIndex,
       terminology,
-      theme.accent,
+      theme.accentSoft,
     ],
   );
 

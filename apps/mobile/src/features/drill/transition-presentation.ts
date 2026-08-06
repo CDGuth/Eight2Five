@@ -25,7 +25,9 @@ export function formatTransitionAnalysis(
         : `${formatMetricNumber(analysis.stepSizeToFive)} to 5`,
     crossingCounts:
       analysis.yardLineCrossingCounts.length > 0
-        ? analysis.yardLineCrossingCounts.map(formatMetricNumber).join(", ")
+        ? analysis.yardLineCrossingCounts
+            .map((count) => formatCrossingCount(count, countsFromPrevious))
+            .join(", ")
         : "–",
   };
 }
@@ -43,4 +45,8 @@ export function getTransitionPresentation(
 
 function formatMetricNumber(value: number): string {
   return Number(value.toFixed(6)).toString();
+}
+
+function formatCrossingCount(value: number, moveCounts: number): string {
+  return String(Math.min(moveCounts, Math.max(1, Math.round(value))));
 }
