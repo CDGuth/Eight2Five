@@ -12,18 +12,45 @@ const androidVersionCode =
   Number.isSafeInteger(requestedVersionCode) && requestedVersionCode > 0
     ? requestedVersionCode
     : 1;
+const requestedIosBuildNumber = Number(
+  process.env.E2F_IOS_BUILD_NUMBER ?? process.env.GITHUB_RUN_NUMBER ?? 1,
+);
+const iosBuildNumber =
+  Number.isSafeInteger(requestedIosBuildNumber) && requestedIosBuildNumber > 0
+    ? String(requestedIosBuildNumber)
+    : "1";
+
+const appVariant = process.env.APP_VARIANT;
+const isDevelopment = appVariant === "development";
+const isPreview = appVariant === "preview";
+
+const appName = isDevelopment
+  ? "Eight2Five (Development)"
+  : isPreview
+    ? "Eight2Five (Preview)"
+    : "Eight2Five";
+
+const appIdentifier = isDevelopment
+  ? "com.eight2five.app.development"
+  : isPreview
+    ? "com.eight2five.app.preview"
+    : "com.eight2five.app";
 
 const config: ExpoConfig = {
   owner: "cdguth",
-  name: "Eight2Five",
+  name: appName,
   slug: "eight2five",
+  scheme: "eight2five",
   platforms: ["ios", "android"],
-  version: "0.0.0",
-  orientation: "portrait",
+  version: "0.1.0",
+  // Field is the only route that opts into landscape; Drill and Settings
+  // apply portrait locks through their nested native stacks.
+  orientation: "default",
   icon: "./assets/app-icons/mobile-android-legacy-icon.png",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "com.eight2five.app",
+    bundleIdentifier: appIdentifier,
+    buildNumber: iosBuildNumber,
     supportsTablet: false,
     icon: {
       light: "./assets/app-icons/mobile-ios-icon.png",
@@ -32,7 +59,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: "com.eight2five.app",
+    package: appIdentifier,
     versionCode: androidVersionCode,
     icon: "./assets/app-icons/mobile-android-legacy-icon.png",
     adaptiveIcon: {
@@ -46,6 +73,15 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-build-properties",
+      {
+        buildReactNativeFromSource: false,
+        ios: {
+          ccacheEnabled: true,
+        },
+      },
+    ],
     [
       "expo-splash-screen",
       {
@@ -65,6 +101,13 @@ const config: ExpoConfig = {
             backgroundColor: "#000000",
           },
         },
+      },
+    ],
+    [
+      "expo-sensors",
+      {
+        motionPermission:
+          "Allow $(PRODUCT_NAME) to use device motion for brief live-position prediction.",
       },
     ],
     [

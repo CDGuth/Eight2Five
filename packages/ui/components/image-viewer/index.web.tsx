@@ -33,7 +33,7 @@ const imageViewerContentStyle = tva({
 });
 
 const imageViewerCloseButtonStyle = tva({
-  base: 'absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-xl font-bold cursor-pointer backdrop-blur-sm',
+  base: 'absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-xl font-body-bold cursor-pointer backdrop-blur-sm',
 });
 
 const imageViewerNavigationStyle = tva({
@@ -41,7 +41,7 @@ const imageViewerNavigationStyle = tva({
 });
 
 const imageViewerNavButtonStyle = tva({
-  base: 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-2xl font-bold cursor-pointer pointer-events-auto backdrop-blur-sm',
+  base: 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-2xl font-body-bold cursor-pointer pointer-events-auto backdrop-blur-sm',
 });
 
 const imageViewerCounterStyle = tva({
@@ -49,7 +49,7 @@ const imageViewerCounterStyle = tva({
 });
 
 const imageViewerCounterTextStyle = tva({
-  base: 'text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full',
+  base: 'text-white text-sm font-body-medium bg-black/60 px-4 py-2 rounded-full',
 });
 
 // Context for ImageViewer - with default values to prevent errors when used outside provider

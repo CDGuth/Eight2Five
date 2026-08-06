@@ -63,6 +63,7 @@ coverage/clover.xml
 
 # other
 .com.facebook.react.devsupport.BundleDownloader.swp
+/app.json
 
 # local vendor reference docs (do not commit)
 docs/local-only

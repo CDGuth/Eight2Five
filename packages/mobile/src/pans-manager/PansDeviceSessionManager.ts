@@ -1,4 +1,5 @@
 import {
+  addConnectionStateChangedListener,
   addLocationDataListener,
   connect,
   decodeLocationData,
@@ -26,6 +27,7 @@ import {
   writePersistedPosition,
 } from "expo-pans-ble-api";
 import type {
+  ConnectionStateChangeEvent,
   PansAnchorList,
   PansCharacteristicNotificationEvent,
   PansClusterInfo,
@@ -69,6 +71,9 @@ export interface PansNativeGateway {
   addLocationDataListener(
     listener: (event: PansLocationNotification) => void,
   ): PansLocationSubscription;
+  addConnectionStateChangedListener?(
+    listener: (event: PansConnectionStateEvent) => void,
+  ): PansLocationSubscription;
   decodeLocationData(payload: number[]): PansLocationData;
   requestMtu?(deviceId: string, mtu: number): Promise<number | undefined>;
   writePersistedPosition(
@@ -92,6 +97,9 @@ export interface PansLocationNotification {
 export interface PansLocationSubscription {
   remove(): void;
 }
+
+/** Manager-safe connection event used by app-level session owners. */
+export type PansConnectionStateEvent = ConnectionStateChangeEvent;
 
 export const defaultPansNativeGateway: PansNativeGateway = {
   connect,
@@ -124,6 +132,7 @@ export const defaultPansNativeGateway: PansNativeGateway = {
         payloadLength: event.payloadLength,
       }),
     ),
+  addConnectionStateChangedListener,
   decodeLocationData,
   requestMtu: async (deviceId, mtu) =>
     getCapabilities().supportsMtuRequest
@@ -288,6 +297,16 @@ export class PansDeviceSessionManager {
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (failure) throw normalizeManagerError(failure.reason);
+  }
+
+  addConnectionStateListener(
+    listener: (event: PansConnectionStateEvent) => void,
+  ): PansLocationSubscription {
+    return (
+      this.gateway.addConnectionStateChangedListener?.(listener) ?? {
+        remove() {},
+      }
+    );
   }
 
   private async acquire(deviceId: string, timeoutMs?: number): Promise<void> {

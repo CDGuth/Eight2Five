@@ -36,14 +36,14 @@ const tooltipContentStyle = tva({
 });
 
 const tooltipTextStyle = tva({
-  base: 'font-normal tracking-normal web:select-none text-xs text-foreground/90',
+  base: 'font-body tracking-normal web:select-none text-xs text-foreground/90',
 
   variants: {
     isTruncated: {
       true: 'line-clamp-1 truncate',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-body-bold',
     },
     underline: {
       true: 'underline',

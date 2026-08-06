@@ -20,7 +20,7 @@ export const tableFooterStyle = tva({
 });
 
 export const tableHeadStyle = tva({
-  base: 'flex-1 px-6 py-[14px] text-left font-bold text-[16px] leading-[22px] text-foreground/80 font-roboto',
+  base: 'flex-1 px-6 py-[14px] text-left font-body-bold text-[16px] leading-[22px] text-foreground/80',
 });
 
 export const tableRowStyleStyle = tva({
@@ -36,9 +36,9 @@ export const tableRowStyleStyle = tva({
 });
 
 export const tableDataStyle = tva({
-  base: 'flex-1 px-6 py-[14px] text-left text-[16px] font-medium leading-[22px] text-foreground/80 font-roboto',
+  base: 'flex-1 px-6 py-[14px] text-left text-[16px] font-body-medium leading-[22px] text-foreground/80',
 });
 
 export const tableCaptionStyle = tva({
-  base: `${captionTableStyle} px-6 py-[14px] text-[16px] font-normal leading-[22px] text-foreground/90 bg-background/90 font-roboto`,
+  base: `${captionTableStyle} px-6 py-[14px] text-[16px] font-body leading-[22px] text-foreground/90 bg-background/90`,
 });

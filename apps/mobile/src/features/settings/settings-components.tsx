@@ -1,0 +1,341 @@
+import React from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react-native";
+import { Card } from "@eight2five/ui/components/card";
+import { Heading } from "@eight2five/ui/components/heading";
+import { HStack } from "@eight2five/ui/components/hstack";
+import { Icon } from "@eight2five/ui/components/icon";
+import { Pressable } from "@eight2five/ui/components/pressable";
+import { ScrollView } from "@eight2five/ui/components/scroll-view";
+import {
+  Select,
+  SelectBackdrop,
+  SelectContent,
+  SelectDragIndicator,
+  SelectDragIndicatorWrapper,
+  SelectIcon,
+  SelectInput,
+  SelectItem,
+  SelectPortal,
+  SelectTrigger,
+} from "@eight2five/ui/components/select";
+import { Switch } from "@eight2five/ui/components/switch";
+import { Text } from "@eight2five/ui/components/text";
+import { VStack } from "@eight2five/ui/components/vstack";
+import {
+  eight2FiveFonts,
+  eight2FiveRadii,
+  eight2FiveSpacing,
+  useEight2FiveTheme,
+} from "@eight2five/ui/theme";
+
+export function SettingsScreenContainer({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <ScrollView
+      className="flex-1"
+      contentInsetAdjustmentBehavior="automatic"
+      keyboardShouldPersistTaps="handled"
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={{
+        gap: eight2FiveSpacing.lg,
+        padding: eight2FiveSpacing.md,
+        paddingBottom: eight2FiveSpacing.xxl,
+      }}
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+export function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <VStack style={{ gap: eight2FiveSpacing.sm }}>
+      <Heading
+        size="sm"
+        style={{
+          color: theme.textMuted,
+          fontFamily: eight2FiveFonts.styleSemibold,
+          paddingHorizontal: eight2FiveSpacing.xs,
+        }}
+      >
+        {title}
+      </Heading>
+      <Card
+        className="p-0"
+        style={{
+          overflow: "hidden",
+          borderWidth: 0,
+          borderRadius: eight2FiveRadii.md,
+          backgroundColor: theme.surfaceRaised,
+        }}
+      >
+        {children}
+      </Card>
+    </VStack>
+  );
+}
+
+interface SettingsRowContentProps {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  accessory?: React.ReactNode;
+  danger?: boolean;
+}
+
+function SettingsRowContent({
+  icon,
+  title,
+  description,
+  accessory,
+  danger = false,
+}: SettingsRowContentProps) {
+  const theme = useEight2FiveTheme();
+  const color = danger ? theme.danger : theme.text;
+  return (
+    <HStack
+      className="min-h-16 items-center"
+      style={{ gap: 12, padding: eight2FiveSpacing.md }}
+    >
+      <Icon as={icon} size="lg" style={{ color }} />
+      <VStack className="flex-1" style={{ gap: 2 }}>
+        <Text style={{ color, fontFamily: eight2FiveFonts.styleSemibold }}>
+          {title}
+        </Text>
+        {description ? (
+          <Text size="sm" style={{ color: theme.textMuted }}>
+            {description}
+          </Text>
+        ) : null}
+      </VStack>
+      {accessory}
+    </HStack>
+  );
+}
+
+export function SettingsNavigationRow({
+  icon,
+  title,
+  description,
+  onPress,
+  testID,
+}: SettingsRowContentProps & { onPress(): void; testID?: string }) {
+  const theme = useEight2FiveTheme();
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+    >
+      <SettingsRowContent
+        icon={icon}
+        title={title}
+        description={description}
+        accessory={
+          <Icon
+            as={ChevronRight}
+            size="md"
+            style={{ color: theme.textMuted }}
+          />
+        }
+      />
+    </Pressable>
+  );
+}
+
+export function SettingsValueRow({
+  icon,
+  title,
+  description,
+  value,
+}: SettingsRowContentProps & { value: string }) {
+  const theme = useEight2FiveTheme();
+  return (
+    <SettingsRowContent
+      icon={icon}
+      title={title}
+      description={description}
+      accessory={
+        <Text size="sm" style={{ color: theme.textMuted }}>
+          {value}
+        </Text>
+      }
+    />
+  );
+}
+
+export function SettingsSwitchRow({
+  icon,
+  title,
+  description,
+  value,
+  onChange,
+  disabled,
+  testID,
+}: SettingsRowContentProps & {
+  value: boolean;
+  onChange(value: boolean): void;
+  disabled?: boolean;
+  testID?: string;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <SettingsRowContent
+      icon={icon}
+      title={title}
+      description={description}
+      accessory={
+        <Switch
+          testID={testID}
+          value={value}
+          onValueChange={onChange}
+          disabled={disabled}
+          accessibilityLabel={title}
+          trackColor={{ false: theme.surfaceStrong, true: theme.accent }}
+        />
+      }
+    />
+  );
+}
+
+export interface SettingsSelectChoice<T extends string> {
+  readonly label: string;
+  readonly value: T;
+}
+
+export function SettingsSelectRow<T extends string>({
+  icon,
+  title,
+  description,
+  value,
+  choices,
+  onChange,
+  disabled,
+  testID,
+}: SettingsRowContentProps & {
+  value: T;
+  choices: readonly SettingsSelectChoice<T>[];
+  onChange(value: T): void;
+  disabled?: boolean;
+  testID?: string;
+}) {
+  const theme = useEight2FiveTheme();
+  const selectedLabel =
+    choices.find((choice) => choice.value === value)?.label ?? value;
+  return (
+    <VStack>
+      <SettingsRowContent icon={icon} title={title} description={description} />
+      <VStack
+        style={{
+          paddingHorizontal: eight2FiveSpacing.md,
+          paddingBottom: eight2FiveSpacing.md,
+        }}
+      >
+        <Select
+          selectedValue={value}
+          initialLabel={selectedLabel}
+          isDisabled={disabled}
+          onValueChange={(next) => onChange(next as T)}
+        >
+          <SelectTrigger
+            testID={testID}
+            accessibilityLabel={title}
+            size="lg"
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              borderRadius: eight2FiveRadii.sm,
+            }}
+          >
+            <SelectInput
+              accessibilityLabel={`${title}: ${selectedLabel}`}
+              style={{ color: theme.text }}
+            />
+            <SelectIcon
+              as={ChevronDown}
+              style={{
+                color: theme.textMuted,
+                marginRight: eight2FiveSpacing.sm,
+              }}
+            />
+          </SelectTrigger>
+          <SelectPortal>
+            <SelectBackdrop />
+            <SelectContent
+              style={{
+                backgroundColor: theme.surfaceRaised,
+                borderTopLeftRadius: eight2FiveRadii.lg,
+                borderTopRightRadius: eight2FiveRadii.lg,
+              }}
+            >
+              <SelectDragIndicatorWrapper>
+                <SelectDragIndicator />
+              </SelectDragIndicatorWrapper>
+              {choices.map((choice) => (
+                <SelectItem
+                  key={choice.value}
+                  label={choice.label}
+                  value={choice.value}
+                />
+              ))}
+            </SelectContent>
+          </SelectPortal>
+        </Select>
+      </VStack>
+    </VStack>
+  );
+}
+
+export function SettingsMessage({
+  tone,
+  children,
+}: {
+  tone: "info" | "error" | "warning";
+  children: React.ReactNode;
+}) {
+  const theme = useEight2FiveTheme();
+  const color =
+    tone === "error"
+      ? theme.danger
+      : tone === "warning"
+        ? theme.warning
+        : theme.text;
+  return (
+    <Card
+      accessibilityRole="alert"
+      style={{
+        borderWidth: 0,
+        borderRadius: eight2FiveRadii.sm,
+        backgroundColor:
+          tone === "error"
+            ? theme.dangerSoft
+            : tone === "warning"
+              ? theme.warningSoft
+              : theme.accentSoft,
+        padding: 12,
+      }}
+    >
+      <Text selectable style={{ color }}>
+        {children}
+      </Text>
+    </Card>
+  );
+}
+
+export { SettingsRowContent };

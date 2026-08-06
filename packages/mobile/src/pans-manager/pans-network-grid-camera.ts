@@ -4,6 +4,11 @@ import type {
   GridViewport,
 } from "./pans-network-grid-math";
 import type { PansGridCameraSharedValues } from "./pans-network-grid-types";
+import {
+  clampFieldCameraAxis,
+  fieldCenterForStationaryWorldPoint,
+  fieldScreenToWorld,
+} from "../field/camera/field-camera-math";
 
 export function panCameraCenter(
   startCenter: GridPoint,
@@ -25,10 +30,15 @@ export function screenPointToWorld(
   metersPerPixel: number,
 ): GridPoint {
   "worklet";
-  return {
-    xMeters: center.xMeters + (point.x - size.width / 2) * metersPerPixel,
-    yMeters: center.yMeters - (point.y - size.height / 2) * metersPerPixel,
-  };
+  return fieldScreenToWorld(
+    point,
+    {
+      centerXMeters: center.xMeters,
+      centerYMeters: center.yMeters,
+      metersPerPixel,
+    },
+    size,
+  );
 }
 
 export function centerForStationaryWorldPoint(
@@ -38,12 +48,12 @@ export function centerForStationaryWorldPoint(
   metersPerPixel: number,
 ): GridPoint {
   "worklet";
-  return {
-    xMeters:
-      worldPoint.xMeters - (screenPoint.x - size.width / 2) * metersPerPixel,
-    yMeters:
-      worldPoint.yMeters + (screenPoint.y - size.height / 2) * metersPerPixel,
-  };
+  return fieldCenterForStationaryWorldPoint(
+    worldPoint,
+    screenPoint,
+    size,
+    metersPerPixel,
+  );
 }
 
 export function setGridCamera(
@@ -71,8 +81,5 @@ export function clampCameraAxis(
     minimum >= maximum
   )
     return center;
-  const minimumCenter = minimum + halfVisibleSpan;
-  const maximumCenter = maximum - halfVisibleSpan;
-  if (minimumCenter > maximumCenter) return (minimum + maximum) / 2;
-  return Math.min(maximumCenter, Math.max(minimumCenter, center));
+  return clampFieldCameraAxis(center, minimum, maximum, halfVisibleSpan);
 }

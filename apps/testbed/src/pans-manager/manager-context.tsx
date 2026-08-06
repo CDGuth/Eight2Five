@@ -1669,6 +1669,7 @@ function managerSettingsWithDefaults(
     connectionTimeoutMs: 10_000,
     positionLogMemoryCap: 1_000,
     positionLogFlushSize: 100,
+    discoveryRssiCutoff: -75,
     ...compatible,
   };
 }

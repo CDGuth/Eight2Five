@@ -50,7 +50,7 @@ export const ConversationEmptyState = ({
     {icon ?? (
       <Icon as={MessageSquare} size={48} className="text-muted-foreground" />
     )}
-    <Text className="mt-4 text-xl font-semibold text-foreground">{title}</Text>
+    <Text className="mt-4 text-xl font-heading-semibold text-foreground">{title}</Text>
     <Text className="mt-2 text-center text-base text-muted-foreground">
       {description}
     </Text>

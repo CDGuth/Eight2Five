@@ -25,7 +25,7 @@ export const dateTimePickerTriggerStyle = tva({
 });
 
 export const dateTimePickerInputStyle = tva({
-  base: 'px-3 placeholder:text-muted-foreground web:w-full h-full text-foreground/90 pointer-events-none web:outline-none ios:leading-[0px] py-0',
+  base: 'px-3 placeholder:text-muted-foreground web:w-full h-full text-foreground/90 font-body pointer-events-none web:outline-none ios:leading-[0px] py-0',
   parentVariants: {
     size: {
       xl: 'text-xl',

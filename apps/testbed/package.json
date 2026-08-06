@@ -1,6 +1,6 @@
 {
   "name": "eight2five-testbed",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -20,9 +20,9 @@
   "dependencies": {
     "@eight2five/mobile": "*",
     "@eight2five/ui": "*",
-    "expo": "~57.0.9",
+    "expo": "~57.0.10",
     "expo-dev-client": "~57.0.10",
-    "expo-router": "~57.0.9",
+    "expo-router": "~57.0.10",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0"

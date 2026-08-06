@@ -153,5 +153,6 @@ function settings(
     connectionTimeoutMs,
     positionLogMemoryCap,
     positionLogFlushSize,
+    discoveryRssiCutoff: -75,
   };
 }

@@ -76,13 +76,13 @@ const actionsheetItemStyle = tva({
 });
 
 const actionsheetItemTextStyle = tva({
-  base: 'text-foreground/70 font-normal font-body tracking-md text-left mx-2',
+  base: 'text-foreground/70 font-body tracking-md text-left mx-2',
   variants: {
     isTruncated: {
       true: '',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-body-bold',
     },
     underline: {
       true: 'underline',
@@ -138,13 +138,13 @@ const actionsheetSectionListStyle = tva({
 });
 
 const actionsheetSectionHeaderTextStyle = tva({
-  base: 'leading-5 font-bold font-heading my-0 text-foreground/50 p-3 uppercase',
+  base: 'leading-5 font-heading-bold my-0 text-foreground/50 p-3 uppercase',
   variants: {
     isTruncated: {
       true: '',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-heading-bold',
     },
     underline: {
       true: 'underline',

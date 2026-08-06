@@ -49,7 +49,7 @@ const bottomSheetItemStyle = tva({
   base: 'p-3 flex-row items-center rounded-sm w-full disabled:opacity-40 web:pointer-events-auto disabled:cursor-not-allowed hover:bg-accent/40 active:bg-accent/50 data-[focus=true]:bg-accent/20 web:data-[focus-visible=true]:bg-accent/40',
 });
 const bottomSheetItemTextStyle = tva({
-  base: 'text-foreground font-normal text-sm',
+  base: 'text-foreground font-body text-sm',
 });
 
 const bottomSheetFooterStyle = tva({
@@ -57,7 +57,7 @@ const bottomSheetFooterStyle = tva({
 });
 
 const bottomSheetTextInputStyle = tva({
-  base: 'flex-1 text-foreground text-sm md:text-sm py-1 placeholder:text-muted-foreground  web:outline-none ios:leading-[0px] web:cursor-text  h-9 w-full flex-row items-center rounded-md border border-border dark:bg-input/30 bg-transparent shadow-xs overflow-hidden px-3 gap-2',
+  base: 'flex-1 text-foreground text-sm md:text-sm font-body py-1 placeholder:text-muted-foreground  web:outline-none ios:leading-[0px] web:cursor-text  h-9 w-full flex-row items-center rounded-md border border-border dark:bg-input/30 bg-transparent shadow-xs overflow-hidden px-3 gap-2',
 });
 
 type BottomSheetContextValue = {

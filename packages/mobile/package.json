@@ -1,12 +1,18 @@
 {
   "name": "@eight2five/mobile",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./pans-manager": "./src/pans-manager/index.ts"
+    "./pans-manager": "./src/pans-manager/index.ts",
+    "./field": "./src/field/index.ts",
+    "./field/render": "./src/field/render/index.ts",
+    "./drill": "./src/drill/index.ts",
+    "./motion": "./src/motion/index.ts",
+    "./settings": "./src/settings/index.ts",
+    "./storage": "./src/storage/index.ts"
   },
   "files": [
     "src"
@@ -15,13 +21,15 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit -p tsconfig.json",
-    "test": "jest src/pans-manager --watchAll=false --passWithNoTests --runInBand"
+    "test": "jest src --watchAll=false --passWithNoTests --runInBand"
   },
   "peerDependencies": {
     "react": "19.2.3",
     "react-native": "0.86.2"
   },
   "dependencies": {
+    "@eight2five/drill-schema": "0.1.0",
+    "@expo-google-fonts/montserrat": "^0.4.2",
     "@expo/html-elements": "^0.12.5",
     "@gluestack-ui/core": "^5.0.15",
     "@gluestack-ui/utils": "^5.0.6",
@@ -52,7 +60,7 @@
     "expo-image-picker": "~57.0.6",
     "expo-keep-awake": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
-    "expo-linking": "~57.0.4",
+    "expo-linking": "~57.0.5",
     "expo-local-authentication": "~57.0.2",
     "expo-location": "~57.0.6",
     "expo-media-library": "~57.0.3",
@@ -60,7 +68,7 @@
     "expo-notifications": "~57.0.7",
     "expo-pans-ble-api": "file:../../modules/expo-pans-ble-api",
     "expo-print": "~57.0.1",
-    "expo-router": "~57.0.9",
+    "expo-router": "~57.0.10",
     "expo-screen-capture": "~57.0.1",
     "expo-screen-orientation": "~57.0.1",
     "expo-secure-store": "~57.0.1",
@@ -113,6 +121,10 @@
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
     ],
+    "moduleNameMapper": {
+      "^@eight2five/drill-schema$": "<rootDir>/../drill-schema/src/index.ts",
+      "^@eight2five/drill-schema/(.*)$": "<rootDir>/../drill-schema/src/$1"
+    },
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ]

@@ -10,7 +10,6 @@ import {
 import { withUniwind } from 'uniwind';
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { eight2FiveFonts } from '../../theme';
 const SCOPE = 'BUTTON';
 const Root = withStyleContext(Pressable, SCOPE);
 const StyledUIIcon = withUniwind(UIIcon);
@@ -37,7 +36,7 @@ const buttonStyle = tva({
       link: 'text-primary underline-offset-4 data-[hover=true]:underline',
     },
     size: {
-      default: 'px-4 py-2',
+      default: 'min-h-10 px-4 py-2',
       sm: 'min-h-8 rounded-md px-3 text-xs',
       lg: 'min-h-10 rounded-md px-8',
       icon: 'min-h-9 min-w-9',
@@ -45,7 +44,7 @@ const buttonStyle = tva({
   },
 });
 const buttonTextStyle = tva({
-  base: 'web:select-none font-sans',
+  base: 'web:select-none text-center font-heading-semibold',
   parentVariants: {
     variant: {
       default: 'text-primary-foreground',
@@ -150,7 +149,10 @@ const ButtonText = React.forwardRef<
     <UIButton.Text
       ref={ref}
       {...props}
-      style={[{ fontFamily: eight2FiveFonts.styleSemibold }, style]}
+      style={[
+        { includeFontPadding: false, textAlignVertical: 'center' },
+        style,
+      ]}
       className={buttonTextStyle({
         parentVariants: {
           size: parentSize,

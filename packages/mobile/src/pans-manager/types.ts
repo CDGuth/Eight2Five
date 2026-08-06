@@ -125,7 +125,7 @@ export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
 
 /** App-only fields which may be independently saved without a BLE session. */
 export interface LocalDeviceChanges {
-  /** @deprecated PANS device nicknames are retained for database compatibility only. */
+  /** App-only display name. Never written to PANS hardware. */
   nickname?: string | undefined;
   /** @deprecated PANS device notes are retained for database compatibility only. */
   notes?: string | undefined;
@@ -163,7 +163,7 @@ export interface ManagedDevice {
   transportDeviceId: string;
   macAddress?: string;
   nodeIdHex?: string;
-  /** @deprecated Retained only for database/import compatibility. */
+  /** App-only display name. Never written to PANS hardware. */
   nickname?: string;
   /** Legacy hardware label cache. Prefer lastKnownConfig.label. */
   label?: string;
@@ -396,13 +396,24 @@ export interface PansManagerSettings {
   connectionTimeoutMs: number;
   positionLogMemoryCap: number;
   positionLogFlushSize: number;
+  /** Stable local device identity selected by the performer app. */
+  rememberedTagDeviceId?: string;
+  /** Developer-only discovery override. Reset when Developer Mode is disabled. */
+  discoveryRssiCutoff: number;
+  /** Durable selected profile; selecting a profile does not rewrite hardware. */
+  activeNetworkId?: string;
 }
+
+export const DEFAULT_DISCOVERY_RSSI_CUTOFF = -75;
+export const MIN_DISCOVERY_RSSI_CUTOFF = -100;
+export const MAX_DISCOVERY_RSSI_CUTOFF = -30;
 
 export const DEFAULT_PANS_MANAGER_SETTINGS: PansManagerSettings = {
   discoveryStaleAfterMs: 10_000,
   connectionTimeoutMs: 10_000,
   positionLogMemoryCap: 1_000,
   positionLogFlushSize: 100,
+  discoveryRssiCutoff: DEFAULT_DISCOVERY_RSSI_CUTOFF,
 };
 
 export function normalizePansManagerSettings(
@@ -411,6 +422,28 @@ export function normalizePansManagerSettings(
   const compatible = { ...(settings ?? {}) } as Partial<PansManagerSettings> &
     Record<string, unknown>;
   delete compatible.discoveryScanDurationMs;
+  if (
+    compatible.rememberedTagDeviceId !== undefined &&
+    (typeof compatible.rememberedTagDeviceId !== "string" ||
+      !compatible.rememberedTagDeviceId.trim())
+  ) {
+    delete compatible.rememberedTagDeviceId;
+  }
+  if (
+    compatible.activeNetworkId !== undefined &&
+    (typeof compatible.activeNetworkId !== "string" ||
+      !compatible.activeNetworkId.trim())
+  ) {
+    delete compatible.activeNetworkId;
+  }
+  if (
+    typeof compatible.discoveryRssiCutoff !== "number" ||
+    !Number.isInteger(compatible.discoveryRssiCutoff) ||
+    compatible.discoveryRssiCutoff < MIN_DISCOVERY_RSSI_CUTOFF ||
+    compatible.discoveryRssiCutoff > MAX_DISCOVERY_RSSI_CUTOFF
+  ) {
+    compatible.discoveryRssiCutoff = DEFAULT_DISCOVERY_RSSI_CUTOFF;
+  }
   return { ...DEFAULT_PANS_MANAGER_SETTINGS, ...compatible };
 }
 

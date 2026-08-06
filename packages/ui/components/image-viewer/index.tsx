@@ -63,7 +63,7 @@ const imageViewerCounterStyle = tva({
 });
 
 const imageViewerCounterTextStyle = tva({
-  base: 'text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full',
+  base: 'text-white text-sm font-body-medium bg-black/60 px-4 py-2 rounded-full',
 });
 
 interface ImageItem {
@@ -671,7 +671,7 @@ const ImageViewerCloseButton = React.forwardRef<
       accessibilityRole="button"
       {...props}
     >
-      <Text className="text-white text-xl font-bold">✕</Text>
+      <Text className="text-white text-xl font-body-bold">✕</Text>
     </TouchableOpacity>
   );
 });
@@ -697,7 +697,7 @@ const ImageViewerNavigation = React.forwardRef<View, { className?: string }>(
             accessibilityLabel="Previous image"
             accessibilityRole="button"
           >
-            <Text className="text-white text-2xl font-bold">‹</Text>
+            <Text className="text-white text-2xl font-body-bold">‹</Text>
           </TouchableOpacity>
         )}
         <View className="flex-1" />
@@ -708,7 +708,7 @@ const ImageViewerNavigation = React.forwardRef<View, { className?: string }>(
             accessibilityLabel="Next image"
             accessibilityRole="button"
           >
-            <Text className="text-white text-2xl font-bold">›</Text>
+            <Text className="text-white text-2xl font-body-bold">›</Text>
           </TouchableOpacity>
         )}
       </View>

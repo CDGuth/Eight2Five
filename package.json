@@ -1,6 +1,6 @@
 {
   "name": "eight2five",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -8,6 +8,8 @@
     "modules/expo-pans-ble-api"
   ],
   "scripts": {
+    "start:drill-converter": "npm run start --workspace apps/drill-converter",
+    "build:drill-converter": "npm run build:web --workspace apps/drill-converter",
     "start:mobile": "npm run start --workspace apps/mobile",
     "start:mobile:mcp": "npm run start:mcp --workspace apps/mobile",
     "start:testbed": "npm run start --workspace apps/testbed",

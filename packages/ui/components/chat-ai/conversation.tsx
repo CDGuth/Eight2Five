@@ -47,7 +47,7 @@ export const ConversationEmptyState = ({
   className,
 }: ConversationEmptyStateProps) => (
   <View className={`flex-1  items-center justify-center   ${className || ''}`}>
-    <Text className="mt-4 text-3xl font-semibold text-foreground">{title}</Text>
+    <Text className="mt-4 text-3xl font-heading-semibold text-foreground">{title}</Text>
   </View>
 );
 

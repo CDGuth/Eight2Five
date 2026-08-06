@@ -68,9 +68,17 @@ jest.mock(
       Group: MockSkiaNode,
       Line: MockSkiaNode,
       Path: MockSkiaNode,
+      Text: MockSkiaNode,
       Circle: MockSkiaNode,
       LinearGradient: MockSkiaNode,
-      useFont: () => ({}),
+      useFont: () => ({
+        measureText: (text: string) => ({
+          x: 0,
+          y: -0.75,
+          width: text.length * 0.6,
+          height: 0.75,
+        }),
+      }),
       vec: (x: number, y: number) => ({ x, y }),
     };
   },

@@ -28,7 +28,7 @@ export const calendarHeaderButtonStyle = tva({
 });
 
 export const calendarHeaderTitleStyle = tva({
-  base: 'text-foreground text-base font-semibold',
+  base: 'text-foreground text-base font-heading-semibold',
   variants: {},
 });
 
@@ -44,7 +44,7 @@ export const calendarWeekDayStyle = tva({
 });
 
 export const calendarWeekDayTextStyle = tva({
-  base: 'text-muted-foreground text-xs font-medium uppercase',
+  base: 'text-muted-foreground text-xs font-body-medium uppercase',
   variants: {},
   parentVariants: {},
 });
@@ -83,7 +83,7 @@ export const calendarDayStyle = tva({
 });
 
 export const calendarDayTextStyle = tva({
-  base: 'text-foreground text-sm font-normal z-10',
+  base: 'text-foreground text-sm font-body z-10',
   variants: {
     state: {
       'default': 'text-foreground',
@@ -91,8 +91,8 @@ export const calendarDayTextStyle = tva({
       'today': 'text-accent-foreground',
       'disabled': 'text-muted-foreground',
       'outside-month': 'text-muted-foreground',
-      'range-start': 'text-primary-foreground font-semibold',
-      'range-end': 'text-primary-foreground font-semibold',
+      'range-start': 'text-primary-foreground font-body-semibold',
+      'range-end': 'text-primary-foreground font-body-semibold',
       'range-middle': 'text-foreground',
     },
   },
@@ -122,7 +122,7 @@ export const calendarWeekNumberStyle = tva({
 });
 
 export const calendarWeekNumberTextStyle = tva({
-  base: 'text-muted-foreground text-xs font-normal',
+  base: 'text-muted-foreground text-xs font-body',
   variants: {},
   parentVariants: {},
 });

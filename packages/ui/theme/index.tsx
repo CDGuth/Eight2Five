@@ -3,13 +3,18 @@ import { Montserrat_500Medium } from '@expo-google-fonts/montserrat/500Medium';
 import { Montserrat_600SemiBold } from '@expo-google-fonts/montserrat/600SemiBold';
 import { Montserrat_700Bold } from '@expo-google-fonts/montserrat/700Bold';
 import { SourceSans3_400Regular } from '@expo-google-fonts/source-sans-3/400Regular';
+import { SourceSans3_500Medium } from '@expo-google-fonts/source-sans-3/500Medium';
 import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
 import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
+import { COLOR_PRESETS } from '@eight2five/drill-schema';
 import { useFonts } from 'expo-font';
-import { useColorScheme } from 'react-native';
+import React from 'react';
+import { useColorScheme, type ColorSchemeName } from 'react-native';
+
+export const eight2FiveDrillColors = COLOR_PRESETS;
 
 export const eight2FiveBaseColors = {
-  blue: '#3C6EC8',
+  blue: eight2FiveDrillColors.blue,
   blueSecondary: '#3264BE',
   white: '#FFFFFF',
   black: '#000000',
@@ -71,16 +76,24 @@ export const eight2FiveSpacing = {
 } as const;
 
 export const eight2FiveFonts = {
-  style: 'Montserrat',
-  utility: 'Source Sans 3',
+  style: 'Montserrat_400Regular',
+  utility: 'SourceSans3_400Regular',
   styleRegular: 'Montserrat_400Regular',
   styleMedium: 'Montserrat_500Medium',
   styleSemibold: 'Montserrat_600SemiBold',
   styleBold: 'Montserrat_700Bold',
   utilityRegular: 'SourceSans3_400Regular',
+  utilityMedium: 'SourceSans3_500Medium',
   utilitySemibold: 'SourceSans3_600SemiBold',
   utilityBold: 'SourceSans3_700Bold',
 } as const;
+
+function colorWithOpacity(color: `#${string}`, opacity: number): string {
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
 
 export const eight2FiveThemes = {
   light: {
@@ -96,7 +109,7 @@ export const eight2FiveThemes = {
     border: eight2FiveLightColors.secondary,
     accent: eight2FiveLightColors.blue,
     accentPressed: eight2FiveLightColors.blueSecondary,
-    accentSoft: 'rgba(60, 110, 200, 0.12)',
+    accentSoft: colorWithOpacity(eight2FiveDrillColors.blue, 0.12),
     danger: eight2FiveLightColors.danger,
     dangerSoft: 'rgba(200, 60, 60, 0.12)',
     warning: eight2FiveLightColors.warning,
@@ -119,7 +132,7 @@ export const eight2FiveThemes = {
     border: eight2FiveDarkColors.primary,
     accent: eight2FiveDarkColors.blue,
     accentPressed: eight2FiveDarkColors.blueSecondary,
-    accentSoft: 'rgba(60, 110, 200, 0.20)',
+    accentSoft: colorWithOpacity(eight2FiveDrillColors.blue, 0.2),
     danger: eight2FiveDarkColors.danger,
     dangerSoft: 'rgba(200, 60, 60, 0.18)',
     warning: eight2FiveDarkColors.warning,
@@ -133,9 +146,48 @@ export const eight2FiveThemes = {
 
 export type Eight2FiveThemeName = keyof typeof eight2FiveThemes;
 export type Eight2FiveTheme = (typeof eight2FiveThemes)[Eight2FiveThemeName];
+export type Eight2FiveThemeMode = Eight2FiveThemeName | 'system';
+
+const Eight2FiveThemeNameContext = React.createContext<
+  Eight2FiveThemeName | undefined
+>(undefined);
+
+export function resolveEight2FiveThemeName(
+  mode: Eight2FiveThemeMode,
+  systemColorScheme: ColorSchemeName | null | undefined
+): Eight2FiveThemeName {
+  if (mode !== 'system') return mode;
+  return systemColorScheme === 'dark' ? 'dark' : 'light';
+}
+
+export function Eight2FiveThemeProvider({
+  mode,
+  children,
+}: {
+  mode: Eight2FiveThemeMode;
+  children: React.ReactNode;
+}) {
+  const systemColorScheme = useColorScheme();
+  const themeName = resolveEight2FiveThemeName(mode, systemColorScheme);
+
+  return (
+    <Eight2FiveThemeNameContext.Provider value={themeName}>
+      {children}
+    </Eight2FiveThemeNameContext.Provider>
+  );
+}
+
+export function useEight2FiveThemeName(): Eight2FiveThemeName {
+  const providedThemeName = React.useContext(Eight2FiveThemeNameContext);
+  const systemColorScheme = useColorScheme();
+  return (
+    providedThemeName ??
+    resolveEight2FiveThemeName('system', systemColorScheme)
+  );
+}
 
 export function useEight2FiveTheme(): Eight2FiveTheme {
-  return eight2FiveThemes[useColorScheme() === 'dark' ? 'dark' : 'light'];
+  return eight2FiveThemes[useEight2FiveThemeName()];
 }
 
 export function useEight2FiveFonts(): [boolean, Error | null] {
@@ -145,6 +197,7 @@ export function useEight2FiveFonts(): [boolean, Error | null] {
     Montserrat_600SemiBold,
     Montserrat_700Bold,
     SourceSans3_400Regular,
+    SourceSans3_500Medium,
     SourceSans3_600SemiBold,
     SourceSans3_700Bold,
   });

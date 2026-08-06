@@ -38,13 +38,13 @@ const fabStyle = tva({
 });
 
 const fabLabelStyle = tva({
-  base: 'text-primary-foreground/90 font-normal font-body tracking-md text-left mx-2',
+  base: 'text-primary-foreground/90 font-body tracking-md text-left mx-2',
   variants: {
     isTruncated: {
       true: '',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-body-bold',
     },
     underline: {
       true: 'underline',

@@ -1,0 +1,52 @@
+{
+  "name": "eight2five-drill-converter",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --web",
+    "web": "expo start --web",
+    "build:web": "expo export --platform web",
+    "type-check": "tsc --noEmit",
+    "lint": "expo lint",
+    "lint:fix": "expo lint --fix",
+    "test": "jest --watchAll=false --passWithNoTests --runInBand"
+  },
+  "dependencies": {
+    "@eight2five/drill-importers": "0.1.0",
+    "@eight2five/drill-schema": "0.1.0",
+    "@eight2five/ui": "0.1.0",
+    "@expo/metro-runtime": "~57.0.8",
+    "expo": "~57.0.10",
+    "expo-document-picker": "~57.0.1",
+    "expo-router": "~57.0.10",
+    "lucide-react-native": "^1.22.0",
+    "react": "19.2.3",
+    "react-dom": "^19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/react": "~19.2.10",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "jest": "^29.7.0",
+    "jest-expo": "~57.0.3",
+    "prettier": "^3.6.2",
+    "typescript": "~6.0.3"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@eight2five/drill-schema$": "<rootDir>/../../packages/drill-schema/src/index.ts",
+      "^@eight2five/drill-schema/(.*)$": "<rootDir>/../../packages/drill-schema/src/$1",
+      "^@eight2five/drill-importers$": "<rootDir>/../../packages/drill-importers/src/index.ts",
+      "^@eight2five/drill-importers/(.*)$": "<rootDir>/../../packages/drill-importers/src/$1"
+    }
+  }
+}

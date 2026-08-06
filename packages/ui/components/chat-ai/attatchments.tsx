@@ -150,7 +150,7 @@ export const Attachment = ({
         className={`
           group relative
           ${variant === 'grid' ? 'w-24 h-24 overflow-hidden rounded-lg' : ''}
-          ${variant === 'inline' ? 'flex h-8 items-center gap-1.5 rounded-md border border-border px-1.5 text-sm font-medium' : ''}
+          ${variant === 'inline' ? 'flex h-8 items-center gap-1.5 rounded-md border border-border px-1.5 text-sm font-body-medium' : ''}
           ${variant === 'list' ? 'flex w-full items-center gap-3 rounded-lg border p-3' : ''}
           ${className}
         `}

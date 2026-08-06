@@ -1,17 +1,17 @@
 import { tva } from '@gluestack-ui/utils/nativewind-utils';
 import { isWeb } from '@gluestack-ui/utils/nativewind-utils';
 const baseStyle = isWeb
-  ? 'font-sans tracking-sm bg-transparent border-0 box-border display-inline list-none margin-0 padding-0 position-relative text-start no-underline whitespace-pre-wrap word-wrap-break-word'
+  ? 'tracking-sm bg-transparent border-0 box-border display-inline list-none margin-0 padding-0 position-relative text-start no-underline whitespace-pre-wrap word-wrap-break-word'
   : '';
 
 export const headingStyle = tva({
-  base: `text-foreground font-bold font-heading tracking-sm my-0 ${baseStyle}`,
+  base: `text-foreground font-heading-bold tracking-sm my-0 ${baseStyle}`,
   variants: {
     isTruncated: {
       true: 'truncate',
     },
     bold: {
-      true: 'font-bold',
+      true: 'font-heading-bold',
     },
     underline: {
       true: 'underline',

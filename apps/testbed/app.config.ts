@@ -19,7 +19,7 @@ const config: ExpoConfig = {
   slug: "eight2five-testbed",
   scheme: "eight2five-testbed",
   platforms: ["ios", "android"],
-  version: "0.0.0",
+  version: "0.1.0",
   orientation: "portrait",
   icon: "./assets/app-icons/testbed-android-legacy-icon.png",
   userInterfaceStyle: "automatic",
@@ -47,6 +47,15 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-build-properties",
+      {
+        buildReactNativeFromSource: false,
+        ios: {
+          ccacheEnabled: true,
+        },
+      },
+    ],
     [
       "expo-splash-screen",
       {
