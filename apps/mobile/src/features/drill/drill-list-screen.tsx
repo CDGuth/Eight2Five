@@ -105,7 +105,7 @@ export function DrillListScreen() {
               ? `import:${controller.pendingImport.fileName}`
               : controller.performerDialog
                 ? `performer:${controller.performerDialog.drill?.id}:${controller.performerDialog.drill?.selectedPerformerEntityId ?? "none"}`
-                : "closed"
+                : "performer:closed"
           }
           document={
             controller.pendingImport?.document ??
@@ -146,7 +146,7 @@ export function DrillListScreen() {
           key={
             controller.propertiesDialog
               ? `${controller.propertiesDialog.drill.id}:${controller.propertiesDialog.drill.updatedAt}`
-              : "closed"
+              : "properties:closed"
           }
           drill={controller.propertiesDialog?.drill}
           document={controller.propertiesDialog?.document}

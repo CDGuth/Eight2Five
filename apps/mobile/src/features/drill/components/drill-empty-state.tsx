@@ -39,9 +39,14 @@ export function DrillEmptyState({
           Upload an Eight2Five drill file to start working with its{" "}
           {terms.lowercasePlural}.
         </Text>
-        <Button onPress={onUpload} accessibilityLabel="Upload Drill">
-          <ButtonIcon as={FileUp} />
-          <ButtonText>Upload Drill</ButtonText>
+        <Button
+          variant="link"
+          onPress={onUpload}
+          accessibilityLabel="Upload Drill"
+          className="px-0"
+        >
+          <ButtonIcon as={FileUp} style={{ color: theme.accent }} />
+          <ButtonText style={{ color: theme.accent }}>Upload Drill</ButtonText>
         </Button>
       </VStack>
     </Center>
