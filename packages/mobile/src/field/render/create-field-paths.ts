@@ -205,10 +205,8 @@ export function createFieldPaths(
   ] as const;
   const inboundsMarkings = template.fieldDefinition.markings.inboundsHashMarks;
   const hashMarks: string[] = [];
-  const inboundsXCoordinates = spacedInteriorCoordinates(
-    fieldExtent.minXMeters,
-    fieldExtent.maxXMeters,
-    inboundsMarkings.spacingMeters,
+  const inboundsXCoordinates = template.yardLines.map(
+    (line) => line.coordinateMeters,
   );
   for (const yMeters of hashYCoordinates) {
     for (const xMeters of inboundsXCoordinates) {
@@ -283,7 +281,7 @@ export function createFieldPaths(
     }),
     yardLines: Object.freeze({ lineCount: template.yardLines.length }),
     hashMarks: Object.freeze({
-      spacingMeters: inboundsMarkings.spacingMeters,
+      spacingMeters: template.dimensions.fiveYardLineSpacingMeters,
       tickLengthMeters: inboundsMarkings.lengthMeters,
       rowCount: 2,
       ticksPerRow: inboundsXCoordinates.length,

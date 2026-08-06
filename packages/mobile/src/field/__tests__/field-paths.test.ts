@@ -188,13 +188,13 @@ describe("aggregate field paths", () => {
     },
   );
 
-  test("renders perpendicular inbounds hashes without treating guides as ticks", () => {
+  test("renders one perpendicular inbounds hash on each full yard line", () => {
     const paths = createFieldPaths(field);
     const hashSegments = parseSubpaths(paths.hashMarksPath);
 
     expect(subpathCount(paths.yardLinesPath)).toBe(19);
     expect(paths.counts.yardLines.lineCount).toBe(19);
-    expect(hashSegments).toHaveLength(198);
+    expect(hashSegments).toHaveLength(38);
     expect(
       hashSegments.every(
         ({ x1, y1, x2, y2 }) =>
@@ -208,13 +208,20 @@ describe("aggregate field paths", () => {
     ).toBe(true);
     expect(paths.counts.hashMarks).toMatchObject({
       rowCount: 2,
-      ticksPerRow: 99,
-      tickCount: 198,
-      spacingMeters:
-        field.fieldDefinition.markings.inboundsHashMarks.spacingMeters,
+      ticksPerRow: 19,
+      tickCount: 38,
+      spacingMeters: field.dimensions.fiveYardLineSpacingMeters,
       tickLengthMeters:
         field.fieldDefinition.markings.inboundsHashMarks.lengthMeters,
     });
+    const yardLineCoordinates = new Set(
+      field.yardLines.map((line) => Number(line.coordinateMeters.toFixed(6))),
+    );
+    expect(
+      hashSegments.every(({ x1, x2 }) =>
+        yardLineCoordinates.has(Number(((x1 + x2) / 2).toFixed(6))),
+      ),
+    ).toBe(true);
     expect(paths.hashGuideLinesPath).toBe("");
     expect(subpathCount(paths.hashGuideLinesPath)).toBe(0);
     expect(paths.counts.hashGuideLines.lineCount).toBe(0);

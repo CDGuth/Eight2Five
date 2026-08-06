@@ -204,13 +204,18 @@ function SidelineLabel({
   const width = font.measureText(text).width;
   const transform = useDerivedValue(() => {
     const scale = metersPerPixel.value;
-    return perspective === "performer"
-      ? [{ scaleX: -scale }, { scaleY: scale }]
-      : [{ scaleX: scale }, { scaleY: -scale }];
+    const uprightScaleX = perspective === "performer" ? -scale : scale;
+    const uprightScaleY = perspective === "performer" ? scale : -scale;
+    const orientation = atTop ? 1 : -1;
+    return [
+      { scaleX: uprightScaleX * orientation },
+      { scaleY: uprightScaleY * orientation },
+    ];
   });
-  const baselineOffset = atTop
-    ? SIDELINE_LABEL_FONT_SIZE_PX + SIDELINE_LABEL_INSET_PX
-    : -SIDELINE_LABEL_INSET_PX;
+  // Keep the label outside the field with the bottom of the lettering facing
+  // its sideline. The lower on-screen label is rotated 180 degrees, so the
+  // same local baseline offset works for both sides.
+  const baselineOffset = -SIDELINE_LABEL_INSET_PX;
 
   return (
     <Group origin={{ x: 0, y: yMeters }} transform={transform} opacity={0.78}>
