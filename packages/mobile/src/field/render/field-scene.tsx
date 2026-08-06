@@ -75,6 +75,7 @@ export function FieldScene({
         paths={paths}
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
+        perspective={perspective}
         showPerimeterStepGrid={showPerimeterStepGrid}
         showAuxiliaryFieldMarks={showAuxiliaryFieldMarks}
       />
@@ -89,6 +90,7 @@ export function FieldScene({
         fallbackTargetPosition={targetPosition}
         metersPerPixel={camera.metersPerPixel}
         palette={palette}
+        perspective={perspective}
       />
       {guidanceVisible && targetPosition ? (
         <FieldGuidanceLayer

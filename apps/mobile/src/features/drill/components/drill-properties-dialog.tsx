@@ -1,35 +1,27 @@
 import React from "react";
 import { Alert } from "react-native";
-import { Check, Trash2 } from "lucide-react-native";
+import { Trash2, X } from "lucide-react-native";
 import type {
   Drill,
   DrillDocument,
   DrillTerms,
-  UpdateDrillPropertiesInput,
 } from "@eight2five/mobile/drill";
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
-import {
-  FormControl,
-  FormControlLabel,
-  FormControlLabelText,
-} from "@eight2five/ui/components/form-control";
 import { Heading } from "@eight2five/ui/components/heading";
 import { Icon } from "@eight2five/ui/components/icon";
-import { Input, InputField } from "@eight2five/ui/components/input";
 import {
   Modal,
   ModalBackdrop,
   ModalBody,
+  ModalCloseButton,
   ModalContent,
   ModalFooter,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
-import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -39,9 +31,9 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 
+import { SpinningLoaderIcon } from "../../../components/spinning-loader-icon";
 import { SettingsMessage } from "../../settings/settings-components";
-import { DRILL_ICON_NAMES, resolveDrillIcon } from "../drill-icons";
-import { DRILL_NAME_MAX_LENGTH, validateDrillName } from "../drill-management";
+import { resolveDrillIcon } from "../drill-icons";
 
 export function DrillPropertiesDialog({
   drill,
@@ -52,7 +44,6 @@ export function DrillPropertiesDialog({
   saving,
   error,
   onClose,
-  onSave,
   onDelete,
 }: {
   readonly drill?: Drill;
@@ -63,32 +54,12 @@ export function DrillPropertiesDialog({
   readonly saving: boolean;
   readonly error?: Error;
   readonly onClose: () => void;
-  readonly onSave: (input: UpdateDrillPropertiesInput) => Promise<void>;
   readonly onDelete: () => Promise<void>;
 }) {
   const theme = useEight2FiveTheme();
-  const [name, setName] = React.useState(drill?.name ?? "");
-  const [iconName, setIconName] = React.useState<string | undefined>(
-    drill?.metadata?.lucideIcon,
-  );
-  const [formError, setFormError] = React.useState<string>();
-
   if (!drill) return null;
   const metadata = document?.metadata ?? drill.metadata;
-
-  const save = async () => {
-    const validationError = validateDrillName(name);
-    setFormError(validationError);
-    if (validationError) return;
-    try {
-      await onSave({
-        name: name.trim(),
-        lucideIcon: iconName ?? null,
-      });
-    } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : String(cause));
-    }
-  };
+  const DrillIcon = resolveDrillIcon(drill.metadata?.lucideIcon);
 
   const confirmDelete = () => {
     Alert.alert(
@@ -106,18 +77,17 @@ export function DrillPropertiesDialog({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        if (!saving && !loading) onClose();
-      }}
-      size="lg"
-      avoidKeyboard
-    >
+    <Modal isOpen={isOpen} onClose={saving ? undefined : onClose} size="lg">
       <ModalBackdrop />
       <ModalContent>
-        <ModalHeader>
+        <ModalHeader className="items-center justify-between">
           <Heading size="md">Drill Info</Heading>
+          <ModalCloseButton
+            accessibilityLabel="Close drill info"
+            disabled={saving}
+          >
+            <Icon as={X} />
+          </ModalCloseButton>
         </ModalHeader>
         <ModalBody>
           <VStack style={{ gap: eight2FiveSpacing.md }}>
@@ -127,61 +97,29 @@ export function DrillPropertiesDialog({
             {error ? (
               <SettingsMessage tone="error">{error.message}</SettingsMessage>
             ) : null}
-            {formError ? (
-              <SettingsMessage tone="error">{formError}</SettingsMessage>
-            ) : null}
 
-            <FormControl isRequired isInvalid={Boolean(formError)}>
-              <FormControlLabel>
-                <FormControlLabelText>Drill name</FormControlLabelText>
-              </FormControlLabel>
-              <Input isDisabled={saving}>
-                <InputField
-                  value={name}
-                  onChangeText={(value) => {
-                    setName(value);
-                    if (formError) setFormError(undefined);
-                  }}
-                  maxLength={DRILL_NAME_MAX_LENGTH}
-                  autoCapitalize="words"
-                  accessibilityLabel="Drill name"
-                />
-              </Input>
-            </FormControl>
-
-            <VStack style={{ gap: eight2FiveSpacing.xs }}>
+            <VStack
+              className="items-center"
+              style={{ gap: eight2FiveSpacing.xs }}
+            >
+              <Icon as={DrillIcon} size={48} style={{ color: theme.text }} />
               <Text
                 style={{
                   color: theme.text,
                   fontFamily: eight2FiveFonts.styleSemibold,
+                  fontSize: 18,
                 }}
               >
-                Card icon
+                {drill.name}
               </Text>
-              <HStackWrap>
-                <IconChoice
-                  label="Default drill icon"
-                  selected={!iconName}
-                  icon={resolveDrillIcon(undefined)}
-                  onPress={() => setIconName(undefined)}
-                />
-                {DRILL_ICON_NAMES.map((nameOption) => (
-                  <IconChoice
-                    key={nameOption}
-                    label={`Use ${nameOption} icon`}
-                    selected={iconName === nameOption}
-                    icon={resolveDrillIcon(nameOption)}
-                    onPress={() => setIconName(nameOption)}
-                  />
-                ))}
-              </HStackWrap>
             </VStack>
 
             <VStack
               style={{
                 gap: eight2FiveSpacing.sm,
                 padding: eight2FiveSpacing.md,
-                borderRadius: eight2FiveRadii.md,
+                borderRadius: eight2FiveRadii.lg,
+                borderCurve: "continuous",
                 backgroundColor: theme.surface,
               }}
             >
@@ -206,71 +144,15 @@ export function DrillPropertiesDialog({
             isDisabled={saving || loading}
             accessibilityLabel={`Delete ${drill.name}`}
           >
-            <ButtonIcon as={Trash2} />
+            {saving ? <SpinningLoaderIcon /> : <ButtonIcon as={Trash2} />}
             <ButtonText>Delete</ButtonText>
           </Button>
           <Button variant="ghost" onPress={onClose} isDisabled={saving}>
-            <ButtonText>Cancel</ButtonText>
-          </Button>
-          <Button
-            onPress={() => void save()}
-            isDisabled={saving || loading}
-            accessibilityState={{ busy: saving, disabled: saving || loading }}
-          >
-            {saving ? <ButtonSpinner /> : <ButtonIcon as={Check} />}
-            <ButtonText>Save</ButtonText>
+            <ButtonText>Close</ButtonText>
           </Button>
         </ModalFooter>
       </ModalContent>
     </Modal>
-  );
-}
-
-function HStackWrap({ children }: { readonly children: React.ReactNode }) {
-  return (
-    <VStack
-      style={{
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: eight2FiveSpacing.xs,
-      }}
-    >
-      {children}
-    </VStack>
-  );
-}
-
-function IconChoice({
-  label,
-  selected,
-  icon,
-  onPress,
-}: {
-  readonly label: string;
-  readonly selected: boolean;
-  readonly icon: React.ElementType;
-  readonly onPress: () => void;
-}) {
-  const theme = useEight2FiveTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected }}
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: eight2FiveRadii.sm,
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? theme.accent : theme.border,
-        backgroundColor: selected ? theme.accentSoft : theme.surfaceRaised,
-      }}
-    >
-      <Icon as={icon} size="md" style={{ color: theme.text }} />
-    </Pressable>
   );
 }
 

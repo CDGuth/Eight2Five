@@ -1,4 +1,5 @@
 import type { FieldPresetId } from "@eight2five/drill-schema";
+import type { CoordinateRoundingSteps } from "@eight2five/mobile/settings";
 import {
   fieldPointToMarchingCoordinate,
   formatMarchingFrontBack,
@@ -13,12 +14,17 @@ import type { CoordinateLines } from "./field-hud-state";
 export function getLiveCoordinateLines(
   live: FieldLivePositionState,
   fieldPreset: FieldPresetId = "football-nfhs",
+  roundingSteps: CoordinateRoundingSteps = 0.25,
 ): CoordinateLines | null {
   if (!live.position || live.isStale) return null;
   const coordinate = fieldPointToMarchingCoordinate(live.position, fieldPreset);
   return {
-    side: formatMarchingSide(coordinate.side),
-    frontBack: formatMarchingFrontBack(coordinate.frontBack, fieldPreset),
+    side: formatMarchingSide(coordinate.side, roundingSteps),
+    frontBack: formatMarchingFrontBack(
+      coordinate.frontBack,
+      fieldPreset,
+      roundingSteps,
+    ),
   };
 }
 

@@ -10,7 +10,10 @@ import {
   type DrillSet,
   type DrillTerminology,
 } from "@eight2five/mobile/drill";
-import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type {
+  CoordinateRoundingSteps,
+  TransitionMetricMode,
+} from "@eight2five/mobile/settings";
 
 import { getTransitionPresentation } from "../drill/transition-presentation";
 
@@ -61,11 +64,16 @@ export interface DrillSetHudPresentation {
 export function formatDrillCoordinateLines(
   position: DrillSet["position"],
   fieldPreset: FieldPresetId = "football-nfhs",
+  roundingSteps: CoordinateRoundingSteps = 0.25,
 ): CoordinateLines {
   const coordinate = drillGridPointToMarchingCoordinate(position, fieldPreset);
   return {
-    side: formatMarchingSide(coordinate.side),
-    frontBack: formatMarchingFrontBack(coordinate.frontBack, fieldPreset),
+    side: formatMarchingSide(coordinate.side, roundingSteps),
+    frontBack: formatMarchingFrontBack(
+      coordinate.frontBack,
+      fieldPreset,
+      roundingSteps,
+    ),
   };
 }
 
@@ -75,12 +83,14 @@ export function getDrillSetHudPresentation({
   metricMode,
   fieldPreset = "football-nfhs",
   terminology,
+  coordinateRoundingSteps = 0.25,
 }: {
   readonly page?: DrillSet;
   readonly previousPage?: DrillSet;
   readonly metricMode: TransitionMetricMode;
   readonly fieldPreset?: FieldPresetId;
   readonly terminology: DrillTerminology;
+  readonly coordinateRoundingSteps?: CoordinateRoundingSteps;
 }): DrillSetHudPresentation {
   const terms = getDrillTerms(terminology);
   const metricLabel = metricMode === "step-size" ? "Step Size" : "xCounts";
@@ -108,7 +118,11 @@ export function getDrillSetHudPresentation({
       metricMode === "step-size"
         ? transition.stepSize
         : transition.crossingCounts,
-    coordinate: formatDrillCoordinateLines(page.position, fieldPreset),
+    coordinate: formatDrillCoordinateLines(
+      page.position,
+      fieldPreset,
+      coordinateRoundingSteps,
+    ),
   };
 }
 

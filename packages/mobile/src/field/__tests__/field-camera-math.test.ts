@@ -87,7 +87,7 @@ describe("field camera math", () => {
     expect(preserved.y).toBeCloseTo(focal.y, 10);
   });
 
-  test("clamps using the visible half span and centers oversized viewports", () => {
+  test("clamps only the camera center even when the viewport is oversized", () => {
     const bounds = {
       minXMeters: 0,
       maxXMeters: 100,
@@ -101,8 +101,8 @@ describe("field camera math", () => {
         bounds,
       ),
     ).toEqual({
-      centerXMeters: 40,
-      centerYMeters: 30,
+      centerXMeters: 0,
+      centerYMeters: 50,
       metersPerPixel: 0.1,
     });
     expect(
@@ -111,7 +111,7 @@ describe("field camera math", () => {
         size,
         bounds,
       ),
-    ).toMatchObject({ centerXMeters: 50, centerYMeters: 25 });
+    ).toMatchObject({ centerXMeters: 10, centerYMeters: 10 });
   });
 
   test("clamps panning to the exterior camera allowance in both orientations", () => {
@@ -129,14 +129,8 @@ describe("field camera math", () => {
         bounds,
       );
 
-      expect(clamped.centerXMeters).toBeCloseTo(
-        bounds.minXMeters + (currentSize.width * metersPerPixel) / 2,
-        10,
-      );
-      expect(clamped.centerYMeters).toBeCloseTo(
-        bounds.maxYMeters - (currentSize.height * metersPerPixel) / 2,
-        10,
-      );
+      expect(clamped.centerXMeters).toBeCloseTo(bounds.minXMeters, 10);
+      expect(clamped.centerYMeters).toBeCloseTo(bounds.maxYMeters, 10);
     }
   });
 

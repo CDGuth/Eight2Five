@@ -16,11 +16,17 @@ describe("Field overlay layout", () => {
     expect(layout.hudStyle.top).toBe(38);
     expect(layout.hudStyle.left).toBe(24);
     expect(layout.hudWidth).toBeGreaterThan(0);
-    expect(layout.liveStyle.right).toBe(24);
-    expect(layout.dialStyle.right).toBe(24);
-    expect(Number(layout.dialStyle.top)).toBe(
-      Number(layout.liveStyle.top) + layout.controlDiameter + layout.controlGap,
-    );
+    const topGap = Number(layout.liveStyle.top) - insets.top;
+    const betweenGap =
+      Number(layout.dialStyle.top) -
+      (Number(layout.liveStyle.top) + layout.controlDiameter);
+    const bottomGap =
+      390 -
+      insets.bottom -
+      (Number(layout.dialStyle.top) + layout.controlDiameter);
+    expect(topGap).toBeCloseTo(layout.controlGap);
+    expect(betweenGap).toBeCloseTo(layout.controlGap);
+    expect(bottomGap).toBeCloseTo(layout.controlGap);
   });
 
   test("centers the live/dial pair above the bottom inset in portrait", () => {
@@ -34,20 +40,18 @@ describe("Field overlay layout", () => {
     expect(layout.controlDiameter).toBeGreaterThanOrEqual(140);
     expect(layout.controlDiameter).toBeLessThanOrEqual(156);
     expect(layout.hudStyle.left).toBe(22);
-    expect(layout.dialStyle.bottom).toBe(32);
-    expect(layout.liveStyle.left).toBe(
-      insets.left +
-        (390 -
-          insets.left -
-          insets.right -
-          (layout.controlDiameter * 2 + layout.controlGap)) /
-          2,
-    );
-    expect(Number(layout.dialStyle.left)).toBe(
-      Number(layout.liveStyle.left) +
-        layout.controlDiameter +
-        layout.controlGap,
-    );
+    const leftGap = Number(layout.liveStyle.left) - insets.left;
+    const betweenGap =
+      Number(layout.dialStyle.left) -
+      (Number(layout.liveStyle.left) + layout.controlDiameter);
+    const rightGap =
+      390 -
+      insets.right -
+      (Number(layout.dialStyle.left) + layout.controlDiameter);
+    expect(leftGap).toBeCloseTo(layout.controlGap);
+    expect(betweenGap).toBeCloseTo(layout.controlGap);
+    expect(rightGap).toBeCloseTo(layout.controlGap);
+    expect(layout.dialStyle.bottom).toBe(insets.bottom + layout.controlGap);
   });
 
   test("shrinks both portrait controls together on a narrow safe width", () => {
@@ -57,9 +61,9 @@ describe("Field overlay layout", () => {
       landscape: false,
       insets: { top: 20, right: 18, bottom: 20, left: 18 },
     });
-    const availableWidth = 360 - 18 - 18 - layout.outerPadding * 2;
-    expect(layout.controlDiameter * 2 + layout.controlGap).toBeLessThanOrEqual(
-      availableWidth,
+    const safeWidth = 360 - 18 - 18;
+    expect(layout.controlDiameter * 2 + layout.controlGap * 3).toBeCloseTo(
+      safeWidth,
     );
   });
 

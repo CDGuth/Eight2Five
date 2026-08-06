@@ -23,6 +23,7 @@ import type {
   CountDisplayMode,
   DrillSetHudPresentation,
 } from "../field-hud-state";
+import { CoordinateLinesView } from "../coordinate-lines-view";
 import { AnimatedValueSwitch } from "./animated-value-switch";
 import type { DrillPillColumnMetrics } from "./drill-pill-layout";
 import {
@@ -82,7 +83,10 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleCounts ? "auto" : "none"}
         onPress={onToggleCounts}
-        style={{ width: columns.countWidth }}
+        style={{
+          width: columns.countWidth,
+          paddingLeft: columns.horizontalPadding,
+        }}
       >
         <SwitchingMetricCell
           displayKey={count.key}
@@ -126,30 +130,26 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         onPress={onToggleExpanded}
         style={{ width: columns.coordinateWidth }}
       >
-        <HStack className="flex-1 items-center" style={{ gap: 2, height: 48 }}>
-          <VStack className="flex-1 justify-center">
+        <HStack
+          className="flex-1 items-center"
+          style={{ gap: 2, minHeight: 48 }}
+        >
+          <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
             <Text
-              numberOfLines={2}
               maxFontSizeMultiplier={1.4}
               size="xs"
               style={{ color: labelColor, lineHeight: 13 }}
             >
               Coordinate
             </Text>
-            <Text
-              numberOfLines={2}
-              maxFontSizeMultiplier={1.4}
-              style={{
-                color: valueColor,
-                fontFamily: eight2FiveFonts.utilitySemibold,
-                fontSize: 14,
-                lineHeight: 17,
-              }}
-            >
-              {presentation.coordinate
-                ? `${presentation.coordinate.side}\n${presentation.coordinate.frontBack}`
-                : "–"}
-            </Text>
+            <CoordinateLinesView
+              coordinate={presentation.coordinate}
+              color={valueColor}
+              mutedColor={labelColor}
+              fontSize={14}
+              lineHeight={17}
+              iconSize={12}
+            />
           </VStack>
           {header && onToggleExpanded ? (
             <Icon

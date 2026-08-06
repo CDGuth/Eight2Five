@@ -1,4 +1,5 @@
 import type { EntityIcon } from "@eight2five/drill-schema";
+import type { FieldCameraPerspective } from "../camera/field-camera-types";
 
 /** Icons that can be rendered as a directional path or as a circle. */
 export type DrillShapeIcon = EntityIcon | "circle";
@@ -39,12 +40,12 @@ export interface DrillLabelTransformPolicy {
  */
 export function getDrillLabelTransformPolicy(
   metersPerPixel: number,
+  perspective: FieldCameraPerspective = "director",
 ): DrillLabelTransformPolicy {
   "worklet";
-  return {
-    scaleX: metersPerPixel,
-    scaleY: -metersPerPixel,
-  };
+  return perspective === "performer"
+    ? { scaleX: -metersPerPixel, scaleY: metersPerPixel }
+    : { scaleX: metersPerPixel, scaleY: -metersPerPixel };
 }
 
 /**

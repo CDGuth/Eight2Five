@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 8;
+export const MOBILE_SCHEMA_VERSION = 9;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -160,6 +160,8 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
         CHECK (transition_metric_mode IN ('step-size', 'crossing-counts')),
       count_display_mode TEXT NOT NULL DEFAULT 'counts'
         CHECK (count_display_mode IN ('counts', 'measures')),
+      coordinate_rounding_steps REAL NOT NULL DEFAULT 0.25
+        CHECK (coordinate_rounding_steps IN (0.125, 0.25, 0.5, 1)),
       guidance_enabled INTEGER NOT NULL DEFAULT 1
         CHECK (guidance_enabled IN (0, 1)),
       developer_mode_enabled INTEGER NOT NULL DEFAULT 0

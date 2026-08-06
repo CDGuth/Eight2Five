@@ -52,7 +52,7 @@ export interface HashMarksPathMetadata {
 }
 
 export interface HashGuideLinesPathMetadata {
-  readonly lineCount: 2;
+  readonly lineCount: 0;
 }
 
 export interface SidelineHashMarksPathMetadata {
@@ -222,15 +222,10 @@ export function createFieldPaths(
     }
   }
   const hashMarksPath = hashMarks.join(" ");
-  const hashGuideLinesPath = template.hashLines
-    .map((line) =>
-      horizontalSegment(
-        fieldExtent.minXMeters,
-        line.coordinateMeters,
-        fieldExtent.maxXMeters,
-      ),
-    )
-    .join(" ");
+  // A football hash is a sequence of discrete two-foot ticks, never a
+  // continuous guide line across the field. Keep the legacy path slot empty
+  // so older render consumers cannot accidentally resurrect that artifact.
+  const hashGuideLinesPath = "";
 
   const sidelineMarkings = template.fieldDefinition.markings.sidelineHashMarks;
   const sidelineXCoordinates = spacedInteriorCoordinates(
@@ -294,7 +289,7 @@ export function createFieldPaths(
       ticksPerRow: inboundsXCoordinates.length,
       tickCount: hashMarks.length,
     }),
-    hashGuideLines: Object.freeze({ lineCount: 2 }),
+    hashGuideLines: Object.freeze({ lineCount: 0 }),
     sidelineHashMarks: Object.freeze({
       spacingMeters: sidelineMarkings.spacingMeters,
       markLengthMeters: sidelineMarkings.lengthMeters,

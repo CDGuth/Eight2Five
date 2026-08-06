@@ -18,7 +18,6 @@ import {
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { HStack } from "@eight2five/ui/components/hstack";
@@ -30,6 +29,7 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 
+import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
 import {
   useAppSettingsSnapshot,
   useAppSettingsStore,
@@ -197,7 +197,7 @@ export function DeveloperSettingsScreen() {
                 onPress={confirmDatabaseRebuild}
               >
                 {rebuildingDatabase ? (
-                  <ButtonSpinner />
+                  <SpinningLoaderIcon />
                 ) : (
                   <ButtonIcon as={Database} />
                 )}
@@ -267,7 +267,11 @@ export function DeveloperSettingsScreen() {
             isDisabled={pans.connectionState !== "connected" || refreshing}
             onPress={() => void refresh()}
           >
-            {refreshing ? <ButtonSpinner /> : <ButtonIcon as={RefreshCw} />}
+            {refreshing ? (
+              <SpinningLoaderIcon />
+            ) : (
+              <ButtonIcon as={RefreshCw} />
+            )}
             <ButtonText>Refresh Hardware Diagnostics</ButtonText>
           </Button>
         </VStack>
@@ -398,7 +402,7 @@ export function DeveloperSettingsScreen() {
             onPress={confirmDatabaseRebuild}
           >
             {rebuildingDatabase ? (
-              <ButtonSpinner />
+              <SpinningLoaderIcon />
             ) : (
               <ButtonIcon as={Database} />
             )}

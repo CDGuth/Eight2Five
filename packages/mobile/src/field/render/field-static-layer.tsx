@@ -1,20 +1,31 @@
 import React from "react";
 import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
-import { Group, Path, Rect, Text, useFont } from "@shopify/react-native-skia";
+import {
+  Group,
+  Path,
+  Rect,
+  Text,
+  useFont,
+  type SkFont,
+} from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
+import type { FieldCameraPerspective } from "../camera/field-camera-types";
 import type { StandardFootballFieldTemplate } from "../template";
 import type { FieldPaths } from "./create-field-paths";
 import type { FieldRenderPalette } from "./field-render-tokens";
 import { createYardNumberTextLayout } from "./yard-number-layout";
 
 const YARD_NUMBER_MEASUREMENT_FONT_SIZE = 100;
+const SIDELINE_LABEL_FONT_SIZE_PX = 11;
+const SIDELINE_LABEL_INSET_PX = 6;
 
 interface FieldStaticLayerProps {
   readonly template: StandardFootballFieldTemplate;
   readonly paths: FieldPaths;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
+  readonly perspective: FieldCameraPerspective;
   readonly showPerimeterStepGrid: boolean;
   readonly showAuxiliaryFieldMarks: boolean;
 }
@@ -24,6 +35,7 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   paths,
   metersPerPixel,
   palette,
+  perspective,
   showPerimeterStepGrid,
   showAuxiliaryFieldMarks,
 }: FieldStaticLayerProps) {
@@ -38,6 +50,10 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   const numberFont = useFont(
     Montserrat_600SemiBold,
     YARD_NUMBER_MEASUREMENT_FONT_SIZE,
+  );
+  const sidelineFont = useFont(
+    Montserrat_600SemiBold,
+    SIDELINE_LABEL_FONT_SIZE_PX,
   );
   const fieldClip = {
     x: template.bounds.minXMeters,
@@ -95,22 +111,13 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
         strokeWidth={fieldLineStroke}
       />
       {showAuxiliaryFieldMarks ? (
-        <>
-          <Path
-            path={paths.hashGuideLinesPath}
-            color={palette.fieldLines}
-            opacity={0.74}
-            style="stroke"
-            strokeWidth={fieldLineStroke}
-          />
-          <Path
-            path={paths.sidelineHashMarksPath}
-            color={palette.fieldLines}
-            opacity={0.74}
-            style="stroke"
-            strokeWidth={fieldLineStroke}
-          />
-        </>
+        <Path
+          path={paths.sidelineHashMarksPath}
+          color={palette.fieldLines}
+          opacity={0.74}
+          style="stroke"
+          strokeWidth={fieldLineStroke}
+        />
       ) : null}
       <Path
         path={paths.boundaryPath}
@@ -118,6 +125,28 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
         style="stroke"
         strokeWidth={boundaryStroke}
       />
+      {sidelineFont ? (
+        <>
+          <SidelineLabel
+            text="FRONT SIDELINE"
+            yMeters={template.bounds.minYMeters}
+            atTop={perspective === "performer"}
+            perspective={perspective}
+            metersPerPixel={metersPerPixel}
+            font={sidelineFont}
+            color={palette.fieldNumbers}
+          />
+          <SidelineLabel
+            text="BACK SIDELINE"
+            yMeters={template.bounds.maxYMeters}
+            atTop={perspective === "director"}
+            perspective={perspective}
+            metersPerPixel={metersPerPixel}
+            font={sidelineFont}
+            color={palette.fieldNumbers}
+          />
+        </>
+      ) : null}
       {numberFont
         ? template.yardNumbers.map((number) => {
             const layout = createYardNumberTextLayout(
@@ -154,3 +183,44 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
     </>
   );
 });
+
+function SidelineLabel({
+  text,
+  yMeters,
+  atTop,
+  perspective,
+  metersPerPixel,
+  font,
+  color,
+}: {
+  readonly text: string;
+  readonly yMeters: number;
+  readonly atTop: boolean;
+  readonly perspective: FieldCameraPerspective;
+  readonly metersPerPixel: SharedValue<number>;
+  readonly font: SkFont;
+  readonly color: string;
+}) {
+  const width = font.measureText(text).width;
+  const transform = useDerivedValue(() => {
+    const scale = metersPerPixel.value;
+    return perspective === "performer"
+      ? [{ scaleX: -scale }, { scaleY: scale }]
+      : [{ scaleX: scale }, { scaleY: -scale }];
+  });
+  const baselineOffset = atTop
+    ? SIDELINE_LABEL_FONT_SIZE_PX + SIDELINE_LABEL_INSET_PX
+    : -SIDELINE_LABEL_INSET_PX;
+
+  return (
+    <Group origin={{ x: 0, y: yMeters }} transform={transform} opacity={0.78}>
+      <Text
+        x={-width / 2}
+        y={yMeters + baselineOffset}
+        text={text}
+        font={font}
+        color={color}
+      />
+    </Group>
+  );
+}

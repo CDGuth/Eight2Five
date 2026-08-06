@@ -3,7 +3,6 @@ import { Radio, Save, TriangleAlert } from "lucide-react-native";
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { Card } from "@eight2five/ui/components/card";
@@ -24,6 +23,7 @@ import {
   AnchorNumberInput,
   StandardAnchorPositionForm,
 } from "./standard-anchor-position-form";
+import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
 import { useAnchorEditorController } from "./use-anchor-editor-controller";
 import {
   SettingsMessage,
@@ -42,6 +42,7 @@ export function AnchorEditorScreen({
   const preview = formatAnchorCanonicalPreview(
     controller.validation.position,
     controller.fieldPreset,
+    controller.coordinateRoundingSteps,
   );
 
   if (!controller.developerModeEnabled) {
@@ -210,7 +211,7 @@ export function AnchorEditorScreen({
           }
         }}
       >
-        {controller.saving ? <ButtonSpinner /> : <ButtonIcon as={Save} />}
+        {controller.saving ? <SpinningLoaderIcon /> : <ButtonIcon as={Save} />}
         <ButtonText>Save Anchor Position</ButtonText>
       </Button>
     </SettingsScreenContainer>

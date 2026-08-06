@@ -10,7 +10,7 @@ import {
   type FieldLivePositionInput,
   type FieldPoint,
 } from "@eight2five/mobile/field";
-import { formatSetName, getDrillTerms } from "@eight2five/mobile/drill";
+import { formatSetName } from "@eight2five/mobile/drill";
 import {
   FIELD_FOUR_STEP_GRID_COLOR,
   FieldCanvas,
@@ -157,7 +157,6 @@ export function FieldScreen({
   const canExpandDrillPill = Boolean(
     controller.activeDrill && controller.pages.length > 0,
   );
-  const terms = getDrillTerms(controller.settings.drillTerminology);
   const palette = React.useMemo(
     () => ({
       canvasBackground: theme.background,
@@ -215,6 +214,9 @@ export function FieldScreen({
               countDisplayMode={controller.settings.countDisplayMode}
               metricMode={controller.settings.transitionMetricMode}
               fieldPreset={controller.fieldPreset}
+              coordinateRoundingSteps={
+                controller.settings.coordinateRoundingSteps
+              }
               expanded={canExpandDrillPill && hudState.drillPillExpanded}
               controlsDisabled={controlsDisabled}
               error={controller.error}
@@ -234,6 +236,9 @@ export function FieldScreen({
               width={metrics.hudWidth}
               live={liveState}
               fieldPreset={controller.fieldPreset}
+              coordinateRoundingSteps={
+                controller.settings.coordinateRoundingSteps
+              }
               onOpenTagConnection={() => setTagDialogOpen(true)}
             />
           )
@@ -251,6 +256,9 @@ export function FieldScreen({
                   }
                   yellowThresholdSteps={
                     controller.settings.distanceYellowThresholdSteps
+                  }
+                  coordinateRoundingSteps={
+                    controller.settings.coordinateRoundingSteps
                   }
                   onOpenTagConnection={() => setTagDialogOpen(true)}
                 />
@@ -271,7 +279,7 @@ export function FieldScreen({
                   pageCount={controller.pages.length}
                   terminology={controller.settings.drillTerminology}
                   activeColor={theme.accent}
-                  trackColor={theme.border}
+                  trackColor={colorWithAlpha(theme.accent, "52")}
                   foregroundColor={theme.text}
                   onSelectIndex={(index) =>
                     void controller.selectPageAtIndex(index)
@@ -288,16 +296,8 @@ export function FieldScreen({
         }
       />
       <DrillSelectionDialog
-        entries={controller.drillEntries}
-        terms={terms}
-        activeDrillId={controller.settings.activeDrillId}
         isOpen={controller.settings.drillFeaturesEnabled && drillDialogOpen}
-        disabled={controlsDisabled}
         onClose={() => setDrillDialogOpen(false)}
-        onSelect={(drillId) => {
-          setDrillDialogOpen(false);
-          void controller.selectActiveDrill(drillId);
-        }}
       />
       <PerformerSelectionDialog
         key={`field-performer:${controller.activeDrill?.id ?? "none"}:${

@@ -49,6 +49,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
            default_field_preset = ?,
            transition_metric_mode = ?,
            count_display_mode = ?,
+           coordinate_rounding_steps = ?,
            guidance_enabled = ?,
            developer_mode_enabled = ?,
            show_cached_anchor_geometry = ?,
@@ -79,6 +80,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         DEFAULT_APP_SETTINGS.defaultFieldPreset,
         DEFAULT_APP_SETTINGS.transitionMetricMode,
         DEFAULT_APP_SETTINGS.countDisplayMode,
+        DEFAULT_APP_SETTINGS.coordinateRoundingSteps,
         boolToSql(DEFAULT_APP_SETTINGS.guidanceEnabled),
         boolToSql(DEFAULT_APP_SETTINGS.developerModeEnabled),
         boolToSql(DEFAULT_APP_SETTINGS.showCachedAnchorGeometry),
@@ -116,6 +118,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          default_field_preset,
          transition_metric_mode,
          count_display_mode,
+         coordinate_rounding_steps,
          guidance_enabled,
          developer_mode_enabled,
          show_cached_anchor_geometry,
@@ -157,6 +160,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          default_field_preset,
          transition_metric_mode,
          count_display_mode,
+         coordinate_rounding_steps,
          guidance_enabled,
          developer_mode_enabled,
          show_cached_anchor_geometry,
@@ -180,7 +184,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
          appearance_mode = excluded.appearance_mode,
          drill_features_enabled = excluded.drill_features_enabled,
@@ -189,6 +193,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          default_field_preset = excluded.default_field_preset,
          transition_metric_mode = excluded.transition_metric_mode,
          count_display_mode = excluded.count_display_mode,
+         coordinate_rounding_steps = excluded.coordinate_rounding_steps,
          guidance_enabled = excluded.guidance_enabled,
          developer_mode_enabled = excluded.developer_mode_enabled,
          show_cached_anchor_geometry = excluded.show_cached_anchor_geometry,
@@ -221,6 +226,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         normalized.defaultFieldPreset,
         normalized.transitionMetricMode,
         normalized.countDisplayMode,
+        normalized.coordinateRoundingSteps,
         boolToSql(normalized.guidanceEnabled),
         boolToSql(normalized.developerModeEnabled),
         boolToSql(normalized.showCachedAnchorGeometry),
@@ -263,6 +269,7 @@ function fromRow(row: AppSettingsRow): AppSettings {
     defaultFieldPreset: row.default_field_preset,
     transitionMetricMode: row.transition_metric_mode,
     countDisplayMode: row.count_display_mode,
+    coordinateRoundingSteps: row.coordinate_rounding_steps,
     guidanceEnabled: sqliteBoolean(row.guidance_enabled),
     developerModeEnabled: sqliteBoolean(row.developer_mode_enabled),
     showCachedAnchorGeometry: sqliteBoolean(row.show_cached_anchor_geometry),
@@ -300,6 +307,7 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
     row.default_field_preset === settings.defaultFieldPreset &&
     row.transition_metric_mode === settings.transitionMetricMode &&
     row.count_display_mode === settings.countDisplayMode &&
+    row.coordinate_rounding_steps === settings.coordinateRoundingSteps &&
     row.guidance_enabled === boolToSql(settings.guidanceEnabled) &&
     row.developer_mode_enabled === boolToSql(settings.developerModeEnabled) &&
     row.show_cached_anchor_geometry ===

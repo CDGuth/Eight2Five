@@ -19,6 +19,7 @@ import type { StandardFootballFieldTemplate } from "./template";
 
 const EPSILON = 1e-9;
 const NFHS_FIELD = getFieldPreset("football-nfhs");
+export const DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS = 0.25;
 
 export type MarchingFieldInput =
   | FieldPresetId
@@ -70,18 +71,30 @@ function assertFinite(value: number, name: string): void {
 }
 
 /**
- * Marching labels are intentionally quarter-step friendly. The canonical
- * coordinate retains the unrounded value; only this display helper rounds it.
+ * Round marching-coordinate display values without mutating canonical drill
+ * coordinates. The app preference controls the increment; quarter-step
+ * rounding remains the default for callers that do not provide one.
  */
-export function formatMarchingSteps(steps: number): string {
+export function formatMarchingSteps(
+  steps: number,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
+): string {
   assertFinite(steps, "Steps");
-  const quarterSteps = Math.round(steps * 4) / 4;
-  const cleaned = Math.abs(quarterSteps) < EPSILON ? 0 : quarterSteps;
-  return Number(cleaned.toFixed(2)).toString();
+  assertFinite(roundingSteps, "Coordinate rounding");
+  if (roundingSteps <= 0) {
+    throw new RangeError("Coordinate rounding must be greater than zero.");
+  }
+  const rounded = Math.round(steps / roundingSteps) * roundingSteps;
+  const cleaned = Math.abs(rounded) < EPSILON ? 0 : rounded;
+  return Number(cleaned.toFixed(3)).toString();
 }
 
-function stepWord(steps: number, uppercase = true): string {
-  const value = formatMarchingSteps(steps);
+function stepWord(
+  steps: number,
+  uppercase = true,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
+): string {
+  const value = formatMarchingSteps(steps, roundingSteps);
   if (Math.abs(Number(value)) === 1) return uppercase ? "One Step" : "one step";
   return uppercase ? `${value} Steps` : `${value} steps`;
 }
@@ -431,14 +444,17 @@ export const marchingToFieldPoint = marchingCoordinateToFieldPoint;
 export const fieldPositionToMarchingCoordinate = fieldPointToMarchingCoordinate;
 export const marchingCoordinateToFieldPosition = marchingCoordinateToFieldPoint;
 
-function formatSideCoordinate(coordinate: MarchingSideCoordinate): string {
+function formatSideCoordinate(
+  coordinate: MarchingSideCoordinate,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
+): string {
   const line = yardLineText(coordinate.yardLine);
   if (coordinate.relation === "on") {
     return coordinate.side === "center"
       ? `On ${line}`
       : `Side ${coordinate.side}: On ${line}`;
   }
-  const steps = stepWord(coordinate.offsetSteps);
+  const steps = stepWord(coordinate.offsetSteps, true, roundingSteps);
   if (coordinate.side === "center") return `On ${line}`;
   return `Side ${coordinate.side}: ${steps} ${coordinate.relation} ${line}`;
 }
@@ -481,16 +497,20 @@ function lateralReferenceText(
 function formatFrontBackCoordinate(
   coordinate: MarchingFrontBackCoordinate,
   field: ResolvedFieldDefinition,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
 ): string {
   const reference = lateralReferenceText(coordinate.reference, field);
   if (coordinate.relation === "on") return `On ${reference}`;
-  return `${stepWord(coordinate.offsetSteps)} ${
+  return `${stepWord(coordinate.offsetSteps, true, roundingSteps)} ${
     coordinate.relation === "behind" ? "behind" : "in front of"
   } ${reference}`;
 }
 
-export function formatMarchingSide(coordinate: MarchingSideCoordinate): string {
-  return formatSideCoordinate(coordinate);
+export function formatMarchingSide(
+  coordinate: MarchingSideCoordinate,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
+): string {
+  return formatSideCoordinate(coordinate, roundingSteps);
 }
 
 export const formatMarchingSideCoordinate = formatMarchingSide;
@@ -498,10 +518,12 @@ export const formatMarchingSideCoordinate = formatMarchingSide;
 export function formatMarchingFrontBack(
   coordinate: MarchingFrontBackCoordinate,
   fieldInput: MarchingFieldInput = NFHS_FIELD,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
 ): string {
   return formatFrontBackCoordinate(
     coordinate,
     resolveMarchingField(fieldInput),
+    roundingSteps,
   );
 }
 
@@ -510,6 +532,7 @@ export const formatMarchingFrontBackCoordinate = formatMarchingFrontBack;
 export function formatMarchingCoordinate(
   coordinateOrPoint: MarchingCoordinate | FieldPoint | DrillGridPoint,
   fieldInput: MarchingFieldInput = NFHS_FIELD,
+  roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
 ): string {
   const field = resolveMarchingField(fieldInput);
   let coordinate: MarchingCoordinate;
@@ -521,8 +544,8 @@ export function formatMarchingCoordinate(
     coordinate = fieldPointToMarchingCoordinate(coordinateOrPoint, field);
   }
   const parts = [
-    formatSideCoordinate(coordinate.side),
-    formatFrontBackCoordinate(coordinate.frontBack, field),
+    formatSideCoordinate(coordinate.side, roundingSteps),
+    formatFrontBackCoordinate(coordinate.frontBack, field, roundingSteps),
   ];
   const formatted = parts.join("; ");
   return coordinate.outOfBounds?.length

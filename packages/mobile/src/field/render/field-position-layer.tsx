@@ -1,4 +1,4 @@
-import { Circle, Group } from "@shopify/react-native-skia";
+import { Circle } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import type { FieldPoint } from "../types";
@@ -13,25 +13,29 @@ export function FieldPositionLayer({
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
 }) {
-  const liveTransform = useDerivedValue(() => {
-    const position = livePosition.value;
-    const scale = metersPerPixel.value;
-    return [
-      { translateX: position?.xMeters ?? -1_000_000 },
-      { translateY: position?.yMeters ?? -1_000_000 },
-      { scaleX: scale },
-      { scaleY: -scale },
-    ];
-  });
+  const cx = useDerivedValue(() => livePosition.value?.xMeters ?? -1_000_000);
+  const cy = useDerivedValue(() => livePosition.value?.yMeters ?? -1_000_000);
+  const outerRadius = useDerivedValue(() => metersPerPixel.value * 9);
+  const innerRadius = useDerivedValue(() => metersPerPixel.value * 7);
   const liveOpacity = useDerivedValue(() =>
     livePosition.value === null ? 0 : 1,
   );
   return (
     <>
-      <Group transform={liveTransform} opacity={liveOpacity}>
-        <Circle cx={0} cy={0} r={9} color="#FFFFFF" />
-        <Circle cx={0} cy={0} r={7} color={palette.livePosition} />
-      </Group>
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={outerRadius}
+        color="#FFFFFF"
+        opacity={liveOpacity}
+      />
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={innerRadius}
+        color={palette.livePosition}
+        opacity={liveOpacity}
+      />
     </>
   );
 }

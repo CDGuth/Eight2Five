@@ -191,6 +191,7 @@ export function useAnchorEditorController(anchorId: string) {
     canWritePosition,
     anchor,
     fieldPreset,
+    coordinateRoundingSteps: settings.settings.coordinateRoundingSteps,
     mode,
     marchingDraft,
     standardDraft,

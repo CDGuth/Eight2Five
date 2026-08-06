@@ -52,10 +52,14 @@ describe("drill icon shape policy", () => {
     );
   });
 
-  test("uses opposite Y scaling for screen-constant upright labels", () => {
-    expect(getDrillLabelTransformPolicy(0.25)).toEqual({
+  test("counter-scales labels for both camera perspectives", () => {
+    expect(getDrillLabelTransformPolicy(0.25, "director")).toEqual({
       scaleX: 0.25,
       scaleY: -0.25,
+    });
+    expect(getDrillLabelTransformPolicy(0.25, "performer")).toEqual({
+      scaleX: -0.25,
+      scaleY: 0.25,
     });
   });
 

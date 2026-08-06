@@ -1,11 +1,7 @@
 import React from "react";
 import { useWindowDimensions } from "react-native";
 import type { DrillDocument, DrillEntity } from "@eight2five/drill-schema";
-import {
-  Button,
-  ButtonSpinner,
-  ButtonText,
-} from "@eight2five/ui/components/button";
+import { Button, ButtonText } from "@eight2five/ui/components/button";
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import {
@@ -26,6 +22,7 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 
+import { SpinningLoaderIcon } from "../../../components/spinning-loader-icon";
 import { SettingsMessage } from "../../settings/settings-components";
 import { getPerformerSymbolGroups } from "../drill-import";
 
@@ -236,7 +233,7 @@ function PerformerSelectionDialogContent({
             }}
             isDisabled={!selectedPerformer || importing}
           >
-            {importing ? <ButtonSpinner /> : null}
+            {importing ? <SpinningLoaderIcon /> : null}
             <ButtonText>{importing ? "Saving…" : confirmLabel}</ButtonText>
           </Button>
         </ModalFooter>

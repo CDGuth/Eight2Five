@@ -2,7 +2,10 @@ import React from "react";
 import { FlatList, type ListRenderItemInfo } from "react-native";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import type { DrillSet, DrillTerminology } from "@eight2five/mobile/drill";
-import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type {
+  CoordinateRoundingSteps,
+  TransitionMetricMode,
+} from "@eight2five/mobile/settings";
 import type { FieldPresetId } from "@eight2five/drill-schema";
 import { useEight2FiveTheme } from "@eight2five/ui/theme";
 
@@ -13,7 +16,7 @@ import {
 import { DrillSetMetricGrid } from "./drill-set-metric-grid";
 import type { DrillPillColumnMetrics } from "./drill-pill-layout";
 
-export const DRILL_SET_ROW_HEIGHT = 84;
+export const DRILL_SET_ROW_HEIGHT = 104;
 
 export function DrillSetList({
   pages,
@@ -23,6 +26,7 @@ export function DrillSetList({
   metricMode,
   terminology,
   fieldPreset,
+  coordinateRoundingSteps,
   expanded,
   onSelectIndex,
 }: {
@@ -33,6 +37,7 @@ export function DrillSetList({
   readonly metricMode: TransitionMetricMode;
   readonly terminology: DrillTerminology;
   readonly fieldPreset: FieldPresetId;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly expanded: boolean;
   readonly onSelectIndex: (index: number) => void;
 }) {
@@ -56,6 +61,7 @@ export function DrillSetList({
         metricMode,
         fieldPreset,
         terminology,
+        coordinateRoundingSteps,
       });
       return (
         <Pressable
@@ -84,6 +90,7 @@ export function DrillSetList({
     [
       columns,
       countDisplayMode,
+      coordinateRoundingSteps,
       fieldPreset,
       metricMode,
       onSelectIndex,

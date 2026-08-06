@@ -35,21 +35,17 @@ export function getFieldOverlayMetrics({
   readonly controlPairVisible?: boolean;
 }): FieldOverlayMetrics {
   const outerPadding = landscape ? 14 : 12;
-  const controlGap = landscape ? 16 : 18;
   const safeWidth = Math.max(0, width - insets.left - insets.right);
   const safeHeight = Math.max(0, height - insets.top - insets.bottom);
 
   if (landscape) {
     const maximumFittingDiameter = Math.max(
       0,
-      (safeHeight - outerPadding * 2 - controlGap) / 2,
+      (safeHeight - outerPadding * 3) / 2,
     );
     const controlDiameter = Math.min(164, maximumFittingDiameter);
-    const stackHeight = controlDiameter * 2 + controlGap;
-    const stackTop =
-      insets.top +
-      outerPadding +
-      Math.max(0, (safeHeight - outerPadding * 2 - stackHeight) / 2);
+    const controlGap = Math.max(0, (safeHeight - controlDiameter * 2) / 3);
+    const stackTop = insets.top + controlGap;
     const right = insets.right + outerPadding;
     const columnLeft = width - right - controlDiameter;
     const hudLeft = insets.left + outerPadding;
@@ -92,12 +88,12 @@ export function getFieldOverlayMetrics({
 
   const maximumFittingDiameter = Math.max(
     0,
-    (safeWidth - outerPadding * 2 - controlGap) / 2,
+    (safeWidth - outerPadding * 3) / 2,
   );
   const controlDiameter = Math.min(156, maximumFittingDiameter);
-  const pairWidth = controlDiameter * 2 + controlGap;
-  const pairLeft = insets.left + Math.max(0, (safeWidth - pairWidth) / 2);
-  const controlsBottom = insets.bottom + outerPadding;
+  const controlGap = Math.max(0, (safeWidth - controlDiameter * 2) / 3);
+  const pairLeft = insets.left + controlGap;
+  const controlsBottom = insets.bottom + controlGap;
   const controlsTop = height - controlsBottom - controlDiameter;
   const hudLeft = insets.left + outerPadding;
   const hudWidth = Math.max(0, safeWidth - outerPadding * 2);

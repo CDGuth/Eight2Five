@@ -7,7 +7,10 @@ import Animated, {
 } from "react-native-reanimated";
 import type { FieldPresetId } from "@eight2five/drill-schema";
 import type { DrillSet, DrillTerminology } from "@eight2five/mobile/drill";
-import type { TransitionMetricMode } from "@eight2five/mobile/settings";
+import type {
+  CoordinateRoundingSteps,
+  TransitionMetricMode,
+} from "@eight2five/mobile/settings";
 import { Divider } from "@eight2five/ui/components/divider";
 import { Text } from "@eight2five/ui/components/text";
 import {
@@ -35,6 +38,7 @@ export function DrillPill({
   countDisplayMode,
   metricMode,
   fieldPreset,
+  coordinateRoundingSteps,
   expanded,
   controlsDisabled,
   error,
@@ -52,6 +56,7 @@ export function DrillPill({
   readonly countDisplayMode: CountDisplayMode;
   readonly metricMode: TransitionMetricMode;
   readonly fieldPreset: FieldPresetId;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly expanded: boolean;
   readonly controlsDisabled: boolean;
   readonly error?: Error;
@@ -72,6 +77,7 @@ export function DrillPill({
     metricMode,
     fieldPreset,
     terminology,
+    coordinateRoundingSteps,
   });
   const availableListHeight = Math.min(
     listMaxHeight,
@@ -134,6 +140,7 @@ export function DrillPill({
           metricMode={metricMode}
           terminology={terminology}
           fieldPreset={fieldPreset}
+          coordinateRoundingSteps={coordinateRoundingSteps}
           expanded={effectiveExpanded}
           onSelectIndex={onSelectIndex}
         />

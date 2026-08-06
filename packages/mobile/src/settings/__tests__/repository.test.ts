@@ -22,6 +22,7 @@ describe("app settings", () => {
       default_field_preset: "football-nfhs",
       transition_metric_mode: "step-size",
       count_display_mode: "counts",
+      coordinate_rounding_steps: 0.25,
       guidance_enabled: 1,
       developer_mode_enabled: 0,
       show_cached_anchor_geometry: 0,
@@ -57,6 +58,7 @@ describe("app settings", () => {
       default_field_preset: "unknown",
       transition_metric_mode: "unknown",
       count_display_mode: "unknown",
+      coordinate_rounding_steps: 0.3,
       guidance_enabled: "yes",
       developer_mode_enabled: 0,
       show_cached_anchor_geometry: 1,
@@ -176,6 +178,7 @@ describe("app settings", () => {
       defaultFieldPreset: "football-ncaa",
       transitionMetricMode: "crossing-counts",
       countDisplayMode: "measures",
+      coordinateRoundingSteps: 0.5,
       guidanceEnabled: false,
       developerModeEnabled: true,
       showCachedAnchorGeometry: true,
@@ -204,6 +207,7 @@ describe("app settings", () => {
       appearanceMode: "dark",
       drillTerminology: "pages",
       countDisplayMode: "measures",
+      coordinateRoundingSteps: 0.5,
       previousTransitionSetCount: 0,
       nextTransitionSetCount: 5,
       distanceGreenThresholdSteps: 0.75,
@@ -225,6 +229,7 @@ describe("app settings", () => {
       field_perspective: "performer",
       default_field_preset: "football-nfl",
       transition_metric_mode: "crossing-counts",
+      coordinate_rounding_steps: 1,
       guidance_enabled: 0,
       developer_mode_enabled: 1,
       show_cached_anchor_geometry: 1,
@@ -276,6 +281,15 @@ describe("app settings", () => {
       normalizeAppSettings({ drillTerminology: "pages" }).drillTerminology,
     ).toBe("pages");
     expect(normalizeAppSettings({}).fieldPerspective).toBe("performer");
+    expect(normalizeAppSettings({}).coordinateRoundingSteps).toBe(0.25);
+    expect(
+      normalizeAppSettings({ coordinateRoundingSteps: 0.125 })
+        .coordinateRoundingSteps,
+    ).toBe(0.125);
+    expect(
+      normalizeAppSettings({ coordinateRoundingSteps: 0.3 })
+        .coordinateRoundingSteps,
+    ).toBe(0.25);
   });
 
   test("bounds transition counts and preserves threshold invariants", () => {
@@ -392,37 +406,7 @@ class SettingsFakeDatabase {
             default_field_preset: params[4],
             transition_metric_mode: params[5],
             count_display_mode: params[6],
-            guidance_enabled: params[7],
-            developer_mode_enabled: params[8],
-            show_cached_anchor_geometry: params[9],
-            show_comfortable_anchor_range: params[10],
-            show_perimeter_step_grid: params[11],
-            show_auxiliary_field_marks: params[12],
-            show_performer_labels: params[13],
-            show_performer_names: params[14],
-            show_prop_labels: params[15],
-            show_prop_names: params[16],
-            show_transition_markers: params[17],
-            show_all_transition_sets: params[18],
-            previous_transition_set_count: params[19],
-            next_transition_set_count: params[20],
-            distance_green_threshold_steps: params[21],
-            distance_yellow_threshold_steps: params[22],
-            motion_interpolation_enabled: params[23],
-            mock_live_position_enabled: params[24],
-            mock_live_position_x_steps: params[25],
-            mock_live_position_y_steps: params[26],
-            comfortable_anchor_range_meters: params[27],
-          };
-        } else {
-          this.row = {
-            appearance_mode: params[1],
-            drill_features_enabled: params[2],
-            drill_terminology: params[3],
-            field_perspective: params[4],
-            default_field_preset: params[5],
-            transition_metric_mode: params[6],
-            count_display_mode: params[7],
+            coordinate_rounding_steps: params[7],
             guidance_enabled: params[8],
             developer_mode_enabled: params[9],
             show_cached_anchor_geometry: params[10],
@@ -444,8 +428,40 @@ class SettingsFakeDatabase {
             mock_live_position_x_steps: params[26],
             mock_live_position_y_steps: params[27],
             comfortable_anchor_range_meters: params[28],
-            active_drill_id: params[29],
-            selected_drill_page_id: params[30],
+          };
+        } else {
+          this.row = {
+            appearance_mode: params[1],
+            drill_features_enabled: params[2],
+            drill_terminology: params[3],
+            field_perspective: params[4],
+            default_field_preset: params[5],
+            transition_metric_mode: params[6],
+            count_display_mode: params[7],
+            coordinate_rounding_steps: params[8],
+            guidance_enabled: params[9],
+            developer_mode_enabled: params[10],
+            show_cached_anchor_geometry: params[11],
+            show_comfortable_anchor_range: params[12],
+            show_perimeter_step_grid: params[13],
+            show_auxiliary_field_marks: params[14],
+            show_performer_labels: params[15],
+            show_performer_names: params[16],
+            show_prop_labels: params[17],
+            show_prop_names: params[18],
+            show_transition_markers: params[19],
+            show_all_transition_sets: params[20],
+            previous_transition_set_count: params[21],
+            next_transition_set_count: params[22],
+            distance_green_threshold_steps: params[23],
+            distance_yellow_threshold_steps: params[24],
+            motion_interpolation_enabled: params[25],
+            mock_live_position_enabled: params[26],
+            mock_live_position_x_steps: params[27],
+            mock_live_position_y_steps: params[28],
+            comfortable_anchor_range_meters: params[29],
+            active_drill_id: params[30],
+            selected_drill_page_id: params[31],
           };
         }
         return { lastInsertRowId: 1, changes: 1 };
@@ -463,6 +479,7 @@ function settingsRow(overrides: Record<string, unknown> = {}) {
     default_field_preset: "football-nfhs",
     transition_metric_mode: "step-size",
     count_display_mode: "counts",
+    coordinate_rounding_steps: 0.25,
     guidance_enabled: 1,
     developer_mode_enabled: 0,
     show_cached_anchor_geometry: 0,

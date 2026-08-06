@@ -3,7 +3,6 @@ import { Database, Pencil, RefreshCw, Triangle } from "lucide-react-native";
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { HStack } from "@eight2five/ui/components/hstack";
@@ -13,6 +12,7 @@ import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 
+import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
 import { useAnchorListController } from "./use-anchor-list-controller";
 import {
   SettingsMessage,
@@ -58,7 +58,7 @@ export function AnchorListScreen() {
             onPress={() => void controller.refresh()}
           >
             {controller.refreshing ? (
-              <ButtonSpinner />
+              <SpinningLoaderIcon />
             ) : (
               <ButtonIcon as={RefreshCw} />
             )}

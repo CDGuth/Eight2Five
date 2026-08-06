@@ -14,10 +14,12 @@ import {
   Rows3,
   RulerDimensionLine,
 } from "lucide-react-native";
-import type {
-  AppearanceMode,
-  AppSettingsUpdate,
-  FieldPerspective,
+import {
+  COORDINATE_ROUNDING_PRESETS,
+  type AppearanceMode,
+  type AppSettingsUpdate,
+  type CoordinateRoundingSteps,
+  type FieldPerspective,
 } from "@eight2five/mobile/settings";
 import type { DrillTerminology } from "@eight2five/mobile/drill";
 import {
@@ -65,6 +67,20 @@ const FIELD_PRESET_CHOICES = FIELD_PRESET_IDS.map((value) => ({
   label: getFieldPreset(value).name,
   value,
 })) satisfies readonly { label: string; value: FieldPresetId }[];
+
+const COORDINATE_ROUNDING_CHOICES = COORDINATE_ROUNDING_PRESETS.map(
+  (value) => ({
+    label:
+      value === 0.125
+        ? "⅛ step"
+        : value === 0.25
+          ? "¼ step"
+          : value === 0.5
+            ? "½ step"
+            : "1 step",
+    value: String(value),
+  }),
+);
 
 const TRANSITION_COUNT_CHOICES = Array.from({ length: 6 }, (_, count) => ({
   label: String(count),
@@ -188,10 +204,24 @@ export function SettingsScreen() {
           disabled={disabled}
           testID="field-perspective-setting"
         />
+        <SettingsSelectRow<string>
+          icon={RulerDimensionLine}
+          title="Coordinate rounding"
+          description="Round displayed marching coordinates to this step increment."
+          value={String(settings.coordinateRoundingSteps)}
+          choices={COORDINATE_ROUNDING_CHOICES}
+          onChange={(value) =>
+            void update({
+              coordinateRoundingSteps: Number(value) as CoordinateRoundingSteps,
+            })
+          }
+          disabled={disabled}
+          testID="coordinate-rounding-setting"
+        />
         <SettingsSwitchRow
           icon={Rows3}
           title="Auxiliary field marks"
-          description="Show sideline one-yard extensions and the two long hash guide lines. Inbounds hash ticks remain visible."
+          description="Show the short one-yard sideline extensions. Inbounds hash ticks remain visible."
           value={settings.showAuxiliaryFieldMarks}
           onChange={(showAuxiliaryFieldMarks) =>
             void update({ showAuxiliaryFieldMarks })

@@ -20,6 +20,7 @@ import type {
   PhysicalImmediateTransition,
   PhysicalTransitionPathGeometry,
 } from "../../drill/render-scene";
+import type { FieldCameraPerspective } from "../camera/field-camera-types";
 import type { FieldPoint } from "../types";
 import { resolveCurrentTargetPosition } from "./field-overlay-types";
 import {
@@ -31,7 +32,7 @@ import {
 import type { FieldRenderPalette } from "./field-render-tokens";
 import {
   DRILL_MARKER_COLORS,
-  DRILL_MARKER_SIZE_METERS,
+  DRILL_MARKER_SIZE_PIXELS,
 } from "./field-render-tokens";
 
 const EMPTY_ENTITIES: readonly DrillRenderEntity[] = Object.freeze([]);
@@ -46,8 +47,8 @@ const LABEL_FONT_SIZE_PX = 12;
 const LABEL_LINE_HEIGHT_PX = 14;
 const MARKER_STROKE_PX = 2;
 const CONNECTOR_STROKE_PX = 1.25;
-const DASH_LENGTH_PX = 6;
-const DASH_GAP_PX = 4;
+const DASH_LENGTH_PX = 2.4;
+const DASH_GAP_PX = 1.6;
 const EXTRA_TRANSITION_OPACITY = 0.68;
 
 export interface FieldDrillLayerProps {
@@ -56,6 +57,7 @@ export interface FieldDrillLayerProps {
   readonly fallbackTargetPosition?: FieldPoint;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
+  readonly perspective: FieldCameraPerspective;
 }
 
 /**
@@ -68,6 +70,7 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
   fallbackTargetPosition,
   metersPerPixel,
   palette,
+  perspective,
 }: FieldDrillLayerProps) {
   const labelFont = useFont(Montserrat_400Regular, LABEL_FONT_SIZE_PX);
   const entities = scene?.entities ?? EMPTY_ENTITIES;
@@ -90,6 +93,7 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           labelFont={labelFont}
           metersPerPixel={metersPerPixel}
           palette={palette}
+          perspective={perspective}
         />
       ))}
       {previousConnectors.map((transition) => (
@@ -113,6 +117,7 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           key={`previous-dot-${dot.setId}`}
           point={dot.point}
           color={DRILL_MARKER_COLORS.red}
+          metersPerPixel={metersPerPixel}
         />
       ))}
       {nextDots.map((dot) => (
@@ -120,6 +125,7 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           key={`next-dot-${dot.setId}`}
           point={dot.point}
           color={DRILL_MARKER_COLORS.green}
+          metersPerPixel={metersPerPixel}
         />
       ))}
       {scene?.previous ? (
@@ -151,11 +157,13 @@ function OrdinaryEntity({
   labelFont,
   metersPerPixel,
   palette,
+  perspective,
 }: {
   readonly entity: DrillRenderEntity;
   readonly labelFont: SkFont | null;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
+  readonly perspective: FieldCameraPerspective;
 }) {
   const icon = entity.icon as string;
   const width =
@@ -227,6 +235,7 @@ function OrdinaryEntity({
         font={labelFont}
         metersPerPixel={metersPerPixel}
         color={palette.fieldLines}
+        perspective={perspective}
       />
     </>
   );
@@ -237,11 +246,13 @@ function EntityLabel({
   font,
   metersPerPixel,
   color,
+  perspective,
 }: {
   readonly entity: DrillRenderEntity;
   readonly font: SkFont | null;
   readonly metersPerPixel: SharedValue<number>;
   readonly color: string;
+  readonly perspective: FieldCameraPerspective;
 }) {
   const lines = React.useMemo(
     () =>
@@ -252,15 +263,11 @@ function EntityLabel({
     [entity.labelText, entity.nameText],
   );
   const labelTransform = useDerivedValue(() => {
-    const labelScale = getDrillLabelTransformPolicy(metersPerPixel.value);
-    return [
-      { translateX: entity.position.xMeters },
-      { translateY: entity.position.yMeters },
-      { scaleX: labelScale.scaleX },
-      // The camera has a negative Y scale. This restores upright screen text
-      // and makes the label size independent of zoom.
-      { scaleY: labelScale.scaleY },
-    ];
+    const labelScale = getDrillLabelTransformPolicy(
+      metersPerPixel.value,
+      perspective,
+    );
+    return [{ scaleX: labelScale.scaleX }, { scaleY: labelScale.scaleY }];
   });
 
   if (!font || lines.length === 0) return null;
@@ -268,12 +275,16 @@ function EntityLabel({
   const startY = -LABEL_LINE_HEIGHT_PX * (lines.length + 0.15);
 
   return (
-    <Group transform={labelTransform} opacity={entity.opacity}>
+    <Group
+      origin={{ x: entity.position.xMeters, y: entity.position.yMeters }}
+      transform={labelTransform}
+      opacity={entity.opacity}
+    >
       {lines.map((line, index) => (
         <Text
           key={line.key}
-          x={-widths[index] / 2}
-          y={startY + index * LABEL_LINE_HEIGHT_PX}
+          x={entity.position.xMeters - widths[index] / 2}
+          y={entity.position.yMeters + startY + index * LABEL_LINE_HEIGHT_PX}
           text={line.text}
           font={font}
           color={color}
@@ -286,15 +297,21 @@ function EntityLabel({
 function ExtraDot({
   point,
   color,
+  metersPerPixel,
 }: {
   readonly point: PhysicalFieldPoint;
   readonly color: string;
+  readonly metersPerPixel: SharedValue<number>;
 }) {
+  const radius = useDerivedValue(
+    () =>
+      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.midpointDiameter) / 2,
+  );
   return (
     <Circle
       cx={point.xMeters}
       cy={point.yMeters}
-      r={DRILL_MARKER_SIZE_METERS.midpointDiameter / 2}
+      r={radius}
       color={color}
       opacity={EXTRA_TRANSITION_OPACITY}
     />
@@ -347,18 +364,18 @@ function ImmediateTransitionLayer({
     () => createPhysicalPath(transition.geometry),
     [transition.geometry],
   );
-  const markerDiameter = DRILL_MARKER_SIZE_METERS.transitionDiameter;
-  const markerPath = React.useMemo(
-    () => createCirclePath(markerDiameter / 2),
-    [markerDiameter],
-  );
   const markerPoint = kind === "previous" ? transition.start : transition.end;
-  const markerTransform = React.useMemo(
-    () => [
-      { translateX: markerPoint.xMeters },
-      { translateY: markerPoint.yMeters },
-    ],
-    [markerPoint.xMeters, markerPoint.yMeters],
+  const markerRadius = useDerivedValue(
+    () =>
+      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.transitionDiameter) / 2,
+  );
+  const midpointRadius = useDerivedValue(
+    () =>
+      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.midpointDiameter) / 2,
+  );
+  const centerRadius = useDerivedValue(
+    () =>
+      metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.transitionDiameter * 0.18,
   );
   const markerStrokeWidth = useDerivedValue(
     () => metersPerPixel.value * MARKER_STROKE_PX,
@@ -372,7 +389,6 @@ function ImmediateTransitionLayer({
   ]);
   const connectorColor =
     kind === "previous" ? DRILL_MARKER_COLORS.red : DRILL_MARKER_COLORS.green;
-  const centerRadius = markerDiameter * 0.18;
 
   return (
     <>
@@ -384,39 +400,46 @@ function ImmediateTransitionLayer({
         strokeCap="round"
         strokeJoin="round"
       />
-      <Group transform={markerTransform} origin={{ x: 0, y: 0 }} opacity={1}>
-        {kind === "previous" ? (
-          <Path
-            path={markerPath}
+      {kind === "previous" ? (
+        <Circle
+          cx={markerPoint.xMeters}
+          cy={markerPoint.yMeters}
+          r={markerRadius}
+          color={connectorColor}
+          style="stroke"
+          strokeWidth={markerStrokeWidth}
+        >
+          <DashPathEffect intervals={dashIntervals} />
+        </Circle>
+      ) : (
+        <>
+          <Circle
+            cx={markerPoint.xMeters}
+            cy={markerPoint.yMeters}
+            r={markerRadius}
+            color={connectorColor}
+            style="fill"
+          />
+          <Circle
+            cx={markerPoint.xMeters}
+            cy={markerPoint.yMeters}
+            r={markerRadius}
             color={connectorColor}
             style="stroke"
             strokeWidth={markerStrokeWidth}
-          >
-            <DashPathEffect intervals={dashIntervals} />
-          </Path>
-        ) : (
-          <>
-            <Circle
-              cx={0}
-              cy={0}
-              r={markerDiameter / 2}
-              color={connectorColor}
-              style="fill"
-            />
-            <Path
-              path={markerPath}
-              color={connectorColor}
-              style="stroke"
-              strokeWidth={markerStrokeWidth}
-            />
-          </>
-        )}
-        <Circle cx={0} cy={0} r={centerRadius} color={connectorColor} />
-      </Group>
+          />
+        </>
+      )}
+      <Circle
+        cx={markerPoint.xMeters}
+        cy={markerPoint.yMeters}
+        r={centerRadius}
+        color={connectorColor}
+      />
       <Circle
         cx={transition.midpoint.xMeters}
         cy={transition.midpoint.yMeters}
-        r={DRILL_MARKER_SIZE_METERS.midpointDiameter / 2}
+        r={midpointRadius}
         color={connectorColor}
       />
     </>
@@ -430,35 +453,35 @@ function CurrentTargetMarker({
   readonly point: PhysicalFieldPoint | FieldPoint;
   readonly metersPerPixel: SharedValue<number>;
 }) {
-  const diameter = DRILL_MARKER_SIZE_METERS.currentDiameter;
-  const ringPath = React.useMemo(
-    () => createCirclePath(diameter / 2),
-    [diameter],
+  const radius = useDerivedValue(
+    () => (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.currentDiameter) / 2,
   );
-  const transform = React.useMemo(
-    () => [{ translateX: point.xMeters }, { translateY: point.yMeters }],
-    [point.xMeters, point.yMeters],
+  const centerRadius = useDerivedValue(
+    () =>
+      metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.currentDiameter * 0.14,
   );
   const strokeWidth = useDerivedValue(
     () => metersPerPixel.value * MARKER_STROKE_PX,
   );
 
   return (
-    <Group transform={transform} origin={{ x: 0, y: 0 }} opacity={1}>
+    <>
       {/* The ring is intentionally not filled; its interior stays transparent. */}
-      <Path
-        path={ringPath}
+      <Circle
+        cx={point.xMeters}
+        cy={point.yMeters}
+        r={radius}
         color={DRILL_MARKER_COLORS.yellow}
         style="stroke"
         strokeWidth={strokeWidth}
       />
       <Circle
-        cx={0}
-        cy={0}
-        r={diameter * 0.14}
+        cx={point.xMeters}
+        cy={point.yMeters}
+        r={centerRadius}
         color={DRILL_MARKER_COLORS.yellow}
       />
-    </Group>
+    </>
   );
 }
 
@@ -493,10 +516,6 @@ function createPhysicalPath(geometry: PhysicalTransitionPathGeometry): SkPath {
       break;
   }
   return builder.build();
-}
-
-function createCirclePath(radius: number): SkPath {
-  return Skia.PathBuilder.Make().addCircle(0, 0, radius).build();
 }
 
 function createShapePath(

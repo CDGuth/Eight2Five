@@ -1,10 +1,8 @@
 import React from "react";
 import { useWindowDimensions } from "react-native";
-import { CircleCheck, X } from "lucide-react-native";
-import type { Drill, DrillTerms } from "@eight2five/mobile/drill";
+import { X } from "lucide-react-native";
 import { FlatList } from "@eight2five/ui/components/flat-list";
 import { Heading } from "@eight2five/ui/components/heading";
-import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import {
   Modal,
@@ -13,149 +11,119 @@ import {
   ModalContent,
   ModalHeader,
 } from "@eight2five/ui/components/modal";
-import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
-import {
-  eight2FiveFonts,
-  eight2FiveRadii,
-  eight2FiveSpacing,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 
-import { resolveDrillIcon } from "../drill-icons";
-import { formatDrillCount } from "../drill-management";
-
-export interface DrillSelectionEntry {
-  readonly drill: Drill;
-  readonly pageCount: number;
-}
+import { DrillListItem } from "./drill-list-item";
+import { DrillPropertiesDialog } from "./drill-properties-dialog";
+import { PerformerSelectionDialog } from "./performer-selection-dialog";
+import { useDrillListController } from "../use-drill-list-controller";
 
 export function DrillSelectionDialog({
-  entries,
-  terms,
-  activeDrillId,
   isOpen,
-  disabled,
   onClose,
-  onSelect,
 }: {
-  readonly entries: readonly DrillSelectionEntry[];
-  readonly terms: DrillTerms;
-  readonly activeDrillId: string | null;
   readonly isOpen: boolean;
-  readonly disabled: boolean;
   readonly onClose: () => void;
-  readonly onSelect: (drillId: string) => void;
 }) {
   const { height } = useWindowDimensions();
-  if (!isOpen) return null;
-  return (
-    <Modal isOpen onClose={onClose} size="lg">
-      <ModalBackdrop />
-      <ModalContent style={{ maxHeight: Math.max(320, height * 0.82) }}>
-        <ModalHeader className="items-center justify-between">
-          <Heading size="md">Select Drill</Heading>
-          <ModalCloseButton accessibilityLabel="Close drill selector">
-            <Icon as={X} />
-          </ModalCloseButton>
-        </ModalHeader>
-        <DrillSelectionList
-          entries={entries}
-          terms={terms}
-          activeDrillId={activeDrillId}
-          disabled={disabled}
-          maxHeight={Math.max(220, height * 0.62)}
-          onSelect={onSelect}
-        />
-      </ModalContent>
-    </Modal>
-  );
-}
-
-/** Shared selection-only list body for field and future drill pickers. */
-export function DrillSelectionList({
-  entries,
-  terms,
-  activeDrillId,
-  disabled,
-  maxHeight,
-  onSelect,
-}: {
-  readonly entries: readonly DrillSelectionEntry[];
-  readonly terms: DrillTerms;
-  readonly activeDrillId: string | null;
-  readonly disabled: boolean;
-  readonly maxHeight?: number;
-  readonly onSelect: (drillId: string) => void;
-}) {
   const theme = useEight2FiveTheme();
+  const controller = useDrillListController();
+
   const renderItem = React.useCallback(
-    ({ item }: { item: DrillSelectionEntry }) => {
-      const active = item.drill.id === activeDrillId;
-      const DrillIcon = resolveDrillIcon(item.drill.metadata?.lucideIcon);
-      return (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Select ${item.drill.name}`}
-          accessibilityState={{ disabled, selected: active }}
-          disabled={disabled}
-          onPress={() => onSelect(item.drill.id)}
-          style={{
-            minHeight: 64,
-            justifyContent: "center",
-            borderRadius: eight2FiveRadii.md,
-            borderWidth: active ? 2 : 1,
-            borderColor: active ? theme.accent : theme.border,
-            backgroundColor: active ? theme.accentSoft : theme.surfaceRaised,
-            padding: eight2FiveSpacing.sm,
-          }}
-          testID={`drill-selection-${item.drill.id}`}
-        >
-          <HStack
-            className="items-center"
-            style={{ gap: eight2FiveSpacing.sm }}
-          >
-            <Icon as={DrillIcon} size="xl" style={{ color: theme.text }} />
-            <VStack className="flex-1" style={{ gap: 2 }}>
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: theme.text,
-                  fontFamily: eight2FiveFonts.styleSemibold,
-                }}
-              >
-                {item.drill.name}
-              </Text>
-              <Text size="sm" style={{ color: theme.textMuted }}>
-                {formatDrillCount(item.pageCount, terms)}
-              </Text>
-            </VStack>
-            {active ? (
-              <Icon
-                as={CircleCheck}
-                size="lg"
-                style={{ color: theme.accent }}
-              />
-            ) : null}
-          </HStack>
-        </Pressable>
-      );
-    },
-    [activeDrillId, disabled, onSelect, terms, theme],
+    ({ item }: { item: (typeof controller.entries)[number] }) => (
+      <DrillListItem
+        drill={item.drill}
+        pageCount={item.pageCount}
+        terms={controller.terms}
+        active={controller.activeDrillId === item.drill.id}
+        busy={controller.busyDrillId === item.drill.id}
+        onOpenInfo={() => void controller.openProperties(item.drill)}
+        onSelectPerformer={() =>
+          void controller.openPerformerSelection(item.drill)
+        }
+        onToggleActive={() =>
+          void controller.toggleActive(item.drill).catch(() => undefined)
+        }
+      />
+    ),
+    [controller],
   );
 
   return (
-    <FlatList
-      data={entries as DrillSelectionEntry[]}
-      keyExtractor={(entry) => entry.drill.id}
-      renderItem={renderItem}
-      style={maxHeight === undefined ? undefined : { maxHeight }}
-      contentContainerStyle={{ gap: eight2FiveSpacing.sm }}
-      ListEmptyComponent={
-        <Text style={{ color: theme.textMuted }}>No drills uploaded.</Text>
-      }
-      testID="drill-selection-list"
-    />
+    <>
+      <Modal isOpen={isOpen} onClose={onClose} size="lg">
+        <ModalBackdrop />
+        <ModalContent style={{ maxHeight: Math.max(360, height * 0.84) }}>
+          <ModalHeader className="items-center justify-between">
+            <Heading size="md">Select Drill</Heading>
+            <ModalCloseButton accessibilityLabel="Close drill selector">
+              <Icon as={X} />
+            </ModalCloseButton>
+          </ModalHeader>
+          <FlatList
+            data={controller.entries}
+            keyExtractor={(entry) => entry.drill.id}
+            renderItem={renderItem}
+            style={{ maxHeight: Math.max(260, height * 0.66) }}
+            contentContainerStyle={{
+              gap: eight2FiveSpacing.sm,
+              padding: eight2FiveSpacing.md,
+            }}
+            ListEmptyComponent={
+              <VStack style={{ paddingVertical: eight2FiveSpacing.lg }}>
+                <Text style={{ color: theme.textMuted }}>
+                  No drills uploaded.
+                </Text>
+              </VStack>
+            }
+            testID="drill-selection-list"
+          />
+        </ModalContent>
+      </Modal>
+
+      <PerformerSelectionDialog
+        key={
+          controller.performerDialog
+            ? `performer:${controller.performerDialog.drill?.id}:${controller.performerDialog.drill?.selectedPerformerEntityId ?? "none"}`
+            : "selector-performer:closed"
+        }
+        document={controller.performerDialog?.document}
+        isOpen={Boolean(controller.performerDialog)}
+        importing={controller.busyDrillId !== undefined}
+        error={controller.performerError}
+        selectedPerformerEntityId={
+          controller.performerDialog?.drill?.selectedPerformerEntityId
+        }
+        title="Change performer"
+        confirmLabel="Save"
+        onClose={controller.closePerformerSelection}
+        onConfirm={controller.selectPerformer}
+      />
+
+      <DrillPropertiesDialog
+        key={
+          controller.propertiesDialog
+            ? `selector-info:${controller.propertiesDialog.drill.id}:${controller.propertiesDialog.drill.updatedAt}`
+            : "selector-info:closed"
+        }
+        drill={controller.propertiesDialog?.drill}
+        document={controller.propertiesDialog?.document}
+        terms={controller.terms}
+        isOpen={Boolean(controller.propertiesDialog)}
+        loading={controller.propertiesLoading}
+        saving={
+          controller.busyDrillId === controller.propertiesDialog?.drill.id
+        }
+        error={controller.propertiesError}
+        onClose={controller.closeProperties}
+        onDelete={async () => {
+          const drill = controller.propertiesDialog?.drill;
+          if (!drill) return;
+          await controller.remove(drill);
+        }}
+      />
+    </>
   );
 }

@@ -1,8 +1,9 @@
 import React from "react";
+import { Animated } from "react-native";
 import {
+  CircleCheck,
   CirclePlus,
   CircleUserRound,
-  CircleX,
   Info,
 } from "lucide-react-native";
 import type { Drill, DrillTerms } from "@eight2five/mobile/drill";
@@ -93,16 +94,14 @@ export const DrillListItem = React.memo(function DrillListItem({
             icon={Info}
             disabled={busy}
             onPress={onOpenInfo}
-            backgroundColor={theme.raw.black}
-            iconColor={theme.raw.white}
+            iconColor={theme.text}
           />
           <DrillActionButton
             label={actionLabels.performer}
             icon={CircleUserRound}
             disabled={busy}
             onPress={onSelectPerformer}
-            backgroundColor={theme.raw.black}
-            iconColor={theme.raw.white}
+            iconColor={theme.text}
           />
           <Pressable
             onPress={onToggleActive}
@@ -115,19 +114,11 @@ export const DrillListItem = React.memo(function DrillListItem({
             style={{
               width: 48,
               height: 48,
-              borderRadius: 24,
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: active ? 0 : 2,
-              borderColor: theme.accent,
-              backgroundColor: active ? theme.accent : "transparent",
             }}
           >
-            <Icon
-              as={active ? CircleX : CirclePlus}
-              size="lg"
-              style={{ color: active ? theme.raw.white : theme.accent }}
-            />
+            <AnimatedSelectionIcon active={active} color={theme.accent} />
           </Pressable>
         </HStack>
       </HStack>
@@ -140,14 +131,12 @@ function DrillActionButton({
   icon,
   disabled,
   onPress,
-  backgroundColor,
   iconColor,
 }: {
   readonly label: string;
   readonly icon: React.ElementType;
   readonly disabled: boolean;
   readonly onPress: () => void;
-  readonly backgroundColor: string;
   readonly iconColor: string;
 }) {
   return (
@@ -160,13 +149,67 @@ function DrillActionButton({
       style={{
         width: 48,
         height: 48,
-        borderRadius: 24,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor,
       }}
     >
-      <Icon as={icon} size="lg" style={{ color: iconColor }} />
+      <Icon as={icon} size={48} style={{ color: iconColor }} />
     </Pressable>
+  );
+}
+
+function AnimatedSelectionIcon({
+  active,
+  color,
+}: {
+  readonly active: boolean;
+  readonly color: string;
+}) {
+  const [progress] = React.useState(() => new Animated.Value(active ? 1 : 0));
+  React.useEffect(() => {
+    Animated.timing(progress, {
+      toValue: active ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [active, progress]);
+
+  const plusOpacity = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const checkOpacity = progress;
+  const plusScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.9],
+  });
+  const checkScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          opacity: plusOpacity,
+          transform: [{ scale: plusScale }],
+        }}
+      >
+        <Icon as={CirclePlus} size={48} style={{ color }} />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          opacity: checkOpacity,
+          transform: [{ scale: checkScale }],
+        }}
+      >
+        <Icon as={CircleCheck} size={48} style={{ color }} />
+      </Animated.View>
+    </>
   );
 }

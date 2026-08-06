@@ -13,6 +13,7 @@ import type {
   FieldPoint,
 } from "@eight2five/mobile/field";
 import type { FieldPresetId } from "@eight2five/drill-schema";
+import type { CoordinateRoundingSteps } from "@eight2five/mobile/settings";
 import { Divider } from "@eight2five/ui/components/divider";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
@@ -31,6 +32,7 @@ import {
   getTargetDistancePresentation,
   type DistanceTone,
 } from "./live-position-hud-state";
+import { CoordinateLinesView } from "./coordinate-lines-view";
 import { FrostedFieldSurface } from "./field-frosted-surface";
 
 export function LivePositionSquare({
@@ -40,6 +42,7 @@ export function LivePositionSquare({
   fieldPreset,
   greenThresholdSteps,
   yellowThresholdSteps,
+  coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
   readonly diameter: number;
@@ -48,6 +51,7 @@ export function LivePositionSquare({
   readonly fieldPreset: FieldPresetId;
   readonly greenThresholdSteps: number;
   readonly yellowThresholdSteps: number;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
   const theme = useEight2FiveTheme();
@@ -71,6 +75,7 @@ export function LivePositionSquare({
           live={live}
           fieldPreset={fieldPreset}
           compact={diameter < 140}
+          coordinateRoundingSteps={coordinateRoundingSteps}
           onOpenTagConnection={onOpenTagConnection}
         />
         <Divider style={{ backgroundColor: theme.border }} />
@@ -110,11 +115,13 @@ export function LiveOnlyPill({
   width,
   live,
   fieldPreset,
+  coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
   readonly width: number;
   readonly live: FieldLivePositionState;
   readonly fieldPreset: FieldPresetId;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
   return (
@@ -126,6 +133,7 @@ export function LiveOnlyPill({
       <LivePositionHeader
         live={live}
         fieldPreset={fieldPreset}
+        coordinateRoundingSteps={coordinateRoundingSteps}
         onOpenTagConnection={onOpenTagConnection}
       />
     </FrostedFieldSurface>
@@ -136,15 +144,21 @@ function LivePositionHeader({
   live,
   fieldPreset,
   compact = false,
+  coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
   readonly live: FieldLivePositionState;
   readonly fieldPreset: FieldPresetId;
   readonly compact?: boolean;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
   const theme = useEight2FiveTheme();
-  const coordinate = getLiveCoordinateLines(live, fieldPreset);
+  const coordinate = getLiveCoordinateLines(
+    live,
+    fieldPreset,
+    coordinateRoundingSteps,
+  );
   return (
     <HStack
       className="flex-1 items-center"
@@ -158,20 +172,16 @@ function LivePositionHeader({
         state={live.connectionState}
         onPress={onOpenTagConnection}
       />
-      <Text
-        className="flex-1 text-right"
-        numberOfLines={2}
-        adjustsFontSizeToFit
-        minimumFontScale={0.68}
-        style={{
-          color: coordinate ? theme.text : theme.textMuted,
-          fontFamily: eight2FiveFonts.utilitySemibold,
-          fontSize: compact ? 13 : 16,
-          lineHeight: compact ? 16 : 19,
-        }}
-      >
-        {coordinate ? `${coordinate.side}\n${coordinate.frontBack}` : "–"}
-      </Text>
+      <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
+        <CoordinateLinesView
+          coordinate={coordinate}
+          color={theme.text}
+          mutedColor={theme.textMuted}
+          fontSize={compact ? 15 : 18}
+          lineHeight={compact ? 18 : 22}
+          iconSize={compact ? 13 : 15}
+        />
+      </VStack>
     </HStack>
   );
 }

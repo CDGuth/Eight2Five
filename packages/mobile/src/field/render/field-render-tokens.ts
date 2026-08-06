@@ -38,7 +38,14 @@ export const DRILL_MARKER_SIZE_STEPS = Object.freeze({
   midpointDiameter: 0.375,
 });
 
-/** Physical marker sizes keep their world meaning while the camera zooms. */
+/** Fixed screen-space marker diameters used by the interactive field HUD. */
+export const DRILL_MARKER_SIZE_PIXELS = Object.freeze({
+  currentDiameter: 16,
+  transitionDiameter: 8,
+  midpointDiameter: 4,
+});
+
+/** Legacy physical equivalents retained for non-render calculations/tests. */
 export const DRILL_MARKER_SIZE_METERS = Object.freeze({
   currentDiameter:
     DRILL_MARKER_SIZE_STEPS.currentDiameter * STANDARD_STEP_METERS,

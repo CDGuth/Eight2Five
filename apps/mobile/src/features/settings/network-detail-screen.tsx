@@ -17,7 +17,6 @@ import {
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { HStack } from "@eight2five/ui/components/hstack";
@@ -37,6 +36,7 @@ import {
   validateNetworkDraft,
   type NetworkDraft,
 } from "./network-form";
+import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
 import { NetworkProfileForm } from "./network-profile-form";
 import {
   anchorInitiatorLabel,
@@ -369,7 +369,7 @@ export function NetworkDetailScreen({
         isDisabled={busy}
         onPress={confirmDelete}
       >
-        {busy ? <ButtonSpinner /> : <ButtonIcon as={Trash2} />}
+        {busy ? <SpinningLoaderIcon /> : <ButtonIcon as={Trash2} />}
         <ButtonText>Delete Network</ButtonText>
       </Button>
 

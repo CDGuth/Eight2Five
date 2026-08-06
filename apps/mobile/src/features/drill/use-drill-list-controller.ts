@@ -7,7 +7,6 @@ import {
   type Drill,
   type DrillDocument,
   type DrillRepository,
-  type UpdateDrillPropertiesInput,
 } from "@eight2five/mobile/drill";
 
 import {
@@ -246,43 +245,6 @@ export function useDrillListController() {
     }
   }, [propertiesLoading]);
 
-  const updateProperties = React.useCallback(
-    async (input: UpdateDrillPropertiesInput) => {
-      const current = propertiesDialog;
-      if (!current) return;
-      try {
-        const saved = await mutate(current.drill.id, (repository) =>
-          repository.updateDrillProperties(current.drill.id, input),
-        );
-        setPropertiesError(undefined);
-        setPropertiesDialog((dialog) =>
-          dialog?.drill.id === saved.id
-            ? {
-                ...dialog,
-                drill: saved,
-                document: dialog.document
-                  ? {
-                      ...dialog.document,
-                      metadata: {
-                        ...metadataWithSavedIcon(
-                          dialog.document.metadata,
-                          saved.metadata?.lucideIcon,
-                        ),
-                        title: saved.name,
-                      },
-                    }
-                  : undefined,
-              }
-            : dialog,
-        );
-      } catch (cause) {
-        setPropertiesError(toError(cause));
-        throw cause;
-      }
-    },
-    [mutate, propertiesDialog],
-  );
-
   const openPerformerSelection = React.useCallback(
     async (drill: Drill) => {
       if (snapshot.status !== "ready") return;
@@ -363,7 +325,6 @@ export function useDrillListController() {
     propertiesDialog,
     propertiesLoading,
     propertiesError,
-    updateProperties,
     openPerformerSelection,
     closePerformerSelection,
     performerDialog,
@@ -372,13 +333,4 @@ export function useDrillListController() {
     selectPerformer,
     remove,
   } as const;
-}
-
-function metadataWithSavedIcon(
-  metadata: DrillDocument["metadata"],
-  lucideIcon: string | undefined,
-): DrillDocument["metadata"] {
-  if (lucideIcon !== undefined) return { ...metadata, lucideIcon };
-  const { lucideIcon: _ignored, ...withoutIcon } = metadata;
-  return withoutIcon;
 }

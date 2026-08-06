@@ -12,13 +12,13 @@ import { Input, InputField } from "@eight2five/ui/components/input";
 import {
   Button,
   ButtonIcon,
-  ButtonSpinner,
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { Save } from "lucide-react-native";
 import { VStack } from "@eight2five/ui/components/vstack";
 import { eight2FiveSpacing } from "@eight2five/ui/theme";
 
+import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
 import type { NetworkDraft, NetworkDraftErrors } from "./network-form";
 
 export function NetworkProfileForm({
@@ -97,7 +97,7 @@ export function NetworkProfileForm({
         isDisabled={saving}
         onPress={onSubmit}
       >
-        {saving ? <ButtonSpinner /> : <ButtonIcon as={Save} />}
+        {saving ? <SpinningLoaderIcon /> : <ButtonIcon as={Save} />}
         <ButtonText>{submitLabel}</ButtonText>
       </Button>
     </VStack>

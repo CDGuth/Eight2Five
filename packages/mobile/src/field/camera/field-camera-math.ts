@@ -112,13 +112,13 @@ export function clampFieldCameraAxis(
   center: number,
   minimum: number,
   maximum: number,
-  halfVisibleSpan: number,
+  _halfVisibleSpan = 0,
 ): number {
   "worklet";
-  const minimumCenter = minimum + halfVisibleSpan;
-  const maximumCenter = maximum - halfVisibleSpan;
-  if (minimumCenter > maximumCenter) return (minimum + maximum) / 2;
-  return Math.min(maximumCenter, Math.max(minimumCenter, center));
+  // Clamp only the camera center. A zoomed-out viewport is intentionally
+  // allowed to extend beyond the camera bounds; otherwise a large viewport
+  // collapses the valid pan range to a single centered point.
+  return Math.min(maximum, Math.max(minimum, center));
 }
 
 export function clampFieldViewport(

@@ -215,8 +215,9 @@ describe("aggregate field paths", () => {
       tickLengthMeters:
         field.fieldDefinition.markings.inboundsHashMarks.lengthMeters,
     });
-    expect(subpathCount(paths.hashGuideLinesPath)).toBe(2);
-    expect(paths.counts.hashGuideLines.lineCount).toBe(2);
+    expect(paths.hashGuideLinesPath).toBe("");
+    expect(subpathCount(paths.hashGuideLinesPath)).toBe(0);
+    expect(paths.counts.hashGuideLines.lineCount).toBe(0);
     expect(subpathCount(paths.boundaryPath)).toBe(1);
     expect(paths.boundaryPath.endsWith(" Z")).toBe(true);
     expect(paths.counts.boundary.segmentCount).toBe(1);
@@ -264,9 +265,11 @@ describe("aggregate field paths", () => {
       expect(front.y1 - template.bounds.minYMeters).toBeCloseTo(
         markings.insetFromSidelineMeters,
       );
+      expect(front.y2 - front.y1).toBeCloseTo(markings.lengthMeters);
       expect(template.bounds.maxYMeters - back.y2).toBeCloseTo(
         markings.insetFromSidelineMeters,
       );
+      expect(back.y2 - back.y1).toBeCloseTo(markings.lengthMeters);
     },
   );
 });

@@ -155,7 +155,6 @@ export function DrillListScreen() {
           }
           error={controller.propertiesError}
           onClose={controller.closeProperties}
-          onSave={controller.updateProperties}
           onDelete={async () => {
             const drill = controller.propertiesDialog?.drill;
             if (!drill) return;

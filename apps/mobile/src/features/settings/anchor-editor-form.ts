@@ -1,4 +1,5 @@
 import type { FieldPresetId } from "@eight2five/drill-schema";
+import type { CoordinateRoundingSteps } from "@eight2five/mobile/settings";
 import {
   ANCHOR_POSITION_REFERENCE_LABELS,
   ANCHOR_POSITION_REFERENCES,
@@ -148,10 +149,15 @@ export function validateStandardAnchorDraft(
 export function formatAnchorCanonicalPreview(
   position: AnchorFieldPosition | undefined,
   fieldPreset: FieldPresetId = "football-nfhs",
+  coordinateRoundingSteps: CoordinateRoundingSteps = 0.25,
 ): { readonly marching: string; readonly meters: string } | undefined {
   if (!position) return undefined;
   return {
-    marching: formatMarchingCoordinate(position, fieldPreset),
+    marching: formatMarchingCoordinate(
+      position,
+      fieldPreset,
+      coordinateRoundingSteps,
+    ),
     meters: `X ${position.xMeters.toFixed(3)} m · Y ${position.yMeters.toFixed(3)} m · Z ${position.zMeters.toFixed(3)} m`,
   };
 }

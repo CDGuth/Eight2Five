@@ -5,6 +5,11 @@ export type FieldPerspective = "director" | "performer";
 export type AppearanceMode = "system" | "light" | "dark";
 export type TransitionMetricMode = "step-size" | "crossing-counts";
 export type CountDisplayMode = "counts" | "measures";
+export type CoordinateRoundingSteps = 0.125 | 0.25 | 0.5 | 1;
+
+export const COORDINATE_ROUNDING_PRESETS = Object.freeze([
+  0.125, 0.25, 0.5, 1,
+] as const satisfies readonly CoordinateRoundingSteps[]);
 
 export const DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS = 20;
 export const MAX_COMFORTABLE_ANCHOR_RANGE_METERS = 200;
@@ -22,6 +27,7 @@ export interface AppSettings {
   readonly defaultFieldPreset: FieldPresetId;
   readonly transitionMetricMode: TransitionMetricMode;
   readonly countDisplayMode: CountDisplayMode;
+  readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly guidanceEnabled: boolean;
   readonly developerModeEnabled: boolean;
   readonly showCachedAnchorGeometry: boolean;
@@ -57,6 +63,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   defaultFieldPreset: "football-nfhs",
   transitionMetricMode: "step-size",
   countDisplayMode: "counts",
+  coordinateRoundingSteps: 0.25,
   guidanceEnabled: true,
   developerModeEnabled: false,
   showCachedAnchorGeometry: false,
@@ -91,6 +98,7 @@ export const APP_PREFERENCE_KEYS = Object.freeze([
   "defaultFieldPreset",
   "transitionMetricMode",
   "countDisplayMode",
+  "coordinateRoundingSteps",
   "guidanceEnabled",
   "developerModeEnabled",
   "showCachedAnchorGeometry",
@@ -165,6 +173,11 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       candidate.countDisplayMode === "measures"
         ? candidate.countDisplayMode
         : DEFAULT_APP_SETTINGS.countDisplayMode,
+    coordinateRoundingSteps: isCoordinateRoundingSteps(
+      candidate.coordinateRoundingSteps,
+    )
+      ? candidate.coordinateRoundingSteps
+      : DEFAULT_APP_SETTINGS.coordinateRoundingSteps,
     guidanceEnabled: booleanOrDefault(
       candidate.guidanceEnabled,
       DEFAULT_APP_SETTINGS.guidanceEnabled,
@@ -312,6 +325,15 @@ export function selectShowComfortableAnchorRange(value: AppSettings): boolean {
 
 export function selectShowPerimeterStepGrid(value: AppSettings): boolean {
   return getEffectiveAppSettings(value).showPerimeterStepGrid;
+}
+
+function isCoordinateRoundingSteps(
+  value: unknown,
+): value is CoordinateRoundingSteps {
+  return (
+    typeof value === "number" &&
+    COORDINATE_ROUNDING_PRESETS.includes(value as CoordinateRoundingSteps)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
