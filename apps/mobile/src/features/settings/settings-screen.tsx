@@ -18,7 +18,6 @@ import type {
   AppearanceMode,
   AppSettingsUpdate,
   FieldPerspective,
-  TransitionMetricMode,
 } from "@eight2five/mobile/settings";
 import type { DrillTerminology } from "@eight2five/mobile/drill";
 import {
@@ -67,12 +66,7 @@ const FIELD_PRESET_CHOICES = FIELD_PRESET_IDS.map((value) => ({
   value,
 })) satisfies readonly { label: string; value: FieldPresetId }[];
 
-const TRANSITION_CHOICES = [
-  { label: "Step Size", value: "step-size" },
-  { label: "xCounts", value: "crossing-counts" },
-] as const;
-
-const TRANSITION_COUNT_CHOICES = Array.from({ length: 51 }, (_, count) => ({
+const TRANSITION_COUNT_CHOICES = Array.from({ length: 6 }, (_, count) => ({
   label: String(count),
   value: String(count),
 }));
@@ -81,7 +75,7 @@ const DISTANCE_THRESHOLD_VALUES = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
 function distanceThresholdChoices(values: readonly number[]) {
   return values.map((value) => ({
-    label: `${value} steps`,
+    label: value === 1 ? "one step" : `${value} steps`,
     value: String(value),
   }));
 }
@@ -124,19 +118,6 @@ export function SettingsScreen() {
         </SettingsMessage>
       ) : null}
 
-      <SettingsSection title="Appearance">
-        <SettingsSelectRow<AppearanceMode>
-          icon={Palette}
-          title="App appearance"
-          description="Follow the system appearance or always use a light or dark theme."
-          value={settings.appearanceMode}
-          choices={APPEARANCE_CHOICES}
-          onChange={(appearanceMode) => void update({ appearanceMode })}
-          disabled={disabled}
-          testID="appearance-mode-setting"
-        />
-      </SettingsSection>
-
       <SettingsSection title="PANS">
         <SettingsNavigationRow
           icon={Radio}
@@ -149,6 +130,19 @@ export function SettingsScreen() {
           testID="tag-connection-link"
         />
         <ConnectionStatusRow state={pans.connectionState} />
+      </SettingsSection>
+
+      <SettingsSection title="Appearance">
+        <SettingsSelectRow<AppearanceMode>
+          icon={Palette}
+          title="App appearance"
+          description="Follow the system appearance or always use a light or dark theme."
+          value={settings.appearanceMode}
+          choices={APPEARANCE_CHOICES}
+          onChange={(appearanceMode) => void update({ appearanceMode })}
+          disabled={disabled}
+          testID="appearance-mode-setting"
+        />
       </SettingsSection>
 
       <SettingsSection title="Drill">
@@ -219,18 +213,6 @@ export function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="Transitions">
-        <SettingsSelectRow<TransitionMetricMode>
-          icon={Route}
-          title="Step size metric"
-          description="Show Step Size or xCounts."
-          value={settings.transitionMetricMode}
-          choices={TRANSITION_CHOICES}
-          onChange={(transitionMetricMode) =>
-            void update({ transitionMetricMode })
-          }
-          disabled={disabled}
-          testID="transition-metric-setting"
-        />
         <SettingsSelectRow<string>
           icon={RulerDimensionLine}
           title="Green distance threshold"

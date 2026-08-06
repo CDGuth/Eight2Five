@@ -226,8 +226,6 @@ function BluetoothStatusButton({
         height: 44,
         alignItems: "center",
         justifyContent: "center",
-        borderRadius: 22,
-        backgroundColor: theme.surface,
       }}
       testID="open-tag-connection"
     >

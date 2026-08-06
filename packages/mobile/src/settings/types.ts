@@ -4,11 +4,12 @@ import type { DrillTerminology } from "../drill/terminology";
 export type FieldPerspective = "director" | "performer";
 export type AppearanceMode = "system" | "light" | "dark";
 export type TransitionMetricMode = "step-size" | "crossing-counts";
+export type CountDisplayMode = "counts" | "measures";
 
 export const DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS = 20;
 export const MAX_COMFORTABLE_ANCHOR_RANGE_METERS = 200;
 export const MIN_TRANSITION_SET_COUNT = 0;
-export const MAX_TRANSITION_SET_COUNT = 50;
+export const MAX_TRANSITION_SET_COUNT = 5;
 export const DEFAULT_DISTANCE_GREEN_THRESHOLD_STEPS = 0.5;
 export const DEFAULT_DISTANCE_YELLOW_THRESHOLD_STEPS = 1;
 
@@ -20,6 +21,7 @@ export interface AppSettings {
   readonly fieldPerspective: FieldPerspective;
   readonly defaultFieldPreset: FieldPresetId;
   readonly transitionMetricMode: TransitionMetricMode;
+  readonly countDisplayMode: CountDisplayMode;
   readonly guidanceEnabled: boolean;
   readonly developerModeEnabled: boolean;
   readonly showCachedAnchorGeometry: boolean;
@@ -54,6 +56,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   fieldPerspective: "performer",
   defaultFieldPreset: "football-nfhs",
   transitionMetricMode: "step-size",
+  countDisplayMode: "counts",
   guidanceEnabled: true,
   developerModeEnabled: false,
   showCachedAnchorGeometry: false,
@@ -87,6 +90,7 @@ export const APP_PREFERENCE_KEYS = Object.freeze([
   "fieldPerspective",
   "defaultFieldPreset",
   "transitionMetricMode",
+  "countDisplayMode",
   "guidanceEnabled",
   "developerModeEnabled",
   "showCachedAnchorGeometry",
@@ -156,6 +160,11 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       candidate.transitionMetricMode === "crossing-counts"
         ? candidate.transitionMetricMode
         : DEFAULT_APP_SETTINGS.transitionMetricMode,
+    countDisplayMode:
+      candidate.countDisplayMode === "counts" ||
+      candidate.countDisplayMode === "measures"
+        ? candidate.countDisplayMode
+        : DEFAULT_APP_SETTINGS.countDisplayMode,
     guidanceEnabled: booleanOrDefault(
       candidate.guidanceEnabled,
       DEFAULT_APP_SETTINGS.guidanceEnabled,

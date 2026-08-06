@@ -52,11 +52,6 @@ export function PageDialControls({
     proportions.controlCenterOffset,
   );
   const centerDiameter = proportions.centerDiskDiameter;
-  const dividerSegments = getPageDialDividerSegments(
-    diameter,
-    proportions.innerDiskDiameter,
-    centerDiameter,
-  );
   const buttonStyle = (x: number, y: number, disabled = false) => ({
     position: "absolute" as const,
     left: x - buttonSize / 2,
@@ -70,14 +65,6 @@ export function PageDialControls({
 
   return (
     <>
-      {dividerSegments.map((segment, index) => (
-        <Divider
-          key={`page-dial-control-divider-${index}`}
-          orientation="vertical"
-          pointerEvents="none"
-          style={getDividerStyle(segment)}
-        />
-      ))}
       <Pressable
         accessibilityLabel="Select drill"
         accessibilityRole="button"
@@ -181,6 +168,27 @@ export function PageDialControls({
       >
         <Icon as={Plus} size={24} style={{ color: foregroundColor }} />
       </Pressable>
+    </>
+  );
+}
+
+export function PageDialDividers({ diameter }: { readonly diameter: number }) {
+  const proportions = getPageDialProportions(diameter);
+  const dividerSegments = getPageDialDividerSegments(
+    diameter,
+    proportions.innerDiskDiameter,
+    proportions.centerDiskDiameter,
+  );
+  return (
+    <>
+      {dividerSegments.map((segment, index) => (
+        <Divider
+          key={`page-dial-control-divider-${index}`}
+          orientation="vertical"
+          pointerEvents="none"
+          style={getDividerStyle(segment)}
+        />
+      ))}
     </>
   );
 }

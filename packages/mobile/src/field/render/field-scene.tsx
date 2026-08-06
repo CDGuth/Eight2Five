@@ -6,6 +6,7 @@ import type { StandardFootballFieldTemplate } from "../template";
 import type { FieldPoint } from "../types";
 import type {
   FieldCamera,
+  FieldCameraPerspective,
   FieldViewportSize,
 } from "../camera/field-camera-types";
 import type { FieldPaths } from "./create-field-paths";
@@ -27,6 +28,7 @@ interface FieldSceneProps {
   readonly template: StandardFootballFieldTemplate;
   readonly paths: FieldPaths;
   readonly palette: FieldRenderPalette;
+  readonly perspective: FieldCameraPerspective;
   readonly livePosition: SharedValue<FieldPoint | null>;
   readonly targetPosition?: FieldPoint;
   readonly drillScene?: DrillRenderScene;
@@ -43,6 +45,7 @@ export function FieldScene({
   template,
   paths,
   palette,
+  perspective,
   livePosition,
   targetPosition,
   drillScene,
@@ -52,14 +55,18 @@ export function FieldScene({
   showPerimeterStepGrid,
   showAuxiliaryFieldMarks,
 }: FieldSceneProps) {
-  const cameraTransform = useDerivedValue(() => [
-    { translateX: canvasSize.value.width / 2 },
-    { translateY: canvasSize.value.height / 2 },
-    { scaleX: 1 / camera.metersPerPixel.value },
-    { scaleY: -1 / camera.metersPerPixel.value },
-    { translateX: -camera.centerXMeters.value },
-    { translateY: -camera.centerYMeters.value },
-  ]);
+  const cameraTransform = useDerivedValue(() => {
+    const scale = 1 / camera.metersPerPixel.value;
+    const performerView = perspective === "performer";
+    return [
+      { translateX: canvasSize.value.width / 2 },
+      { translateY: canvasSize.value.height / 2 },
+      { scaleX: performerView ? -scale : scale },
+      { scaleY: performerView ? scale : -scale },
+      { translateX: -camera.centerXMeters.value },
+      { translateY: -camera.centerYMeters.value },
+    ];
+  });
 
   return (
     <Group transform={cameraTransform}>

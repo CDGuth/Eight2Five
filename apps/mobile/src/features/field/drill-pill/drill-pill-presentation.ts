@@ -7,7 +7,6 @@ import type {
 
 export interface AnimatedMetricPresentation {
   readonly key: string;
-  readonly direction: -1 | 1;
   readonly label: string;
   readonly value: string;
 }
@@ -19,13 +18,11 @@ export function getCountMetricPresentation(
   return mode === "counts"
     ? {
         key: mode,
-        direction: -1,
         label: "Counts",
         value: presentation.counts,
       }
     : {
         key: mode,
-        direction: 1,
         label: "Measures",
         value: presentation.measures,
       };
@@ -37,7 +34,6 @@ export function getTransitionMetricPresentation(
 ): AnimatedMetricPresentation {
   return {
     key: mode,
-    direction: mode === "step-size" ? -1 : 1,
     label: presentation.metricLabel,
     value: presentation.metric,
   };

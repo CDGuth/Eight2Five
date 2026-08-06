@@ -187,6 +187,7 @@ export function FieldScreen({
             onViewportChange={controller.commitViewport}
             palette={palette}
             fieldPreset={controller.fieldPreset}
+            perspective={controller.settings.fieldPerspective}
             livePosition={livePositionValue}
             targetPosition={targetPosition}
             drillScene={drillScene}
@@ -211,15 +212,13 @@ export function FieldScreen({
               pages={controller.pages}
               selectedIndex={controller.selectedIndex}
               terminology={controller.settings.drillTerminology}
-              countDisplayMode={hudState.countDisplayMode}
+              countDisplayMode={controller.settings.countDisplayMode}
               metricMode={controller.settings.transitionMetricMode}
               fieldPreset={controller.fieldPreset}
               expanded={canExpandDrillPill && hudState.drillPillExpanded}
               controlsDisabled={controlsDisabled}
               error={controller.error}
-              onToggleCounts={() =>
-                dispatchHud({ type: "toggle-count-display" })
-              }
+              onToggleCounts={() => void controller.toggleCountDisplayMode()}
               onToggleMetric={() => void controller.toggleMetricMode()}
               onToggleExpanded={
                 canExpandDrillPill
@@ -301,7 +300,9 @@ export function FieldScreen({
         }}
       />
       <PerformerSelectionDialog
-        key={`field-performer:${controller.activeDrill?.id ?? "none"}:${controller.activeDrill?.selectedPerformerEntityId ?? "none"}`}
+        key={`field-performer:${controller.activeDrill?.id ?? "none"}:${
+          controller.activeDrill?.selectedPerformerEntityId ?? "none"
+        }`}
         document={controller.activeDrillDocument}
         isOpen={controller.settings.drillFeaturesEnabled && performerDialogOpen}
         importing={controller.selectionBusy}

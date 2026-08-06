@@ -40,11 +40,12 @@ export default function MobileRootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppSettingsProvider>
-          <MobileAppearance>
-            <MobilePansWithSettings>
+          {/* Keep PANS above the UI portal host so modal content retains PANS context. */}
+          <MobilePansWithSettings>
+            <MobileAppearance>
               <MobileNavigation />
-            </MobilePansWithSettings>
-          </MobileAppearance>
+            </MobileAppearance>
+          </MobilePansWithSettings>
         </AppSettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

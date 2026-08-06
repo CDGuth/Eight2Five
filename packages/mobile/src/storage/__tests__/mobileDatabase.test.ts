@@ -15,7 +15,7 @@ describe("mobile app SQLite schema preparation", () => {
 
     const sql = executed.join("\n");
     expect(MOBILE_DB_NAME).toBe("eight2five-mobile.db");
-    expect(MOBILE_SCHEMA_VERSION).toBe(7);
+    expect(MOBILE_SCHEMA_VERSION).toBe(8);
     expect(sql).toContain("PRAGMA journal_mode = WAL");
     expect(sql).toContain("PRAGMA foreign_keys = OFF");
     expect(sql).toContain("DROP TABLE IF EXISTS app_settings");
@@ -42,12 +42,15 @@ describe("mobile app SQLite schema preparation", () => {
     );
     expect(sql).toContain("default_field_preset TEXT NOT NULL");
     expect(sql).toContain("show_perimeter_step_grid INTEGER NOT NULL");
+    expect(sql).toContain("count_display_mode TEXT NOT NULL DEFAULT 'counts'");
     expect(sql).toContain(
       "previous_transition_set_count INTEGER NOT NULL DEFAULT 1",
     );
     expect(sql).toContain(
       "next_transition_set_count INTEGER NOT NULL DEFAULT 1",
     );
+    expect(sql).toContain("previous_transition_set_count <= 5");
+    expect(sql).toContain("next_transition_set_count <= 5");
     expect(sql).toContain(
       "distance_green_threshold_steps REAL NOT NULL DEFAULT 0.5",
     );

@@ -64,6 +64,9 @@ export interface TransitionScene {
   readonly current: DrillGridPoint | null;
   readonly previous?: ImmediateTransition;
   readonly next?: ImmediateTransition;
+  /** Depth > 1 connectors are ordered nearest-to-farthest from the selected set. */
+  readonly previousConnectors: readonly ImmediateTransition[];
+  readonly nextConnectors: readonly ImmediateTransition[];
   /** Extra dots are ordered nearest-to-farthest from the selected set. */
   readonly previousDots: readonly TransitionDot[];
   readonly nextDots: readonly TransitionDot[];
@@ -121,6 +124,8 @@ export function buildTransitionScene(
     selectedPerformerEntityId: input.selectedPerformerEntityId,
     selectedSourceSetId: input.selectedSourceSetId,
     current,
+    previousConnectors: [],
+    nextConnectors: [],
     previousDots: [],
     nextDots: [],
   };
@@ -171,6 +176,14 @@ export function buildTransitionScene(
     epsilon,
   );
 
+  const extraConnectors = createExtraTransitionConnectors(
+    input.document,
+    input.selectedPerformerEntityId,
+    previousIndices,
+    nextIndices,
+    input.geometryOptions,
+    epsilon,
+  );
   const extraDots = createSceneExtraDots(
     input.document,
     input.selectedPerformerEntityId,
@@ -186,6 +199,8 @@ export function buildTransitionScene(
     ...emptyScene,
     ...(previous ? { previous } : {}),
     ...(next ? { next } : {}),
+    previousConnectors: extraConnectors.previousConnectors,
+    nextConnectors: extraConnectors.nextConnectors,
     previousDots: extraDots.previousDots,
     nextDots: extraDots.nextDots,
   };
@@ -245,6 +260,54 @@ function makeImmediateTransition(
     ...(resolved.midpointParameter === undefined
       ? {}
       : { midpointParameter: resolved.midpointParameter }),
+  };
+}
+
+function createExtraTransitionConnectors(
+  document: DrillDocument,
+  entityId: number,
+  previousIndices: readonly number[],
+  nextIndices: readonly number[],
+  geometryOptions: TransitionGeometryOptions | undefined,
+  epsilon: number,
+): {
+  readonly previousConnectors: readonly ImmediateTransition[];
+  readonly nextConnectors: readonly ImmediateTransition[];
+} {
+  const createChain = (
+    indices: readonly number[],
+    direction: "previous" | "next",
+  ): readonly ImmediateTransition[] => {
+    const connectors: ImmediateTransition[] = [];
+    for (let depth = 1; depth < indices.length; depth += 1) {
+      const nearer = positionAtIndex(document, entityId, indices[depth - 1]);
+      const farther = positionAtIndex(document, entityId, indices[depth]);
+      const transition =
+        direction === "previous"
+          ? createImmediateTransition(
+              document,
+              entityId,
+              farther,
+              nearer,
+              geometryOptions,
+              epsilon,
+            )
+          : createImmediateTransition(
+              document,
+              entityId,
+              nearer,
+              farther,
+              geometryOptions,
+              epsilon,
+            );
+      if (transition) connectors.push(transition);
+    }
+    return connectors;
+  };
+
+  return {
+    previousConnectors: createChain(previousIndices, "previous"),
+    nextConnectors: createChain(nextIndices, "next"),
   };
 }
 

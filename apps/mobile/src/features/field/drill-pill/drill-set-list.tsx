@@ -40,16 +40,12 @@ export function DrillSetList({
   const listRef = React.useRef<FlatList<DrillSet>>(null);
 
   React.useEffect(() => {
-    if (!expanded || selectedIndex < 0 || pages.length === 0) return;
+    if (!expanded || pages.length === 0) return;
     const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({
-        index: selectedIndex,
-        animated: false,
-        viewPosition: 0.5,
-      });
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
     return () => cancelAnimationFrame(frame);
-  }, [expanded, pages.length, selectedIndex]);
+  }, [expanded, pages.length]);
 
   const renderItem = React.useCallback(
     ({ item, index }: ListRenderItemInfo<DrillSet>) => {
@@ -64,7 +60,9 @@ export function DrillSetList({
       return (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Select ${presentation.term.toLowerCase()} ${presentation.set}`}
+          accessibilityLabel={`Select ${presentation.term.toLowerCase()} ${
+            presentation.set
+          }`}
           accessibilityState={{ selected }}
           onPress={() => onSelectIndex(index)}
           style={{

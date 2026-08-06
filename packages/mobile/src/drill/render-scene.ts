@@ -140,6 +140,8 @@ export interface DrillRenderScene {
   readonly entities: readonly DrillRenderEntity[];
   readonly previous?: PhysicalImmediateTransition;
   readonly next?: PhysicalImmediateTransition;
+  readonly previousConnectors: readonly PhysicalImmediateTransition[];
+  readonly nextConnectors: readonly PhysicalImmediateTransition[];
   readonly previousDots: readonly PhysicalTransitionDot[];
   readonly nextDots: readonly PhysicalTransitionDot[];
 }
@@ -152,6 +154,7 @@ export const DRILL_RENDER_LAYER_ORDER = Object.freeze([
   "static",
   "anchors",
   "entities",
+  "extra-connectors",
   "extra-dots",
   "previous",
   "next",
@@ -236,6 +239,12 @@ export function buildDrillRenderScene(
           ),
         }
       : {}),
+    previousConnectors: transitionScene.previousConnectors.map((transition) =>
+      projectImmediateTransition(transition, field, input.geometryOptions),
+    ),
+    nextConnectors: transitionScene.nextConnectors.map((transition) =>
+      projectImmediateTransition(transition, field, input.geometryOptions),
+    ),
     previousDots: transitionScene.previousDots.map((dot) =>
       projectTransitionDot(dot, field),
     ),
@@ -451,6 +460,8 @@ function freezeScene(scene: {
   readonly entities: readonly DrillRenderEntity[];
   readonly previous?: PhysicalImmediateTransition;
   readonly next?: PhysicalImmediateTransition;
+  readonly previousConnectors: readonly PhysicalImmediateTransition[];
+  readonly nextConnectors: readonly PhysicalImmediateTransition[];
   readonly previousDots: readonly PhysicalTransitionDot[];
   readonly nextDots: readonly PhysicalTransitionDot[];
 }): DrillRenderScene {
@@ -460,6 +471,8 @@ function freezeScene(scene: {
     entities: Object.freeze(
       scene.entities.map((entity) => Object.freeze(entity)),
     ),
+    previousConnectors: Object.freeze([...scene.previousConnectors]),
+    nextConnectors: Object.freeze([...scene.nextConnectors]),
     previousDots: Object.freeze([...scene.previousDots]),
     nextDots: Object.freeze([...scene.nextDots]),
   });

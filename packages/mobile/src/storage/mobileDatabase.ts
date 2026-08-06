@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 7;
+export const MOBILE_SCHEMA_VERSION = 8;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -158,6 +158,8 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
         CHECK (default_field_preset IN (${FIELD_PRESET_SQL_LIST})),
       transition_metric_mode TEXT NOT NULL DEFAULT 'step-size'
         CHECK (transition_metric_mode IN ('step-size', 'crossing-counts')),
+      count_display_mode TEXT NOT NULL DEFAULT 'counts'
+        CHECK (count_display_mode IN ('counts', 'measures')),
       guidance_enabled INTEGER NOT NULL DEFAULT 1
         CHECK (guidance_enabled IN (0, 1)),
       developer_mode_enabled INTEGER NOT NULL DEFAULT 0
@@ -185,13 +187,13 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
       previous_transition_set_count INTEGER NOT NULL DEFAULT 1
         CHECK (
           previous_transition_set_count >= 0 AND
-          previous_transition_set_count <= 50 AND
+          previous_transition_set_count <= 5 AND
           previous_transition_set_count = CAST(previous_transition_set_count AS INTEGER)
         ),
       next_transition_set_count INTEGER NOT NULL DEFAULT 1
         CHECK (
           next_transition_set_count >= 0 AND
-          next_transition_set_count <= 50 AND
+          next_transition_set_count <= 5 AND
           next_transition_set_count = CAST(next_transition_set_count AS INTEGER)
         ),
       distance_green_threshold_steps REAL NOT NULL DEFAULT 0.5

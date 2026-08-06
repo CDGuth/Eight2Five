@@ -20,21 +20,14 @@ const set = (overrides: Partial<DrillSet> = {}): DrillSet => ({
 });
 
 describe("field HUD state", () => {
-  test("keeps count display and expansion as explicit session state", () => {
-    const measures = reduceFieldHudState(INITIAL_FIELD_HUD_STATE, {
-      type: "toggle-count-display",
-    });
-    expect(measures).toEqual({
-      countDisplayMode: "measures",
-      drillPillExpanded: false,
-    });
-    const expanded = reduceFieldHudState(measures, {
+  test("keeps expansion as explicit session state", () => {
+    const expanded = reduceFieldHudState(INITIAL_FIELD_HUD_STATE, {
       type: "toggle-drill-pill",
     });
     expect(expanded.drillPillExpanded).toBe(true);
     expect(
       reduceFieldHudState(expanded, { type: "collapse-drill-pill" }),
-    ).toEqual({ countDisplayMode: "measures", drillPillExpanded: false });
+    ).toEqual({ drillPillExpanded: false });
   });
 
   test("formats counts, measures, metrics, terminology, and coordinates centrally", () => {

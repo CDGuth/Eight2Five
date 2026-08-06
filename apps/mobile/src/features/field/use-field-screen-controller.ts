@@ -128,6 +128,20 @@ export function useFieldScreenController() {
     }
   }, [snapshot.settings.transitionMetricMode, snapshot.status, store]);
 
+  const toggleCountDisplayMode = React.useCallback(async () => {
+    if (snapshot.status !== "ready") return;
+    try {
+      await store.update({
+        countDisplayMode:
+          snapshot.settings.countDisplayMode === "counts"
+            ? "measures"
+            : "counts",
+      });
+    } catch (cause) {
+      setFieldError(cause instanceof Error ? cause : new Error(String(cause)));
+    }
+  }, [snapshot.settings.countDisplayMode, snapshot.status, store]);
+
   const selectPageAtIndex = React.useCallback(
     async (index: number) => {
       const page = pages[index];
@@ -258,6 +272,7 @@ export function useFieldScreenController() {
     error: fieldError ?? snapshot.error,
     selectActiveDrill,
     toggleMetricMode,
+    toggleCountDisplayMode,
     selectPageAtIndex,
     selectPerformer,
     refreshDrills,

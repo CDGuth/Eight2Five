@@ -14,20 +14,17 @@ import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 
 import { getTransitionPresentation } from "../drill/transition-presentation";
 
-export type CountDisplayMode = "counts" | "measures";
+export type { CountDisplayMode } from "@eight2five/mobile/settings";
 
 export interface FieldHudState {
-  readonly countDisplayMode: CountDisplayMode;
   readonly drillPillExpanded: boolean;
 }
 
 export type FieldHudAction =
-  | { readonly type: "toggle-count-display" }
   | { readonly type: "toggle-drill-pill" }
   | { readonly type: "collapse-drill-pill" };
 
 export const INITIAL_FIELD_HUD_STATE: FieldHudState = Object.freeze({
-  countDisplayMode: "counts",
   drillPillExpanded: false,
 });
 
@@ -36,12 +33,6 @@ export function reduceFieldHudState(
   action: FieldHudAction,
 ): FieldHudState {
   switch (action.type) {
-    case "toggle-count-display":
-      return {
-        ...state,
-        countDisplayMode:
-          state.countDisplayMode === "counts" ? "measures" : "counts",
-      };
     case "toggle-drill-pill":
       return { ...state, drillPillExpanded: !state.drillPillExpanded };
     case "collapse-drill-pill":

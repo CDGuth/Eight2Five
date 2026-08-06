@@ -40,6 +40,7 @@ export function PageDialCanvas({
       innerColor={innerColor}
       backgroundColor={backgroundColor}
       knobColor={knobColor}
+      showKnob={false}
       dividerSegments={[]}
     />
   );

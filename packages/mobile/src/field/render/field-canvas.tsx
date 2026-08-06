@@ -25,6 +25,7 @@ import {
 } from "../camera/field-camera-policy";
 import type {
   FieldCamera,
+  FieldCameraPerspective,
   FieldViewport,
   FieldViewportSize,
 } from "../camera/field-camera-types";
@@ -48,6 +49,7 @@ export interface FieldCanvasProps {
   readonly defaultViewport?: FieldViewport;
   readonly onViewportChange?: (viewport: FieldViewport) => void;
   readonly palette?: FieldRenderPalette;
+  readonly perspective?: FieldCameraPerspective;
   readonly livePosition?: SharedValue<FieldPoint | null>;
   readonly targetPosition?: FieldPoint;
   readonly drillScene?: DrillRenderScene;
@@ -69,6 +71,7 @@ export function FieldCanvas({
   defaultViewport,
   onViewportChange,
   palette = DEFAULT_FIELD_RENDER_PALETTE,
+  perspective = "director",
   livePosition: externalLivePosition,
   targetPosition,
   drillScene,
@@ -120,6 +123,7 @@ export function FieldCanvas({
     canvasSize,
     cameraBounds,
     gridBounds,
+    perspective,
     onViewportChange,
     testID,
   });
@@ -167,6 +171,7 @@ export function FieldCanvas({
             template={template}
             paths={paths}
             palette={palette}
+            perspective={perspective}
             livePosition={livePosition}
             targetPosition={targetPosition}
             drillScene={drillScene}

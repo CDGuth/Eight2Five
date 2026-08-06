@@ -2,6 +2,7 @@ import type { FieldPoint } from "../types";
 import type {
   FieldCamera,
   FieldCameraBounds,
+  FieldCameraPerspective,
   FieldPanBaseline,
   FieldViewport,
   FieldViewportSize,
@@ -21,15 +22,20 @@ export function fieldWorldToScreen(
   point: FieldPoint,
   viewport: FieldViewport,
   size: FieldViewportSize,
+  perspective: FieldCameraPerspective = "director",
 ): { x: number; y: number } {
   "worklet";
+  const xSign = perspective === "performer" ? -1 : 1;
+  const ySign = perspective === "performer" ? 1 : -1;
   return {
     x:
       size.width / 2 +
-      (point.xMeters - viewport.centerXMeters) / viewport.metersPerPixel,
+      ((point.xMeters - viewport.centerXMeters) / viewport.metersPerPixel) *
+        xSign,
     y:
-      size.height / 2 -
-      (point.yMeters - viewport.centerYMeters) / viewport.metersPerPixel,
+      size.height / 2 +
+      ((point.yMeters - viewport.centerYMeters) / viewport.metersPerPixel) *
+        ySign,
   };
 }
 
@@ -37,15 +43,18 @@ export function fieldScreenToWorld(
   point: { readonly x: number; readonly y: number },
   viewport: FieldViewport,
   size: FieldViewportSize,
+  perspective: FieldCameraPerspective = "director",
 ): FieldPoint {
   "worklet";
+  const xSign = perspective === "performer" ? -1 : 1;
+  const ySign = perspective === "performer" ? 1 : -1;
   return {
     xMeters:
       viewport.centerXMeters +
-      (point.x - size.width / 2) * viewport.metersPerPixel,
+      (point.x - size.width / 2) * viewport.metersPerPixel * xSign,
     yMeters:
-      viewport.centerYMeters -
-      (point.y - size.height / 2) * viewport.metersPerPixel,
+      viewport.centerYMeters +
+      (point.y - size.height / 2) * viewport.metersPerPixel * ySign,
   };
 }
 
@@ -64,15 +73,18 @@ export function fieldPanCenter(
   baseline: FieldPanBaseline,
   translationX: number,
   translationY: number,
+  perspective: FieldCameraPerspective = "director",
 ): FieldPoint {
   "worklet";
+  const xSign = perspective === "performer" ? -1 : 1;
+  const ySign = perspective === "performer" ? 1 : -1;
   return {
     xMeters:
       baseline.center.xMeters -
-      (translationX - baseline.translationX) * baseline.metersPerPixel,
+      (translationX - baseline.translationX) * baseline.metersPerPixel * xSign,
     yMeters:
-      baseline.center.yMeters +
-      (translationY - baseline.translationY) * baseline.metersPerPixel,
+      baseline.center.yMeters -
+      (translationY - baseline.translationY) * baseline.metersPerPixel * ySign,
   };
 }
 
@@ -81,13 +93,18 @@ export function fieldCenterForStationaryWorldPoint(
   screenPoint: { readonly x: number; readonly y: number },
   size: FieldViewportSize,
   metersPerPixel: number,
+  perspective: FieldCameraPerspective = "director",
 ): FieldPoint {
   "worklet";
+  const xSign = perspective === "performer" ? -1 : 1;
+  const ySign = perspective === "performer" ? 1 : -1;
   return {
     xMeters:
-      worldPoint.xMeters - (screenPoint.x - size.width / 2) * metersPerPixel,
+      worldPoint.xMeters -
+      (screenPoint.x - size.width / 2) * metersPerPixel * xSign,
     yMeters:
-      worldPoint.yMeters + (screenPoint.y - size.height / 2) * metersPerPixel,
+      worldPoint.yMeters -
+      (screenPoint.y - size.height / 2) * metersPerPixel * ySign,
   };
 }
 
@@ -139,14 +156,17 @@ export interface FieldCameraTransform {
 export function fieldCameraTransform(
   viewport: FieldViewport,
   size: FieldViewportSize,
+  perspective: FieldCameraPerspective = "director",
 ): FieldCameraTransform {
   "worklet";
   const scale = 1 / viewport.metersPerPixel;
+  const scaleX = scale * (perspective === "performer" ? -1 : 1);
+  const scaleY = scale * (perspective === "performer" ? 1 : -1);
   return {
-    scaleX: scale,
-    scaleY: -scale,
-    translateX: size.width / 2 - viewport.centerXMeters * scale,
-    translateY: size.height / 2 + viewport.centerYMeters * scale,
+    scaleX,
+    scaleY,
+    translateX: size.width / 2 - viewport.centerXMeters * scaleX,
+    translateY: size.height / 2 - viewport.centerYMeters * scaleY,
   };
 }
 

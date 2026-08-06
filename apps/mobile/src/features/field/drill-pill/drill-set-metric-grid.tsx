@@ -1,6 +1,12 @@
 import React from "react";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
-import { Box } from "@eight2five/ui/components/box";
+import Animated, {
+  interpolateColor,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
@@ -74,24 +80,19 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
             ? `Show ${countDisplayMode === "counts" ? "measures" : "counts"}`
             : undefined
         }
-        disabled={!onToggleCounts}
         pointerEvents={onToggleCounts ? "auto" : "none"}
         onPress={onToggleCounts}
         style={{ width: columns.countWidth }}
       >
-        <AnimatedValueSwitch
+        <SwitchingMetricCell
           displayKey={count.key}
-          direction={count.direction}
+          label={count.label}
+          value={count.value}
+          labelColor={labelColor}
+          valueColor={valueColor}
+          modeIndex={countDisplayMode === "counts" ? 0 : 1}
           testID={header ? "drill-pill-count-switch" : undefined}
-        >
-          <MetricCell
-            label={count.label}
-            value={count.value}
-            labelColor={labelColor}
-            valueColor={valueColor}
-            modeIndex={countDisplayMode === "counts" ? 0 : 1}
-          />
-        </AnimatedValueSwitch>
+        />
       </Pressable>
       <Pressable
         accessibilityRole={onToggleMetric ? "button" : undefined}
@@ -100,24 +101,19 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
             ? `Show ${metricMode === "step-size" ? "xCounts" : "step size"}`
             : undefined
         }
-        disabled={!onToggleMetric}
         pointerEvents={onToggleMetric ? "auto" : "none"}
         onPress={onToggleMetric}
         style={{ width: columns.metricWidth }}
       >
-        <AnimatedValueSwitch
+        <SwitchingMetricCell
           displayKey={metric.key}
-          direction={metric.direction}
+          label={metric.label}
+          value={metric.value}
+          labelColor={labelColor}
+          valueColor={valueColor}
+          modeIndex={metricMode === "step-size" ? 0 : 1}
           testID={header ? "drill-pill-metric-switch" : undefined}
-        >
-          <MetricCell
-            label={metric.label}
-            value={metric.value}
-            labelColor={labelColor}
-            valueColor={valueColor}
-            modeIndex={metricMode === "step-size" ? 0 : 1}
-          />
-        </AnimatedValueSwitch>
+        />
       </Pressable>
       <Pressable
         accessibilityRole={onToggleExpanded ? "button" : undefined}
@@ -126,7 +122,6 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
             ? `${expanded ? "Collapse" : "Expand"} drill set list`
             : undefined
         }
-        disabled={!onToggleExpanded}
         pointerEvents={onToggleExpanded ? "auto" : "none"}
         onPress={onToggleExpanded}
         style={{ width: columns.coordinateWidth }}
@@ -178,20 +173,131 @@ function MetricCell({
   value,
   labelColor,
   valueColor,
-  modeIndex,
 }: {
   readonly width?: number;
   readonly label: string;
   readonly value: string;
   readonly labelColor: string;
   readonly valueColor: string;
-  readonly modeIndex?: 0 | 1;
 }) {
-  const content = (
+  return (
     <VStack
-      className={modeIndex === undefined ? undefined : "flex-1"}
-      style={{ justifyContent: "center" }}
+      style={{
+        height: 48,
+        justifyContent: "center",
+        ...(width === undefined ? null : { width }),
+      }}
     >
+      <MetricText
+        label={label}
+        value={value}
+        labelColor={labelColor}
+        valueColor={valueColor}
+      />
+    </VStack>
+  );
+}
+
+function SwitchingMetricCell({
+  displayKey,
+  label,
+  value,
+  labelColor,
+  valueColor,
+  modeIndex,
+  testID,
+}: {
+  readonly displayKey: string;
+  readonly label: string;
+  readonly value: string;
+  readonly labelColor: string;
+  readonly valueColor: string;
+  readonly modeIndex: 0 | 1;
+  readonly testID?: string;
+}) {
+  return (
+    <HStack className="items-center" style={{ gap: 6, height: 48 }}>
+      <ModeIndicator
+        modeIndex={modeIndex}
+        labelColor={labelColor}
+        valueColor={valueColor}
+      />
+      <AnimatedValueSwitch
+        displayKey={displayKey}
+        style={{ flex: 1 }}
+        testID={testID}
+      >
+        <MetricText
+          label={label}
+          value={value}
+          labelColor={labelColor}
+          valueColor={valueColor}
+        />
+      </AnimatedValueSwitch>
+    </HStack>
+  );
+}
+
+function ModeIndicator({
+  modeIndex,
+  labelColor,
+  valueColor,
+}: {
+  readonly modeIndex: 0 | 1;
+  readonly labelColor: string;
+  readonly valueColor: string;
+}) {
+  const progress = useSharedValue(modeIndex);
+  React.useEffect(() => {
+    progress.value = withTiming(modeIndex, {
+      duration: 180,
+      reduceMotion: ReduceMotion.System,
+    });
+  }, [modeIndex, progress]);
+
+  const topStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [valueColor, labelColor],
+    ),
+    opacity: 1 - progress.value * 0.5,
+  }));
+  const bottomStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [labelColor, valueColor],
+    ),
+    opacity: 0.5 + progress.value * 0.5,
+  }));
+  const dotStyle = {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  } as const;
+
+  return (
+    <VStack style={{ gap: 4 }} accessibilityElementsHidden>
+      <Animated.View style={[dotStyle, topStyle]} />
+      <Animated.View style={[dotStyle, bottomStyle]} />
+    </VStack>
+  );
+}
+
+function MetricText({
+  label,
+  value,
+  labelColor,
+  valueColor,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly labelColor: string;
+  readonly valueColor: string;
+}) {
+  return (
+    <VStack className="flex-1 justify-center">
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.4}
@@ -214,52 +320,5 @@ function MetricCell({
         {value}
       </Text>
     </VStack>
-  );
-
-  if (modeIndex === undefined) {
-    return (
-      <VStack
-        style={{
-          height: 48,
-          justifyContent: "center",
-          ...(width === undefined ? null : { width }),
-        }}
-      >
-        {content}
-      </VStack>
-    );
-  }
-
-  return (
-    <HStack
-      className="items-center"
-      style={{
-        gap: 6,
-        height: 48,
-        ...(width === undefined ? null : { width }),
-      }}
-    >
-      <VStack style={{ gap: 4 }} accessibilityElementsHidden>
-        <Box
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 2.5,
-            backgroundColor: modeIndex === 0 ? valueColor : labelColor,
-            opacity: modeIndex === 0 ? 1 : 0.5,
-          }}
-        />
-        <Box
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 2.5,
-            backgroundColor: modeIndex === 1 ? valueColor : labelColor,
-            opacity: modeIndex === 1 ? 1 : 0.5,
-          }}
-        />
-      </VStack>
-      {content}
-    </HStack>
   );
 }

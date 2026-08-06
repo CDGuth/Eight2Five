@@ -39,12 +39,16 @@ const EMPTY_DOTS = Object.freeze([]) as readonly {
   readonly setId: number;
   readonly point: PhysicalFieldPoint;
 }[];
+const EMPTY_TRANSITIONS = Object.freeze(
+  [],
+) as readonly PhysicalImmediateTransition[];
 const LABEL_FONT_SIZE_PX = 12;
 const LABEL_LINE_HEIGHT_PX = 14;
 const MARKER_STROKE_PX = 2;
 const CONNECTOR_STROKE_PX = 1.25;
 const DASH_LENGTH_PX = 6;
 const DASH_GAP_PX = 4;
+const EXTRA_TRANSITION_OPACITY = 0.68;
 
 export interface FieldDrillLayerProps {
   readonly scene?: DrillRenderScene;
@@ -67,6 +71,8 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
 }: FieldDrillLayerProps) {
   const labelFont = useFont(Montserrat_400Regular, LABEL_FONT_SIZE_PX);
   const entities = scene?.entities ?? EMPTY_ENTITIES;
+  const previousConnectors = scene?.previousConnectors ?? EMPTY_TRANSITIONS;
+  const nextConnectors = scene?.nextConnectors ?? EMPTY_TRANSITIONS;
   const previousDots = scene?.previousDots ?? EMPTY_DOTS;
   const nextDots = scene?.nextDots ?? EMPTY_DOTS;
   const targetPoint = resolveCurrentTargetPosition({
@@ -84,6 +90,22 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           labelFont={labelFont}
           metersPerPixel={metersPerPixel}
           palette={palette}
+        />
+      ))}
+      {previousConnectors.map((transition) => (
+        <ExtraTransitionConnector
+          key={`previous-connector-${transition.fromSetId}-${transition.toSetId}`}
+          transition={transition}
+          kind="previous"
+          metersPerPixel={metersPerPixel}
+        />
+      ))}
+      {nextConnectors.map((transition) => (
+        <ExtraTransitionConnector
+          key={`next-connector-${transition.fromSetId}-${transition.toSetId}`}
+          transition={transition}
+          kind="next"
+          metersPerPixel={metersPerPixel}
         />
       ))}
       {previousDots.map((dot) => (
@@ -274,7 +296,40 @@ function ExtraDot({
       cy={point.yMeters}
       r={DRILL_MARKER_SIZE_METERS.midpointDiameter / 2}
       color={color}
-      opacity={0.68}
+      opacity={EXTRA_TRANSITION_OPACITY}
+    />
+  );
+}
+
+function ExtraTransitionConnector({
+  transition,
+  kind,
+  metersPerPixel,
+}: {
+  readonly transition: PhysicalImmediateTransition;
+  readonly kind: "previous" | "next";
+  readonly metersPerPixel: SharedValue<number>;
+}) {
+  const connectorPath = React.useMemo(
+    () => createPhysicalPath(transition.geometry),
+    [transition.geometry],
+  );
+  const connectorStrokeWidth = useDerivedValue(
+    () => metersPerPixel.value * CONNECTOR_STROKE_PX,
+  );
+  return (
+    <Path
+      path={connectorPath}
+      color={
+        kind === "previous"
+          ? DRILL_MARKER_COLORS.red
+          : DRILL_MARKER_COLORS.green
+      }
+      opacity={EXTRA_TRANSITION_OPACITY}
+      style="stroke"
+      strokeWidth={connectorStrokeWidth}
+      strokeCap="round"
+      strokeJoin="round"
     />
   );
 }

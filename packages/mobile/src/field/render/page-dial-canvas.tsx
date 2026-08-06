@@ -22,6 +22,7 @@ export interface FieldPageDialCanvasProps {
   readonly innerColor?: string;
   readonly backgroundColor?: string;
   readonly knobColor?: string;
+  readonly showKnob?: boolean;
   readonly dividerColor?: string;
   readonly dividerSegments?: readonly FieldPageDialLineSegment[];
   readonly testID?: string;
@@ -83,6 +84,7 @@ export function FieldPageDialCanvas({
   innerColor = "#222222",
   backgroundColor = "transparent",
   knobColor = "#FFFFFF",
+  showKnob = true,
   dividerColor = "rgba(255,255,255,0.28)",
   dividerSegments,
   testID = "page-dial-canvas",
@@ -212,14 +214,16 @@ export function FieldPageDialCanvas({
       />
 
       {/* A larger, overscanned knob keeps its soft offset shadow inside the canvas. */}
-      <Circle cx={knobX} cy={knobY} r={knobRadius} color={knobColor}>
-        <Shadow
-          dx={diameter * 0.012}
-          dy={diameter * 0.018}
-          blur={diameter * 0.018}
-          color="rgba(0,0,0,0.22)"
-        />
-      </Circle>
+      {showKnob ? (
+        <Circle cx={knobX} cy={knobY} r={knobRadius} color={knobColor}>
+          <Shadow
+            dx={diameter * 0.012}
+            dy={diameter * 0.018}
+            blur={diameter * 0.018}
+            color="rgba(0,0,0,0.22)"
+          />
+        </Circle>
+      ) : null}
     </Canvas>
   );
 }

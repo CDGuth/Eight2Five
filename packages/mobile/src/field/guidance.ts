@@ -23,8 +23,9 @@ function formatGuidanceAxis(
   if (Math.abs(steps) < 1e-9) return "0 steps";
   const direction = steps < 0 ? negativeDirection : positiveDirection;
   const magnitude = formatMarchingSteps(Math.abs(steps));
-  const word = Number(magnitude) === 1 ? "step" : "steps";
-  return `${magnitude} ${word} toward ${direction}`;
+  return Number(magnitude) === 1
+    ? `one step toward ${direction}`
+    : `${magnitude} steps toward ${direction}`;
 }
 
 /**

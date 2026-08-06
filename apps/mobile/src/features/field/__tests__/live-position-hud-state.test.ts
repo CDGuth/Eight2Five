@@ -24,8 +24,8 @@ describe("live position HUD state", () => {
         target: { xMeters: 0.5715, yMeters: 0 },
         greenThresholdSteps: 0.5,
         yellowThresholdSteps: 1,
-      }).tone,
-    ).toBe("warning");
+      }),
+    ).toMatchObject({ value: "one step", tone: "warning" });
     expect(
       getTargetDistancePresentation({
         live,

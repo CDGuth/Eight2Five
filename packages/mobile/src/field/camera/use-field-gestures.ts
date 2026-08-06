@@ -23,6 +23,7 @@ import {
 import type {
   FieldCamera,
   FieldCameraBounds,
+  FieldCameraPerspective,
   FieldPanBaseline,
   FieldViewport,
   FieldViewportSize,
@@ -33,6 +34,7 @@ interface UseFieldGesturesOptions {
   readonly canvasSize: SharedValue<FieldViewportSize>;
   readonly cameraBounds: FieldCameraBounds;
   readonly gridBounds: FieldCameraBounds;
+  readonly perspective?: FieldCameraPerspective;
   readonly onViewportChange?: (viewport: FieldViewport) => void;
   readonly testID?: string;
 }
@@ -47,6 +49,7 @@ export function useFieldGestures({
   canvasSize,
   cameraBounds,
   gridBounds,
+  perspective = "director",
   onViewportChange,
   testID = "field",
 }: UseFieldGesturesOptions) {
@@ -127,6 +130,7 @@ export function useFieldGestures({
         panBaseline.value,
         event.translationX,
         event.translationY,
+        perspective,
       );
       const halfWidth =
         (canvasSize.value.width * camera.metersPerPixel.value) / 2;
@@ -181,6 +185,7 @@ export function useFieldGestures({
               metersPerPixel: camera.metersPerPixel.value,
             },
             canvasSize.value,
+            perspective,
           ),
         );
         setSharedValue(pinchInitialized, true);
@@ -198,6 +203,7 @@ export function useFieldGestures({
         { x: event.focalX, y: event.focalY },
         canvasSize.value,
         nextScale,
+        perspective,
       );
       setFieldCamera(camera, {
         centerXMeters: clampFieldCameraAxis(

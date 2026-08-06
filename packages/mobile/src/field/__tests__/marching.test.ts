@@ -89,6 +89,14 @@ describe("marching coordinate conversion", () => {
     },
   );
 
+  test("spells a singular marching step as one step", () => {
+    expect(
+      formatMarchingFrontBack(
+        fieldPointToMarchingCoordinate(gridPoint(0, 1)).frontBack,
+      ),
+    ).toBe("One Step behind Front Sideline");
+  });
+
   test("keeps canonical fractional values while formatting quarter steps", () => {
     const coordinate = fieldPointToMarchingCoordinate(
       gridPoint(-24 + 1.249999999, 28 + 2.500000001),

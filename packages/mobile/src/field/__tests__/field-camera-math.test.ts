@@ -39,6 +39,30 @@ describe("field camera math", () => {
     ).toEqual(screen);
   });
 
+  test("rotates performer perspective by 180 degrees and round-trips it", () => {
+    const point = { xMeters: 49.25, yMeters: 18.5 };
+    const director = fieldWorldToScreen(point, viewport, size, "director");
+    const performer = fieldWorldToScreen(point, viewport, size, "performer");
+
+    expect(performer.x - size.width / 2).toBeCloseTo(
+      -(director.x - size.width / 2),
+      10,
+    );
+    expect(performer.y - size.height / 2).toBeCloseTo(
+      -(director.y - size.height / 2),
+      10,
+    );
+    expect(fieldScreenToWorld(performer, viewport, size, "performer")).toEqual(
+      point,
+    );
+    expect(
+      applyFieldCameraTransform(
+        point,
+        fieldCameraTransform(viewport, size, "performer"),
+      ),
+    ).toEqual(performer);
+  });
+
   test("preserves the world point beneath a pinch focal point", () => {
     const focal = { x: 155, y: 92 };
     const world = fieldScreenToWorld(focal, viewport, size);

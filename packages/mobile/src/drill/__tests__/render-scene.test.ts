@@ -362,6 +362,7 @@ describe("selected-set drill render scene", () => {
       "static",
       "anchors",
       "entities",
+      "extra-connectors",
       "extra-dots",
       "previous",
       "next",

@@ -1,7 +1,8 @@
 import React from "react";
 import { View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
-import {
+import Animated, {
+  useAnimatedStyle,
   useSharedValue,
   withTiming,
   type SharedValue,
@@ -15,9 +16,13 @@ import {
 import { FrostedFieldSurface } from "../field-frosted-surface";
 
 import { PageDialCanvas } from "./page-dial-canvas";
-import { PageDialControls } from "./page-dial-controls";
+import { PageDialControls, PageDialDividers } from "./page-dial-controls";
 import { triggerPageDialHaptic, usePageDialGesture } from "./page-dial-gesture";
-import { normalizePageIndex } from "./page-dial-math";
+import {
+  normalizePageIndex,
+  PAGE_DIAL_KNOB_DIAMETER_RATIO,
+  pageDialPointForProgress,
+} from "./page-dial-math";
 
 function animateProgress(
   sharedValue: SharedValue<number>,
@@ -123,6 +128,12 @@ export function PageDial({
         backgroundColor={resolvedBackgroundColor}
         knobColor={theme.raw.white}
       />
+      <PageDialDividers diameter={diameter} />
+      <PageDialKnob
+        diameter={diameter}
+        progress={provisionalProgress}
+        color={theme.raw.white}
+      />
       <GestureDetector gesture={gesture}>
         <View
           accessibilityElementsHidden
@@ -154,6 +165,44 @@ export function PageDial({
         onSelectPerformer={onSelectPerformer}
       />
     </View>
+  );
+}
+
+function PageDialKnob({
+  diameter,
+  progress,
+  color,
+}: {
+  readonly diameter: number;
+  readonly progress: SharedValue<number>;
+  readonly color: string;
+}) {
+  const knobDiameter = diameter * PAGE_DIAL_KNOB_DIAMETER_RATIO;
+  const animatedStyle = useAnimatedStyle(() => {
+    const point = pageDialPointForProgress(progress.value, diameter);
+    return {
+      left: point.x - knobDiameter / 2,
+      top: point.y - knobDiameter / 2,
+    };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          width: knobDiameter,
+          height: knobDiameter,
+          borderRadius: knobDiameter / 2,
+          backgroundColor: color,
+          boxShadow: `0 ${diameter * 0.018}px ${
+            diameter * 0.03
+          }px rgba(0,0,0,0.22)`,
+        },
+        animatedStyle,
+      ]}
+      testID="page-dial-knob"
+    />
   );
 }
 

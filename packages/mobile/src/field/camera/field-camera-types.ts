@@ -2,6 +2,8 @@ import type { SharedValue } from "react-native-reanimated";
 
 import type { FieldPoint } from "../types";
 
+export type FieldCameraPerspective = "director" | "performer";
+
 export interface FieldViewportSize {
   readonly width: number;
   readonly height: number;

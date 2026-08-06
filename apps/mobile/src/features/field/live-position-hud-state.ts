@@ -50,9 +50,10 @@ export function getTargetDistancePresentation({
     live.position.yMeters - target.yMeters,
   );
   const steps = metersToStandardSteps(distanceMeters);
+  const roundedSteps = Number(steps.toFixed(1));
   return {
     steps,
-    value: `${steps.toFixed(1)} steps`,
+    value: roundedSteps === 1 ? "one step" : `${roundedSteps.toFixed(1)} steps`,
     tone:
       steps <= greenThresholdSteps
         ? "success"

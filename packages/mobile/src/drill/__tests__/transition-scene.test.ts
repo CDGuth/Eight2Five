@@ -292,8 +292,18 @@ describe("transition scene marker state", () => {
     );
 
     expect(scene.previous?.fromSetId).toBe(2);
+    expect(
+      scene.previousConnectors.map(({ fromSetId, toSetId }) => [
+        fromSetId,
+        toSetId,
+      ]),
+    ).toEqual([
+      [1, 2],
+      [0, 1],
+    ]);
     expect(scene.previousDots.map((dot) => dot.setId)).toEqual([1, 0]);
     expect(scene.next?.toSetId).toBe(4);
+    expect(scene.nextConnectors).toEqual([]);
   });
 
   test("uses total-count windows without backfilling a suppressed immediate marker", () => {
@@ -352,6 +362,18 @@ describe("transition scene marker state", () => {
 
     expect(scene.previous).toBeDefined();
     expect(scene.next).toBeDefined();
+    expect(
+      scene.previousConnectors.map(({ fromSetId, toSetId }) => [
+        fromSetId,
+        toSetId,
+      ]),
+    ).toEqual([[0, 1]]);
+    expect(
+      scene.nextConnectors.map(({ fromSetId, toSetId }) => [
+        fromSetId,
+        toSetId,
+      ]),
+    ).toEqual([[3, 4]]);
     expect(scene.previousDots).toEqual([
       { setId: 0, point: { xSteps: 8, ySteps: 0 } },
     ]);

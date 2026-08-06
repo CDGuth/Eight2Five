@@ -82,8 +82,8 @@ export function formatMarchingSteps(steps: number): string {
 
 function stepWord(steps: number, uppercase = true): string {
   const value = formatMarchingSteps(steps);
-  const noun = Math.abs(Number(value)) === 1 ? "Step" : "Steps";
-  return uppercase ? `${value} ${noun}` : `${value} ${noun.toLowerCase()}`;
+  if (Math.abs(Number(value)) === 1) return uppercase ? "One Step" : "one step";
+  return uppercase ? `${value} Steps` : `${value} steps`;
 }
 
 function yardLineText(yardLine: number): string {
