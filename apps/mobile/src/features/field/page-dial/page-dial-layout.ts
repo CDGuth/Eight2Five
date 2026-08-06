@@ -2,11 +2,11 @@ import { getDrillTerms, type DrillTerminology } from "@eight2five/mobile/drill";
 
 import {
   getPageDialCanvasOverscan,
-  getPageDialControlCenterOffset,
   getPageDialControlSize,
   getPageDialRingHitRegion,
   getPageDialRingRadius,
   PAGE_DIAL_CENTER_DISK_DIAMETER_RATIO,
+  PAGE_DIAL_CONTROL_CENTER_OFFSET_RATIO,
   PAGE_DIAL_INNER_DISK_DIAMETER_RATIO,
   PAGE_DIAL_KNOB_DIAMETER_RATIO,
   PAGE_DIAL_RING_THICKNESS_RATIO,
@@ -42,7 +42,7 @@ export function getPageDialProportions(diameter: number): PageDialProportions {
     centerBorderWidth: 0,
     knobDiameter,
     knobRadius: knobDiameter / 2,
-    controlCenterOffset: getPageDialControlCenterOffset(diameter),
+    controlCenterOffset: diameter * PAGE_DIAL_CONTROL_CENTER_OFFSET_RATIO,
     controlButtonSize: getPageDialControlSize(diameter),
     ringHitInnerRadius: ringHitRegion.innerRadius,
     ringHitOuterRadius: ringHitRegion.outerRadius,

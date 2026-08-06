@@ -103,7 +103,7 @@ export function PageDial({
         trackColor={trackColor}
         innerColor={resolvedInnerColor}
         backgroundColor={resolvedBackgroundColor}
-        foregroundColor={resolvedForegroundColor}
+        knobColor={theme.raw.white}
         dividerColor={resolvedDividerColor}
       />
       <GestureDetector gesture={gesture}>

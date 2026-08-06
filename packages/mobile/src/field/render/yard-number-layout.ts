@@ -1,5 +1,3 @@
-import type { FieldYardNumber } from "../template";
-
 export interface TextVisualBounds {
   readonly x: number;
   readonly y: number;
@@ -19,13 +17,13 @@ export interface YardNumberTextLayout {
 
 /**
  * Centers measured glyph bounds at the origin and scales their visual height
- * to the schema-defined physical height. Front and back rows face their
- * nearest sideline once the field scene's world-to-screen Y reflection runs.
+ * to the schema-defined physical height. The field scene reflects world Y into
+ * screen Y, so this layer always reflects text Y once more to keep every yard
+ * number upright to the viewer regardless of which sideline row it belongs to.
  */
 export function createYardNumberTextLayout(
   bounds: TextVisualBounds,
   targetHeightMeters: number,
-  side: FieldYardNumber["side"],
 ): YardNumberTextLayout {
   if (
     !Number.isFinite(targetHeightMeters) ||
@@ -46,8 +44,8 @@ export function createYardNumberTextLayout(
   return Object.freeze({
     x: -bounds.x - bounds.width / 2,
     y: -bounds.y - bounds.height / 2,
-    scaleX: side === "front" ? scale : -scale,
-    scaleY: side === "front" ? -scale : scale,
+    scaleX: scale,
+    scaleY: -scale,
     visualWidthMeters: bounds.width * scale,
     visualHeightMeters: bounds.height * scale,
   });

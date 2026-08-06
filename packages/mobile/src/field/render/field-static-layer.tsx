@@ -8,6 +8,8 @@ import type { FieldPaths } from "./create-field-paths";
 import type { FieldRenderPalette } from "./field-render-tokens";
 import { createYardNumberTextLayout } from "./yard-number-layout";
 
+const YARD_NUMBER_MEASUREMENT_FONT_SIZE = 100;
+
 interface FieldStaticLayerProps {
   readonly template: StandardFootballFieldTemplate;
   readonly paths: FieldPaths;
@@ -29,9 +31,13 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
   const fourStepStroke = useDerivedValue(() => metersPerPixel.value * 1.1);
   const fieldLineStroke = useDerivedValue(() => metersPerPixel.value * 1.4);
   const boundaryStroke = useDerivedValue(() => metersPerPixel.value * 2);
+  // Measure/draw from a large, fixed reference size and scale into world
+  // meters afterward. Measuring Montserrat at ~1.83 "font units" (six feet)
+  // is small enough for hinting/rounding to distort the glyph bounds on some
+  // platforms, which made the painted numbers undersized and slightly offset.
   const numberFont = useFont(
     Montserrat_600SemiBold,
-    template.dimensions.yardNumberHeightMeters,
+    YARD_NUMBER_MEASUREMENT_FONT_SIZE,
   );
   const fieldClip = {
     x: template.bounds.minXMeters,
@@ -117,7 +123,6 @@ export const FieldStaticLayer = React.memo(function FieldStaticLayer({
             const layout = createYardNumberTextLayout(
               numberFont.measureText(number.label),
               number.heightMeters,
-              number.side,
             );
             return (
               <Group

@@ -17,7 +17,7 @@ export function PageDialCanvas({
   trackColor,
   innerColor,
   backgroundColor,
-  foregroundColor,
+  knobColor,
   dividerColor,
 }: {
   readonly diameter: number;
@@ -27,7 +27,7 @@ export function PageDialCanvas({
   readonly trackColor: string;
   readonly innerColor?: string;
   readonly backgroundColor?: string;
-  readonly foregroundColor?: string;
+  readonly knobColor?: string;
   readonly dividerColor?: string;
 }) {
   const progress = useDerivedValue(() => {
@@ -54,7 +54,7 @@ export function PageDialCanvas({
       trackColor={trackColor}
       innerColor={innerColor}
       backgroundColor={backgroundColor}
-      foregroundColor={foregroundColor}
+      knobColor={knobColor}
       dividerColor={dividerColor}
       dividerSegments={dividerSegments}
     />

@@ -245,22 +245,19 @@ export function pageDialPointIsInRingHitRegion(
 
 export const isPageDialRingHit = pageDialPointIsInRingHitRegion;
 
-export function getPageDialControlCenterOffset(diameter: number): number {
-  "worklet";
-  return diameter * PAGE_DIAL_CONTROL_CENTER_OFFSET_RATIO;
-}
-
 export function getPageDialCardinalPoints(
   diameter: number,
-  offset = getPageDialControlCenterOffset(diameter),
+  offset?: number,
 ): PageDialCardinalPoints {
   "worklet";
   const center = diameter / 2;
+  const resolvedOffset =
+    offset ?? diameter * PAGE_DIAL_CONTROL_CENTER_OFFSET_RATIO;
   return {
-    top: { x: center, y: center - offset },
-    right: { x: center + offset, y: center },
-    bottom: { x: center, y: center + offset },
-    left: { x: center - offset, y: center },
+    top: { x: center, y: center - resolvedOffset },
+    right: { x: center + resolvedOffset, y: center },
+    bottom: { x: center, y: center + resolvedOffset },
+    left: { x: center - resolvedOffset, y: center },
   };
 }
 
