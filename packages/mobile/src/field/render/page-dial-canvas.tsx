@@ -34,7 +34,6 @@ const RING_THICKNESS_RATIO = 0.075;
 const KNOB_DIAMETER_RATIO = 0.16;
 const CANVAS_OVERSCAN_RATIO = 0.09;
 const DIVIDER_STROKE_RATIO = 0.012;
-const ACTIVE_OVERLAP_PROGRESS = 0.008;
 
 function pointAtRadius(
   diameter: number,
@@ -98,6 +97,7 @@ export function FieldPageDialCanvas({
   const innerDiskRadius = (diameter * INNER_DISK_DIAMETER_RATIO) / 2;
   const centerDiskRadius = (diameter * CENTER_DISK_DIAMETER_RATIO) / 2;
   const segments = dividerSegments ?? getDefaultDividerSegments(diameter);
+  const fullCircle = Math.abs(usableArcDegrees) >= 359.999;
 
   const trackPath = React.useMemo(() => {
     const inset = canvasOverscan + ringThickness / 2;
@@ -136,13 +136,9 @@ export function FieldPageDialCanvas({
     const value = progress.value;
     return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
   });
-  const activeProgress = useDerivedValue(() => {
-    const value = normalizedProgress.value;
-    return Math.min(
-      1,
-      Math.max(ACTIVE_OVERLAP_PROGRESS, value + ACTIVE_OVERLAP_PROGRESS),
-    );
-  });
+  const fullActiveOpacity = useDerivedValue(() =>
+    fullCircle && normalizedProgress.value >= 0.999999 ? 1 : 0,
+  );
   const knobX = useDerivedValue(() => {
     const angle =
       ((startAngleDegrees + normalizedProgress.value * usableArcDegrees) *
@@ -177,18 +173,39 @@ export function FieldPageDialCanvas({
       <Circle cx={center} cy={center} r={innerDiskRadius} color={innerColor} />
 
       {/* Paint the complete track first, then overlap it with the active arc. */}
-      <Path
-        path={trackPath}
-        color={trackColor}
-        opacity={0.78}
-        style="stroke"
-        strokeCap="round"
-        strokeWidth={ringThickness}
-      />
+      {fullCircle ? (
+        <Circle
+          cx={center}
+          cy={center}
+          r={ringRadius}
+          color={trackColor}
+          style="stroke"
+          strokeWidth={ringThickness}
+        />
+      ) : (
+        <Path
+          path={trackPath}
+          color={trackColor}
+          style="stroke"
+          strokeCap="round"
+          strokeWidth={ringThickness}
+        />
+      )}
+      {fullCircle ? (
+        <Circle
+          cx={center}
+          cy={center}
+          r={ringRadius}
+          color={activeColor}
+          opacity={fullActiveOpacity}
+          style="stroke"
+          strokeWidth={ringThickness}
+        />
+      ) : null}
       <Path
         path={trackPath}
         color={activeColor}
-        end={activeProgress}
+        end={normalizedProgress}
         style="stroke"
         strokeCap="round"
         strokeWidth={ringThickness}

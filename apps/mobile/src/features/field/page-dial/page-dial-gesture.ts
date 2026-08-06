@@ -14,7 +14,7 @@ import {
   normalizePageIndex,
   pageDialIndexForProgress,
   pageDialPointIsInControlHitTarget,
-  pageDialProgressForPoint,
+  pageDialProgressForPointNearReference,
   pageDialPointIsInRingHitRegion,
 } from "./page-dial-math";
 
@@ -48,7 +48,12 @@ export function usePageDialGesture({
   const updateFromPoint = (x: number, y: number, shouldHaptic = true) => {
     "worklet";
     if (!ringActive.value || pageCount <= 0) return;
-    const nextProgress = pageDialProgressForPoint(x, y, diameter);
+    const nextProgress = pageDialProgressForPointNearReference(
+      x,
+      y,
+      diameter,
+      provisionalProgress.value,
+    );
     const nextIndex = pageDialIndexForProgress(nextProgress, pageCount);
     setSharedValue(provisionalProgress, nextProgress);
     if (nextIndex === previewIndex.value) return;

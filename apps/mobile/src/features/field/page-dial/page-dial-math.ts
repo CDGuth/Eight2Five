@@ -4,12 +4,10 @@
  * right and positive values rotate clockwise because y grows downwards.
  */
 
-export const PAGE_DIAL_DEAD_ZONE_DEGREES = 10;
-export const PAGE_DIAL_USABLE_ARC_DEGREES = 360 - PAGE_DIAL_DEAD_ZONE_DEGREES;
-export const PAGE_DIAL_START_ANGLE_DEGREES =
-  -90 + PAGE_DIAL_DEAD_ZONE_DEGREES / 2;
-export const PAGE_DIAL_END_ANGLE_DEGREES =
-  PAGE_DIAL_START_ANGLE_DEGREES + PAGE_DIAL_USABLE_ARC_DEGREES;
+export const PAGE_DIAL_DEAD_ZONE_DEGREES = 0;
+export const PAGE_DIAL_USABLE_ARC_DEGREES = 360;
+export const PAGE_DIAL_START_ANGLE_DEGREES = -90;
+export const PAGE_DIAL_END_ANGLE_DEGREES = 270;
 
 export const PAGE_DIAL_RING_THICKNESS_RATIO = 0.075;
 export const PAGE_DIAL_INNER_DISK_DIAMETER_RATIO = 0.86;
@@ -104,10 +102,7 @@ export function pageDialRelativeAngle(angleRadians: number): number {
 
 export function pageDialAngleIsInValidArc(angleRadians: number): boolean {
   "worklet";
-  return (
-    pageDialRelativeAngle(angleRadians) <=
-    PAGE_DIAL_USABLE_ARC_DEGREES * DEGREES_TO_RADIANS
-  );
+  return Number.isFinite(angleRadians);
 }
 
 export const isPageDialAngleInValidArc = pageDialAngleIsInValidArc;
@@ -115,18 +110,41 @@ export const isPageDialAngleInValidArc = pageDialAngleIsInValidArc;
 export function pageDialProgressForAngle(angleRadians: number): number {
   "worklet";
   if (!Number.isFinite(angleRadians)) return 0;
+  return pageDialRelativeAngle(angleRadians) / FULL_TURN_RADIANS;
+}
 
-  const usableArcRadians = PAGE_DIAL_USABLE_ARC_DEGREES * DEGREES_TO_RADIANS;
-  const relative = pageDialRelativeAngle(angleRadians);
-  if (relative <= usableArcRadians) return relative / usableArcRadians;
+/**
+ * Resolve the top seam against the user's current drag position. The top point
+ * is intentionally shared by progress 0 (first set) and progress 1 (last set).
+ * Approaching it clockwise from the end of the ring resolves to 1; approaching
+ * counter-clockwise from the start resolves to 0. Continuing beyond either
+ * endpoint clamps there rather than wrapping unexpectedly to the other end.
+ */
+export function pageDialProgressForAngleNearReference(
+  angleRadians: number,
+  referenceProgress: number,
+): number {
+  "worklet";
+  const wrapped = pageDialProgressForAngle(angleRadians);
+  const reference = clamp(
+    Number.isFinite(referenceProgress) ? referenceProgress : 0,
+    0,
+    1,
+  );
 
-  // The only invalid portion is the top dead zone. Its midpoint is a stable
-  // tie-breaker: the exact top angle belongs to the first page, the clockwise
-  // half belongs to the first page, and the counter-clockwise half belongs to
-  // the last page. This prevents an accidental first/last wrap.
-  const distanceFromEnd = relative - usableArcRadians;
-  const distanceFromStart = FULL_TURN_RADIANS - relative;
-  return distanceFromStart <= distanceFromEnd ? 0 : 1;
+  let candidate = wrapped;
+  if (wrapped <= 0.5) {
+    const afterEnd = wrapped + 1;
+    if (Math.abs(afterEnd - reference) < Math.abs(candidate - reference)) {
+      candidate = afterEnd;
+    }
+  } else {
+    const beforeStart = wrapped - 1;
+    if (Math.abs(beforeStart - reference) < Math.abs(candidate - reference)) {
+      candidate = beforeStart;
+    }
+  }
+  return clamp(candidate, 0, 1);
 }
 
 export function pageDialProgressForPoint(
@@ -138,6 +156,21 @@ export function pageDialProgressForPoint(
   const center = diameter / 2;
   if (x === center && y === center) return 0;
   return pageDialProgressForAngle(Math.atan2(y - center, x - center));
+}
+
+export function pageDialProgressForPointNearReference(
+  x: number,
+  y: number,
+  diameter: number,
+  referenceProgress: number,
+): number {
+  "worklet";
+  const center = diameter / 2;
+  if (x === center && y === center) return clamp(referenceProgress, 0, 1);
+  return pageDialProgressForAngleNearReference(
+    Math.atan2(y - center, x - center),
+    referenceProgress,
+  );
 }
 
 export function pageDialIndexForProgress(
@@ -190,13 +223,15 @@ export function pageDialPointForAngle(
 export function pageDialPointForProgress(
   progress: number,
   diameter: number,
-  radius = getPageDialRingRadius(diameter),
+  radius?: number,
 ): PageDialPoint {
   "worklet";
+  const resolvedRadius =
+    radius ?? diameter / 2 - (diameter * PAGE_DIAL_RING_THICKNESS_RATIO) / 2;
   return pageDialPointForAngle(
     pageDialAngleForProgress(progress),
     diameter,
-    radius,
+    resolvedRadius,
   );
 }
 

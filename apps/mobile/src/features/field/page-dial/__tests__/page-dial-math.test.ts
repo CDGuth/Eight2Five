@@ -8,6 +8,7 @@ import {
   pageDialPointIsInRingHitRegion,
   pageDialProgressForAngle,
   pageDialProgressForPoint,
+  pageDialProgressForPointNearReference,
   PAGE_DIAL_START_ANGLE_DEGREES,
   PAGE_DIAL_USABLE_ARC_DEGREES,
   normalizePageIndex,
@@ -23,7 +24,7 @@ import {
 const radians = (degrees: number) => (degrees * Math.PI) / 180;
 
 describe("page dial math", () => {
-  test("maps first and last pages to distinct arc endpoints", () => {
+  test("maps first and last pages to the shared top endpoint", () => {
     expect(normalizePageIndex(0, 38)).toBe(0);
     expect(normalizePageIndex(37, 38)).toBe(1);
     expect(pageDialAngleForIndex(0, 38)).toBeCloseTo(
@@ -32,28 +33,33 @@ describe("page dial math", () => {
     expect(pageDialAngleForIndex(37, 38)).toBeCloseTo(
       radians(PAGE_DIAL_START_ANGLE_DEGREES + PAGE_DIAL_USABLE_ARC_DEGREES),
     );
+    const first = pageDialPointForProgress(0, 200);
+    const last = pageDialPointForProgress(1, 200);
+    expect(first.x).toBeCloseTo(last.x);
+    expect(first.y).toBeCloseTo(last.y);
   });
 
-  test("clamps either side of the top seam to the nearest endpoint", () => {
+  test("uses drag history to disambiguate the shared top endpoint", () => {
+    const diameter = 200;
+    const center = diameter / 2;
+    const topY = center - 90;
+    expect(
+      pageDialProgressForPointNearReference(center, topY, diameter, 0.02),
+    ).toBe(0);
+    expect(
+      pageDialProgressForPointNearReference(center, topY, diameter, 0.98),
+    ).toBe(1);
     expect(pageDialIndexForAngle(radians(-89), 38)).toBe(0);
     expect(pageDialIndexForAngle(radians(-91), 38)).toBe(37);
     expect(pageDialIndexForAngle(radians(90), 5)).toBe(2);
   });
 
-  test("keeps cardinal angles on one continuous valid arc", () => {
-    expect(pageDialProgressForAngle(radians(0))).toBeCloseTo(85 / 350);
+  test("keeps cardinal angles on one continuous full circle", () => {
+    expect(pageDialProgressForAngle(radians(0))).toBeCloseTo(0.25);
     expect(pageDialProgressForAngle(radians(90))).toBeCloseTo(0.5);
-    expect(pageDialProgressForAngle(radians(180))).toBeCloseTo(265 / 350);
-    expect(pageDialAngleIsInValidArc(radians(-85))).toBe(true);
-    expect(pageDialAngleIsInValidArc(radians(265))).toBe(true);
-  });
-
-  test("uses a deterministic top dead zone without wrapping", () => {
-    expect(pageDialProgressForAngle(radians(-90))).toBe(0);
-    expect(pageDialProgressForAngle(radians(-89.9))).toBe(0);
-    expect(pageDialProgressForAngle(radians(-90.1))).toBe(1);
-    expect(pageDialProgressForAngle(radians(-85.1))).toBe(0);
-    expect(pageDialProgressForAngle(radians(265.1))).toBe(1);
+    expect(pageDialProgressForAngle(radians(180))).toBeCloseTo(0.75);
+    expect(pageDialAngleIsInValidArc(radians(-90))).toBe(true);
+    expect(pageDialAngleIsInValidArc(radians(270))).toBe(true);
     expect(pageDialIndexForProgress(0.5, 5)).toBe(2);
   });
 

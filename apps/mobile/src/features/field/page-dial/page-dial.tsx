@@ -94,8 +94,7 @@ export function PageDial({
     [onSelectIndex, pageCount, provisionalProgress, selectedIndex],
   );
 
-  const resolvedInnerColor =
-    innerColor ?? colorWithOpacity(theme.surfaceRaised, 0.38);
+  const resolvedInnerColor = innerColor ?? "transparent";
   const resolvedBackgroundColor = backgroundColor ?? "transparent";
   const resolvedForegroundColor = foregroundColor ?? theme.text;
 
@@ -117,6 +116,7 @@ export function PageDial({
       >
         <View style={{ flex: 1 }} pointerEvents="none" />
       </FrostedFieldSurface>
+      <PageDialDividers diameter={diameter} />
       <PageDialCanvas
         key={`page-dial-canvas-${themeName}`}
         diameter={diameter}
@@ -128,7 +128,6 @@ export function PageDial({
         backgroundColor={resolvedBackgroundColor}
         knobColor={theme.raw.white}
       />
-      <PageDialDividers diameter={diameter} />
       <PageDialKnob
         diameter={diameter}
         progress={provisionalProgress}
@@ -204,14 +203,4 @@ function PageDialKnob({
       testID="page-dial-knob"
     />
   );
-}
-
-function colorWithOpacity(color: string, opacity: number): string {
-  const match = /^#([0-9a-f]{6})$/i.exec(color);
-  if (!match) return color;
-  const hex = match[1];
-  const red = Number.parseInt(hex.slice(0, 2), 16);
-  const green = Number.parseInt(hex.slice(2, 4), 16);
-  const blue = Number.parseInt(hex.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }
