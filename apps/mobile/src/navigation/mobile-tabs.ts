@@ -1,6 +1,6 @@
 import type { NativeTabsTriggerIconProps } from "expo-router/unstable-native-tabs";
 
-export type MobileTabName = "field" | "drill" | "settings" | "info";
+export type MobileTabName = "field" | "drill" | "settings";
 
 export interface MobileTabConfig {
   name: MobileTabName;
@@ -34,14 +34,6 @@ export const MOBILE_TABS = [
     icon: {
       sf: { default: "gearshape", selected: "gearshape.fill" },
       md: "settings",
-    },
-  },
-  {
-    name: "info",
-    label: "Info",
-    icon: {
-      sf: { default: "info.circle", selected: "info.circle.fill" },
-      md: "info",
     },
   },
 ] as const satisfies readonly MobileTabConfig[];

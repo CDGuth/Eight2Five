@@ -1,31 +1,10 @@
-import { execFileSync } from "node:child_process";
 import type { ExpoConfig } from "expo/config";
-
-function resolveGitSha(): string {
-  const injectedSha = (
-    process.env.EIGHT2FIVE_GIT_SHA ??
-    process.env.EAS_BUILD_GIT_COMMIT_HASH ??
-    process.env.GITHUB_SHA
-  )?.trim();
-  if (injectedSha) return injectedSha;
-
-  try {
-    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
-      cwd: __dirname,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "unknown";
-  }
-}
 
 const buildId =
   process.env.E2F_BUILD_ID ??
   process.env.EAS_BUILD_GIT_COMMIT_HASH ??
   process.env.GITHUB_SHA ??
   "local";
-const gitSha = resolveGitSha();
 const requestedVersionCode = Number(
   process.env.E2F_ANDROID_VERSION_CODE ?? process.env.GITHUB_RUN_NUMBER ?? 1,
 );
@@ -150,7 +129,6 @@ const config: ExpoConfig = {
   },
   extra: {
     buildId,
-    EIGHT2FIVE_GIT_SHA: gitSha,
     eas: {
       projectId: "a26bddc3-6439-460b-b15b-51143e499c8a",
     },
