@@ -97,45 +97,43 @@ export function AnchorEditorScreen({
         >
           <FormControl>
             <FormControlLabel>
-              <FormControlLabelText>Local display name</FormControlLabelText>
+              <FormControlLabelText>Anchor name</FormControlLabelText>
             </FormControlLabel>
-            <Input
-              isDisabled={controller.loading || controller.savingLocalName}
-            >
+            <Input isDisabled={controller.loading || controller.savingName}>
               <InputField
-                testID="anchor-local-name-input"
-                value={controller.localName}
-                editable={!controller.loading && !controller.savingLocalName}
-                maxLength={40}
+                testID="anchor-name-input"
+                value={controller.anchorName}
+                editable={!controller.loading && !controller.savingName}
+                maxLength={16}
                 autoCapitalize="words"
-                accessibilityLabel="Local anchor display name"
+                accessibilityLabel="Anchor name"
                 placeholder="Optional"
-                onChangeText={controller.setLocalName}
+                onChangeText={controller.setAnchorName}
               />
             </Input>
             <FormControlHelper>
               <FormControlHelperText>
-                Stored only on this device and never written to the anchor.
+                Written to the PANS device name and advertised over Bluetooth.
               </FormControlHelperText>
             </FormControlHelper>
           </FormControl>
           <Button
             size="sm"
             variant="outline"
-            testID="save-anchor-local-name-button"
+            testID="save-anchor-name-button"
             isDisabled={
               controller.loading ||
-              controller.savingLocalName ||
-              !controller.localNameDirty
+              controller.savingName ||
+              !controller.anchorNameDirty
             }
-            onPress={() => void controller.saveLocalName()}
+            onPress={() => void controller.saveAnchorName()}
           >
-            {controller.savingLocalName ? (
+            {controller.savingName ? (
               <SpinningLoaderIcon />
             ) : (
               <ButtonIcon as={Save} />
             )}
-            <ButtonText>Save Local Name</ButtonText>
+            <ButtonText>Save Name</ButtonText>
           </Button>
         </VStack>
       </SettingsSection>

@@ -701,16 +701,15 @@ export class MobilePansStore {
     return knownAnchors;
   }
 
-  async setAnchorLocalName(
-    anchorId: string,
-    localName: string,
-  ): Promise<ManagedDevice> {
+  async renameAnchor(anchorId: string, label: string): Promise<ManagedDevice> {
     if (!this.developerModeEnabled) {
       throw new ManagerError(
         "INVALID_CONFIGURATION",
-        "Enable Developer Mode before naming cached anchors.",
+        "Enable Developer Mode before renaming anchors.",
       );
     }
+    const requestedLabel = label.trim();
+    assertValidLabel(requestedLabel);
     const runtime = this.requireRuntime();
     const anchor = await runtime.repository.getDevice(anchorId);
     if (
@@ -719,14 +718,33 @@ export class MobilePansStore {
     ) {
       throw new Error("The selected cached anchor does not exist.");
     }
-    const nickname = localName.trim() || undefined;
-    const saved = await runtime.repository.saveDevice({
-      ...anchor,
-      nickname,
-      updatedAt: Date.now(),
-    });
-    await this.refreshCachedAnchors();
-    return saved;
+    try {
+      await this.runHardwareOperation(async () => {
+        const result = await runtime.configuration.applyConfigurationDiff(
+          anchor.id,
+          { label: requestedLabel },
+        );
+        const write = result.writes.find((item) => item.field === "label");
+        if (
+          result.error ||
+          write?.status === "failed" ||
+          write?.status === "mismatch"
+        ) {
+          throw new ManagerError(
+            result.error?.code ?? "WRITE_FAILED",
+            result.error?.message ?? "The anchor name could not be verified.",
+            { deviceId: anchor.id, operation: "rename anchor" },
+          );
+        }
+      });
+      await this.refreshCachedAnchors();
+      return (await runtime.repository.getDevice(anchor.id)) ?? anchor;
+    } catch (cause) {
+      throw normalizeManagerError(cause, {
+        deviceId: anchor.id,
+        operation: "rename anchor",
+      });
+    }
   }
 
   async writeAnchorPosition(

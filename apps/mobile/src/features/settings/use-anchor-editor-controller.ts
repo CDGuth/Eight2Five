@@ -42,10 +42,10 @@ export function useAnchorEditorController(anchorId: string) {
   const [standardDraft, setStandardDraft] = React.useState(
     () => createAnchorEditorDrafts().standard,
   );
-  const [localName, setLocalName] = React.useState("");
+  const [anchorName, setAnchorName] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [savingLocalName, setSavingLocalName] = React.useState(false);
+  const [savingName, setSavingName] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<Error>();
 
@@ -78,7 +78,7 @@ export function useAnchorEditorController(anchorId: string) {
       );
       const drafts = createAnchorEditorDrafts(position, nextFieldPreset);
       setAnchor(next);
-      setLocalName(next.nickname ?? "");
+      setAnchorName(next.lastKnownConfig?.label ?? next.label ?? "");
       setFieldPreset(nextFieldPreset);
       setMarchingDraft(drafts.marching);
       setStandardDraft(drafts.standard);
@@ -172,23 +172,22 @@ export function useAnchorEditorController(anchorId: string) {
     );
   };
 
-  const saveLocalName = async () => {
-    if (!anchor || savingLocalName || !settings.settings.developerModeEnabled) {
+  const saveAnchorName = async () => {
+    if (!anchor || savingName || !settings.settings.developerModeEnabled) {
       return;
     }
-    setSavingLocalName(true);
+    setSavingName(true);
     setError(undefined);
     try {
-      const savedAnchor = await pansStore.setAnchorLocalName(
-        anchor.id,
-        localName,
-      );
+      const savedAnchor = await pansStore.renameAnchor(anchor.id, anchorName);
       setAnchor(savedAnchor);
-      setLocalName(savedAnchor.nickname ?? "");
+      setAnchorName(
+        savedAnchor.lastKnownConfig?.label ?? savedAnchor.label ?? "",
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error(String(cause)));
     } finally {
-      setSavingLocalName(false);
+      setSavingName(false);
     }
   };
 
@@ -219,16 +218,18 @@ export function useAnchorEditorController(anchorId: string) {
     marchingDraft,
     standardDraft,
     validation,
-    localName,
-    localNameDirty: localName.trim() !== (anchor?.nickname ?? ""),
+    anchorName,
+    anchorNameDirty:
+      anchorName.trim() !==
+      (anchor?.lastKnownConfig?.label ?? anchor?.label ?? "").trim(),
     loading,
     saving,
-    savingLocalName,
+    savingName,
     saved,
     error,
     setMode,
-    setLocalName,
-    saveLocalName,
+    setAnchorName,
+    saveAnchorName,
     setMarchingDraft: (draft: MarchingAnchorDraft) => {
       setSaved(false);
       setMarchingDraft(draft);

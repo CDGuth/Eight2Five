@@ -438,7 +438,7 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
-  test("stores a developer-only local anchor name and refreshes the cache", async () => {
+  test("writes an anchor name to the hardware PANS label and refreshes the cache", async () => {
     const harness = await createHarness();
     const store = new MobilePansStore({
       createRuntime: async () => harness.runtime,
@@ -448,19 +448,18 @@ describe("MobilePansStore", () => {
     await harness.repository.saveDevice(managedAnchor("named-anchor"));
     await store.refreshCachedAnchors();
 
-    const saved = await store.setAnchorLocalName(
-      "named-anchor",
-      "  Front 50  ",
-    );
+    const saved = await store.renameAnchor("named-anchor", "  Front 50  ");
 
-    expect(saved.nickname).toBe("Front 50");
-    expect((await harness.repository.getDevice("named-anchor"))?.nickname).toBe(
-      "Front 50",
-    );
+    expect(saved.lastKnownConfig?.label).toBe("Front 50");
+    expect(harness.configurationApply).toHaveBeenCalledWith("named-anchor", {
+      label: "Front 50",
+    });
     expect(store.getSnapshot().knownAnchors).toContainEqual(
-      expect.objectContaining({ id: "named-anchor", nickname: "Front 50" }),
+      expect.objectContaining({
+        id: "named-anchor",
+        lastKnownConfig: expect.objectContaining({ label: "Front 50" }),
+      }),
     );
-    expect(harness.configurationApply).not.toHaveBeenCalled();
     await store.dispose();
   });
 
@@ -524,17 +523,42 @@ async function createHarness(
   >();
   const streamStart = options.streamStart ?? jest.fn(async () => undefined);
   const configurationApply = jest.fn(
-    async (deviceId: string, changes: { position: PansPosition }) => {
+    async (
+      deviceId: string,
+      changes: { position?: PansPosition; label?: string },
+    ) => {
       const device = (await repository.getDevice(deviceId))!;
+      const baseConfig =
+        device.lastKnownConfig?.role === "anchor"
+          ? device.lastKnownConfig
+          : anchorConfig();
       await repository.saveDevice({
         ...device,
+        ...(changes.label !== undefined ? { label: changes.label } : {}),
         lastKnownConfig: {
-          ...(device.lastKnownConfig?.role === "anchor"
-            ? device.lastKnownConfig
-            : anchorConfig()),
-          position: changes.position,
+          ...baseConfig,
+          ...(changes.position !== undefined
+            ? { position: changes.position }
+            : {}),
+          ...(changes.label !== undefined ? { label: changes.label } : {}),
         },
       });
+      if (changes.label !== undefined) {
+        return {
+          deviceId,
+          transportDeviceId: device.transportDeviceId,
+          outcome: "applied" as const,
+          writes: [
+            {
+              field: "label",
+              status: "verified" as const,
+              requested: changes.label,
+              actual: changes.label,
+            },
+          ],
+          warnings: [],
+        };
+      }
       return {
         deviceId,
         transportDeviceId: device.transportDeviceId,

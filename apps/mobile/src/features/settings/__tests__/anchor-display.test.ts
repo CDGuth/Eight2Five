@@ -11,16 +11,28 @@ const anchor = (overrides: Partial<ManagedDevice> = {}): ManagedDevice => ({
 });
 
 describe("developer anchor display names", () => {
-  test("prefers the local name and falls back to hardware identifiers", () => {
+  test("prefers the hardware PANS label and falls back to identifiers", () => {
     expect(
       getDeveloperAnchorDisplayName(
-        anchor({ nickname: "  Front 50  ", nodeIdHex: "A001", label: "HW" }),
+        anchor({
+          nickname: "Legacy local name",
+          nodeIdHex: "A001",
+          label: "HW",
+          lastKnownConfig: {
+            role: "anchor",
+            label: "  Front 50  ",
+            uwbMode: "active",
+            ledEnabled: true,
+            firmwareUpdateEnabled: false,
+            initiatorEnabled: false,
+          },
+        }),
       ),
     ).toBe("Front 50");
+    expect(getDeveloperAnchorDisplayName(anchor({ label: "HW" }))).toBe("HW");
     expect(getDeveloperAnchorDisplayName(anchor({ nodeIdHex: "A001" }))).toBe(
       "A001",
     );
-    expect(getDeveloperAnchorDisplayName(anchor({ label: "HW" }))).toBe("HW");
     expect(getDeveloperAnchorDisplayName(anchor())).toBe("anchor-id");
   });
 });
