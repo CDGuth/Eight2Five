@@ -100,11 +100,7 @@ export function FieldScene({
           color={palette.guidance}
         />
       ) : null}
-      <FieldPositionLayer
-        livePosition={livePosition}
-        metersPerPixel={camera.metersPerPixel}
-        palette={palette}
-      />
+      <FieldPositionLayer livePosition={livePosition} palette={palette} />
     </Group>
   );
 }

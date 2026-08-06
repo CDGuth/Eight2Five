@@ -2,6 +2,8 @@ import {
   DRILL_MARKER_COLORS,
   DRILL_MARKER_SIZE_METERS,
   DRILL_MARKER_SIZE_STEPS,
+  LIVE_POSITION_MARKER_DIAMETER_METERS,
+  LIVE_POSITION_MARKER_SIZE_STEPS,
 } from "../../field/render/field-render-tokens";
 import {
   buildDrillRenderScene,
@@ -346,13 +348,15 @@ describe("selected-set drill render scene", () => {
     ).toEqual({ widthMeters: 2, lengthMeters: 1 });
     expect(DEFAULT_PERFORMER_DIAMETER_METERS).toBe(0.5715);
     expect(DRILL_MARKER_SIZE_STEPS).toEqual({
-      currentDiameter: 1.5,
-      transitionDiameter: 0.75,
-      midpointDiameter: 0.375,
+      currentDiameter: 2,
+      transitionDiameter: 1,
+      midpointDiameter: 0.5,
     });
-    expect(DRILL_MARKER_SIZE_METERS.currentDiameter).toBeCloseTo(0.85725);
-    expect(DRILL_MARKER_SIZE_METERS.transitionDiameter).toBeCloseTo(0.428625);
-    expect(DRILL_MARKER_SIZE_METERS.midpointDiameter).toBeCloseTo(0.2143125);
+    expect(DRILL_MARKER_SIZE_METERS.currentDiameter).toBeCloseTo(1.143);
+    expect(DRILL_MARKER_SIZE_METERS.transitionDiameter).toBeCloseTo(0.5715);
+    expect(DRILL_MARKER_SIZE_METERS.midpointDiameter).toBeCloseTo(0.28575);
+    expect(LIVE_POSITION_MARKER_SIZE_STEPS).toBe(1.5);
+    expect(LIVE_POSITION_MARKER_DIAMETER_METERS).toBeCloseTo(0.85725);
     expect(DRILL_MARKER_COLORS).toEqual({
       yellow: COLOR_PRESETS.yellow,
       red: COLOR_PRESETS.red,

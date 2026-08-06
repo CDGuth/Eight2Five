@@ -32,8 +32,9 @@ import {
 import type { FieldRenderPalette } from "./field-render-tokens";
 import {
   DRILL_MARKER_COLORS,
-  DRILL_MARKER_SIZE_PIXELS,
+  DRILL_MARKER_SIZE_METERS,
 } from "./field-render-tokens";
+import { STANDARD_STEP_METERS } from "../units";
 
 const EMPTY_ENTITIES: readonly DrillRenderEntity[] = Object.freeze([]);
 const EMPTY_DOTS = Object.freeze([]) as readonly {
@@ -45,10 +46,10 @@ const EMPTY_TRANSITIONS = Object.freeze(
 ) as readonly PhysicalImmediateTransition[];
 const LABEL_FONT_SIZE_PX = 12;
 const LABEL_LINE_HEIGHT_PX = 14;
-const MARKER_STROKE_PX = 2;
+const MARKER_STROKE_METERS = STANDARD_STEP_METERS * 0.12;
 const CONNECTOR_STROKE_PX = 1.25;
-const DASH_LENGTH_PX = 2.4;
-const DASH_GAP_PX = 1.6;
+const DASH_LENGTH_METERS = STANDARD_STEP_METERS * 0.25;
+const DASH_GAP_METERS = STANDARD_STEP_METERS * 0.15;
 const EXTRA_TRANSITION_OPACITY = 0.68;
 
 export interface FieldDrillLayerProps {
@@ -117,7 +118,6 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           key={`previous-dot-${dot.setId}`}
           point={dot.point}
           color={DRILL_MARKER_COLORS.red}
-          metersPerPixel={metersPerPixel}
         />
       ))}
       {nextDots.map((dot) => (
@@ -125,7 +125,6 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           key={`next-dot-${dot.setId}`}
           point={dot.point}
           color={DRILL_MARKER_COLORS.green}
-          metersPerPixel={metersPerPixel}
         />
       ))}
       {scene?.previous ? (
@@ -142,12 +141,7 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
           metersPerPixel={metersPerPixel}
         />
       ) : null}
-      {targetPoint ? (
-        <CurrentTargetMarker
-          point={targetPoint}
-          metersPerPixel={metersPerPixel}
-        />
-      ) : null}
+      {targetPoint ? <CurrentTargetMarker point={targetPoint} /> : null}
     </>
   );
 });
@@ -297,16 +291,11 @@ function EntityLabel({
 function ExtraDot({
   point,
   color,
-  metersPerPixel,
 }: {
   readonly point: PhysicalFieldPoint;
   readonly color: string;
-  readonly metersPerPixel: SharedValue<number>;
 }) {
-  const radius = useDerivedValue(
-    () =>
-      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.midpointDiameter) / 2,
-  );
+  const radius = DRILL_MARKER_SIZE_METERS.midpointDiameter / 2;
   return (
     <Circle
       cx={point.xMeters}
@@ -365,28 +354,13 @@ function ImmediateTransitionLayer({
     [transition.geometry],
   );
   const markerPoint = kind === "previous" ? transition.start : transition.end;
-  const markerRadius = useDerivedValue(
-    () =>
-      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.transitionDiameter) / 2,
-  );
-  const midpointRadius = useDerivedValue(
-    () =>
-      (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.midpointDiameter) / 2,
-  );
-  const centerRadius = useDerivedValue(
-    () =>
-      metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.transitionDiameter * 0.18,
-  );
-  const markerStrokeWidth = useDerivedValue(
-    () => metersPerPixel.value * MARKER_STROKE_PX,
-  );
+  const markerRadius = DRILL_MARKER_SIZE_METERS.transitionDiameter / 2;
+  const midpointRadius = DRILL_MARKER_SIZE_METERS.midpointDiameter / 2;
+  const centerRadius = DRILL_MARKER_SIZE_METERS.transitionDiameter * 0.18;
   const connectorStrokeWidth = useDerivedValue(
     () => metersPerPixel.value * CONNECTOR_STROKE_PX,
   );
-  const dashIntervals = useDerivedValue(() => [
-    metersPerPixel.value * DASH_LENGTH_PX,
-    metersPerPixel.value * DASH_GAP_PX,
-  ]);
+  const dashIntervals = [DASH_LENGTH_METERS, DASH_GAP_METERS];
   const connectorColor =
     kind === "previous" ? DRILL_MARKER_COLORS.red : DRILL_MARKER_COLORS.green;
 
@@ -407,7 +381,7 @@ function ImmediateTransitionLayer({
           r={markerRadius}
           color={connectorColor}
           style="stroke"
-          strokeWidth={markerStrokeWidth}
+          strokeWidth={MARKER_STROKE_METERS}
         >
           <DashPathEffect intervals={dashIntervals} />
         </Circle>
@@ -426,7 +400,7 @@ function ImmediateTransitionLayer({
             r={markerRadius}
             color={connectorColor}
             style="stroke"
-            strokeWidth={markerStrokeWidth}
+            strokeWidth={MARKER_STROKE_METERS}
           />
         </>
       )}
@@ -448,21 +422,11 @@ function ImmediateTransitionLayer({
 
 function CurrentTargetMarker({
   point,
-  metersPerPixel,
 }: {
   readonly point: PhysicalFieldPoint | FieldPoint;
-  readonly metersPerPixel: SharedValue<number>;
 }) {
-  const radius = useDerivedValue(
-    () => (metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.currentDiameter) / 2,
-  );
-  const centerRadius = useDerivedValue(
-    () =>
-      metersPerPixel.value * DRILL_MARKER_SIZE_PIXELS.currentDiameter * 0.14,
-  );
-  const strokeWidth = useDerivedValue(
-    () => metersPerPixel.value * MARKER_STROKE_PX,
-  );
+  const radius = DRILL_MARKER_SIZE_METERS.currentDiameter / 2;
+  const centerRadius = DRILL_MARKER_SIZE_METERS.currentDiameter * 0.14;
 
   return (
     <>
@@ -473,7 +437,7 @@ function CurrentTargetMarker({
         r={radius}
         color={DRILL_MARKER_COLORS.yellow}
         style="stroke"
-        strokeWidth={strokeWidth}
+        strokeWidth={MARKER_STROKE_METERS}
       />
       <Circle
         cx={point.xMeters}

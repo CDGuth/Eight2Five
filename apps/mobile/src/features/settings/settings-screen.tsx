@@ -382,7 +382,7 @@ export function SettingsScreen() {
         <SettingsSwitchRow
           icon={Navigation}
           title="Field guidance"
-          description="Show field-relative movement guidance to the target."
+          description="Draw a dashed line from your current position to the selected set."
           value={settings.guidanceEnabled}
           onChange={(guidanceEnabled) => void update({ guidanceEnabled })}
           disabled={disabled}

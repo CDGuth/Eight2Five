@@ -31,21 +31,14 @@ export const DRILL_MARKER_COLORS = Object.freeze({
   green: COLOR_PRESETS.green,
 });
 
-/** Marker diameters are physical sizes expressed in standard steps. */
+/** Marker diameters are physical sizes expressed in standard 8:5 steps. */
 export const DRILL_MARKER_SIZE_STEPS = Object.freeze({
-  currentDiameter: 1.5,
-  transitionDiameter: 0.75,
-  midpointDiameter: 0.375,
+  currentDiameter: 2,
+  transitionDiameter: 1,
+  midpointDiameter: 0.5,
 });
 
-/** Fixed screen-space marker diameters used by the interactive field HUD. */
-export const DRILL_MARKER_SIZE_PIXELS = Object.freeze({
-  currentDiameter: 16,
-  transitionDiameter: 8,
-  midpointDiameter: 4,
-});
-
-/** Legacy physical equivalents retained for non-render calculations/tests. */
+/** World-space diameters used by the renderer so markers stay locked to the grid. */
 export const DRILL_MARKER_SIZE_METERS = Object.freeze({
   currentDiameter:
     DRILL_MARKER_SIZE_STEPS.currentDiameter * STANDARD_STEP_METERS,
@@ -54,6 +47,10 @@ export const DRILL_MARKER_SIZE_METERS = Object.freeze({
   midpointDiameter:
     DRILL_MARKER_SIZE_STEPS.midpointDiameter * STANDARD_STEP_METERS,
 });
+
+export const LIVE_POSITION_MARKER_SIZE_STEPS = 1.5;
+export const LIVE_POSITION_MARKER_DIAMETER_METERS =
+  LIVE_POSITION_MARKER_SIZE_STEPS * STANDARD_STEP_METERS;
 
 export const DEFAULT_FIELD_RENDER_PALETTE: FieldRenderPalette = Object.freeze({
   canvasBackground: "#E7EAF0",
