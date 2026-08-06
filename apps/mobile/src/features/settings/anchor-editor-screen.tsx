@@ -6,8 +6,16 @@ import {
   ButtonText,
 } from "@eight2five/ui/components/button";
 import { Card } from "@eight2five/ui/components/card";
+import {
+  FormControl,
+  FormControlHelper,
+  FormControlHelperText,
+  FormControlLabel,
+  FormControlLabelText,
+} from "@eight2five/ui/components/form-control";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
+import { Input, InputField } from "@eight2five/ui/components/input";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -18,6 +26,7 @@ import {
 
 import { MarchingCoordinateForm } from "../drill/components/marching-coordinate-form";
 import { formatAnchorCanonicalPreview } from "./anchor-editor-form";
+import { getDeveloperAnchorDisplayName } from "./anchor-display";
 import { confirmAnchorPositionWrite } from "./anchor-write-confirmation";
 import {
   AnchorNumberInput,
@@ -72,13 +81,63 @@ export function AnchorEditorScreen({
         <SettingsValueRow
           icon={Radio}
           title={
-            controller.anchor?.nodeIdHex ??
-            controller.anchor?.label ??
-            "Cached anchor"
+            controller.anchor
+              ? getDeveloperAnchorDisplayName(controller.anchor)
+              : "Cached anchor"
           }
           description={controller.anchor?.transportDeviceId}
           value={controller.loading ? "Loading" : controller.connectionState}
         />
+        <VStack
+          style={{
+            gap: eight2FiveSpacing.sm,
+            padding: eight2FiveSpacing.md,
+            paddingTop: 0,
+          }}
+        >
+          <FormControl>
+            <FormControlLabel>
+              <FormControlLabelText>Local display name</FormControlLabelText>
+            </FormControlLabel>
+            <Input
+              isDisabled={controller.loading || controller.savingLocalName}
+            >
+              <InputField
+                testID="anchor-local-name-input"
+                value={controller.localName}
+                editable={!controller.loading && !controller.savingLocalName}
+                maxLength={40}
+                autoCapitalize="words"
+                accessibilityLabel="Local anchor display name"
+                placeholder="Optional"
+                onChangeText={controller.setLocalName}
+              />
+            </Input>
+            <FormControlHelper>
+              <FormControlHelperText>
+                Stored only on this device and never written to the anchor.
+              </FormControlHelperText>
+            </FormControlHelper>
+          </FormControl>
+          <Button
+            size="sm"
+            variant="outline"
+            testID="save-anchor-local-name-button"
+            isDisabled={
+              controller.loading ||
+              controller.savingLocalName ||
+              !controller.localNameDirty
+            }
+            onPress={() => void controller.saveLocalName()}
+          >
+            {controller.savingLocalName ? (
+              <SpinningLoaderIcon />
+            ) : (
+              <ButtonIcon as={Save} />
+            )}
+            <ButtonText>Save Local Name</ButtonText>
+          </Button>
+        </VStack>
       </SettingsSection>
 
       <HStack style={{ gap: eight2FiveSpacing.sm }}>

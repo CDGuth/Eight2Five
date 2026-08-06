@@ -438,6 +438,32 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
+  test("stores a developer-only local anchor name and refreshes the cache", async () => {
+    const harness = await createHarness();
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+      developerModeEnabled: true,
+    });
+    await store.initialize();
+    await harness.repository.saveDevice(managedAnchor("named-anchor"));
+    await store.refreshCachedAnchors();
+
+    const saved = await store.setAnchorLocalName(
+      "named-anchor",
+      "  Front 50  ",
+    );
+
+    expect(saved.nickname).toBe("Front 50");
+    expect((await harness.repository.getDevice("named-anchor"))?.nickname).toBe(
+      "Front 50",
+    );
+    expect(store.getSnapshot().knownAnchors).toContainEqual(
+      expect.objectContaining({ id: "named-anchor", nickname: "Front 50" }),
+    );
+    expect(harness.configurationApply).not.toHaveBeenCalled();
+    await store.dispose();
+  });
+
   test("sets a reachable initiator and reports unreachable prior initiators", async () => {
     const harness = await createHarness();
     const store = new MobilePansStore({

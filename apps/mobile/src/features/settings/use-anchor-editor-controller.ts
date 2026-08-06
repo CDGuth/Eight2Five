@@ -42,8 +42,10 @@ export function useAnchorEditorController(anchorId: string) {
   const [standardDraft, setStandardDraft] = React.useState(
     () => createAnchorEditorDrafts().standard,
   );
+  const [localName, setLocalName] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [savingLocalName, setSavingLocalName] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<Error>();
 
@@ -76,6 +78,7 @@ export function useAnchorEditorController(anchorId: string) {
       );
       const drafts = createAnchorEditorDrafts(position, nextFieldPreset);
       setAnchor(next);
+      setLocalName(next.nickname ?? "");
       setFieldPreset(nextFieldPreset);
       setMarchingDraft(drafts.marching);
       setStandardDraft(drafts.standard);
@@ -169,6 +172,26 @@ export function useAnchorEditorController(anchorId: string) {
     );
   };
 
+  const saveLocalName = async () => {
+    if (!anchor || savingLocalName || !settings.settings.developerModeEnabled) {
+      return;
+    }
+    setSavingLocalName(true);
+    setError(undefined);
+    try {
+      const savedAnchor = await pansStore.setAnchorLocalName(
+        anchor.id,
+        localName,
+      );
+      setAnchor(savedAnchor);
+      setLocalName(savedAnchor.nickname ?? "");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause : new Error(String(cause)));
+    } finally {
+      setSavingLocalName(false);
+    }
+  };
+
   const save = async (position: AnchorFieldPosition) => {
     if (saving || !settings.settings.developerModeEnabled) return;
     setSaving(true);
@@ -196,11 +219,16 @@ export function useAnchorEditorController(anchorId: string) {
     marchingDraft,
     standardDraft,
     validation,
+    localName,
+    localNameDirty: localName.trim() !== (anchor?.nickname ?? ""),
     loading,
     saving,
+    savingLocalName,
     saved,
     error,
     setMode,
+    setLocalName,
+    saveLocalName,
     setMarchingDraft: (draft: MarchingAnchorDraft) => {
       setSaved(false);
       setMarchingDraft(draft);

@@ -13,6 +13,7 @@ import { VStack } from "@eight2five/ui/components/vstack";
 import { eight2FiveSpacing, useEight2FiveTheme } from "@eight2five/ui/theme";
 
 import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
+import { getDeveloperAnchorDisplayName } from "./anchor-display";
 import { useAnchorListController } from "./use-anchor-list-controller";
 import {
   SettingsMessage,
@@ -88,7 +89,7 @@ export function AnchorListScreen() {
                 key={anchor.id}
                 testID={`edit-anchor-${anchor.id}`}
                 accessibilityRole="button"
-                accessibilityLabel={`Edit anchor ${anchor.nodeIdHex ?? anchor.label ?? anchor.id}`}
+                accessibilityLabel={`Edit anchor ${getDeveloperAnchorDisplayName(anchor)}`}
                 onPress={() =>
                   router.push({
                     pathname: "/(tabs)/settings/anchor/[anchorId]",
@@ -103,7 +104,7 @@ export function AnchorListScreen() {
                   <Icon as={Triangle} style={{ color: theme.warning }} />
                   <VStack className="flex-1" style={{ gap: 2 }}>
                     <Text selectable style={{ color: theme.text }}>
-                      {anchor.nodeIdHex ?? anchor.label ?? anchor.id}
+                      {getDeveloperAnchorDisplayName(anchor)}
                     </Text>
                     <Text size="sm" style={{ color: theme.textMuted }}>
                       Initiator:{" "}

@@ -125,7 +125,7 @@ export type ManagedDeviceConfig = ManagedTagConfig | ManagedAnchorConfig;
 
 /** App-only fields which may be independently saved without a BLE session. */
 export interface LocalDeviceChanges {
-  /** @deprecated PANS device nicknames are retained for database compatibility only. */
+  /** App-only display name. Never written to PANS hardware. */
   nickname?: string | undefined;
   /** @deprecated PANS device notes are retained for database compatibility only. */
   notes?: string | undefined;
@@ -163,7 +163,7 @@ export interface ManagedDevice {
   transportDeviceId: string;
   macAddress?: string;
   nodeIdHex?: string;
-  /** @deprecated Retained only for database/import compatibility. */
+  /** App-only display name. Never written to PANS hardware. */
   nickname?: string;
   /** Legacy hardware label cache. Prefer lastKnownConfig.label. */
   label?: string;

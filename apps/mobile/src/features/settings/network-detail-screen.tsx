@@ -37,6 +37,7 @@ import {
   type NetworkDraft,
 } from "./network-form";
 import { SpinningLoaderIcon } from "../../components/spinning-loader-icon";
+import { getDeveloperAnchorDisplayName } from "./anchor-display";
 import { NetworkProfileForm } from "./network-profile-form";
 import {
   anchorInitiatorLabel,
@@ -408,7 +409,7 @@ function CachedAnchorRow({
         className="flex-1"
         testID={`edit-network-anchor-${anchor.id}`}
         accessibilityRole="button"
-        accessibilityLabel={`Edit anchor ${anchor.nodeIdHex ?? anchor.label ?? anchor.id}`}
+        accessibilityLabel={`Edit anchor ${getDeveloperAnchorDisplayName(anchor)}`}
         disabled={busy}
         onPress={onEdit}
       >
@@ -416,7 +417,7 @@ function CachedAnchorRow({
           <Icon as={Radio} style={{ color: theme.accent }} />
           <VStack className="flex-1" style={{ gap: 2 }}>
             <Text selectable style={{ color: theme.text }}>
-              {anchor.nodeIdHex ?? anchor.label ?? anchor.id}
+              {getDeveloperAnchorDisplayName(anchor)}
             </Text>
             <Text size="sm" style={{ color: theme.textMuted }}>
               Initiator: {initiator}
@@ -456,11 +457,9 @@ function DiscoveryAnchorRow({
 }) {
   const theme = useEight2FiveTheme();
   const cached = row.cachedAnchor;
-  const title =
-    cached?.nodeIdHex ??
-    cached?.label ??
-    row.discovery.name ??
-    row.discovery.transportDeviceId;
+  const title = cached
+    ? getDeveloperAnchorDisplayName(cached)
+    : (row.discovery.name ?? row.discovery.transportDeviceId);
   const action = cached ? "Assign to this network" : "Add as anchor";
   return (
     <Pressable

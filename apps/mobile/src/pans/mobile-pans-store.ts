@@ -701,6 +701,34 @@ export class MobilePansStore {
     return knownAnchors;
   }
 
+  async setAnchorLocalName(
+    anchorId: string,
+    localName: string,
+  ): Promise<ManagedDevice> {
+    if (!this.developerModeEnabled) {
+      throw new ManagerError(
+        "INVALID_CONFIGURATION",
+        "Enable Developer Mode before naming cached anchors.",
+      );
+    }
+    const runtime = this.requireRuntime();
+    const anchor = await runtime.repository.getDevice(anchorId);
+    if (
+      !anchor ||
+      (anchor.role !== "anchor" && anchor.lastKnownConfig?.role !== "anchor")
+    ) {
+      throw new Error("The selected cached anchor does not exist.");
+    }
+    const nickname = localName.trim() || undefined;
+    const saved = await runtime.repository.saveDevice({
+      ...anchor,
+      nickname,
+      updatedAt: Date.now(),
+    });
+    await this.refreshCachedAnchors();
+    return saved;
+  }
+
   async writeAnchorPosition(
     anchorId: string,
     position: AnchorFieldPosition,
