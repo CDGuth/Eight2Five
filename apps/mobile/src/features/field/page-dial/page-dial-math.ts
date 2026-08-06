@@ -114,11 +114,11 @@ export function pageDialProgressForAngle(angleRadians: number): number {
 }
 
 /**
- * Resolve the top seam against the user's current drag position. The top point
- * is intentionally shared by progress 0 (first set) and progress 1 (last set).
- * Approaching it clockwise from the end of the ring resolves to 1; approaching
- * counter-clockwise from the start resolves to 0. Continuing beyond either
- * endpoint clamps there rather than wrapping unexpectedly to the other end.
+ * Resolve the shared top seam while still allowing the dial to wrap forever.
+ * Exactly at the top, drag history decides whether the knob represents the
+ * first set (0) or last set (1). Once the pointer crosses the seam, the wrapped
+ * angular progress is returned immediately so clockwise motion moves last →
+ * first and counter-clockwise motion moves first → last on every revolution.
  */
 export function pageDialProgressForAngleNearReference(
   angleRadians: number,
@@ -132,19 +132,13 @@ export function pageDialProgressForAngleNearReference(
     1,
   );
 
-  let candidate = wrapped;
-  if (wrapped <= 0.5) {
-    const afterEnd = wrapped + 1;
-    if (Math.abs(afterEnd - reference) < Math.abs(candidate - reference)) {
-      candidate = afterEnd;
-    }
-  } else {
-    const beforeStart = wrapped - 1;
-    if (Math.abs(beforeStart - reference) < Math.abs(candidate - reference)) {
-      candidate = beforeStart;
-    }
+  // atan2 resolves the exact top point to the start angle, so use the prior
+  // state to preserve the intentional first/last ambiguity at that one point.
+  if (wrapped === 0) {
+    return reference > 0.5 ? 1 : 0;
   }
-  return clamp(candidate, 0, 1);
+
+  return wrapped;
 }
 
 export function pageDialProgressForPoint(

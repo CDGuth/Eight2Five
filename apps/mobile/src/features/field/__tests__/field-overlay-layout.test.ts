@@ -16,8 +16,8 @@ describe("Field overlay layout", () => {
     expect(layout.hudStyle.top).toBe(38);
     expect(layout.hudStyle.left).toBe(24);
     expect(layout.hudWidth).toBeGreaterThan(0);
-    expect(layout.liveStyle.right).toBe(10);
-    expect(layout.dialStyle.right).toBe(10);
+    expect(layout.liveStyle.right).toBe(4);
+    expect(layout.dialStyle.right).toBe(4);
     const topGap = Number(layout.liveStyle.top) - insets.top;
     const betweenGap =
       Number(layout.dialStyle.top) -
@@ -31,7 +31,7 @@ describe("Field overlay layout", () => {
     expect(bottomGap).toBeCloseTo(layout.controlGap);
   });
 
-  test("caps the landscape right margin when the safe-area inset is large", () => {
+  test("keeps the landscape control stack close to the physical edge on iPhone", () => {
     const layout = getFieldOverlayMetrics({
       width: 844,
       height: 390,
@@ -39,8 +39,8 @@ describe("Field overlay layout", () => {
       insets: { top: 24, right: 48, bottom: 20, left: 10 },
     });
 
-    expect(layout.liveStyle.right).toBe(layout.outerPadding);
-    expect(layout.dialStyle.right).toBe(layout.outerPadding);
+    expect(layout.liveStyle.right).toBe(4);
+    expect(layout.dialStyle.right).toBe(4);
   });
 
   test("centers the live/dial pair above the bottom inset in portrait", () => {

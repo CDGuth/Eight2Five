@@ -4,6 +4,7 @@ import {
   fieldPointToMarchingCoordinate,
   formatMarchingFrontBack,
   formatMarchingSide,
+  formatMarchingSteps,
   metersToStandardSteps,
   type FieldLivePositionState,
   type FieldPoint,
@@ -41,11 +42,13 @@ export function getTargetDistancePresentation({
   target,
   greenThresholdSteps,
   yellowThresholdSteps,
+  roundingSteps = 0.25,
 }: {
   readonly live: FieldLivePositionState;
   readonly target?: FieldPoint;
   readonly greenThresholdSteps: number;
   readonly yellowThresholdSteps: number;
+  readonly roundingSteps?: CoordinateRoundingSteps;
 }): TargetDistancePresentation {
   if (!live.position || live.isStale || !target) {
     return { value: "–", tone: "muted" };
@@ -56,10 +59,10 @@ export function getTargetDistancePresentation({
     live.position.yMeters - target.yMeters,
   );
   const steps = metersToStandardSteps(distanceMeters);
-  const roundedSteps = Number(steps.toFixed(1));
+  const roundedSteps = formatMarchingSteps(steps, roundingSteps);
   return {
     steps,
-    value: roundedSteps === 1 ? "one step" : `${roundedSteps.toFixed(1)} steps`,
+    value: Number(roundedSteps) === 1 ? "one step" : `${roundedSteps} steps`,
     tone:
       steps <= greenThresholdSteps
         ? "success"

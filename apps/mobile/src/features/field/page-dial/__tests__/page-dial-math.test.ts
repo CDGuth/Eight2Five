@@ -49,6 +49,31 @@ describe("page dial math", () => {
     expect(
       pageDialProgressForPointNearReference(center, topY, diameter, 0.98),
     ).toBe(1);
+
+    const clockwisePastTop = pageDialPointForProgress(0.01, diameter, 90);
+    expect(
+      pageDialProgressForPointNearReference(
+        clockwisePastTop.x,
+        clockwisePastTop.y,
+        diameter,
+        1,
+      ),
+    ).toBeCloseTo(0.01);
+
+    const counterClockwisePastTop = pageDialPointForProgress(
+      0.99,
+      diameter,
+      90,
+    );
+    expect(
+      pageDialProgressForPointNearReference(
+        counterClockwisePastTop.x,
+        counterClockwisePastTop.y,
+        diameter,
+        0,
+      ),
+    ).toBeCloseTo(0.99);
+
     expect(pageDialIndexForAngle(radians(-89), 38)).toBe(0);
     expect(pageDialIndexForAngle(radians(-91), 38)).toBe(37);
     expect(pageDialIndexForAngle(radians(90), 5)).toBe(2);

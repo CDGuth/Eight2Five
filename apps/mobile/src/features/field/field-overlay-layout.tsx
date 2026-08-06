@@ -39,7 +39,7 @@ export function getFieldOverlayMetrics({
   const safeHeight = Math.max(0, height - insets.top - insets.bottom);
 
   if (landscape) {
-    const landscapeEdgePadding = 8;
+    const landscapeEdgePadding = 4;
     const maximumFittingDiameter = Math.max(
       0,
       (safeHeight - outerPadding * 3) / 2,
@@ -47,13 +47,10 @@ export function getFieldOverlayMetrics({
     const controlDiameter = Math.min(164, maximumFittingDiameter);
     const controlGap = Math.max(0, (safeHeight - controlDiameter * 2) / 3);
     const stackTop = insets.top + controlGap;
-    // NativeTabs are hidden on the landscape Field route. Keep the controls
-    // close to the physical screen edge instead of stacking the full safe-area
-    // inset and normal HUD padding, which leaves an oversized dead strip.
-    const right = Math.max(
-      landscapeEdgePadding,
-      Math.min(insets.right, outerPadding),
-    );
+    // NativeTabs are hidden on the landscape Field route, so the live/dial
+    // stack should hug the physical screen edge instead of inheriting the
+    // landscape safe-area inset that made iPhone spacing look oversized.
+    const right = landscapeEdgePadding;
     const columnLeft = width - right - controlDiameter;
     const hudLeft = insets.left + outerPadding;
     const hudWidth = controlPairVisible

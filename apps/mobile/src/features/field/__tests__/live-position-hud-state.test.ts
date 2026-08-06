@@ -36,6 +36,15 @@ describe("live position HUD state", () => {
     ).toBe("danger");
     expect(
       getTargetDistancePresentation({
+        live,
+        target: { xMeters: 0.5715 * 0.62, yMeters: 0 },
+        greenThresholdSteps: 1,
+        yellowThresholdSteps: 2,
+        roundingSteps: 0.125,
+      }).value,
+    ).toBe("0.625 steps");
+    expect(
+      getTargetDistancePresentation({
         live: { ...live, isStale: true },
         target: { xMeters: 0, yMeters: 0 },
         greenThresholdSteps: 0.5,

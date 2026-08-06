@@ -110,7 +110,7 @@ export const DrillListItem = React.memo(function DrillListItem({
               {countLabel}
             </Text>
           </VStack>
-          <HStack style={{ gap: eight2FiveSpacing.xs }}>
+          <HStack className="items-center" style={{ gap: 0 }}>
             <DrillActionButton
               label={actionLabels.info}
               icon={Info}
@@ -138,8 +138,8 @@ export const DrillListItem = React.memo(function DrillListItem({
               accessibilityState={{ disabled: busy, selected: active }}
               hitSlop={4}
               style={({ pressed }) => ({
-                width: 46,
-                height: 46,
+                width: 40,
+                height: 40,
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: busy ? 0.45 : pressed ? 0.6 : 1,
@@ -179,8 +179,8 @@ function DrillActionButton({
       accessibilityState={{ disabled }}
       hitSlop={6}
       style={({ pressed }) => ({
-        width: 42,
-        height: 42,
+        width: 36,
+        height: 36,
         alignItems: "center",
         justifyContent: "center",
         opacity: disabled ? 0.45 : pressed ? 0.6 : 1,

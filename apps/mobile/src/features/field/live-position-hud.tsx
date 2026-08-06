@@ -60,6 +60,7 @@ export function LivePositionSquare({
     target,
     greenThresholdSteps,
     yellowThresholdSteps,
+    roundingSteps: coordinateRoundingSteps,
   });
   const distanceColor = colorForDistanceTone(distance.tone, theme);
   const dividerThickness = 1;
