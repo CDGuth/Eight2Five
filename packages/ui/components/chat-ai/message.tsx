@@ -247,6 +247,7 @@ export const MessageResponse = memo(({ message }: { message: UIMessage }) => {
             <Image
               key={index}
               source={{ uri }}
+              alt="Message attachment"
               className="w-40 h-40 rounded-xl mt-1.5"
               resizeMode="cover"
             />
