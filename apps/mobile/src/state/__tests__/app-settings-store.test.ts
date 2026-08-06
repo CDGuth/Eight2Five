@@ -95,6 +95,41 @@ describe("AppSettingsStore", () => {
     );
   });
 
+  test("can rebuild the app database after an initialization failure", async () => {
+    const close = jest.fn(async () => undefined);
+    const storage = {
+      settingsRepository: {
+        load: jest.fn(async () => DEFAULT_APP_SETTINGS),
+        update: jest.fn(),
+        resetPreferences: jest.fn(),
+      },
+      drillRepository: {},
+      close,
+    } as unknown as OpenMobileRepositoriesResult;
+    const openStorage = jest
+      .fn<Promise<OpenMobileRepositoriesResult>, []>()
+      .mockRejectedValueOnce(new Error("schema failed"))
+      .mockResolvedValueOnce(storage);
+    const deleteStorage = jest.fn(async () => undefined);
+    const store = new AppSettingsStore(openStorage, deleteStorage);
+
+    await store.initialize();
+    expect(store.getSnapshot().status).toBe("error");
+
+    const settings = await store.rebuildDatabase();
+
+    expect(deleteStorage).toHaveBeenCalledTimes(1);
+    expect(openStorage).toHaveBeenCalledTimes(2);
+    expect(settings).toEqual(DEFAULT_APP_SETTINGS);
+    expect(store.getSnapshot()).toEqual({
+      status: "ready",
+      settings: DEFAULT_APP_SETTINGS,
+    });
+
+    await store.dispose();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   test("waits for queued writes before closing storage", async () => {
     let releaseUpdate!: () => void;
     const close = jest.fn(async () => undefined);

@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 5;
+export const MOBILE_SCHEMA_VERSION = 6;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -204,9 +204,6 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
           distance_yellow_threshold_steps >= 0 AND
           distance_yellow_threshold_steps = distance_yellow_threshold_steps
         ),
-      CHECK (
-        distance_green_threshold_steps <= distance_yellow_threshold_steps
-      ),
       motion_interpolation_enabled INTEGER NOT NULL DEFAULT 1
         CHECK (motion_interpolation_enabled IN (0, 1)),
       comfortable_anchor_range_meters REAL NOT NULL DEFAULT 20
@@ -214,7 +211,10 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
       active_drill_id TEXT
         REFERENCES ${DRILLS_TABLE}(id) ON DELETE SET NULL,
       selected_drill_page_id TEXT
-        REFERENCES ${DRILL_SETS_TABLE}(id) ON DELETE SET NULL
+        REFERENCES ${DRILL_SETS_TABLE}(id) ON DELETE SET NULL,
+      CHECK (
+        distance_green_threshold_steps <= distance_yellow_threshold_steps
+      )
     );
 
     INSERT INTO ${APP_SETTINGS_TABLE} (singleton_id) VALUES (1);

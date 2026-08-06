@@ -5,6 +5,7 @@ import {
   type AppSettingsUpdate,
 } from "@eight2five/mobile/settings";
 import {
+  deleteMobileDatabase,
   openMobileRepositories,
   type OpenMobileRepositoriesResult,
 } from "@eight2five/mobile/storage";
@@ -19,6 +20,7 @@ export interface AppSettingsStoreSnapshot {
 
 export type OpenAppSettingsStorage =
   () => Promise<OpenMobileRepositoriesResult>;
+export type DeleteAppSettingsStorage = () => Promise<void>;
 
 const INITIAL_SNAPSHOT: AppSettingsStoreSnapshot = Object.freeze({
   status: "loading",
@@ -36,6 +38,8 @@ export class AppSettingsStore {
   constructor(
     private readonly openStorage: OpenAppSettingsStorage = () =>
       openMobileRepositories(),
+    private readonly deleteStorage: DeleteAppSettingsStorage = () =>
+      deleteMobileDatabase(),
   ) {}
 
   readonly getSnapshot = (): AppSettingsStoreSnapshot => this.snapshot;
@@ -126,6 +130,34 @@ export class AppSettingsStore {
       this.publish(Object.freeze({ status: "ready", settings }));
       return settings;
     });
+  }
+
+  /**
+   * Destructively rebuild the disposable app database from the current schema.
+   * This intentionally does not touch the separate PANS manager database.
+   */
+  async rebuildDatabase(): Promise<AppSettings> {
+    this.publish(INITIAL_SNAPSHOT);
+    try {
+      await this.dispose();
+      await this.deleteStorage();
+      await this.initialize();
+      const snapshot = this.snapshot;
+      if (snapshot.status !== "ready") {
+        throw snapshot.error ?? new Error("App database rebuild failed.");
+      }
+      return snapshot.settings;
+    } catch (cause) {
+      const error = toError(cause);
+      this.publish(
+        Object.freeze({
+          status: "error",
+          settings: DEFAULT_APP_SETTINGS,
+          error,
+        }),
+      );
+      throw error;
+    }
   }
 
   getDrillRepository() {

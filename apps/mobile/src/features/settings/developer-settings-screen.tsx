@@ -1,4 +1,5 @@
 import React from "react";
+import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Activity,
@@ -57,6 +58,7 @@ export function DeveloperSettingsScreen() {
   const { status, settings, error: settingsError } = useAppSettingsSnapshot();
   const pans = useMobilePansSnapshot();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [rebuildingDatabase, setRebuildingDatabase] = React.useState(false);
   const [operationError, setOperationError] = React.useState<Error>();
   const [rangeDraft, setRangeDraft] = React.useState(() =>
     settings.comfortableAnchorRangeMeters.toString(),
@@ -92,6 +94,36 @@ export function DeveloperSettingsScreen() {
     }
   };
 
+  const rebuildDatabase = async () => {
+    if (rebuildingDatabase) return;
+    setRebuildingDatabase(true);
+    setOperationError(undefined);
+    try {
+      await settingsStore.rebuildDatabase();
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause : new Error(String(cause)),
+      );
+    } finally {
+      setRebuildingDatabase(false);
+    }
+  };
+
+  const confirmDatabaseRebuild = () => {
+    Alert.alert(
+      "Rebuild app database?",
+      "This deletes all locally stored drills and app settings, then recreates the app database from the current schema. PANS device and network data is not deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Rebuild",
+          style: "destructive",
+          onPress: () => void rebuildDatabase(),
+        },
+      ],
+    );
+  };
+
   const updateOverlay = async (partial: {
     showCachedAnchorGeometry?: boolean;
     showComfortableAnchorRange?: boolean;
@@ -116,6 +148,11 @@ export function DeveloperSettingsScreen() {
   if (!settings.developerModeEnabled) {
     return (
       <SettingsScreenContainer>
+        {settingsError || operationError ? (
+          <SettingsMessage tone="error">
+            {(operationError ?? settingsError)?.message}
+          </SettingsMessage>
+        ) : null}
         <SettingsSection title="Developer Mode">
           <SettingsValueRow
             icon={Code2}
@@ -133,6 +170,30 @@ export function DeveloperSettingsScreen() {
             testID="developer-mode-confirmation-link"
           />
         </SettingsSection>
+        {status === "error" ? (
+          <SettingsSection title="Development Storage">
+            <VStack style={{ gap: 12, padding: eight2FiveSpacing.md }}>
+              <Text style={{ color: theme.textMuted }}>
+                If the app database cannot open after a schema change, rebuild
+                it from the current schema. This clears local drills and app
+                settings but leaves PANS device and network data alone.
+              </Text>
+              <Button
+                variant="destructive"
+                testID="rebuild-mobile-database-button"
+                isDisabled={rebuildingDatabase}
+                onPress={confirmDatabaseRebuild}
+              >
+                {rebuildingDatabase ? (
+                  <ButtonSpinner />
+                ) : (
+                  <ButtonIcon as={Database} />
+                )}
+                <ButtonText>Rebuild App Database</ButtonText>
+              </Button>
+            </VStack>
+          </SettingsSection>
+        ) : null}
       </SettingsScreenContainer>
     );
   }
@@ -245,6 +306,29 @@ export function DeveloperSettingsScreen() {
           description="Positions remain local until an explicit confirmed write."
           value={pans.knownAnchors.length.toString()}
         />
+      </SettingsSection>
+
+      <SettingsSection title="Development Storage">
+        <VStack style={{ gap: 12, padding: eight2FiveSpacing.md }}>
+          <Text style={{ color: theme.textMuted }}>
+            Delete the disposable app SQLite database and recreate it from the
+            current schema. This clears local drills and app settings but does
+            not delete PANS device or network data.
+          </Text>
+          <Button
+            variant="destructive"
+            testID="rebuild-mobile-database-button"
+            isDisabled={rebuildingDatabase}
+            onPress={confirmDatabaseRebuild}
+          >
+            {rebuildingDatabase ? (
+              <ButtonSpinner />
+            ) : (
+              <ButtonIcon as={Database} />
+            )}
+            <ButtonText>Rebuild App Database</ButtonText>
+          </Button>
+        </VStack>
       </SettingsSection>
 
       <SettingsSection title="Anchor Configuration">

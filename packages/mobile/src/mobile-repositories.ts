@@ -13,6 +13,19 @@ export interface OpenMobileRepositoriesResult {
 }
 
 /**
+ * Delete the disposable app-side SQLite database so it can be recreated from
+ * the current schema on the next open. Callers must close every connection to
+ * this database before invoking this helper. The separate PANS manager database
+ * is intentionally unaffected.
+ */
+export async function deleteMobileDatabase(
+  databaseName = MOBILE_DB_NAME,
+): Promise<void> {
+  const { deleteDatabaseAsync } = await import("expo-sqlite");
+  await deleteDatabaseAsync(databaseName);
+}
+
+/**
  * Open the app-side repositories over one database connection.
  *
  * `expo-sqlite` is imported lazily so consumers of the pure field and drill

@@ -15,7 +15,7 @@ describe("mobile app SQLite schema preparation", () => {
 
     const sql = executed.join("\n");
     expect(MOBILE_DB_NAME).toBe("eight2five-mobile.db");
-    expect(MOBILE_SCHEMA_VERSION).toBe(5);
+    expect(MOBILE_SCHEMA_VERSION).toBe(6);
     expect(sql).toContain("PRAGMA journal_mode = WAL");
     expect(sql).toContain("PRAGMA foreign_keys = OFF");
     expect(sql).toContain("DROP TABLE IF EXISTS app_settings");
@@ -56,6 +56,13 @@ describe("mobile app SQLite schema preparation", () => {
     );
     expect(sql).toContain(
       "motion_interpolation_enabled INTEGER NOT NULL DEFAULT 1",
+    );
+    expect(
+      sql.indexOf("motion_interpolation_enabled INTEGER NOT NULL"),
+    ).toBeLessThan(
+      sql.indexOf(
+        "distance_green_threshold_steps <= distance_yellow_threshold_steps",
+      ),
     );
     expect(sql).toContain("REFERENCES drills(id) ON DELETE CASCADE");
     expect(sql).toContain("REFERENCES drill_sets(id) ON DELETE SET NULL");
