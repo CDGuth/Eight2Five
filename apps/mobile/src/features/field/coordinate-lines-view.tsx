@@ -39,7 +39,7 @@ export function CoordinateLinesView({
   }
 
   return (
-    <VStack className="flex-1" style={{ gap: 2 }}>
+    <VStack style={{ gap: 2 }}>
       <CoordinateLine
         icon={ArrowLeftRight}
         value={coordinate.side}

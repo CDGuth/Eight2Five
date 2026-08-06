@@ -62,9 +62,14 @@ export function LivePositionSquare({
     yellowThresholdSteps,
   });
   const distanceColor = colorForDistanceTone(distance.tone, theme);
-  const horizontalPadding = Math.max(10, diameter * 0.09);
+  const dividerThickness = 1;
+  const iconColumnWidth = 32;
+  const lowerSectionHeight = Math.max(0, (diameter - dividerThickness) / 3);
+  const sectionPadding = Math.max(
+    0,
+    (lowerSectionHeight - iconColumnWidth) / 2,
+  );
   const rowGap = eight2FiveSpacing.sm;
-  const iconColumnWidth = 44;
 
   const radius = Math.min(eight2FiveRadii.lg, diameter * 0.16);
   return (
@@ -79,19 +84,25 @@ export function LivePositionSquare({
             live={live}
             fieldPreset={fieldPreset}
             compact
-            horizontalPadding={horizontalPadding}
+            horizontalPadding={sectionPadding}
             gap={rowGap}
+            iconColumnWidth={iconColumnWidth}
             coordinateRoundingSteps={coordinateRoundingSteps}
             onOpenTagConnection={onOpenTagConnection}
           />
         </VStack>
-        <Divider style={{ backgroundColor: theme.border }} />
+        <Divider
+          style={{
+            height: dividerThickness,
+            backgroundColor: theme.border,
+          }}
+        />
         <HStack
           className="items-center"
           style={{
             flex: 1,
             gap: rowGap,
-            paddingHorizontal: horizontalPadding,
+            padding: sectionPadding,
           }}
         >
           <HStack
@@ -159,6 +170,7 @@ function LivePositionHeader({
   compact = false,
   horizontalPadding,
   gap,
+  iconColumnWidth,
   coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
@@ -167,6 +179,7 @@ function LivePositionHeader({
   readonly compact?: boolean;
   readonly horizontalPadding?: number;
   readonly gap?: number;
+  readonly iconColumnWidth?: number;
   readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
@@ -187,6 +200,7 @@ function LivePositionHeader({
     >
       <BluetoothStatusButton
         state={live.connectionState}
+        size={iconColumnWidth}
         onPress={onOpenTagConnection}
       />
       <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
@@ -205,9 +219,11 @@ function LivePositionHeader({
 
 function BluetoothStatusButton({
   state,
+  size = 44,
   onPress,
 }: {
   readonly state: FieldConnectionState;
+  readonly size?: number;
   readonly onPress: () => void;
 }) {
   const theme = useEight2FiveTheme();
@@ -249,8 +265,8 @@ function BluetoothStatusButton({
       onPress={onPress}
       hitSlop={8}
       style={{
-        width: 44,
-        height: 44,
+        width: size,
+        height: size,
         alignItems: "center",
         justifyContent: "center",
       }}

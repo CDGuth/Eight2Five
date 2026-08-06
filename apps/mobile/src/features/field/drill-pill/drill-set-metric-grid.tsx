@@ -60,7 +60,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
 
   return (
     <HStack
-      className="items-stretch"
+      className="items-center"
       style={{
         gap: columns.gap,
         paddingHorizontal: columns.horizontalPadding,
@@ -83,7 +83,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleCounts ? "auto" : "none"}
         onPress={onToggleCounts}
-        style={{ width: columns.countWidth }}
+        style={{ width: columns.countWidth, height: 48 }}
       >
         <SwitchingMetricCell
           displayKey={count.key}
@@ -104,7 +104,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleMetric ? "auto" : "none"}
         onPress={onToggleMetric}
-        style={{ width: columns.metricWidth }}
+        style={{ width: columns.metricWidth, height: 48 }}
       >
         <SwitchingMetricCell
           displayKey={metric.key}
@@ -125,12 +125,9 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleExpanded ? "auto" : "none"}
         onPress={onToggleExpanded}
-        style={{ width: columns.coordinateWidth }}
+        style={{ width: columns.coordinateWidth, height: 48 }}
       >
-        <HStack
-          className="flex-1 items-center"
-          style={{ gap: 2, minHeight: 48 }}
-        >
+        <HStack className="flex-1 items-center" style={{ gap: 2, height: 48 }}>
           <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
             <Text
               maxFontSizeMultiplier={1.4}

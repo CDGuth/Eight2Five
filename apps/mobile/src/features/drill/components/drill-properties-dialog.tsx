@@ -59,7 +59,9 @@ export function DrillPropertiesDialog({
   const theme = useEight2FiveTheme();
   if (!drill) return null;
   const metadata = document?.metadata ?? drill.metadata;
-  const DrillIcon = resolveDrillIcon(drill.metadata?.lucideIcon);
+  const DrillIcon = drill.metadata?.lucideIcon
+    ? resolveDrillIcon(drill.metadata.lucideIcon)
+    : undefined;
 
   const confirmDelete = () => {
     Alert.alert(
@@ -99,10 +101,12 @@ export function DrillPropertiesDialog({
             ) : null}
 
             <VStack
-              className="items-center"
+              className={DrillIcon ? "items-center" : "items-start"}
               style={{ gap: eight2FiveSpacing.xs }}
             >
-              <Icon as={DrillIcon} size={48} style={{ color: theme.text }} />
+              {DrillIcon ? (
+                <Icon as={DrillIcon} size={40} style={{ color: theme.text }} />
+              ) : null}
               <Text
                 style={{
                   color: theme.text,

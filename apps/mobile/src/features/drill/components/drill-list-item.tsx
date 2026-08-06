@@ -1,5 +1,5 @@
 import React from "react";
-import { Animated } from "react-native";
+import { Animated, Pressable as NativePressable, View } from "react-native";
 import {
   CircleCheck,
   CirclePlus,
@@ -10,7 +10,6 @@ import type { Drill, DrillTerms } from "@eight2five/mobile/drill";
 import { Card } from "@eight2five/ui/components/card";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
-import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
 import {
@@ -48,7 +47,9 @@ export const DrillListItem = React.memo(function DrillListItem({
   const theme = useEight2FiveTheme();
   const countLabel = formatDrillCount(pageCount, terms);
   const actionLabels = getDrillCardActionLabels(drill.name);
-  const DrillIcon = resolveDrillIcon(drill.metadata?.lucideIcon);
+  const DrillIcon = drill.metadata?.lucideIcon
+    ? resolveDrillIcon(drill.metadata.lucideIcon)
+    : undefined;
 
   return (
     <Card
@@ -64,16 +65,18 @@ export const DrillListItem = React.memo(function DrillListItem({
         className="items-center"
         style={{ padding: eight2FiveSpacing.sm }}
       >
-        <VStack
-          className="items-center justify-center"
-          style={{
-            width: 48,
-            height: 56,
-            marginRight: eight2FiveSpacing.sm,
-          }}
-        >
-          <Icon as={DrillIcon} size="xl" style={{ color: theme.text }} />
-        </VStack>
+        {DrillIcon ? (
+          <VStack
+            className="items-center justify-center"
+            style={{
+              width: 40,
+              height: 48,
+              marginRight: eight2FiveSpacing.sm,
+            }}
+          >
+            <Icon as={DrillIcon} size="lg" style={{ color: theme.text }} />
+          </VStack>
+        ) : null}
         <VStack className="flex-1" style={{ gap: 2 }}>
           <Text
             numberOfLines={1}
@@ -103,7 +106,7 @@ export const DrillListItem = React.memo(function DrillListItem({
             onPress={onSelectPerformer}
             iconColor={theme.text}
           />
-          <Pressable
+          <NativePressable
             onPress={onToggleActive}
             disabled={busy}
             accessibilityRole="button"
@@ -111,15 +114,17 @@ export const DrillListItem = React.memo(function DrillListItem({
               active ? actionLabels.deactivate : actionLabels.activate
             }
             accessibilityState={{ disabled: busy, selected: active }}
-            style={{
-              width: 48,
-              height: 48,
+            hitSlop={4}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
               alignItems: "center",
               justifyContent: "center",
-            }}
+              opacity: busy ? 0.45 : pressed ? 0.6 : 1,
+            })}
           >
             <AnimatedSelectionIcon active={active} color={theme.accent} />
-          </Pressable>
+          </NativePressable>
         </HStack>
       </HStack>
     </Card>
@@ -140,21 +145,25 @@ function DrillActionButton({
   readonly iconColor: string;
 }) {
   return (
-    <Pressable
+    <NativePressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={{
-        width: 48,
-        height: 48,
+      hitSlop={6}
+      style={({ pressed }) => ({
+        width: 40,
+        height: 40,
         alignItems: "center",
         justifyContent: "center",
-      }}
+        opacity: disabled ? 0.45 : pressed ? 0.6 : 1,
+      })}
     >
-      <Icon as={icon} size={48} style={{ color: iconColor }} />
-    </Pressable>
+      <View pointerEvents="none">
+        <Icon as={icon} size={22} style={{ color: iconColor }} />
+      </View>
+    </NativePressable>
   );
 }
 
@@ -189,27 +198,33 @@ function AnimatedSelectionIcon({
   });
 
   return (
-    <>
+    <View
+      pointerEvents="none"
+      style={{
+        width: 28,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Animated.View
-        pointerEvents="none"
         style={{
           position: "absolute",
           opacity: plusOpacity,
           transform: [{ scale: plusScale }],
         }}
       >
-        <Icon as={CirclePlus} size={48} style={{ color }} />
+        <Icon as={CirclePlus} size={28} style={{ color }} />
       </Animated.View>
       <Animated.View
-        pointerEvents="none"
         style={{
           position: "absolute",
           opacity: checkOpacity,
           transform: [{ scale: checkScale }],
         }}
       >
-        <Icon as={CircleCheck} size={48} style={{ color }} />
+        <Icon as={CircleCheck} size={28} style={{ color }} />
       </Animated.View>
-    </>
+    </View>
   );
 }
