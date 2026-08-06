@@ -54,16 +54,78 @@ const SIGNAL_ICONS: Record<SignalStrength, typeof Signal> = {
 };
 
 export function TagConnectionScreen() {
-  return <TagConnectionContent />;
+  return <FocusedTagConnectionContent />;
 }
 
-/** Shared route/modal body. Discovery ownership follows focus lifecycle. */
+/**
+ * Shared route/modal entry point. Modal content owns discovery for its mounted
+ * lifetime instead of depending on navigation focus, which keeps it usable
+ * when rendered through the field HUD modal portal.
+ */
 export function TagConnectionContent({
   modal = false,
 }: {
   readonly modal?: boolean;
 }) {
+  return modal ? (
+    <MountedTagConnectionContent />
+  ) : (
+    <FocusedTagConnectionContent />
+  );
+}
+
+function FocusedTagConnectionContent() {
   const router = useRouter();
+  const store = useMobilePansStore();
+  const snapshot = useMobilePansSnapshot();
+  const [lifecycleError, setLifecycleError] = React.useState<Error>();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setLifecycleError(undefined);
+      return ownTagDiscoveryWhileFocused(
+        store,
+        snapshot.initialization === "ready",
+        store.getSnapshot().connectionState === "connected",
+        setLifecycleError,
+      );
+    }, [snapshot.initialization, store]),
+  );
+
+  return (
+    <TagConnectionBody
+      lifecycleError={lifecycleError}
+      onOpenNetworks={() => router.push("/(tabs)/settings/networks" as never)}
+    />
+  );
+}
+
+function MountedTagConnectionContent() {
+  const store = useMobilePansStore();
+  const snapshot = useMobilePansSnapshot();
+  const [lifecycleError, setLifecycleError] = React.useState<Error>();
+
+  React.useEffect(() => {
+    return ownTagDiscoveryWhileFocused(
+      store,
+      snapshot.initialization === "ready",
+      store.getSnapshot().connectionState === "connected",
+      setLifecycleError,
+    );
+  }, [snapshot.initialization, store]);
+
+  return <TagConnectionBody modal lifecycleError={lifecycleError} />;
+}
+
+function TagConnectionBody({
+  modal = false,
+  lifecycleError,
+  onOpenNetworks,
+}: {
+  readonly modal?: boolean;
+  readonly lifecycleError?: Error;
+  readonly onOpenNetworks?: () => void;
+}) {
   const theme = useEight2FiveTheme();
   const store = useMobilePansStore();
   const snapshot = useMobilePansSnapshot();
@@ -93,17 +155,6 @@ export function TagConnectionContent({
       ? labelEdit.value
       : selectedLabel;
 
-  useFocusEffect(
-    React.useCallback(() => {
-      return ownTagDiscoveryWhileFocused(
-        store,
-        snapshot.initialization === "ready",
-        store.getSnapshot().connectionState === "connected",
-        setError,
-      );
-    }, [snapshot.initialization, store]),
-  );
-
   const run = async (action: () => Promise<void>) => {
     if (operation) return;
     setOperation(true);
@@ -119,9 +170,9 @@ export function TagConnectionContent({
 
   const content = (
     <>
-      {snapshot.error || error ? (
+      {snapshot.error || lifecycleError || error ? (
         <SettingsMessage tone="error">
-          {(error ?? snapshot.error)?.message}
+          {(error ?? lifecycleError ?? snapshot.error)?.message}
         </SettingsMessage>
       ) : null}
 
@@ -251,11 +302,11 @@ export function TagConnectionContent({
             disabled={operation}
             testID="active-network-setting"
           />
-          {!modal ? (
+          {!modal && onOpenNetworks ? (
             <SettingsNavigationRow
               icon={Network}
               title="Manage networks and anchors"
-              onPress={() => router.push("/(tabs)/settings/networks" as never)}
+              onPress={onOpenNetworks}
               testID="network-management-link"
             />
           ) : null}
