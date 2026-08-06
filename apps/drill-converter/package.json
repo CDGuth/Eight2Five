@@ -1,6 +1,6 @@
 {
   "name": "eight2five-drill-converter",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -13,9 +13,9 @@
     "test": "jest --watchAll=false --passWithNoTests --runInBand"
   },
   "dependencies": {
-    "@eight2five/drill-importers": "0.0.0",
-    "@eight2five/drill-schema": "0.0.0",
-    "@eight2five/ui": "0.0.0",
+    "@eight2five/drill-importers": "0.1.0",
+    "@eight2five/drill-schema": "0.1.0",
+    "@eight2five/ui": "0.1.0",
     "@expo/metro-runtime": "~57.0.8",
     "expo": "~57.0.10",
     "expo-document-picker": "~57.0.1",
