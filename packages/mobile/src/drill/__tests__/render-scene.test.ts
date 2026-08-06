@@ -223,6 +223,33 @@ describe("selected-set drill render scene", () => {
     expect(Object.isFrozen(scene.entities)).toBe(true);
   });
 
+  test("temporarily treats JSON label visibility as ordinary entity visibility", () => {
+    const hiddenDocument: DrillDocument = {
+      ...DOCUMENT,
+      entities: DOCUMENT.entities.map((entity) =>
+        entity.id === 2 || entity.id === 3
+          ? {
+              ...entity,
+              appearance: {
+                ...entity.appearance,
+                labelVisible: false,
+              },
+            }
+          : entity,
+      ),
+    };
+    const scene = buildDrillRenderScene({
+      document: hiddenDocument,
+      field: "football-nfhs",
+      selectedPerformerEntityId: 1,
+      selectedSourceSetId: 11,
+      settings: SETTINGS,
+    });
+
+    expect(scene.entities).toEqual([]);
+    expect(scene.current).toEqual(physicalPoint({ xSteps: 8, ySteps: 8 }));
+  });
+
   test("keeps labels and names independent and marker master only suppresses transition graphics", () => {
     const scene = buildDrillRenderScene({
       document: DOCUMENT,

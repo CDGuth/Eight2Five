@@ -198,6 +198,10 @@ export function buildDrillRenderScene(
     ) {
       continue;
     }
+    // TODO: Fix this once the drill schema has an explicit entity visibility
+    // property. For now, imported label visibility controls whether the
+    // performer/prop itself is rendered.
+    if (!resolved.appearance.labelVisible) continue;
     const position = positionsByEntityId.get(resolved.id);
     if (!position) continue;
     entities.push(
