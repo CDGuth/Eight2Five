@@ -58,13 +58,45 @@ export function FieldScreen({
   const [drillDialogOpen, setDrillDialogOpen] = React.useState(false);
   const [performerDialogOpen, setPerformerDialogOpen] = React.useState(false);
   const [tagDialogOpen, setTagDialogOpen] = React.useState(false);
-  const liveState = livePosition?.state ?? EMPTY_FIELD_LIVE_POSITION_STATE;
-  const fallbackLivePosition = useSharedValue<FieldPoint | null>(
-    liveState.position ?? null,
+  const pansLiveState = livePosition?.state ?? EMPTY_FIELD_LIVE_POSITION_STATE;
+  const mockLivePositionEnabled =
+    controller.settings.developerModeEnabled &&
+    controller.settings.mockLivePositionEnabled;
+  const mockPosition = React.useMemo(
+    () =>
+      mockLivePositionEnabled
+        ? drillGridPointToFieldPoint(
+            {
+              xSteps: controller.settings.mockLivePositionXSteps,
+              ySteps: controller.settings.mockLivePositionYSteps,
+            },
+            controller.fieldPreset,
+          )
+        : null,
+    [
+      controller.fieldPreset,
+      controller.settings.mockLivePositionXSteps,
+      controller.settings.mockLivePositionYSteps,
+      mockLivePositionEnabled,
+    ],
   );
-  const livePositionValue = livePosition?.positionValue ?? fallbackLivePosition;
-  const liveXMeters = liveState.position?.xMeters;
-  const liveYMeters = liveState.position?.yMeters;
+  const liveState = mockPosition
+    ? {
+        ...pansLiveState,
+        position: mockPosition,
+        isStale: false,
+        interpolationActive: false,
+      }
+    : pansLiveState;
+  const fallbackLivePosition = useSharedValue<FieldPoint | null>(
+    pansLiveState.position ?? null,
+  );
+  const mockLivePosition = useSharedValue<FieldPoint | null>(mockPosition);
+  const livePositionValue = mockLivePositionEnabled
+    ? mockLivePosition
+    : (livePosition?.positionValue ?? fallbackLivePosition);
+  const liveXMeters = pansLiveState.position?.xMeters;
+  const liveYMeters = pansLiveState.position?.yMeters;
   React.useEffect(() => {
     if (livePosition?.positionValue) return;
     setLivePositionValue(
@@ -79,6 +111,13 @@ export function FieldScreen({
     liveXMeters,
     liveYMeters,
   ]);
+  React.useEffect(() => {
+    setLivePositionValue(mockLivePosition, mockPosition);
+  }, [mockLivePosition, mockPosition]);
+  const activeDrillId = controller.settings.activeDrillId;
+  React.useEffect(() => {
+    dispatchHud({ type: "collapse-drill-pill" });
+  }, [activeDrillId]);
   const drillOverlayState = {
     drillFeaturesEnabled: controller.settings.drillFeaturesEnabled,
     hasActiveDrill: Boolean(controller.activeDrill),
@@ -115,6 +154,9 @@ export function FieldScreen({
     controller.settingsStatus !== "ready" ||
     controller.loadingDrills ||
     controller.selectionBusy;
+  const canExpandDrillPill = Boolean(
+    controller.activeDrill && controller.pages.length > 0,
+  );
   const terms = getDrillTerms(controller.settings.drillTerminology);
   const palette = React.useMemo(
     () => ({
@@ -172,15 +214,17 @@ export function FieldScreen({
               countDisplayMode={hudState.countDisplayMode}
               metricMode={controller.settings.transitionMetricMode}
               fieldPreset={controller.fieldPreset}
-              expanded={hudState.drillPillExpanded}
+              expanded={canExpandDrillPill && hudState.drillPillExpanded}
               controlsDisabled={controlsDisabled}
               error={controller.error}
               onToggleCounts={() =>
                 dispatchHud({ type: "toggle-count-display" })
               }
               onToggleMetric={() => void controller.toggleMetricMode()}
-              onToggleExpanded={() =>
-                dispatchHud({ type: "toggle-drill-pill" })
+              onToggleExpanded={
+                canExpandDrillPill
+                  ? () => dispatchHud({ type: "toggle-drill-pill" })
+                  : undefined
               }
               onSelectIndex={(index) =>
                 void controller.selectPageAtIndex(index)
@@ -229,10 +273,7 @@ export function FieldScreen({
                   terminology={controller.settings.drillTerminology}
                   activeColor={theme.accent}
                   trackColor={theme.border}
-                  innerColor={theme.surfaceRaised}
-                  backgroundColor={theme.surface}
                   foregroundColor={theme.text}
-                  dividerColor={theme.textSubtle}
                   onSelectIndex={(index) =>
                     void controller.selectPageAtIndex(index)
                   }

@@ -1,12 +1,27 @@
 import React from "react";
-import { Host, Picker } from "@expo/ui";
-import { ChevronRight, type LucideIcon } from "lucide-react-native";
+import {
+  ChevronDown,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react-native";
 import { Card } from "@eight2five/ui/components/card";
 import { Heading } from "@eight2five/ui/components/heading";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { ScrollView } from "@eight2five/ui/components/scroll-view";
+import {
+  Select,
+  SelectBackdrop,
+  SelectContent,
+  SelectDragIndicator,
+  SelectDragIndicatorWrapper,
+  SelectIcon,
+  SelectInput,
+  SelectItem,
+  SelectPortal,
+  SelectTrigger,
+} from "@eight2five/ui/components/select";
 import { Switch } from "@eight2five/ui/components/switch";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
@@ -15,7 +30,6 @@ import {
   eight2FiveRadii,
   eight2FiveSpacing,
   useEight2FiveTheme,
-  useEight2FiveThemeName,
 } from "@eight2five/ui/theme";
 
 export function SettingsScreenContainer({
@@ -222,46 +236,68 @@ export function SettingsSelectRow<T extends string>({
   testID?: string;
 }) {
   const theme = useEight2FiveTheme();
-  const themeName = useEight2FiveThemeName();
   const selectedLabel =
     choices.find((choice) => choice.value === value)?.label ?? value;
   return (
     <VStack>
       <SettingsRowContent icon={icon} title={title} description={description} />
-      <Host
-        testID={testID}
-        accessible
-        accessibilityRole="combobox"
-        accessibilityLabel={title}
-        accessibilityHint="Opens a list of choices"
-        accessibilityValue={{ text: selectedLabel }}
-        accessibilityState={{ disabled }}
-        colorScheme={themeName}
-        seedColor={theme.accent}
-        matchContents={{ vertical: true }}
+      <VStack
         style={{
-          alignSelf: "stretch",
-          minHeight: 48,
-          marginHorizontal: eight2FiveSpacing.md,
-          marginBottom: eight2FiveSpacing.md,
+          paddingHorizontal: eight2FiveSpacing.md,
+          paddingBottom: eight2FiveSpacing.md,
         }}
       >
-        <Picker<T>
+        <Select
           selectedValue={value}
-          onValueChange={onChange}
-          enabled={!disabled}
-          appearance="menu"
-          testID={testID ? `${testID}-picker` : undefined}
+          initialLabel={selectedLabel}
+          isDisabled={disabled}
+          onValueChange={(next) => onChange(next as T)}
         >
-          {choices.map((choice) => (
-            <Picker.Item
-              key={choice.value}
-              label={choice.label}
-              value={choice.value}
+          <SelectTrigger
+            testID={testID}
+            accessibilityLabel={title}
+            size="lg"
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              borderRadius: eight2FiveRadii.sm,
+            }}
+          >
+            <SelectInput
+              accessibilityLabel={`${title}: ${selectedLabel}`}
+              style={{ color: theme.text }}
             />
-          ))}
-        </Picker>
-      </Host>
+            <SelectIcon
+              as={ChevronDown}
+              style={{
+                color: theme.textMuted,
+                marginRight: eight2FiveSpacing.sm,
+              }}
+            />
+          </SelectTrigger>
+          <SelectPortal>
+            <SelectBackdrop />
+            <SelectContent
+              style={{
+                backgroundColor: theme.surfaceRaised,
+                borderTopLeftRadius: eight2FiveRadii.lg,
+                borderTopRightRadius: eight2FiveRadii.lg,
+              }}
+            >
+              <SelectDragIndicatorWrapper>
+                <SelectDragIndicator />
+              </SelectDragIndicatorWrapper>
+              {choices.map((choice) => (
+                <SelectItem
+                  key={choice.value}
+                  label={choice.label}
+                  value={choice.value}
+                />
+              ))}
+            </SelectContent>
+          </SelectPortal>
+        </Select>
+      </VStack>
     </VStack>
   );
 }

@@ -31,6 +31,7 @@ import {
   getTargetDistancePresentation,
   type DistanceTone,
 } from "./live-position-hud-state";
+import { FrostedFieldSurface } from "./field-frosted-surface";
 
 export function LivePositionSquare({
   diameter,
@@ -58,54 +59,50 @@ export function LivePositionSquare({
   });
   const distanceColor = colorForDistanceTone(distance.tone, theme);
 
+  const radius = Math.min(eight2FiveRadii.lg, diameter * 0.16);
   return (
-    <VStack
-      style={{
-        width: diameter,
-        height: diameter,
-        overflow: "hidden",
-        borderRadius: Math.min(eight2FiveRadii.lg, diameter * 0.16),
-        borderCurve: "continuous",
-        backgroundColor: theme.surfaceRaised,
-        boxShadow: `0 5px 18px ${theme.shadowStrong}`,
-      }}
+    <FrostedFieldSurface
+      borderRadius={radius}
+      style={{ width: diameter, height: diameter }}
       testID="live-position-square"
     >
-      <LivePositionHeader
-        live={live}
-        fieldPreset={fieldPreset}
-        compact={diameter < 140}
-        onOpenTagConnection={onOpenTagConnection}
-      />
-      <Divider style={{ backgroundColor: theme.border }} />
-      <HStack
-        className="flex-1 items-center"
-        style={{
-          gap: eight2FiveSpacing.sm,
-          paddingHorizontal: Math.max(10, diameter * 0.09),
-        }}
-      >
-        <Icon
-          as={RulerDimensionLine}
-          size="lg"
-          style={{ color: distanceColor }}
+      <VStack className="flex-1">
+        <LivePositionHeader
+          live={live}
+          fieldPreset={fieldPreset}
+          compact={diameter < 140}
+          onOpenTagConnection={onOpenTagConnection}
         />
-        <Text
-          className="flex-1 text-right"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
+        <Divider style={{ backgroundColor: theme.border }} />
+        <HStack
+          className="flex-1 items-center"
           style={{
-            color: distanceColor,
-            fontFamily: eight2FiveFonts.utilitySemibold,
-            fontSize: Math.max(14, diameter * 0.11),
-            fontVariant: ["tabular-nums"],
+            gap: eight2FiveSpacing.sm,
+            paddingHorizontal: Math.max(10, diameter * 0.09),
           }}
         >
-          {distance.value}
-        </Text>
-      </HStack>
-    </VStack>
+          <Icon
+            as={RulerDimensionLine}
+            size="lg"
+            style={{ color: distanceColor }}
+          />
+          <Text
+            className="flex-1 text-right"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={{
+              color: distanceColor,
+              fontFamily: eight2FiveFonts.utilitySemibold,
+              fontSize: Math.max(14, diameter * 0.11),
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {distance.value}
+          </Text>
+        </HStack>
+      </VStack>
+    </FrostedFieldSurface>
   );
 }
 
@@ -120,17 +117,10 @@ export function LiveOnlyPill({
   readonly fieldPreset: FieldPresetId;
   readonly onOpenTagConnection: () => void;
 }) {
-  const theme = useEight2FiveTheme();
   return (
-    <VStack
-      style={{
-        width,
-        minHeight: 76,
-        borderRadius: eight2FiveRadii.lg,
-        borderCurve: "continuous",
-        backgroundColor: theme.surfaceRaised,
-        boxShadow: `0 5px 18px ${theme.shadowStrong}`,
-      }}
+    <FrostedFieldSurface
+      borderRadius={eight2FiveRadii.lg}
+      style={{ width, minHeight: 76 }}
       testID="live-only-pill"
     >
       <LivePositionHeader
@@ -138,7 +128,7 @@ export function LiveOnlyPill({
         fieldPreset={fieldPreset}
         onOpenTagConnection={onOpenTagConnection}
       />
-    </VStack>
+    </FrostedFieldSurface>
   );
 }
 

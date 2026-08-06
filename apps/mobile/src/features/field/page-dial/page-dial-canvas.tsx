@@ -1,13 +1,10 @@
 import { FieldPageDialCanvas } from "@eight2five/mobile/field/render";
-import { useMemo } from "react";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import {
-  getPageDialDividerSegments,
   PAGE_DIAL_START_ANGLE_DEGREES,
   PAGE_DIAL_USABLE_ARC_DEGREES,
 } from "./page-dial-math";
-import { getPageDialProportions } from "./page-dial-layout";
 
 export function PageDialCanvas({
   diameter,
@@ -18,7 +15,6 @@ export function PageDialCanvas({
   innerColor,
   backgroundColor,
   knobColor,
-  dividerColor,
 }: {
   readonly diameter: number;
   readonly pageCount: number;
@@ -28,22 +24,11 @@ export function PageDialCanvas({
   readonly innerColor?: string;
   readonly backgroundColor?: string;
   readonly knobColor?: string;
-  readonly dividerColor?: string;
 }) {
   const progress = useDerivedValue(() => {
     if (pageCount <= 0 || !Number.isFinite(provisionalProgress.value)) return 0;
     return Math.min(1, Math.max(0, provisionalProgress.value));
   });
-  const proportions = getPageDialProportions(diameter);
-  const dividerSegments = useMemo(
-    () =>
-      getPageDialDividerSegments(
-        diameter,
-        proportions.innerDiskDiameter,
-        proportions.centerDiskDiameter,
-      ),
-    [diameter, proportions.centerDiskDiameter, proportions.innerDiskDiameter],
-  );
   return (
     <FieldPageDialCanvas
       diameter={diameter}
@@ -55,8 +40,7 @@ export function PageDialCanvas({
       innerColor={innerColor}
       backgroundColor={backgroundColor}
       knobColor={knobColor}
-      dividerColor={dividerColor}
-      dividerSegments={dividerSegments}
+      dividerSegments={[]}
     />
   );
 }

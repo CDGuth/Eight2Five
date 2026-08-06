@@ -2,31 +2,33 @@ import { DEFAULT_APP_SETTINGS } from "@eight2five/mobile/settings";
 
 import { buildDeveloperDiagnosticRows } from "../developer-diagnostics";
 import {
-  DEVELOPER_MODE_WARNING,
   canUseDeveloperControls,
   disableDeveloperMode,
   enableDeveloperMode,
 } from "../developer-mode-actions";
 
 describe("Developer Mode", () => {
-  test("enables only through the explicit confirmation action", async () => {
+  test("enables directly through the developer settings toggle", async () => {
     const enabled = { ...DEFAULT_APP_SETTINGS, developerModeEnabled: true };
     const writer = { update: jest.fn(async () => enabled) };
 
     await expect(enableDeveloperMode(writer)).resolves.toEqual(enabled);
 
     expect(writer.update).toHaveBeenCalledWith({ developerModeEnabled: true });
-    expect(DEVELOPER_MODE_WARNING).toContain("modify PANS anchor positions");
-    expect(DEVELOPER_MODE_WARNING).toContain("reported locations inaccurate");
   });
 
-  test("disabling hides controls without changing another preference", async () => {
+  test("disabling hides controls and clears developer-only live mocking", async () => {
     const disabled = { ...DEFAULT_APP_SETTINGS, developerModeEnabled: false };
     const writer = { update: jest.fn(async () => disabled) };
 
     await disableDeveloperMode(writer);
 
-    expect(writer.update).toHaveBeenCalledWith({ developerModeEnabled: false });
+    expect(writer.update).toHaveBeenCalledWith({
+      developerModeEnabled: false,
+      mockLivePositionEnabled: false,
+      mockLivePositionXSteps: 0,
+      mockLivePositionYSteps: 0,
+    });
     expect(canUseDeveloperControls(disabled)).toBe(false);
   });
 

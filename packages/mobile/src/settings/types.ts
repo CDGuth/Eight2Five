@@ -37,6 +37,9 @@ export interface AppSettings {
   readonly distanceGreenThresholdSteps: number;
   readonly distanceYellowThresholdSteps: number;
   readonly motionInterpolationEnabled: boolean;
+  readonly mockLivePositionEnabled: boolean;
+  readonly mockLivePositionXSteps: number;
+  readonly mockLivePositionYSteps: number;
   readonly comfortableAnchorRangeMeters: number;
   readonly activeDrillId: string | null;
   readonly selectedDrillSetId: string | null;
@@ -68,6 +71,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   distanceGreenThresholdSteps: DEFAULT_DISTANCE_GREEN_THRESHOLD_STEPS,
   distanceYellowThresholdSteps: DEFAULT_DISTANCE_YELLOW_THRESHOLD_STEPS,
   motionInterpolationEnabled: true,
+  mockLivePositionEnabled: false,
+  mockLivePositionXSteps: 0,
+  mockLivePositionYSteps: 0,
   comfortableAnchorRangeMeters: DEFAULT_COMFORTABLE_ANCHOR_RANGE_METERS,
   activeDrillId: null,
   selectedDrillSetId: null,
@@ -98,6 +104,9 @@ export const APP_PREFERENCE_KEYS = Object.freeze([
   "distanceGreenThresholdSteps",
   "distanceYellowThresholdSteps",
   "motionInterpolationEnabled",
+  "mockLivePositionEnabled",
+  "mockLivePositionXSteps",
+  "mockLivePositionYSteps",
   "comfortableAnchorRangeMeters",
 ] as const satisfies readonly (keyof AppSettings)[]);
 
@@ -213,6 +222,18 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       candidate.motionInterpolationEnabled,
       DEFAULT_APP_SETTINGS.motionInterpolationEnabled,
     ),
+    mockLivePositionEnabled: booleanOrDefault(
+      candidate.mockLivePositionEnabled,
+      DEFAULT_APP_SETTINGS.mockLivePositionEnabled,
+    ),
+    mockLivePositionXSteps: finiteOrDefault(
+      candidate.mockLivePositionXSteps,
+      DEFAULT_APP_SETTINGS.mockLivePositionXSteps,
+    ),
+    mockLivePositionYSteps: finiteOrDefault(
+      candidate.mockLivePositionYSteps,
+      DEFAULT_APP_SETTINGS.mockLivePositionYSteps,
+    ),
     comfortableAnchorRangeMeters: positiveFiniteOrDefault(
       candidate.comfortableAnchorRangeMeters,
       DEFAULT_APP_SETTINGS.comfortableAnchorRangeMeters,
@@ -241,6 +262,9 @@ export function getEffectiveAppSettings(value: AppSettings): AppSettings {
     showCachedAnchorGeometry: false,
     showComfortableAnchorRange: false,
     showPerimeterStepGrid: false,
+    mockLivePositionEnabled: false,
+    mockLivePositionXSteps: DEFAULT_APP_SETTINGS.mockLivePositionXSteps,
+    mockLivePositionYSteps: DEFAULT_APP_SETTINGS.mockLivePositionYSteps,
   };
 }
 
@@ -287,6 +311,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function booleanOrDefault(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function finiteOrDefault(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function positiveFiniteOrDefault(value: unknown, fallback: number): number {

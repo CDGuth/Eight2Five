@@ -1,11 +1,12 @@
-import type { AppSettings } from "@eight2five/mobile/settings";
+import {
+  DEFAULT_APP_SETTINGS,
+  type AppSettings,
+  type AppSettingsUpdate,
+} from "@eight2five/mobile/settings";
 
 export interface DeveloperModeWriter {
-  update(partial: { developerModeEnabled: boolean }): Promise<AppSettings>;
+  update(partial: AppSettingsUpdate): Promise<AppSettings>;
 }
-
-export const DEVELOPER_MODE_WARNING =
-  "Developer controls can modify PANS anchor positions. Incorrect anchor positions can make reported locations inaccurate. These controls are intended for advanced configuration.";
 
 export async function enableDeveloperMode(
   writer: DeveloperModeWriter,
@@ -16,7 +17,12 @@ export async function enableDeveloperMode(
 export async function disableDeveloperMode(
   writer: DeveloperModeWriter,
 ): Promise<AppSettings> {
-  return await writer.update({ developerModeEnabled: false });
+  return await writer.update({
+    developerModeEnabled: false,
+    mockLivePositionEnabled: false,
+    mockLivePositionXSteps: DEFAULT_APP_SETTINGS.mockLivePositionXSteps,
+    mockLivePositionYSteps: DEFAULT_APP_SETTINGS.mockLivePositionYSteps,
+  });
 }
 
 export function canUseDeveloperControls(settings: AppSettings): boolean {

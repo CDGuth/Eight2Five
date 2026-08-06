@@ -91,10 +91,7 @@ export function DrillListScreen() {
           }
           ListEmptyComponent={
             controller.loading ? null : (
-              <DrillEmptyState
-                terms={controller.terms}
-                onUpload={() => void controller.pickFile()}
-              />
+              <DrillEmptyState onUpload={() => void controller.pickFile()} />
             )
           }
         />

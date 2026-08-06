@@ -65,6 +65,9 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
            distance_green_threshold_steps = ?,
            distance_yellow_threshold_steps = ?,
            motion_interpolation_enabled = ?,
+           mock_live_position_enabled = ?,
+           mock_live_position_x_steps = ?,
+           mock_live_position_y_steps = ?,
            comfortable_anchor_range_meters = ?
        WHERE singleton_id = ?`,
       [
@@ -91,6 +94,9 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         DEFAULT_APP_SETTINGS.distanceGreenThresholdSteps,
         DEFAULT_APP_SETTINGS.distanceYellowThresholdSteps,
         boolToSql(DEFAULT_APP_SETTINGS.motionInterpolationEnabled),
+        boolToSql(DEFAULT_APP_SETTINGS.mockLivePositionEnabled),
+        DEFAULT_APP_SETTINGS.mockLivePositionXSteps,
+        DEFAULT_APP_SETTINGS.mockLivePositionYSteps,
         DEFAULT_APP_SETTINGS.comfortableAnchorRangeMeters,
         1,
       ],
@@ -124,6 +130,9 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          distance_green_threshold_steps,
          distance_yellow_threshold_steps,
          motion_interpolation_enabled,
+         mock_live_position_enabled,
+         mock_live_position_x_steps,
+         mock_live_position_y_steps,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
@@ -161,10 +170,13 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          distance_green_threshold_steps,
          distance_yellow_threshold_steps,
          motion_interpolation_enabled,
+         mock_live_position_enabled,
+         mock_live_position_x_steps,
+         mock_live_position_y_steps,
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
          appearance_mode = excluded.appearance_mode,
          drill_features_enabled = excluded.drill_features_enabled,
@@ -189,6 +201,9 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          distance_green_threshold_steps = excluded.distance_green_threshold_steps,
          distance_yellow_threshold_steps = excluded.distance_yellow_threshold_steps,
          motion_interpolation_enabled = excluded.motion_interpolation_enabled,
+         mock_live_position_enabled = excluded.mock_live_position_enabled,
+         mock_live_position_x_steps = excluded.mock_live_position_x_steps,
+         mock_live_position_y_steps = excluded.mock_live_position_y_steps,
          comfortable_anchor_range_meters = excluded.comfortable_anchor_range_meters,
          active_drill_id = excluded.active_drill_id,
          selected_drill_page_id = excluded.selected_drill_page_id`,
@@ -217,6 +232,9 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         normalized.distanceGreenThresholdSteps,
         normalized.distanceYellowThresholdSteps,
         boolToSql(normalized.motionInterpolationEnabled),
+        boolToSql(normalized.mockLivePositionEnabled),
+        normalized.mockLivePositionXSteps,
+        normalized.mockLivePositionYSteps,
         normalized.comfortableAnchorRangeMeters,
         normalized.activeDrillId,
         normalized.selectedDrillSetId,
@@ -257,6 +275,9 @@ function fromRow(row: AppSettingsRow): AppSettings {
     distanceGreenThresholdSteps: row.distance_green_threshold_steps,
     distanceYellowThresholdSteps: row.distance_yellow_threshold_steps,
     motionInterpolationEnabled: sqliteBoolean(row.motion_interpolation_enabled),
+    mockLivePositionEnabled: sqliteBoolean(row.mock_live_position_enabled),
+    mockLivePositionXSteps: row.mock_live_position_x_steps,
+    mockLivePositionYSteps: row.mock_live_position_y_steps,
     comfortableAnchorRangeMeters: row.comfortable_anchor_range_meters,
     activeDrillId: row.active_drill_id,
     selectedDrillSetId: row.selected_drill_page_id,
@@ -296,6 +317,10 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
       settings.distanceYellowThresholdSteps &&
     row.motion_interpolation_enabled ===
       boolToSql(settings.motionInterpolationEnabled) &&
+    row.mock_live_position_enabled ===
+      boolToSql(settings.mockLivePositionEnabled) &&
+    row.mock_live_position_x_steps === settings.mockLivePositionXSteps &&
+    row.mock_live_position_y_steps === settings.mockLivePositionYSteps &&
     row.comfortable_anchor_range_meters ===
       settings.comfortableAnchorRangeMeters &&
     row.active_drill_id === settings.activeDrillId &&

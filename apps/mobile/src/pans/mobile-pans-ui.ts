@@ -39,14 +39,14 @@ export function connectionStatusViewModel(
         label: "Connecting",
         icon: "connecting",
         tone: "accent",
-        animated: true,
+        animated: false,
       };
     case "reconnecting":
       return {
         label: "Reconnecting",
         icon: "connecting",
         tone: "accent",
-        animated: true,
+        animated: false,
       };
     case "error":
       return {

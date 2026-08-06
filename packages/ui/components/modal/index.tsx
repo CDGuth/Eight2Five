@@ -47,7 +47,7 @@ const modalBackdropStyle = tva({
 });
 
 const modalContentStyle = tva({
-  base: 'bg-background rounded-md overflow-hidden border border-border/80 shadow-hard-2 p-6',
+  base: 'bg-background rounded-2xl overflow-hidden border border-border/80 shadow-hard-2 p-6',
   parentVariants: {
     size: {
       xs: 'w-[60%] max-w-[360px]',
@@ -128,7 +128,7 @@ const ModalBackdrop = React.forwardRef<
 const ModalContent = React.forwardRef<
   React.ComponentRef<typeof UIModal.Content>,
   IModalContentProps
->(function ModalContent({ className, size, ...props }, ref) {
+>(function ModalContent({ className, size, style, ...props }, ref) {
   const { size: parentSize } = useStyleContext(SCOPE);
 
   return (
@@ -139,6 +139,7 @@ const ModalContent = React.forwardRef<
       })}
       exiting={FadeOut.duration(200)}
       {...props}
+      style={[{ borderCurve: 'continuous' }, style]}
       className={modalContentStyle({
         parentVariants: {
           size: parentSize,

@@ -1,5 +1,8 @@
 import React from "react";
+import { BlurTargetView } from "expo-blur";
 import { View, type ViewStyle } from "react-native";
+
+import { FieldBlurTargetContext } from "./field-frosted-surface";
 import {
   useSafeAreaInsets,
   type EdgeInsets,
@@ -154,6 +157,7 @@ export function FieldOverlayLayout({
   dial,
 }: FieldOverlayLayoutProps) {
   const insets = useSafeAreaInsets();
+  const blurTargetRef = React.useRef<View | null>(null);
   const metrics = getFieldOverlayMetrics({
     width,
     height,
@@ -163,38 +167,42 @@ export function FieldOverlayLayout({
   });
 
   return (
-    <View
-      style={{ flex: 1 }}
-      testID={`field-layout-${landscape ? "landscape" : "portrait"}`}
-    >
-      <View style={{ flex: 1 }}>{field}</View>
-      {hud ? (
-        <View
-          pointerEvents="box-none"
-          style={metrics.hudStyle}
-          testID="field-hud-slot"
-        >
-          {hud(metrics)}
-        </View>
-      ) : null}
-      {live ? (
-        <View
-          pointerEvents="box-none"
-          style={metrics.liveStyle}
-          testID="field-live-slot"
-        >
-          {live(metrics.controlDiameter)}
-        </View>
-      ) : null}
-      {dial ? (
-        <View
-          pointerEvents="box-none"
-          style={metrics.dialStyle}
-          testID="field-dial-slot"
-        >
-          {dial(metrics.controlDiameter)}
-        </View>
-      ) : null}
-    </View>
+    <FieldBlurTargetContext.Provider value={blurTargetRef}>
+      <View
+        style={{ flex: 1 }}
+        testID={`field-layout-${landscape ? "landscape" : "portrait"}`}
+      >
+        <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+          {field}
+        </BlurTargetView>
+        {hud ? (
+          <View
+            pointerEvents="box-none"
+            style={metrics.hudStyle}
+            testID="field-hud-slot"
+          >
+            {hud(metrics)}
+          </View>
+        ) : null}
+        {live ? (
+          <View
+            pointerEvents="box-none"
+            style={metrics.liveStyle}
+            testID="field-live-slot"
+          >
+            {live(metrics.controlDiameter)}
+          </View>
+        ) : null}
+        {dial ? (
+          <View
+            pointerEvents="box-none"
+            style={metrics.dialStyle}
+            testID="field-dial-slot"
+          >
+            {dial(metrics.controlDiameter)}
+          </View>
+        ) : null}
+      </View>
+    </FieldBlurTargetContext.Provider>
   );
 }

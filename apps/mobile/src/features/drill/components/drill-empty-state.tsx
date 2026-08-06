@@ -1,5 +1,4 @@
 import { FileUp } from "lucide-react-native";
-import type { DrillTerms } from "@eight2five/mobile/drill";
 import {
   Button,
   ButtonIcon,
@@ -15,13 +14,7 @@ import {
   useEight2FiveTheme,
 } from "@eight2five/ui/theme";
 
-export function DrillEmptyState({
-  terms,
-  onUpload,
-}: {
-  terms: DrillTerms;
-  onUpload(): void;
-}) {
+export function DrillEmptyState({ onUpload }: { onUpload(): void }) {
   const theme = useEight2FiveTheme();
   return (
     <Center style={{ padding: eight2FiveSpacing.xl }}>
@@ -36,17 +29,21 @@ export function DrillEmptyState({
           No drills yet
         </Heading>
         <Text className="text-center" style={{ color: theme.textMuted }}>
-          Upload an Eight2Five drill file to start working with its{" "}
-          {terms.lowercasePlural}.
+          Upload an Eight2Five drill file to start working with it.
         </Text>
         <Button
           variant="link"
+          size="lg"
           onPress={onUpload}
           accessibilityLabel="Upload Drill"
-          className="px-0"
+          className="min-h-12 px-3"
         >
-          <ButtonIcon as={FileUp} style={{ color: theme.accent }} />
-          <ButtonText style={{ color: theme.accent }}>Upload Drill</ButtonText>
+          <ButtonIcon as={FileUp} size="lg" style={{ color: theme.accent }} />
+          <ButtonText
+            style={{ color: theme.accent, fontSize: 17, lineHeight: 22 }}
+          >
+            Upload Drill
+          </ButtonText>
         </Button>
       </VStack>
     </Center>

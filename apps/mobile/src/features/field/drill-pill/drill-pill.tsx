@@ -10,7 +10,6 @@ import type { DrillSet, DrillTerminology } from "@eight2five/mobile/drill";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 import { Divider } from "@eight2five/ui/components/divider";
 import { Text } from "@eight2five/ui/components/text";
-import { VStack } from "@eight2five/ui/components/vstack";
 import {
   eight2FiveRadii,
   eight2FiveSpacing,
@@ -24,6 +23,7 @@ import {
 import { getDrillPillColumnMetrics } from "./drill-pill-layout";
 import { DRILL_SET_ROW_HEIGHT, DrillSetList } from "./drill-set-list";
 import { DrillSetMetricGrid } from "./drill-set-metric-grid";
+import { FrostedFieldSurface } from "../field-frosted-surface";
 
 export function DrillPill({
   width,
@@ -57,7 +57,7 @@ export function DrillPill({
   readonly error?: Error;
   readonly onToggleCounts: () => void;
   readonly onToggleMetric: () => void;
-  readonly onToggleExpanded: () => void;
+  readonly onToggleExpanded?: () => void;
   readonly onSelectIndex: (index: number) => void;
 }) {
   const theme = useEight2FiveTheme();
@@ -77,26 +77,26 @@ export function DrillPill({
     listMaxHeight,
     Math.max(0, pages.length * DRILL_SET_ROW_HEIGHT + 1),
   );
-  const animatedHeight = useSharedValue(expanded ? availableListHeight : 0);
+  const effectiveExpanded = Boolean(onToggleExpanded && expanded);
+  const animatedHeight = useSharedValue(
+    effectiveExpanded ? availableListHeight : 0,
+  );
   React.useEffect(() => {
-    animatedHeight.value = withTiming(expanded ? availableListHeight : 0, {
-      duration: 220,
-      reduceMotion: ReduceMotion.System,
-    });
-  }, [animatedHeight, availableListHeight, expanded]);
+    animatedHeight.value = withTiming(
+      effectiveExpanded ? availableListHeight : 0,
+      {
+        duration: 220,
+        reduceMotion: ReduceMotion.System,
+      },
+    );
+  }, [animatedHeight, availableListHeight, effectiveExpanded]);
   const listStyle = useAnimatedStyle(() => ({ height: animatedHeight.value }));
 
   return (
-    <VStack
+    <FrostedFieldSurface
       accessibilityLabel="Drill controls"
-      style={{
-        width,
-        overflow: "hidden",
-        borderRadius: eight2FiveRadii.lg,
-        borderCurve: "continuous",
-        backgroundColor: theme.surfaceRaised,
-        boxShadow: `0 5px 18px ${theme.shadowStrong}`,
-      }}
+      borderRadius={eight2FiveRadii.lg}
+      style={{ width }}
       testID="drill-pill"
     >
       <DrillSetMetricGrid
@@ -105,7 +105,7 @@ export function DrillPill({
         countDisplayMode={countDisplayMode}
         metricMode={metricMode}
         header
-        expanded={expanded}
+        expanded={effectiveExpanded}
         onToggleCounts={controlsDisabled ? undefined : onToggleCounts}
         onToggleMetric={controlsDisabled ? undefined : onToggleMetric}
         onToggleExpanded={controlsDisabled ? undefined : onToggleExpanded}
@@ -134,10 +134,10 @@ export function DrillPill({
           metricMode={metricMode}
           terminology={terminology}
           fieldPreset={fieldPreset}
-          expanded={expanded}
+          expanded={effectiveExpanded}
           onSelectIndex={onSelectIndex}
         />
       </Animated.View>
-    </VStack>
+    </FrostedFieldSurface>
   );
 }

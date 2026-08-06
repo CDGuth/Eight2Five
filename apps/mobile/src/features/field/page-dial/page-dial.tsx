@@ -7,7 +7,12 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import type { DrillTerminology } from "@eight2five/mobile/drill";
-import { useEight2FiveTheme } from "@eight2five/ui/theme";
+import {
+  useEight2FiveTheme,
+  useEight2FiveThemeName,
+} from "@eight2five/ui/theme";
+
+import { FrostedFieldSurface } from "../field-frosted-surface";
 
 import { PageDialCanvas } from "./page-dial-canvas";
 import { PageDialControls } from "./page-dial-controls";
@@ -32,7 +37,6 @@ export function PageDial({
   innerColor,
   backgroundColor,
   foregroundColor,
-  dividerColor,
   onSelectIndex,
   onSelectDrill,
   onSelectPerformer,
@@ -47,12 +51,12 @@ export function PageDial({
   readonly innerColor?: string;
   readonly backgroundColor?: string;
   readonly foregroundColor?: string;
-  readonly dividerColor?: string;
   readonly onSelectIndex: (index: number) => void;
   readonly onSelectDrill?: () => void;
   readonly onSelectPerformer?: () => void;
 }) {
   const theme = useEight2FiveTheme();
+  const themeName = useEight2FiveThemeName();
   const provisionalProgress = useSharedValue(
     normalizePageIndex(Math.max(0, selectedIndex), pageCount),
   );
@@ -85,17 +89,31 @@ export function PageDial({
     [onSelectIndex, pageCount, provisionalProgress, selectedIndex],
   );
 
-  const resolvedInnerColor = innerColor ?? theme.surfaceRaised;
-  const resolvedBackgroundColor = backgroundColor ?? theme.background;
+  const resolvedInnerColor =
+    innerColor ?? colorWithOpacity(theme.surfaceRaised, 0.38);
+  const resolvedBackgroundColor = backgroundColor ?? "transparent";
   const resolvedForegroundColor = foregroundColor ?? theme.text;
-  const resolvedDividerColor = dividerColor ?? theme.border;
 
   return (
     <View
       style={{ width: diameter, height: diameter, overflow: "visible" }}
       testID="page-dial"
     >
+      <FrostedFieldSurface
+        key={`page-dial-surface-${themeName}`}
+        borderRadius={diameter / 2}
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: diameter,
+          height: diameter,
+        }}
+      >
+        <View style={{ flex: 1 }} pointerEvents="none" />
+      </FrostedFieldSurface>
       <PageDialCanvas
+        key={`page-dial-canvas-${themeName}`}
         diameter={diameter}
         pageCount={pageCount}
         provisionalProgress={provisionalProgress}
@@ -104,7 +122,6 @@ export function PageDial({
         innerColor={resolvedInnerColor}
         backgroundColor={resolvedBackgroundColor}
         knobColor={theme.raw.white}
-        dividerColor={resolvedDividerColor}
       />
       <GestureDetector gesture={gesture}>
         <View
@@ -138,4 +155,14 @@ export function PageDial({
       />
     </View>
   );
+}
+
+function colorWithOpacity(color: string, opacity: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return color;
+  const hex = match[1];
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }

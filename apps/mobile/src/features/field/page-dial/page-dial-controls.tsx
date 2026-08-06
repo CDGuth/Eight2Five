@@ -1,4 +1,6 @@
+import type { ViewStyle } from "react-native";
 import { Center } from "@eight2five/ui/components/center";
+import { Divider } from "@eight2five/ui/components/divider";
 import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
@@ -13,6 +15,8 @@ import {
 import {
   getPageDialCardinalPoints,
   getPageDialControlSize,
+  getPageDialDividerSegments,
+  type PageDialLineSegment,
 } from "./page-dial-math";
 
 export function PageDialControls({
@@ -48,6 +52,11 @@ export function PageDialControls({
     proportions.controlCenterOffset,
   );
   const centerDiameter = proportions.centerDiskDiameter;
+  const dividerSegments = getPageDialDividerSegments(
+    diameter,
+    proportions.innerDiskDiameter,
+    centerDiameter,
+  );
   const buttonStyle = (x: number, y: number, disabled = false) => ({
     position: "absolute" as const,
     left: x - buttonSize / 2,
@@ -61,6 +70,14 @@ export function PageDialControls({
 
   return (
     <>
+      {dividerSegments.map((segment, index) => (
+        <Divider
+          key={`page-dial-control-divider-${index}`}
+          orientation="vertical"
+          pointerEvents="none"
+          style={getDividerStyle(segment)}
+        />
+      ))}
       <Pressable
         accessibilityLabel="Select drill"
         accessibilityRole="button"
@@ -111,17 +128,18 @@ export function PageDialControls({
         <Text
           size="xs"
           style={{
-            color: foregroundColor,
+            color: "#FFFFFF",
             fontSize: Math.max(8, diameter * 0.06),
-            opacity: 0.7,
+            opacity: 0.68,
           }}
         >
           {terms.plural}
         </Text>
         <Text
           style={{
-            color: foregroundColor,
+            color: "#FFFFFF",
             fontSize: Math.max(15, diameter * 0.11),
+            opacity: 1,
             lineHeight: Math.max(16, diameter * 0.115),
             fontVariant: ["tabular-nums"],
           }}
@@ -165,4 +183,21 @@ export function PageDialControls({
       </Pressable>
     </>
   );
+}
+
+function getDividerStyle(segment: PageDialLineSegment): ViewStyle {
+  const dx = segment.end.x - segment.start.x;
+  const dy = segment.end.y - segment.start.y;
+  const length = Math.hypot(dx, dy);
+  const midpointX = (segment.start.x + segment.end.x) / 2;
+  const midpointY = (segment.start.y + segment.end.y) / 2;
+  const rotationDegrees = (Math.atan2(dy, dx) * 180) / Math.PI - 90;
+  return {
+    position: "absolute",
+    left: midpointX - 0.5,
+    top: midpointY - length / 2,
+    width: 1,
+    height: length,
+    transform: [{ rotate: `${rotationDegrees}deg` }],
+  };
 }

@@ -131,15 +131,15 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         onPress={onToggleExpanded}
         style={{ width: columns.coordinateWidth }}
       >
-        <HStack className="flex-1 items-center" style={{ gap: 2 }}>
-          <VStack className="flex-1">
+        <HStack className="flex-1 items-center" style={{ gap: 2, height: 48 }}>
+          <VStack className="flex-1 justify-center">
             <Text
               numberOfLines={2}
               maxFontSizeMultiplier={1.4}
               size="xs"
               style={{ color: labelColor, lineHeight: 13 }}
             >
-              Marching Coordinate
+              Coordinate
             </Text>
             <Text
               numberOfLines={2}
@@ -156,11 +156,14 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
                 : "–"}
             </Text>
           </VStack>
-          {onToggleExpanded ? (
+          {header && onToggleExpanded ? (
             <Icon
               as={expanded ? ChevronUp : ChevronDown}
               size="sm"
-              style={{ color: labelColor, marginLeft: eight2FiveSpacing.xs }}
+              style={{
+                color: labelColor,
+                marginLeft: eight2FiveSpacing.xs,
+              }}
             />
           ) : null}
         </HStack>
@@ -185,7 +188,10 @@ function MetricCell({
   readonly modeIndex?: 0 | 1;
 }) {
   const content = (
-    <VStack className={modeIndex === undefined ? undefined : "flex-1"}>
+    <VStack
+      className={modeIndex === undefined ? undefined : "flex-1"}
+      style={{ justifyContent: "center" }}
+    >
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.4}
@@ -212,7 +218,13 @@ function MetricCell({
 
   if (modeIndex === undefined) {
     return (
-      <VStack style={width === undefined ? undefined : { width }}>
+      <VStack
+        style={{
+          height: 48,
+          justifyContent: "center",
+          ...(width === undefined ? null : { width }),
+        }}
+      >
         {content}
       </VStack>
     );
@@ -221,7 +233,11 @@ function MetricCell({
   return (
     <HStack
       className="items-center"
-      style={{ gap: 6, ...(width === undefined ? null : { width }) }}
+      style={{
+        gap: 6,
+        height: 48,
+        ...(width === undefined ? null : { width }),
+      }}
     >
       <VStack style={{ gap: 4 }} accessibilityElementsHidden>
         <Box

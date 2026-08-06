@@ -19,6 +19,7 @@ export default function DrillLayout() {
     <Stack
       screenOptions={{
         orientation: "portrait",
+        headerBackButtonDisplayMode: "minimal",
         headerTintColor: theme.accent,
         headerStyle: { backgroundColor: theme.background },
         headerTitleStyle: {

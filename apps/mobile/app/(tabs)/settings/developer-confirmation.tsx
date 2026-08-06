@@ -1,5 +1,6 @@
-import { DeveloperConfirmationScreen } from "../../../src/features/settings/developer-confirmation-screen";
+import { Redirect } from "expo-router";
 
+/** Legacy route kept only so stale deep links land on the current settings UI. */
 export default function DeveloperConfirmationRoute() {
-  return <DeveloperConfirmationScreen />;
+  return <Redirect href="/(tabs)/settings/developer" />;
 }

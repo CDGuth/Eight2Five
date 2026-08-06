@@ -8,6 +8,7 @@ export default function SettingsLayout() {
     <Stack
       screenOptions={{
         orientation: "portrait",
+        headerBackButtonDisplayMode: "minimal",
         headerTintColor: theme.accent,
         headerStyle: { backgroundColor: theme.background },
         headerTitleStyle: {
@@ -22,10 +23,6 @@ export default function SettingsLayout() {
       <Stack.Screen
         name="developer"
         options={{ title: "Developer Settings" }}
-      />
-      <Stack.Screen
-        name="developer-confirmation"
-        options={{ title: "Enable Developer Mode" }}
       />
       <Stack.Screen name="networks" options={{ title: "PANS Networks" }} />
       <Stack.Screen name="network/[networkId]" options={{ title: "Network" }} />

@@ -10,7 +10,7 @@ export const MOBILE_DATABASE_NAME = MOBILE_DB_NAME;
  * stable, a version mismatch intentionally rebuilds this disposable database
  * rather than carrying migration code for development-only layouts.
  */
-export const MOBILE_SCHEMA_VERSION = 6;
+export const MOBILE_SCHEMA_VERSION = 7;
 
 export const DRILLS_TABLE = "drills";
 export const DRILL_SETS_TABLE = "drill_sets";
@@ -206,6 +206,12 @@ async function createCurrentSchema(db: SQLiteDatabase): Promise<void> {
         ),
       motion_interpolation_enabled INTEGER NOT NULL DEFAULT 1
         CHECK (motion_interpolation_enabled IN (0, 1)),
+      mock_live_position_enabled INTEGER NOT NULL DEFAULT 0
+        CHECK (mock_live_position_enabled IN (0, 1)),
+      mock_live_position_x_steps REAL NOT NULL DEFAULT 0
+        CHECK (mock_live_position_x_steps = mock_live_position_x_steps),
+      mock_live_position_y_steps REAL NOT NULL DEFAULT 0
+        CHECK (mock_live_position_y_steps = mock_live_position_y_steps),
       comfortable_anchor_range_meters REAL NOT NULL DEFAULT 20
         CHECK (comfortable_anchor_range_meters > 0),
       active_drill_id TEXT

@@ -5,6 +5,7 @@ import {
   Activity,
   CircleDotDashed,
   Code2,
+  Crosshair,
   Database,
   Grid3X3,
   MapPinned,
@@ -39,7 +40,10 @@ import {
 } from "../../pans/mobile-pans-context";
 import { buildDeveloperDiagnosticRows } from "./developer-diagnostics";
 import { parseComfortableAnchorRange } from "./comfortable-anchor-range";
-import { disableDeveloperMode } from "./developer-mode-actions";
+import {
+  disableDeveloperMode,
+  enableDeveloperMode,
+} from "./developer-mode-actions";
 import { AnchorNumberInput } from "./standard-anchor-position-form";
 import {
   SettingsMessage,
@@ -66,12 +70,22 @@ export function DeveloperSettingsScreen() {
   const [rssiDraft, setRssiDraft] = React.useState(() =>
     pans.discoveryRssiCutoff.toString(),
   );
+  const [mockXDraft, setMockXDraft] = React.useState(() =>
+    settings.mockLivePositionXSteps.toString(),
+  );
+  const [mockYDraft, setMockYDraft] = React.useState(() =>
+    settings.mockLivePositionYSteps.toString(),
+  );
   const rows = React.useMemo(() => buildDeveloperDiagnosticRows(pans), [pans]);
 
-  const disable = async () => {
+  const setDeveloperMode = async (enabled: boolean) => {
     setOperationError(undefined);
     try {
-      await disableDeveloperMode(settingsStore);
+      if (enabled) {
+        await enableDeveloperMode(settingsStore);
+      } else {
+        await disableDeveloperMode(settingsStore);
+      }
     } catch (cause) {
       setOperationError(
         cause instanceof Error ? cause : new Error(String(cause)),
@@ -141,6 +155,8 @@ export function DeveloperSettingsScreen() {
   };
 
   const rangeValidation = parseComfortableAnchorRange(rangeDraft);
+  const mockX = parseStaticPositionCoordinate(mockXDraft);
+  const mockY = parseStaticPositionCoordinate(mockYDraft);
   const parsedRssi = Number(rssiDraft);
   const validRssi =
     Number.isInteger(parsedRssi) && parsedRssi >= -100 && parsedRssi <= -30;
@@ -154,20 +170,16 @@ export function DeveloperSettingsScreen() {
           </SettingsMessage>
         ) : null}
         <SettingsSection title="Developer Mode">
-          <SettingsValueRow
+          <SettingsSwitchRow
             icon={Code2}
-            title="Developer Mode"
-            description="Advanced PANS configuration controls are hidden."
-            value="Off"
-          />
-          <SettingsNavigationRow
-            icon={Code2}
-            title="Enable Developer Mode"
-            description="Review the anchor-position safety warning first."
-            onPress={() =>
-              router.push("/(tabs)/settings/developer-confirmation")
-            }
-            testID="developer-mode-confirmation-link"
+            title="Developer Settings"
+            description="Show advanced positioning, field, and PANS configuration controls."
+            value={false}
+            onChange={(enabled) => {
+              if (enabled) void setDeveloperMode(true);
+            }}
+            disabled={status !== "ready"}
+            testID="developer-mode-setting"
           />
         </SettingsSection>
         {status === "error" ? (
@@ -213,12 +225,10 @@ export function DeveloperSettingsScreen() {
       <SettingsSection title="Developer Mode">
         <SettingsSwitchRow
           icon={Code2}
-          title="Developer Mode"
-          description="Disabling hides controls and turns overlays off without changing hardware."
+          title="Developer Settings"
+          description="Disabling hides advanced controls and resets developer-only UI overrides."
           value
-          onChange={(enabled) => {
-            if (!enabled) void disable();
-          }}
+          onChange={(enabled) => void setDeveloperMode(enabled)}
           disabled={status !== "ready"}
           testID="developer-mode-setting"
         />
@@ -306,6 +316,72 @@ export function DeveloperSettingsScreen() {
           description="Positions remain local until an explicit confirmed write."
           value={pans.knownAnchors.length.toString()}
         />
+      </SettingsSection>
+
+      <SettingsSection title="Live Position Mock">
+        <SettingsSwitchRow
+          icon={Crosshair}
+          title="Mock live position"
+          description="Replace the field UI's live position with a fixed development coordinate. Hardware status remains real."
+          value={settings.mockLivePositionEnabled}
+          onChange={(mockLivePositionEnabled) =>
+            void settingsStore
+              .update({ mockLivePositionEnabled })
+              .catch((cause) =>
+                setOperationError(
+                  cause instanceof Error ? cause : new Error(String(cause)),
+                ),
+              )
+          }
+          testID="mock-live-position-setting"
+        />
+        {settings.mockLivePositionEnabled ? (
+          <VStack style={{ gap: 12, padding: eight2FiveSpacing.md }}>
+            <AnchorNumberInput
+              label="X (8-to-5 steps from 50)"
+              value={mockXDraft}
+              error={mockX.error}
+              helper="Negative is Side 1; positive is Side 2 when viewed from the front sideline."
+              disabled={false}
+              onChange={setMockXDraft}
+            />
+            <AnchorNumberInput
+              label="Y (8-to-5 steps from front sideline)"
+              value={mockYDraft}
+              error={mockY.error}
+              helper="Zero is the front sideline; positive values move toward the back sideline."
+              disabled={false}
+              onChange={setMockYDraft}
+            />
+            <Button
+              variant="outline"
+              testID="apply-mock-live-position-button"
+              isDisabled={
+                mockX.value === undefined ||
+                mockY.value === undefined ||
+                (mockX.value === settings.mockLivePositionXSteps &&
+                  mockY.value === settings.mockLivePositionYSteps)
+              }
+              onPress={() => {
+                if (mockX.value === undefined || mockY.value === undefined)
+                  return;
+                void settingsStore
+                  .update({
+                    mockLivePositionXSteps: mockX.value,
+                    mockLivePositionYSteps: mockY.value,
+                  })
+                  .catch((cause) =>
+                    setOperationError(
+                      cause instanceof Error ? cause : new Error(String(cause)),
+                    ),
+                  );
+              }}
+            >
+              <ButtonIcon as={Crosshair} />
+              <ButtonText>Apply Mock Position</ButtonText>
+            </Button>
+          </VStack>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Development Storage">
@@ -414,4 +490,18 @@ export function DeveloperSettingsScreen() {
       </SettingsSection>
     </SettingsScreenContainer>
   );
+}
+
+function parseStaticPositionCoordinate(value: string): {
+  readonly value?: number;
+  readonly error?: string;
+} {
+  const normalized = value.trim();
+  if (!normalized) return { error: "Enter a coordinate." };
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return { error: "Enter a finite number." };
+  if (Math.abs(parsed) > 1000) {
+    return { error: "Enter a value between -1000 and 1000 steps." };
+  }
+  return { value: parsed };
 }

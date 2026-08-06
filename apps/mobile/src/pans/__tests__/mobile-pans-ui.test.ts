@@ -12,8 +12,8 @@ describe("mobile PANS UI selectors", () => {
   test.each([
     ["connected", "Connected", "connected", false],
     ["scanning", "Searching", "searching", true],
-    ["connecting", "Connecting", "connecting", true],
-    ["reconnecting", "Reconnecting", "connecting", true],
+    ["connecting", "Connecting", "connecting", false],
+    ["reconnecting", "Reconnecting", "connecting", false],
     ["disconnected", "Disconnected", "disconnected", false],
     ["error", "Connection error", "error", false],
   ] as const)("maps %s status", (state, label, icon, animated) => {
