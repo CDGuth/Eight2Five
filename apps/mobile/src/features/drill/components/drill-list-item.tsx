@@ -1,5 +1,10 @@
 import React from "react";
-import { Animated, Pressable as NativePressable, View } from "react-native";
+import {
+  Animated,
+  Pressable as NativePressable,
+  View,
+  type GestureResponderEvent,
+} from "react-native";
 import {
   CircleCheck,
   CirclePlus,
@@ -61,72 +66,90 @@ export const DrillListItem = React.memo(function DrillListItem({
         backgroundColor: theme.surfaceRaised,
       }}
     >
-      <HStack
-        className="items-center"
-        style={{ padding: eight2FiveSpacing.sm }}
+      <NativePressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          active ? `${drill.name} is active` : actionLabels.activate
+        }
+        accessibilityState={{ disabled: busy, selected: active }}
+        disabled={busy}
+        onPress={() => {
+          if (!active) onToggleActive();
+        }}
+        style={({ pressed }) => ({
+          opacity: busy ? 0.55 : pressed ? 0.8 : 1,
+        })}
       >
-        {DrillIcon ? (
-          <VStack
-            className="items-center justify-center"
-            style={{
-              width: 40,
-              height: 48,
-              marginRight: eight2FiveSpacing.sm,
-            }}
-          >
-            <Icon as={DrillIcon} size="lg" style={{ color: theme.text }} />
+        <HStack
+          className="items-center"
+          style={{ padding: eight2FiveSpacing.sm }}
+        >
+          {DrillIcon ? (
+            <VStack
+              className="items-center justify-center"
+              style={{
+                width: 40,
+                height: 48,
+                marginRight: eight2FiveSpacing.sm,
+              }}
+            >
+              <Icon as={DrillIcon} size="lg" style={{ color: theme.text }} />
+            </VStack>
+          ) : null}
+          <VStack className="flex-1" style={{ gap: 2 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: theme.text,
+                fontFamily: eight2FiveFonts.styleSemibold,
+              }}
+            >
+              {drill.name}
+            </Text>
+            <Text size="sm" style={{ color: theme.textMuted }}>
+              {countLabel}
+            </Text>
           </VStack>
-        ) : null}
-        <VStack className="flex-1" style={{ gap: 2 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: theme.text,
-              fontFamily: eight2FiveFonts.styleSemibold,
-            }}
-          >
-            {drill.name}
-          </Text>
-          <Text size="sm" style={{ color: theme.textMuted }}>
-            {countLabel}
-          </Text>
-        </VStack>
-        <HStack style={{ gap: eight2FiveSpacing.xs }}>
-          <DrillActionButton
-            label={actionLabels.info}
-            icon={Info}
-            disabled={busy}
-            onPress={onOpenInfo}
-            iconColor={theme.text}
-          />
-          <DrillActionButton
-            label={actionLabels.performer}
-            icon={CircleUserRound}
-            disabled={busy}
-            onPress={onSelectPerformer}
-            iconColor={theme.text}
-          />
-          <NativePressable
-            onPress={onToggleActive}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={
-              active ? actionLabels.deactivate : actionLabels.activate
-            }
-            accessibilityState={{ disabled: busy, selected: active }}
-            hitSlop={4}
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: busy ? 0.45 : pressed ? 0.6 : 1,
-            })}
-          >
-            <AnimatedSelectionIcon active={active} color={theme.accent} />
-          </NativePressable>
+          <HStack style={{ gap: eight2FiveSpacing.xs }}>
+            <DrillActionButton
+              label={actionLabels.info}
+              icon={Info}
+              disabled={busy}
+              onPress={onOpenInfo}
+              iconColor={theme.text}
+            />
+            <DrillActionButton
+              label={actionLabels.performer}
+              icon={CircleUserRound}
+              disabled={busy}
+              onPress={onSelectPerformer}
+              iconColor={theme.text}
+            />
+            <NativePressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onToggleActive();
+              }}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={
+                active ? actionLabels.deactivate : actionLabels.activate
+              }
+              accessibilityState={{ disabled: busy, selected: active }}
+              hitSlop={4}
+              style={({ pressed }) => ({
+                width: 46,
+                height: 46,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: busy ? 0.45 : pressed ? 0.6 : 1,
+              })}
+            >
+              <AnimatedSelectionIcon active={active} color={theme.accent} />
+            </NativePressable>
+          </HStack>
         </HStack>
-      </HStack>
+      </NativePressable>
     </Card>
   );
 });
@@ -146,22 +169,25 @@ function DrillActionButton({
 }) {
   return (
     <NativePressable
-      onPress={onPress}
+      onPress={(event: GestureResponderEvent) => {
+        event.stopPropagation();
+        onPress();
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
       hitSlop={6}
       style={({ pressed }) => ({
-        width: 40,
-        height: 40,
+        width: 42,
+        height: 42,
         alignItems: "center",
         justifyContent: "center",
         opacity: disabled ? 0.45 : pressed ? 0.6 : 1,
       })}
     >
       <View pointerEvents="none">
-        <Icon as={icon} size={22} style={{ color: iconColor }} />
+        <Icon as={icon} size={24} style={{ color: iconColor }} />
       </View>
     </NativePressable>
   );
@@ -201,8 +227,8 @@ function AnimatedSelectionIcon({
     <View
       pointerEvents="none"
       style={{
-        width: 28,
-        height: 28,
+        width: 30,
+        height: 30,
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -214,7 +240,7 @@ function AnimatedSelectionIcon({
           transform: [{ scale: plusScale }],
         }}
       >
-        <Icon as={CirclePlus} size={28} style={{ color }} />
+        <Icon as={CirclePlus} size={30} style={{ color }} />
       </Animated.View>
       <Animated.View
         style={{
@@ -223,7 +249,7 @@ function AnimatedSelectionIcon({
           transform: [{ scale: checkScale }],
         }}
       >
-        <Icon as={CircleCheck} size={28} style={{ color }} />
+        <Icon as={CircleCheck} size={30} style={{ color }} />
       </Animated.View>
     </View>
   );

@@ -60,7 +60,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
 
   return (
     <HStack
-      className="items-center"
+      className="items-stretch"
       style={{
         gap: columns.gap,
         paddingHorizontal: columns.horizontalPadding,
@@ -83,7 +83,12 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleCounts ? "auto" : "none"}
         onPress={onToggleCounts}
-        style={{ width: columns.countWidth, height: 48 }}
+        style={{
+          width: columns.countWidth,
+          minHeight: 48,
+          alignSelf: "stretch",
+          justifyContent: "center",
+        }}
       >
         <SwitchingMetricCell
           displayKey={count.key}
@@ -104,7 +109,12 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleMetric ? "auto" : "none"}
         onPress={onToggleMetric}
-        style={{ width: columns.metricWidth, height: 48 }}
+        style={{
+          width: columns.metricWidth,
+          minHeight: 48,
+          alignSelf: "stretch",
+          justifyContent: "center",
+        }}
       >
         <SwitchingMetricCell
           displayKey={metric.key}
@@ -125,9 +135,14 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleExpanded ? "auto" : "none"}
         onPress={onToggleExpanded}
-        style={{ width: columns.coordinateWidth, height: 48 }}
+        style={{
+          width: columns.coordinateWidth,
+          minHeight: 48,
+          alignSelf: "stretch",
+          justifyContent: "center",
+        }}
       >
-        <HStack className="flex-1 items-center" style={{ gap: 2, height: 48 }}>
+        <HStack className="items-center" style={{ gap: 2, minHeight: 48 }}>
           <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
             <Text
               maxFontSizeMultiplier={1.4}
@@ -177,7 +192,8 @@ function MetricCell({
   return (
     <VStack
       style={{
-        height: 48,
+        minHeight: 48,
+        alignSelf: "stretch",
         justifyContent: "center",
         ...(width === undefined ? null : { width }),
       }}

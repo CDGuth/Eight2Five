@@ -208,9 +208,9 @@ function LivePositionHeader({
           coordinate={coordinate}
           color={theme.text}
           mutedColor={theme.textMuted}
-          fontSize={compact ? 13 : 18}
-          lineHeight={compact ? 16 : 22}
-          iconSize={compact ? 12 : 15}
+          fontSize={compact ? 15 : 18}
+          lineHeight={compact ? 18 : 22}
+          iconSize={compact ? 13 : 15}
         />
       </VStack>
     </HStack>
