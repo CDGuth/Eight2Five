@@ -62,6 +62,9 @@ export function LivePositionSquare({
     yellowThresholdSteps,
   });
   const distanceColor = colorForDistanceTone(distance.tone, theme);
+  const horizontalPadding = Math.max(10, diameter * 0.09);
+  const rowGap = eight2FiveSpacing.sm;
+  const iconColumnWidth = 44;
 
   const radius = Math.min(eight2FiveRadii.lg, diameter * 0.16);
   return (
@@ -71,28 +74,38 @@ export function LivePositionSquare({
       testID="live-position-square"
     >
       <VStack className="flex-1">
-        <LivePositionHeader
-          live={live}
-          fieldPreset={fieldPreset}
-          compact={diameter < 140}
-          coordinateRoundingSteps={coordinateRoundingSteps}
-          onOpenTagConnection={onOpenTagConnection}
-        />
+        <VStack style={{ flex: 2 }}>
+          <LivePositionHeader
+            live={live}
+            fieldPreset={fieldPreset}
+            compact
+            horizontalPadding={horizontalPadding}
+            gap={rowGap}
+            coordinateRoundingSteps={coordinateRoundingSteps}
+            onOpenTagConnection={onOpenTagConnection}
+          />
+        </VStack>
         <Divider style={{ backgroundColor: theme.border }} />
         <HStack
-          className="flex-1 items-center"
+          className="items-center"
           style={{
-            gap: eight2FiveSpacing.sm,
-            paddingHorizontal: Math.max(10, diameter * 0.09),
+            flex: 1,
+            gap: rowGap,
+            paddingHorizontal: horizontalPadding,
           }}
         >
-          <Icon
-            as={RulerDimensionLine}
-            size="lg"
-            style={{ color: distanceColor }}
-          />
+          <HStack
+            className="items-center justify-center"
+            style={{ width: iconColumnWidth, height: iconColumnWidth }}
+          >
+            <Icon
+              as={RulerDimensionLine}
+              size="lg"
+              style={{ color: distanceColor }}
+            />
+          </HStack>
           <Text
-            className="flex-1 text-right"
+            className="flex-1"
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.75}
@@ -144,12 +157,16 @@ function LivePositionHeader({
   live,
   fieldPreset,
   compact = false,
+  horizontalPadding,
+  gap,
   coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
   readonly live: FieldLivePositionState;
   readonly fieldPreset: FieldPresetId;
   readonly compact?: boolean;
+  readonly horizontalPadding?: number;
+  readonly gap?: number;
   readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
@@ -163,8 +180,8 @@ function LivePositionHeader({
     <HStack
       className="flex-1 items-center"
       style={{
-        gap: compact ? 6 : eight2FiveSpacing.sm,
-        paddingHorizontal: compact ? 8 : 12,
+        gap: gap ?? (compact ? 6 : eight2FiveSpacing.sm),
+        paddingHorizontal: horizontalPadding ?? (compact ? 8 : 12),
         paddingVertical: 8,
       }}
     >
@@ -177,9 +194,9 @@ function LivePositionHeader({
           coordinate={coordinate}
           color={theme.text}
           mutedColor={theme.textMuted}
-          fontSize={compact ? 15 : 18}
-          lineHeight={compact ? 18 : 22}
-          iconSize={compact ? 13 : 15}
+          fontSize={compact ? 13 : 18}
+          lineHeight={compact ? 16 : 22}
+          iconSize={compact ? 12 : 15}
         />
       </VStack>
     </HStack>

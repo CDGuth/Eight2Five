@@ -83,10 +83,7 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         }
         pointerEvents={onToggleCounts ? "auto" : "none"}
         onPress={onToggleCounts}
-        style={{
-          width: columns.countWidth,
-          paddingLeft: columns.horizontalPadding,
-        }}
+        style={{ width: columns.countWidth }}
       >
         <SwitchingMetricCell
           displayKey={count.key}
