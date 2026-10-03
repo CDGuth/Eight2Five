@@ -86,7 +86,7 @@
     "@react-native-community/datetimepicker": "^9.1.0",
     "@react-stately/toggle": "^3.10.1",
     "ai": "^6.0.214",
-    "expo-document-picker": "~57.0.1",
+    "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.1",
     "expo-glass-effect": "~57.0.1",
     "expo-image-picker": "~57.0.6",
