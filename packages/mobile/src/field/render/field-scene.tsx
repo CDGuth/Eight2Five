@@ -21,6 +21,7 @@ import type {
 import type { FieldRenderPalette } from "./field-render-tokens";
 import type { DrillRenderScene } from "../../drill/render-scene";
 import { FieldDrillLayer } from "./field-drill-layer";
+import { FieldStickyYardNumberLayer } from "./field-sticky-yard-number-layer";
 
 interface FieldSceneProps {
   readonly camera: FieldCamera;
@@ -35,6 +36,8 @@ interface FieldSceneProps {
   readonly guidanceVisible: boolean;
   readonly anchors: readonly FieldAnchorGeometry[];
   readonly anchorOverlayOptions: FieldAnchorOverlayOptions;
+  readonly showFiveYardNumbers: boolean;
+  readonly showStickyYardNumbers: boolean;
   readonly showPerimeterStepGrid: boolean;
   readonly showAuxiliaryFieldMarks: boolean;
 }
@@ -52,6 +55,8 @@ export function FieldScene({
   guidanceVisible,
   anchors,
   anchorOverlayOptions,
+  showFiveYardNumbers,
+  showStickyYardNumbers,
   showPerimeterStepGrid,
   showAuxiliaryFieldMarks,
 }: FieldSceneProps) {
@@ -69,38 +74,53 @@ export function FieldScene({
   });
 
   return (
-    <Group transform={cameraTransform}>
-      <FieldStaticLayer
-        template={template}
-        paths={paths}
-        metersPerPixel={camera.metersPerPixel}
-        palette={palette}
-        perspective={perspective}
-        showPerimeterStepGrid={showPerimeterStepGrid}
-        showAuxiliaryFieldMarks={showAuxiliaryFieldMarks}
-      />
-      <FieldAnchorLayer
-        anchors={anchors}
-        options={anchorOverlayOptions}
-        metersPerPixel={camera.metersPerPixel}
-        palette={palette}
-      />
-      <FieldDrillLayer
-        scene={drillScene}
-        fallbackTargetPosition={targetPosition}
-        metersPerPixel={camera.metersPerPixel}
-        palette={palette}
-        perspective={perspective}
-      />
-      {guidanceVisible && targetPosition ? (
-        <FieldGuidanceLayer
-          livePosition={livePosition}
-          targetPosition={targetPosition}
+    <>
+      <Group transform={cameraTransform}>
+        <FieldStaticLayer
+          template={template}
+          paths={paths}
           metersPerPixel={camera.metersPerPixel}
-          color={palette.guidance}
+          canvasSize={canvasSize}
+          palette={palette}
+          perspective={perspective}
+          showFiveYardNumbers={showFiveYardNumbers}
+          showPerimeterStepGrid={showPerimeterStepGrid}
+          showAuxiliaryFieldMarks={showAuxiliaryFieldMarks}
         />
-      ) : null}
-      <FieldPositionLayer livePosition={livePosition} palette={palette} />
-    </Group>
+        <FieldAnchorLayer
+          anchors={anchors}
+          options={anchorOverlayOptions}
+          metersPerPixel={camera.metersPerPixel}
+          palette={palette}
+        />
+        <FieldDrillLayer
+          scene={drillScene}
+          fallbackTargetPosition={targetPosition}
+          guidanceOverlay={
+            guidanceVisible && targetPosition ? (
+              <FieldGuidanceLayer
+                livePosition={livePosition}
+                targetPosition={targetPosition}
+                metersPerPixel={camera.metersPerPixel}
+                color={palette.guidance}
+              />
+            ) : null
+          }
+          metersPerPixel={camera.metersPerPixel}
+          palette={palette}
+          perspective={perspective}
+        />
+        <FieldPositionLayer livePosition={livePosition} palette={palette} />
+      </Group>
+      <FieldStickyYardNumberLayer
+        camera={camera}
+        canvasSize={canvasSize}
+        template={template}
+        palette={palette}
+        perspective={perspective}
+        showFiveYardNumbers={showFiveYardNumbers}
+        visible={showStickyYardNumbers}
+      />
+    </>
   );
 }

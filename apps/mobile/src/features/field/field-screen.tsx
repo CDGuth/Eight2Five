@@ -193,12 +193,17 @@ export function FieldScreen({
             guidanceVisible={guidanceVisible}
             anchors={anchors}
             anchorOverlayOptions={anchorOverlayOptions}
+            showFiveYardNumbers={controller.settings.showFiveYardNumbers}
+            showStickyYardNumbers={controller.settings.showStickyYardNumbers}
             showAuxiliaryFieldMarks={
               controller.settings.showAuxiliaryFieldMarks
             }
             showPerimeterStepGrid={
               controller.settings.developerModeEnabled &&
               controller.settings.showPerimeterStepGrid
+            }
+            perimeterGridYardLineCount={
+              controller.settings.perimeterGridYardLineCount
             }
           />
         }

@@ -2,8 +2,6 @@ import React from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   BluetoothConnected,
-  Edit3,
-  Network,
   Signal,
   SignalHigh,
   SignalLow,
@@ -11,14 +9,9 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react-native";
-import {
-  Button,
-  ButtonIcon,
-  ButtonText,
-} from "@eight2five/ui/components/button";
+import { Button, ButtonIcon } from "@eight2five/ui/components/button";
 import { HStack } from "@eight2five/ui/components/hstack";
 import { Icon } from "@eight2five/ui/components/icon";
-import { Input, InputField } from "@eight2five/ui/components/input";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { ScrollView } from "@eight2five/ui/components/scroll-view";
 import { Text } from "@eight2five/ui/components/text";
@@ -36,14 +29,12 @@ import {
   type SignalStrength,
 } from "../../pans/mobile-pans-ui";
 import { ConnectionStatusRow } from "./connection-status-row";
+import { NetworkDeviceManager } from "./network-device-manager";
 import { ownTagDiscoveryWhileFocused } from "./tag-connection-lifecycle";
 import {
   SettingsMessage,
-  SettingsNavigationRow,
   SettingsScreenContainer,
   SettingsSection,
-  SettingsSelectRow,
-  SettingsValueRow,
 } from "./settings-components";
 
 const SIGNAL_ICONS: Record<SignalStrength, typeof Signal> = {
@@ -57,11 +48,7 @@ export function TagConnectionScreen() {
   return <FocusedTagConnectionContent />;
 }
 
-/**
- * Shared route/modal entry point. Modal content owns discovery for its mounted
- * lifetime instead of depending on navigation focus, which keeps it usable
- * when rendered through the field HUD modal portal.
- */
+/** Shared route/modal entry point. Mounted modal content owns discovery itself. */
 export function TagConnectionContent({
   modal = false,
 }: {
@@ -75,7 +62,6 @@ export function TagConnectionContent({
 }
 
 function FocusedTagConnectionContent() {
-  const router = useRouter();
   const store = useMobilePansStore();
   const snapshot = useMobilePansSnapshot();
   const [lifecycleError, setLifecycleError] = React.useState<Error>();
@@ -92,12 +78,7 @@ function FocusedTagConnectionContent() {
     }, [snapshot.initialization, store]),
   );
 
-  return (
-    <TagConnectionBody
-      lifecycleError={lifecycleError}
-      onOpenNetworks={() => router.push("/(tabs)/settings/networks" as never)}
-    />
-  );
+  return <TagConnectionBody lifecycleError={lifecycleError} />;
 }
 
 function MountedTagConnectionContent() {
@@ -105,14 +86,16 @@ function MountedTagConnectionContent() {
   const snapshot = useMobilePansSnapshot();
   const [lifecycleError, setLifecycleError] = React.useState<Error>();
 
-  React.useEffect(() => {
-    return ownTagDiscoveryWhileFocused(
-      store,
-      snapshot.initialization === "ready",
-      store.getSnapshot().connectionState === "connected",
-      setLifecycleError,
-    );
-  }, [snapshot.initialization, store]);
+  React.useEffect(
+    () =>
+      ownTagDiscoveryWhileFocused(
+        store,
+        snapshot.initialization === "ready",
+        store.getSnapshot().connectionState === "connected",
+        setLifecycleError,
+      ),
+    [snapshot.initialization, store],
+  );
 
   return <TagConnectionBody modal lifecycleError={lifecycleError} />;
 }
@@ -120,12 +103,11 @@ function MountedTagConnectionContent() {
 function TagConnectionBody({
   modal = false,
   lifecycleError,
-  onOpenNetworks,
 }: {
   readonly modal?: boolean;
   readonly lifecycleError?: Error;
-  readonly onOpenNetworks?: () => void;
 }) {
+  const router = useRouter();
   const theme = useEight2FiveTheme();
   const store = useMobilePansStore();
   const snapshot = useMobilePansSnapshot();
@@ -133,27 +115,14 @@ function TagConnectionBody({
   const developerMode = settings.developerModeEnabled;
   const [operation, setOperation] = React.useState(false);
   const [error, setError] = React.useState<Error>();
-  const [labelEdit, setLabelEdit] = React.useState<{
-    readonly deviceId?: string;
-    readonly value: string;
-  }>({ value: "" });
   const candidates = React.useMemo(
     () =>
       selectVisibleDiscoveries(snapshot.discoveries, {
-        developerMode,
+        developerMode: false,
         cutoff: snapshot.discoveryRssiCutoff,
-      }),
-    [developerMode, snapshot.discoveries, snapshot.discoveryRssiCutoff],
+      }).filter((device) => device.presence?.role === "tag"),
+    [snapshot.discoveries, snapshot.discoveryRssiCutoff],
   );
-
-  const selectedLabel =
-    snapshot.rememberedTag?.lastKnownConfig?.label ??
-    snapshot.rememberedTag?.label ??
-    "";
-  const labelDraft =
-    labelEdit.deviceId === snapshot.rememberedTag?.id
-      ? labelEdit.value
-      : selectedLabel;
 
   const run = async (action: () => Promise<void>) => {
     if (operation) return;
@@ -203,148 +172,32 @@ function TagConnectionBody({
         ) : null}
       </SettingsSection>
 
-      <SettingsSection title="Nearby Tags">
-        {candidates.length === 0 ? (
-          <Text
-            style={{ color: theme.textMuted, padding: eight2FiveSpacing.md }}
-          >
-            {snapshot.connectionState === "scanning"
-              ? "Looking for nearby tags…"
-              : "No nearby tags meet the signal requirement."}
-          </Text>
-        ) : (
-          candidates.map((device) => {
-            const strength = signalStrengthForRssi(
-              device.rssi,
-              snapshot.discoveryRssiCutoff,
-            );
-            const role = device.presence?.role;
-            return (
-              <Pressable
-                key={device.transportDeviceId}
-                testID={`select-tag-${device.transportDeviceId}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Connect to ${device.name ?? "nearby tag"}`}
-                disabled={operation || (!developerMode && role !== "tag")}
-                onPress={() =>
-                  void run(async () => {
-                    if (role === "tag") {
-                      await store.selectConfigureAndConnectTag(
-                        device.transportDeviceId,
-                      );
-                    } else if (developerMode) {
-                      await store.persistDiscoveredAnchor(
-                        device.transportDeviceId,
-                      );
-                    }
-                  })
-                }
-              >
-                <HStack
-                  className="items-center"
-                  style={{ gap: 12, padding: eight2FiveSpacing.md }}
-                >
-                  {developerMode ? (
-                    <Text
-                      style={{
-                        color: theme.textMuted,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {device.rssi} dBm
-                    </Text>
-                  ) : (
-                    <Icon
-                      as={SIGNAL_ICONS[strength]}
-                      style={{ color: theme.accent }}
-                    />
-                  )}
-                  <VStack className="flex-1">
-                    <Text style={{ color: theme.text }}>
-                      {device.name ?? "Unnamed tag"}
-                    </Text>
-                    {developerMode ? (
-                      <Text
-                        size="sm"
-                        selectable
-                        style={{ color: theme.textMuted }}
-                      >
-                        {role ?? "unknown"} · {device.transportDeviceId}
-                      </Text>
-                    ) : null}
-                  </VStack>
-                </HStack>
-              </Pressable>
-            );
-          })
-        )}
-      </SettingsSection>
-
       {developerMode ? (
-        <SettingsSection title="Advanced">
-          <SettingsSelectRow<string>
-            icon={Network}
-            title="Active network"
-            description="A selected network is verified on tags during connection."
-            value={snapshot.activeNetworkId ?? "none"}
-            choices={[
-              { label: "None", value: "none" },
-              ...snapshot.networks.map((network) => ({
-                label: network.name,
-                value: network.id,
-              })),
-            ]}
-            onChange={(value) =>
-              void run(() =>
-                store.setActiveNetwork(value === "none" ? undefined : value),
-              )
-            }
-            disabled={operation}
-            testID="active-network-setting"
-          />
-          {!modal && onOpenNetworks ? (
-            <SettingsNavigationRow
-              icon={Network}
-              title="Manage networks and anchors"
-              onPress={onOpenNetworks}
-              testID="network-management-link"
+        <SettingsSection title="Networks & Devices">
+          <VStack style={{ padding: eight2FiveSpacing.md }}>
+            <NetworkDeviceManager
+              onConnectTag={(transportDeviceId) =>
+                store.selectConfigureAndConnectTag(transportDeviceId)
+              }
+              onEditAnchorPosition={(anchorId) =>
+                router.push(`/(tabs)/settings/anchor/${anchorId}` as never)
+              }
             />
-          ) : null}
-          {snapshot.rememberedTag ? (
-            <VStack style={{ gap: 10, padding: eight2FiveSpacing.md }}>
-              <Input>
-                <InputField
-                  value={labelDraft}
-                  maxLength={16}
-                  accessibilityLabel="Broadcast name"
-                  onChangeText={(value) =>
-                    setLabelEdit({
-                      deviceId: snapshot.rememberedTag?.id,
-                      value,
-                    })
-                  }
-                />
-              </Input>
-              <Button
-                variant="outline"
-                testID="rename-selected-tag-button"
-                isDisabled={operation}
-                onPress={() =>
-                  void run(() => store.renameSelectedTag(labelDraft))
-                }
-              >
-                <ButtonIcon as={Edit3} />
-                <ButtonText>Change Broadcast Name</ButtonText>
-              </Button>
-              <SettingsValueRow
-                icon={Network}
-                title="Device ID"
-                value={snapshot.rememberedTag.transportDeviceId}
-              />
-            </VStack>
-          ) : null}
+          </VStack>
         </SettingsSection>
-      ) : null}
+      ) : (
+        <NearbyTagList
+          candidates={candidates}
+          cutoff={snapshot.discoveryRssiCutoff}
+          scanning={snapshot.connectionState === "scanning"}
+          disabled={operation}
+          onSelect={(transportDeviceId) =>
+            void run(() =>
+              store.selectConfigureAndConnectTag(transportDeviceId),
+            )
+          }
+        />
+      )}
 
       {snapshot.connectionState === "error" ? (
         <HStack style={{ gap: 10 }}>
@@ -371,6 +224,60 @@ function TagConnectionBody({
     >
       {content}
     </ScrollView>
+  );
+}
+
+function NearbyTagList({
+  candidates,
+  cutoff,
+  scanning,
+  disabled,
+  onSelect,
+}: {
+  readonly candidates: ReturnType<typeof selectVisibleDiscoveries>;
+  readonly cutoff: number;
+  readonly scanning: boolean;
+  readonly disabled: boolean;
+  readonly onSelect: (transportDeviceId: string) => void;
+}) {
+  const theme = useEight2FiveTheme();
+  return (
+    <SettingsSection title="Nearby Tags">
+      {candidates.length === 0 ? (
+        <Text style={{ color: theme.textMuted, padding: eight2FiveSpacing.md }}>
+          {scanning
+            ? "Looking for nearby tags…"
+            : "No nearby tags meet the signal requirement."}
+        </Text>
+      ) : (
+        candidates.map((device) => {
+          const strength = signalStrengthForRssi(device.rssi, cutoff);
+          return (
+            <Pressable
+              key={device.transportDeviceId}
+              testID={`select-tag-${device.transportDeviceId}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Connect to ${device.name ?? "nearby tag"}`}
+              disabled={disabled}
+              onPress={() => onSelect(device.transportDeviceId)}
+            >
+              <HStack
+                className="items-center"
+                style={{ gap: 12, padding: eight2FiveSpacing.md }}
+              >
+                <Icon
+                  as={SIGNAL_ICONS[strength]}
+                  style={{ color: theme.accent }}
+                />
+                <Text className="flex-1" style={{ color: theme.text }}>
+                  {device.name ?? "Unnamed tag"}
+                </Text>
+              </HStack>
+            </Pressable>
+          );
+        })
+      )}
+    </SettingsSection>
   );
 }
 

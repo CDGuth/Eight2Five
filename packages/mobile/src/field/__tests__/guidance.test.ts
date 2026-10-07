@@ -23,13 +23,13 @@ describe("field guidance", () => {
     expect(guidance.yLabel).toBe("3 steps toward the back sideline");
   });
 
-  test("spells a singular displacement as one step", () => {
+  test("formats a singular displacement numerically", () => {
     const guidance = calculateFieldGuidance(
       drillGridPointToFieldPoint({ xSteps: 0, ySteps: 0 }),
       drillGridPointToFieldPoint({ xSteps: 1, ySteps: 1 }),
     );
-    expect(guidance.xLabel).toBe("one step toward Side 2");
-    expect(guidance.yLabel).toBe("one step toward the back sideline");
+    expect(guidance.xLabel).toBe("1 step toward Side 2");
+    expect(guidance.yLabel).toBe("1 step toward the back sideline");
   });
 
   test("uses front-sideline wording for negative Y and no phone heading", () => {

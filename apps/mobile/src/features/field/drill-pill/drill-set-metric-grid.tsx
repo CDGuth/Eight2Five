@@ -12,11 +12,7 @@ import { Icon } from "@eight2five/ui/components/icon";
 import { Pressable } from "@eight2five/ui/components/pressable";
 import { Text } from "@eight2five/ui/components/text";
 import { VStack } from "@eight2five/ui/components/vstack";
-import {
-  eight2FiveFonts,
-  eight2FiveSpacing,
-  useEight2FiveTheme,
-} from "@eight2five/ui/theme";
+import { eight2FiveFonts, useEight2FiveTheme } from "@eight2five/ui/theme";
 import type { TransitionMetricMode } from "@eight2five/mobile/settings";
 
 import type {
@@ -62,13 +58,14 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
     <HStack
       className="items-stretch"
       style={{
-        gap: columns.gap,
         paddingHorizontal: columns.horizontalPadding,
         paddingVertical: header ? 10 : 8,
       }}
     >
       <MetricCell
         width={columns.setWidth}
+        marginRight={columns.setToCountGap}
+        visualScale={columns.visualScale}
         label={presentation.term}
         value={presentation.set}
         labelColor={labelColor}
@@ -86,12 +83,14 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         style={{
           width: columns.countWidth,
           minHeight: 48,
+          marginRight: columns.countToMetricGap,
           alignSelf: "stretch",
           justifyContent: "center",
         }}
       >
         <SwitchingMetricCell
           displayKey={count.key}
+          visualScale={columns.visualScale}
           label={count.label}
           value={count.value}
           labelColor={labelColor}
@@ -112,12 +111,14 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
         style={{
           width: columns.metricWidth,
           minHeight: 48,
+          marginRight: columns.metricToCoordinateGap,
           alignSelf: "stretch",
           justifyContent: "center",
         }}
       >
         <SwitchingMetricCell
           displayKey={metric.key}
+          visualScale={columns.visualScale}
           label={metric.label}
           value={metric.value}
           labelColor={labelColor}
@@ -142,12 +143,21 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
           justifyContent: "center",
         }}
       >
-        <HStack className="items-center" style={{ gap: 2, minHeight: 48 }}>
+        <HStack
+          className="items-center"
+          style={{
+            gap: header && onToggleExpanded ? columns.coordinateChevronGap : 0,
+            minHeight: 48,
+          }}
+        >
           <VStack className="flex-1 justify-center" style={{ minWidth: 0 }}>
             <Text
               maxFontSizeMultiplier={1.4}
-              size="xs"
-              style={{ color: labelColor, lineHeight: 13 }}
+              style={{
+                color: labelColor,
+                fontSize: 10 * columns.visualScale,
+                lineHeight: 13 * columns.visualScale,
+              }}
             >
               Coordinate
             </Text>
@@ -155,19 +165,16 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
               coordinate={presentation.coordinate}
               color={valueColor}
               mutedColor={labelColor}
-              fontSize={14}
-              lineHeight={17}
-              iconSize={12}
+              fontSize={14 * columns.visualScale}
+              lineHeight={17 * columns.visualScale}
+              iconSize={12 * columns.visualScale}
             />
           </VStack>
           {header && onToggleExpanded ? (
             <Icon
               as={expanded ? ChevronUp : ChevronDown}
               size="sm"
-              style={{
-                color: labelColor,
-                marginLeft: eight2FiveSpacing.xs,
-              }}
+              style={{ color: labelColor }}
             />
           ) : null}
         </HStack>
@@ -178,12 +185,16 @@ export const DrillSetMetricGrid = React.memo(function DrillSetMetricGrid({
 
 function MetricCell({
   width,
+  marginRight = 0,
+  visualScale,
   label,
   value,
   labelColor,
   valueColor,
 }: {
   readonly width?: number;
+  readonly marginRight?: number;
+  readonly visualScale: number;
   readonly label: string;
   readonly value: string;
   readonly labelColor: string;
@@ -195,10 +206,12 @@ function MetricCell({
         minHeight: 48,
         alignSelf: "stretch",
         justifyContent: "center",
+        marginRight,
         ...(width === undefined ? null : { width }),
       }}
     >
       <MetricText
+        visualScale={visualScale}
         label={label}
         value={value}
         labelColor={labelColor}
@@ -210,6 +223,7 @@ function MetricCell({
 
 function SwitchingMetricCell({
   displayKey,
+  visualScale,
   label,
   value,
   labelColor,
@@ -218,6 +232,7 @@ function SwitchingMetricCell({
   testID,
 }: {
   readonly displayKey: string;
+  readonly visualScale: number;
   readonly label: string;
   readonly value: string;
   readonly labelColor: string;
@@ -238,6 +253,7 @@ function SwitchingMetricCell({
         testID={testID}
       >
         <MetricText
+          visualScale={visualScale}
           label={label}
           value={value}
           labelColor={labelColor}
@@ -296,11 +312,13 @@ function ModeIndicator({
 }
 
 function MetricText({
+  visualScale,
   label,
   value,
   labelColor,
   valueColor,
 }: {
+  readonly visualScale: number;
   readonly label: string;
   readonly value: string;
   readonly labelColor: string;
@@ -311,8 +329,11 @@ function MetricText({
       <Text
         numberOfLines={2}
         maxFontSizeMultiplier={1.4}
-        size="xs"
-        style={{ color: labelColor, lineHeight: 13 }}
+        style={{
+          color: labelColor,
+          fontSize: 10 * visualScale,
+          lineHeight: 13 * visualScale,
+        }}
       >
         {label}
       </Text>
@@ -322,8 +343,8 @@ function MetricText({
         style={{
           color: valueColor,
           fontFamily: eight2FiveFonts.utilitySemibold,
-          fontSize: 15,
-          lineHeight: 18,
+          fontSize: 15 * visualScale,
+          lineHeight: 18 * visualScale,
           fontVariant: ["tabular-nums"],
         }}
       >

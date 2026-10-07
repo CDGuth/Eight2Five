@@ -6,7 +6,11 @@ const targetHeightMeters = feetToMeters(6);
 
 describe("yard-number text layout", () => {
   test("centers measured glyph bounds at an exact six-foot visual height", () => {
-    const layout = createYardNumberTextLayout(bounds, targetHeightMeters);
+    const layout = createYardNumberTextLayout(
+      bounds,
+      targetHeightMeters,
+      "back",
+    );
     const transformedCorners = [
       {
         x: (layout.x + bounds.x) * layout.scaleX,
@@ -30,23 +34,29 @@ describe("yard-number text layout", () => {
     ).toBeCloseTo(targetHeightMeters);
   });
 
-  test("counteracts the field Y reflection so every row is upright to the viewer", () => {
-    const layout = createYardNumberTextLayout(bounds, targetHeightMeters);
+  test("orients front and back rows toward their respective sidelines", () => {
+    const front = createYardNumberTextLayout(
+      bounds,
+      targetHeightMeters,
+      "front",
+    );
+    const back = createYardNumberTextLayout(bounds, targetHeightMeters, "back");
 
-    expect(layout.scaleX).toBeGreaterThan(0);
-    expect(layout.scaleY).toBeLessThan(0);
-
-    // FieldScene applies scaleY(-1). Combining that with this local Y
-    // reflection produces an ordinary positive-X/positive-Y screen transform.
-    expect({ x: layout.scaleX, y: -layout.scaleY }).toEqual({
-      x: Math.abs(layout.scaleX),
-      y: Math.abs(layout.scaleY),
-    });
+    expect(front.scaleX).toBeGreaterThan(0);
+    expect(front.scaleY).toBeLessThan(0);
+    expect(back.scaleX).toBeLessThan(0);
+    expect(back.scaleY).toBeGreaterThan(0);
+    expect(front.scaleX).toBeCloseTo(-back.scaleX);
+    expect(front.scaleY).toBeCloseTo(-back.scaleY);
   });
 
   test("rejects unusable visual bounds", () => {
     expect(() =>
-      createYardNumberTextLayout({ ...bounds, height: 0 }, targetHeightMeters),
+      createYardNumberTextLayout(
+        { ...bounds, height: 0 },
+        targetHeightMeters,
+        "back",
+      ),
     ).toThrow(RangeError);
   });
 });

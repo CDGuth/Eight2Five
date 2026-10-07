@@ -80,6 +80,13 @@ Do not use for: refactoring, writing scripts from scratch, debugging business lo
 3. `query-docs` with the selected library ID and the user's full question (not single words)
 4. Answer using the fetched docs
 
+## Task Persistence
+
+- Continue until the requested work is actually complete and verified; do not end the chat turn merely because a command, validation run, or CI check is still running.
+- Use supported blocking wait commands when necessary (for example, `gh pr checks <number> --watch --fail-fast`) and allow sufficient command timeouts. Respect tool restrictions on background work and polling.
+- For merge requests, wait for required checks, perform the merge, verify that the PR is merged, and finish branch cleanup before reporting completion. Opening a PR or enabling auto-merge alone is not completion.
+- Stop early only when the user requests it or a genuine blocker requires user input. Clearly identify the blocker and any unfinished work rather than promising an unverified outcome.
+
 ## Git Workflow
 
 This project follows a disciplined git workflow. The rules below are mandatory.

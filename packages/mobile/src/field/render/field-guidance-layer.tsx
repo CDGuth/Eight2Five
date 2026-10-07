@@ -1,7 +1,8 @@
-import { DashPathEffect, Line } from "@shopify/react-native-skia";
+import { Line } from "@shopify/react-native-skia";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 
 import type { FieldPoint } from "../types";
+import { FIELD_CONNECTOR_STROKE_PX } from "./field-render-tokens";
 
 export function FieldGuidanceLayer({
   livePosition,
@@ -25,11 +26,9 @@ export function FieldGuidanceLayer({
   const opacity = useDerivedValue(() =>
     livePosition.value === null ? 0 : 0.82,
   );
-  const strokeWidth = useDerivedValue(() => metersPerPixel.value * 2.4);
-  const dashIntervals = useDerivedValue(() => [
-    metersPerPixel.value * 8,
-    metersPerPixel.value * 5,
-  ]);
+  const strokeWidth = useDerivedValue(
+    () => metersPerPixel.value * FIELD_CONNECTOR_STROKE_PX,
+  );
   return (
     <Line
       p1={livePoint}
@@ -38,8 +37,6 @@ export function FieldGuidanceLayer({
       opacity={opacity}
       strokeWidth={strokeWidth}
       strokeCap="round"
-    >
-      <DashPathEffect intervals={dashIntervals} />
-    </Line>
+    />
   );
 }

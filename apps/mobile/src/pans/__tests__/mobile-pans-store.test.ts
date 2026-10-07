@@ -1,11 +1,13 @@
 import {
   DEFAULT_MANAGED_NETWORK_SETTINGS,
   InMemoryPansManagerRepository,
+  PERFORMER_TAG_PROFILE,
 } from "@eight2five/mobile/pans-manager";
 import type {
   DiscoveredDeviceSnapshot,
+  HardwareDeviceChanges,
   ManagedDevice,
-  PansPosition,
+  PansConfigurationResult,
   PansInspectionResult,
   PansPositionStreamSample,
   StartPansPositionStreamOptions,
@@ -63,6 +65,35 @@ const ANCHOR_DISCOVERY: DiscoveredDeviceSnapshot = {
 
 describe("MobilePansStore", () => {
   afterEach(() => jest.useRealTimers());
+
+  test("keeps tag selection in connecting state until the position stream starts", async () => {
+    const start = deferred<void>();
+    const harness = await createHarness({
+      streamStart: jest.fn(
+        async (_options: StartPansPositionStreamOptions) => await start.promise,
+      ),
+    });
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+    });
+    const states: string[] = [];
+    store.subscribe(() => states.push(store.getSnapshot().connectionState));
+    await store.initialize();
+
+    const connecting = store.selectConfigureAndConnectTag(
+      DISCOVERY.transportDeviceId,
+    );
+    await flushPromises();
+
+    expect(store.getSnapshot().connectionState).toBe("connecting");
+    expect(states.slice(states.lastIndexOf("connecting"))).not.toContain(
+      "disconnected",
+    );
+    start.resolve();
+    await connecting;
+    expect(store.getSnapshot().connectionState).toBe("connected");
+    await store.dispose();
+  });
 
   test("shares one connection attempt and one position stream", async () => {
     const start = deferred<void>();
@@ -231,7 +262,7 @@ describe("MobilePansStore", () => {
     ).toEqual({ xMeters: -2, yMeters: 4 });
   });
 
-  test("verifies PAN data before associating a fresh deployment", async () => {
+  test("persists only the explicitly selected tag during performer selection", async () => {
     const harness = await createHarness();
     await harness.repository.saveNetwork({
       id: "network-33",
@@ -263,15 +294,12 @@ describe("MobilePansStore", () => {
     await store.selectTag(DISCOVERY.transportDeviceId);
 
     expect(store.getSnapshot().rememberedTag).toMatchObject({
-      networkId: "network-33",
-      lastKnownConfig: { panId: 33 },
+      transportDeviceId: DISCOVERY.transportDeviceId,
+      role: "tag",
     });
-    expect(store.getSnapshot().knownAnchors).toEqual([
-      expect.objectContaining({
-        networkId: "network-33",
-        lastKnownConfig: expect.objectContaining({ panId: 33 }),
-      }),
-    ]);
+    expect(store.getSnapshot().rememberedTag?.networkId).toBeUndefined();
+    expect(store.getSnapshot().knownAnchors).toEqual([]);
+    expect(harness.configurationInspect).not.toHaveBeenCalled();
     await store.dispose();
   });
 
@@ -285,10 +313,16 @@ describe("MobilePansStore", () => {
     await harness.repository.saveDevice(managedAnchor("anchor-2", "network-a"));
     const store = new MobilePansStore({
       createRuntime: async () => harness.runtime,
+      developerModeEnabled: true,
     });
     await store.initialize();
     await store.selectTag(DISCOVERY.transportDeviceId);
     await store.connect();
+    harness.emitDiscoveries([
+      DISCOVERY,
+      { ...ANCHOR_DISCOVERY, transportDeviceId: "transport-anchor-1" },
+      { ...ANCHOR_DISCOVERY, transportDeviceId: "transport-anchor-2" },
+    ]);
 
     const position = { xMeters: 10, yMeters: 20, zMeters: 2 };
     const first = store.writeAnchorPosition("anchor-1", position);
@@ -319,9 +353,6 @@ describe("MobilePansStore", () => {
 
   test("inspects and sparsely repairs the performer profile before streaming", async () => {
     const harness = await createHarness();
-    harness.configurationInspect.mockResolvedValueOnce(
-      correctTagInspection("selection"),
-    );
     harness.configurationInspect.mockResolvedValueOnce({
       ...correctTagInspection("selected"),
       operationMode: {
@@ -358,22 +389,18 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
-  test("matches PAN only when Developer Mode has an active network", async () => {
+  test("does not implicitly assign the performer tag while connecting", async () => {
     const harness = await createHarness();
     const store = new MobilePansStore({
       createRuntime: async () => harness.runtime,
       developerModeEnabled: true,
     });
     await store.initialize();
-    const network = await store.createNetwork("Field", 42);
-    await store.setActiveNetwork(network.id);
+    await store.createNetwork("Field", 42);
     await store.selectTag(DISCOVERY.transportDeviceId);
     await store.connect();
 
-    expect(harness.commissioningAssign).toHaveBeenCalledWith({
-      deviceId: expect.any(String),
-      targetNetworkId: network.id,
-    });
+    expect(harness.commissioningAssign).not.toHaveBeenCalled();
     await store.dispose();
   });
 
@@ -394,7 +421,7 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
-  test("creates, edits, selects, and deletes network profiles locally", async () => {
+  test("creates, edits, and deletes network profiles locally", async () => {
     const harness = await createHarness();
     const store = new MobilePansStore({
       createRuntime: async () => harness.runtime,
@@ -402,15 +429,12 @@ describe("MobilePansStore", () => {
     });
     await store.initialize();
     const created = await store.createNetwork("Field", 100);
-    await store.setActiveNetwork(created.id);
     await store.updateNetwork(created.id, { name: "Stadium", panId: 101 });
     expect(store.getSnapshot()).toMatchObject({
-      activeNetworkId: created.id,
       networks: [expect.objectContaining({ name: "Stadium", panId: 101 })],
     });
     await store.deleteNetwork(created.id);
     expect(store.getSnapshot().networks).toEqual([]);
-    expect(store.getSnapshot().activeNetworkId).toBeUndefined();
     await store.dispose();
   });
 
@@ -438,6 +462,151 @@ describe("MobilePansStore", () => {
     await store.dispose();
   });
 
+  test("repairs production-owned anchor profile fields without changing initiator", async () => {
+    const harness = await createHarness();
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+      developerModeEnabled: true,
+    });
+    await store.initialize();
+    harness.emitDiscoveries([ANCHOR_DISCOVERY]);
+    const mismatched = {
+      ...anchorInspection("anchor-profile"),
+      operationMode: {
+        ...anchorInspection("anchor-profile").operationMode,
+        uwbMode: "passive" as const,
+        ledEnabled: false,
+        firmwareUpdateEnabled: false,
+        initiatorEnabled: true,
+      },
+    };
+    const repaired = {
+      ...anchorInspection("anchor-profile"),
+      operationMode: {
+        ...anchorInspection("anchor-profile").operationMode,
+        initiatorEnabled: true,
+      },
+    };
+    harness.configurationInspect
+      .mockResolvedValueOnce(mismatched)
+      .mockResolvedValueOnce(repaired);
+    harness.configurationApply.mockResolvedValueOnce({
+      deviceId: "anchor-profile",
+      transportDeviceId: ANCHOR_DISCOVERY.transportDeviceId,
+      outcome: "verified",
+      inspected: repaired,
+      writes: [
+        { field: "uwbMode", status: "verified" },
+        { field: "ledEnabled", status: "verified" },
+        { field: "firmwareUpdateEnabled", status: "verified" },
+      ],
+      warnings: [],
+    } as never);
+
+    await store.persistDiscoveredAnchor(ANCHOR_DISCOVERY.transportDeviceId);
+
+    expect(harness.configurationApply).toHaveBeenCalledWith(
+      expect.any(String),
+      {
+        uwbMode: "active",
+        ledEnabled: true,
+        firmwareUpdateEnabled: true,
+      },
+    );
+    expect(harness.configurationApply.mock.calls[0][1]).not.toHaveProperty(
+      "initiatorEnabled",
+    );
+    await store.dispose();
+  });
+
+  test("converts an anchor to the production performer-tag profile", async () => {
+    const harness = await createHarness();
+    await harness.repository.saveDevice(managedAnchor("convert-anchor"));
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+      developerModeEnabled: true,
+    });
+    await store.initialize();
+    harness.emitDiscoveries([
+      {
+        ...ANCHOR_DISCOVERY,
+        transportDeviceId: "transport-convert-anchor",
+      },
+    ]);
+    harness.configurationInspect
+      .mockResolvedValueOnce(anchorInspection("convert-anchor"))
+      .mockResolvedValueOnce(correctTagInspection("convert-anchor"));
+    harness.configurationApply.mockImplementationOnce(
+      async (deviceId: string, changes: HardwareDeviceChanges) => {
+        const device = (await harness.repository.getDevice(deviceId))!;
+        await harness.repository.saveDevice({
+          ...device,
+          role: "tag",
+          lastKnownConfig: { ...PERFORMER_TAG_PROFILE },
+        });
+        return {
+          deviceId,
+          transportDeviceId: device.transportDeviceId,
+          outcome: "verified" as const,
+          inspected: correctTagInspection(deviceId),
+          writes: Object.entries(changes).map(([field, requested]) => ({
+            field,
+            status: "verified" as const,
+            requested,
+            actual: requested,
+          })),
+          warnings: [],
+        };
+      },
+    );
+
+    const saved = await store.convertDeviceToPerformerTag("convert-anchor");
+
+    expect(harness.configurationApply).toHaveBeenCalledWith(
+      "convert-anchor",
+      expect.objectContaining({
+        role: "tag",
+        locationEngineEnabled: true,
+        locationDataMode: 2,
+      }),
+    );
+    expect(saved).toMatchObject({
+      role: "tag",
+      lastKnownConfig: PERFORMER_TAG_PROFILE,
+    });
+    await store.dispose();
+  });
+
+  test("rediscovers a cached anchor before renaming it when the store cache is stale", async () => {
+    const harness = await createHarness();
+    const store = new MobilePansStore({
+      createRuntime: async () => harness.runtime,
+      developerModeEnabled: true,
+    });
+    await harness.repository.saveDevice(managedAnchor("rediscovered-anchor"));
+    await store.initialize();
+    harness.setDiscoveriesSilently([
+      {
+        ...ANCHOR_DISCOVERY,
+        transportDeviceId: "transport-rediscovered-anchor",
+      },
+    ]);
+
+    const saved = await store.renameAnchor(
+      "rediscovered-anchor",
+      "Back Sideline",
+    );
+
+    expect(harness.runtime.discovery.start).toHaveBeenCalled();
+    expect(harness.runtime.discovery.stop).toHaveBeenCalled();
+    expect(harness.configurationApply).toHaveBeenCalledWith(
+      "rediscovered-anchor",
+      { label: "Back Sideline" },
+    );
+    expect(saved.lastKnownConfig?.label).toBe("Back Sideline");
+    await store.dispose();
+  });
+
   test("writes an anchor name to the hardware PANS label and refreshes the cache", async () => {
     const harness = await createHarness();
     const store = new MobilePansStore({
@@ -447,6 +616,9 @@ describe("MobilePansStore", () => {
     await store.initialize();
     await harness.repository.saveDevice(managedAnchor("named-anchor"));
     await store.refreshCachedAnchors();
+    harness.emitDiscoveries([
+      { ...ANCHOR_DISCOVERY, transportDeviceId: "transport-named-anchor" },
+    ]);
 
     const saved = await store.renameAnchor("named-anchor", "  Front 50  ");
 
@@ -471,7 +643,6 @@ describe("MobilePansStore", () => {
     });
     await store.initialize();
     const network = await store.createNetwork("Field", 55);
-    await store.setActiveNetwork(network.id);
     await harness.repository.saveDevice({
       ...managedAnchor("new-initiator", network.id),
       lastKnownConfig: { ...anchorConfig(), initiatorEnabled: false },
@@ -480,6 +651,12 @@ describe("MobilePansStore", () => {
       ...managedAnchor("old-initiator", network.id),
       lastKnownConfig: { ...anchorConfig(), initiatorEnabled: true },
     });
+    harness.emitDiscoveries([
+      {
+        ...ANCHOR_DISCOVERY,
+        transportDeviceId: "transport-new-initiator",
+      },
+    ]);
     harness.configurationInspect.mockResolvedValueOnce({
       ...anchorInspection("new-initiator"),
       operationMode: {
@@ -487,7 +664,7 @@ describe("MobilePansStore", () => {
         initiatorEnabled: true,
       },
     });
-    await store.setAnchorInitiator("new-initiator");
+    await store.setNetworkInitiator(network.id, "new-initiator");
     expect(harness.configurationApply).toHaveBeenCalledWith("new-initiator", {
       initiatorEnabled: true,
     });
@@ -522,58 +699,56 @@ async function createHarness(
     (items: DiscoveredDeviceSnapshot[]) => void
   >();
   const streamStart = options.streamStart ?? jest.fn(async () => undefined);
-  const configurationApply = jest.fn(
-    async (
-      deviceId: string,
-      changes: { position?: PansPosition; label?: string },
-    ) => {
-      const device = (await repository.getDevice(deviceId))!;
-      const baseConfig =
-        device.lastKnownConfig?.role === "anchor"
-          ? device.lastKnownConfig
-          : anchorConfig();
-      await repository.saveDevice({
-        ...device,
+  const configurationApply = jest.fn<
+    Promise<PansConfigurationResult>,
+    [string, HardwareDeviceChanges]
+  >(async (deviceId: string, changes: HardwareDeviceChanges) => {
+    const device = (await repository.getDevice(deviceId))!;
+    const baseConfig =
+      device.lastKnownConfig?.role === "anchor"
+        ? device.lastKnownConfig
+        : anchorConfig();
+    await repository.saveDevice({
+      ...device,
+      ...(changes.label !== undefined ? { label: changes.label } : {}),
+      lastKnownConfig: {
+        ...baseConfig,
+        ...(changes.position !== undefined
+          ? { position: changes.position }
+          : {}),
         ...(changes.label !== undefined ? { label: changes.label } : {}),
-        lastKnownConfig: {
-          ...baseConfig,
-          ...(changes.position !== undefined
-            ? { position: changes.position }
-            : {}),
-          ...(changes.label !== undefined ? { label: changes.label } : {}),
-        },
-      });
-      if (changes.label !== undefined) {
-        return {
-          deviceId,
-          transportDeviceId: device.transportDeviceId,
-          outcome: "applied" as const,
-          writes: [
-            {
-              field: "label",
-              status: "verified" as const,
-              requested: changes.label,
-              actual: changes.label,
-            },
-          ],
-          warnings: [],
-        };
-      }
+      },
+    });
+    if (changes.label !== undefined) {
       return {
         deviceId,
         transportDeviceId: device.transportDeviceId,
-        outcome: "partial" as const,
+        outcome: "verified",
         writes: [
           {
-            field: "position",
-            status: "written-unverified" as const,
-            requested: changes.position,
+            field: "label",
+            status: "verified",
+            requested: changes.label,
+            actual: changes.label,
           },
         ],
         warnings: [],
       };
-    },
-  );
+    }
+    return {
+      deviceId,
+      transportDeviceId: device.transportDeviceId,
+      outcome: "partial",
+      writes: [
+        {
+          field: "position",
+          status: "written-unverified",
+          requested: changes.position,
+        },
+      ],
+      warnings: [],
+    };
+  });
   const configurationInspect = jest.fn<Promise<PansInspectionResult>, [string]>(
     async (deviceId: string) => correctTagInspection(deviceId),
   );
@@ -637,6 +812,9 @@ async function createHarness(
     emitDiscoveries(next: DiscoveredDeviceSnapshot[]) {
       discoveries = next;
       for (const listener of discoveryListeners) listener(discoveries);
+    },
+    setDiscoveriesSilently(next: DiscoveredDeviceSnapshot[]) {
+      discoveries = next;
     },
     emitSample(sample: PansPositionStreamSample) {
       streamOptions?.onSample(sample);
@@ -754,5 +932,5 @@ function deferred<T>() {
 }
 
 async function flushPromises(): Promise<void> {
-  for (let index = 0; index < 12; index += 1) await Promise.resolve();
+  for (let index = 0; index < 40; index += 1) await Promise.resolve();
 }

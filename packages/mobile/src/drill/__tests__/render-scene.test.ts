@@ -204,9 +204,18 @@ describe("selected-set drill render scene", () => {
       icon: "square",
       labelText: "Flag",
       nameText: "Blue flag",
-      opacity: 1,
+      opacity: 0.5,
     });
     expect(scene.current).toEqual(physicalPoint({ xSteps: 8, ySteps: 8 }));
+    expect(scene.currentEntity).toMatchObject({
+      type: "performer",
+      entityId: 1,
+      labelText: "A",
+      nameText: "Alice",
+      diameterMeters: DEFAULT_PERFORMER_DIAMETER_METERS,
+      opacity: 1,
+      position: physicalPoint({ xSteps: 8, ySteps: 8 }),
+    });
     expect(scene.previous?.geometry.kind).toBe("polyline");
     expect(scene.next?.geometry.kind).toBe("straight");
     expect(scene.previous?.midpoint).toEqual(
@@ -269,6 +278,8 @@ describe("selected-set drill render scene", () => {
     expect(scene.entities[1].labelText).toBeUndefined();
     expect(scene.entities[1].nameText).toBe("Blue flag");
     expect(scene.current).not.toBeNull();
+    expect(scene.currentEntity?.labelText).toBeUndefined();
+    expect(scene.currentEntity?.nameText).toBe("Alice");
     expect(scene.previous).toBeUndefined();
     expect(scene.next).toBeUndefined();
     expect(scene.previousDots).toEqual([]);
@@ -291,6 +302,7 @@ describe("selected-set drill render scene", () => {
     });
 
     expect(scene.current).toBeNull();
+    expect(scene.currentEntity).toBeNull();
     expect(scene.previous).toBeUndefined();
     expect(scene.next).toBeUndefined();
     expect(scene.previousDots).toEqual([]);
@@ -382,8 +394,12 @@ describe("selected-set drill render scene", () => {
     expect(DRILL_MARKER_SIZE_METERS.currentDiameter).toBeCloseTo(1.143);
     expect(DRILL_MARKER_SIZE_METERS.transitionDiameter).toBeCloseTo(0.5715);
     expect(DRILL_MARKER_SIZE_METERS.midpointDiameter).toBeCloseTo(0.28575);
-    expect(LIVE_POSITION_MARKER_SIZE_STEPS).toBe(1.5);
-    expect(LIVE_POSITION_MARKER_DIAMETER_METERS).toBeCloseTo(0.85725);
+    expect(LIVE_POSITION_MARKER_SIZE_STEPS).toBe(
+      DRILL_MARKER_SIZE_STEPS.transitionDiameter,
+    );
+    expect(LIVE_POSITION_MARKER_DIAMETER_METERS).toBeCloseTo(
+      DRILL_MARKER_SIZE_METERS.transitionDiameter,
+    );
     expect(DRILL_MARKER_COLORS).toEqual({
       yellow: COLOR_PRESETS.yellow,
       red: COLOR_PRESETS.red,
@@ -392,13 +408,13 @@ describe("selected-set drill render scene", () => {
     expect(DRILL_RENDER_LAYER_ORDER).toEqual([
       "static",
       "anchors",
+      "guidance",
       "entities",
       "extra-connectors",
       "extra-dots",
       "previous",
       "next",
       "current-target",
-      "guidance",
       "live-position",
     ]);
   });

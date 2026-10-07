@@ -15,6 +15,7 @@ export function CoordinateLinesView({
   fontSize = 14,
   lineHeight = 17,
   iconSize = 13,
+  maxLinesPerAxis = 2,
 }: {
   readonly coordinate: CoordinateLines | null;
   readonly color: string;
@@ -22,6 +23,7 @@ export function CoordinateLinesView({
   readonly fontSize?: number;
   readonly lineHeight?: number;
   readonly iconSize?: number;
+  readonly maxLinesPerAxis?: number;
 }) {
   if (!coordinate) {
     return (
@@ -48,6 +50,7 @@ export function CoordinateLinesView({
         fontSize={fontSize}
         lineHeight={lineHeight}
         iconSize={iconSize}
+        maxLines={maxLinesPerAxis}
       />
       <CoordinateLine
         icon={ArrowUpDown}
@@ -57,6 +60,7 @@ export function CoordinateLinesView({
         fontSize={fontSize}
         lineHeight={lineHeight}
         iconSize={iconSize}
+        maxLines={maxLinesPerAxis}
       />
     </VStack>
   );
@@ -70,6 +74,7 @@ function CoordinateLine({
   fontSize,
   lineHeight,
   iconSize,
+  maxLines,
 }: {
   readonly icon: React.ElementType;
   readonly value: string;
@@ -78,19 +83,19 @@ function CoordinateLine({
   readonly fontSize: number;
   readonly lineHeight: number;
   readonly iconSize: number;
+  readonly maxLines: number;
 }) {
   return (
     <HStack className="items-start" style={{ gap: 4 }}>
-      <Icon
-        as={icon}
-        size={iconSize}
-        style={{
-          color: iconColor,
-          marginTop: Math.max(1, (lineHeight - iconSize) / 2),
-        }}
-      />
+      <HStack
+        className="items-center justify-center"
+        style={{ width: iconSize, height: lineHeight }}
+      >
+        <Icon as={icon} size={iconSize} style={{ color: iconColor }} />
+      </HStack>
       <Text
         className="flex-1"
+        numberOfLines={maxLines}
         style={{
           color,
           fontFamily: eight2FiveFonts.utilitySemibold,

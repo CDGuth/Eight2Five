@@ -1,16 +1,9 @@
 import {
-  assertNetworkProfilePanId,
-  assertUniqueName,
-  assertValidLabel,
-  DEFAULT_MANAGED_NETWORK_SETTINGS,
   DEFAULT_DISCOVERY_RSSI_CUTOFF,
-  deviceFromDiscovery,
-  diffPerformerTagProfile,
   MAX_DISCOVERY_RSSI_CUTOFF,
   MIN_DISCOVERY_RSSI_CUTOFF,
   normalizeManagerError,
   normalizePansManagerSettings,
-  normalizeTransportDeviceId,
   type DiscoveredDeviceSnapshot,
   type ManagedDevice,
   type ManagedNetwork,
@@ -36,18 +29,20 @@ import {
   fieldConnectionState,
   INITIAL_MOBILE_PANS_SNAPSHOT,
   isSelectableTagDiscovery,
-  createLocalId,
   type MobilePansSnapshot,
   type MobilePansStoreOptions,
   type TagConnectionState,
 } from "./mobile-pans-model";
 import { MobilePansPositionPublisher } from "./mobile-pans-position-publisher";
 import { MobilePansConnectionController } from "./mobile-pans-connection-controller";
-import { areDevicesNetworkAssociated } from "./pans-anchor-cache";
 import {
-  persistSelectedTagAndNearbyAnchors,
+  persistSelectedTag,
   sortedCachedAnchors,
 } from "./mobile-pans-device-cache";
+import {
+  MobilePansInventoryController,
+  type MobilePansInventorySnapshot,
+} from "./mobile-pans-inventory-controller";
 
 export {
   pansPositionToFieldPoint,
@@ -73,6 +68,7 @@ export class MobilePansStore {
   private runtime?: MobilePansRuntime;
   private readonly positionPublisher: MobilePansPositionPublisher;
   private readonly connectionController: MobilePansConnectionController;
+  private readonly inventoryController: MobilePansInventoryController;
   private lifecycleGeneration = 0;
   private discoverySubscription?: { remove(): void };
   private discoveryErrorSubscription?: { remove(): void };
@@ -81,7 +77,6 @@ export class MobilePansStore {
   private settings?: PansManagerSettings;
   private rememberedTag?: ManagedDevice;
   private discoveries: readonly DiscoveredDeviceSnapshot[] = EMPTY_DISCOVERIES;
-  private anchorWritePromise?: Promise<void>;
   private hardwareOperationPromise?: Promise<unknown>;
   private manualDiscoveryRequested = false;
   private developerModeEnabled: boolean;
@@ -125,6 +120,19 @@ export class MobilePansStore {
       publish: (snapshot) => this.publish(snapshot),
       publishState: (state, changes) => this.publishState(state, changes),
       prepareTagForStreaming: () => this.prepareSelectedTagForStreaming(),
+    });
+    this.inventoryController = new MobilePansInventoryController({
+      discoveryTimeoutMs: this.discoveryTimeoutMs,
+      now: this.now,
+      schedule: this.schedule,
+      cancel: this.cancel,
+      getRuntime: () => this.runtime,
+      getDiscoveries: () => this.discoveries,
+      isDeveloperModeEnabled: () => this.developerModeEnabled,
+      runHardwareOperation: (action) => this.runHardwareOperation(action),
+      onInventoryChanged: (inventory) => this.publishInventory(inventory),
+      onCommissioningWarning: (commissioningWarning) =>
+        this.publish({ ...this.snapshot, commissioningWarning }),
     });
   }
 
@@ -215,21 +223,19 @@ export class MobilePansStore {
       if (!this.rememberedTag && this.settings.rememberedTagDeviceId) {
         await this.saveRememberedTag(undefined);
       }
-      if (
-        this.settings.activeNetworkId &&
-        !networks.some(
-          (network) => network.id === this.settings?.activeNetworkId,
-        )
-      ) {
+      // Active-network selection was a development-only workflow. Clear any
+      // persisted legacy selection; commissioning now always names a target.
+      if (this.settings.activeNetworkId) {
         await this.saveManagerSettings({ activeNetworkId: undefined });
       }
       this.installRuntimeListeners(runtime, generation);
       this.connectionController.setWantsConnection(Boolean(this.rememberedTag));
       this.publishState(this.rememberedTag ? "disconnected" : "idle", {
         initialization: "ready",
+        managedDevices: devices,
         knownAnchors,
         networks,
-        activeNetworkId: this.settings.activeNetworkId,
+        nativeBuildId: runtime.discovery.getDiagnostics?.().buildId,
         discoveryRssiCutoff: this.settings.discoveryRssiCutoff,
       });
       void this.connectionController.startReconnectLoop();
@@ -300,25 +306,21 @@ export class MobilePansStore {
     if (!isSelectableTagDiscovery(discovery)) {
       throw new Error("Select a compatible, current PANS tag advertisement.");
     }
-    const saved = await persistSelectedTagAndNearbyAnchors(
-      runtime,
-      discovery,
-      this.discoveries,
-      this.now(),
-    );
+    const saved = await persistSelectedTag(runtime, discovery, this.now());
     this.rememberedTag = saved;
     await this.saveRememberedTag(saved.id);
     this.connectionController.setWantsConnection(true);
-    await this.refreshCachedAnchors();
-    this.publishState("disconnected", {
+    await this.inventoryController.refresh();
+    this.publish({
+      ...this.snapshot,
       rememberedTag: saved,
       error: undefined,
     });
   }
 
   async selectConfigureAndConnectTag(transportDeviceId: string): Promise<void> {
+    this.publishState("connecting", { error: undefined });
     await this.selectTag(transportDeviceId);
-    await this.stopDiscovery();
     await this.connect();
   }
 
@@ -360,291 +362,79 @@ export class MobilePansStore {
   }
 
   async renameSelectedTag(label: string): Promise<void> {
-    if (!this.developerModeEnabled) {
-      throw new Error("Developer Mode is required to rename a tag.");
-    }
-    assertValidLabel(label);
-    const runtime = this.requireRuntime();
     const tag = this.rememberedTag;
     if (!tag) throw new Error("Select a tag before changing its name.");
-    await this.runHardwareOperation(async () => {
-      const result = await runtime.configuration.applyConfigurationDiff(
-        tag.id,
-        {
-          label,
-        },
-      );
-      if (
-        result.error ||
-        result.writes.some(
-          (write) => write.status === "failed" || write.status === "mismatch",
-        )
-      ) {
-        throw new Error(
-          result.error?.message ?? "The tag name could not be verified.",
-        );
-      }
-      this.rememberedTag = (await runtime.repository.getDevice(tag.id)) ?? tag;
-      this.publish({ ...this.snapshot, rememberedTag: this.rememberedTag });
-    });
+    await this.renameDevice(tag.id, label);
+  }
+
+  async inspectDevice(deviceId: string): Promise<ManagedDevice> {
+    return await this.inventoryController.inspectDevice(deviceId);
+  }
+
+  async renameDevice(deviceId: string, label: string): Promise<ManagedDevice> {
+    const saved = await this.inventoryController.renameDevice(deviceId, label);
+    if (this.rememberedTag?.id === saved.id) {
+      this.rememberedTag = saved;
+      this.publish({ ...this.snapshot, rememberedTag: saved });
+    }
+    return saved;
   }
 
   async createNetwork(name: string, panId: number): Promise<ManagedNetwork> {
-    const runtime = this.requireDeveloperRuntime();
-    const networks = await runtime.repository.listNetworks();
-    assertUniqueName(
-      name,
-      networks.map((network) => network.name),
-    );
-    assertNetworkProfilePanId(panId);
-    if (networks.some((network) => network.panId === panId)) {
-      throw new Error("A network with this PAN ID already exists.");
-    }
-    const now = this.now();
-    const network = await runtime.repository.saveNetwork({
-      id: createLocalId("network"),
-      name: name.trim(),
-      panId,
-      settings: DEFAULT_MANAGED_NETWORK_SETTINGS,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await this.refreshNetworksAndDevices();
-    return network;
+    return await this.inventoryController.createNetwork(name, panId);
   }
 
   async updateNetwork(
     networkId: string,
     changes: { readonly name: string; readonly panId: number },
   ): Promise<ManagedNetwork> {
-    const runtime = this.requireDeveloperRuntime();
-    const [network, networks] = await Promise.all([
-      runtime.repository.getNetwork(networkId),
-      runtime.repository.listNetworks(),
-    ]);
-    if (!network) throw new Error("The selected network no longer exists.");
-    assertUniqueName(
-      changes.name,
-      networks.filter((item) => item.id !== networkId).map((item) => item.name),
-    );
-    assertNetworkProfilePanId(changes.panId);
-    if (
-      networks.some(
-        (item) => item.id !== networkId && item.panId === changes.panId,
-      )
-    ) {
-      throw new Error("A network with this PAN ID already exists.");
-    }
-    // Profile edits are app-local. Physical nodes change only via explicit assignment.
-    const saved = await runtime.repository.saveNetwork({
-      ...network,
-      name: changes.name.trim(),
-      panId: changes.panId,
-      updatedAt: this.now(),
-    });
-    await this.refreshNetworksAndDevices();
-    return saved;
+    return await this.inventoryController.updateNetwork(networkId, changes);
   }
 
   async deleteNetwork(networkId: string): Promise<void> {
-    const runtime = this.requireDeveloperRuntime();
-    const devices = await runtime.repository.listNetworkDevices(networkId);
-    for (const device of devices) {
-      await runtime.repository.dissociateDevice(
-        networkId,
-        device.id,
-        this.now(),
-      );
-    }
-    await runtime.repository.deleteNetwork(networkId);
-    if (this.settings?.activeNetworkId === networkId) {
-      await this.saveManagerSettings({ activeNetworkId: undefined });
-    }
-    await this.refreshNetworksAndDevices();
-  }
-
-  async setActiveNetwork(networkId: string | undefined): Promise<void> {
-    const runtime = this.requireDeveloperRuntime();
-    if (networkId && !(await runtime.repository.getNetwork(networkId))) {
-      throw new Error("The selected network no longer exists.");
-    }
-    await this.saveManagerSettings({ activeNetworkId: networkId });
-    this.publish({ ...this.snapshot, activeNetworkId: networkId });
+    await this.inventoryController.deleteNetwork(networkId);
   }
 
   async persistDiscoveredAnchor(
     transportDeviceId: string,
     confirmRoleChange = false,
+    targetNetworkId?: string,
   ): Promise<ManagedDevice> {
-    const runtime = this.requireDeveloperRuntime();
-    const discovery = this.discoveries.find(
-      (item) => item.transportDeviceId === transportDeviceId,
-    );
     if (
-      !discovery ||
-      discovery.stale ||
-      discovery.compatibility !== "compatible"
+      confirmRoleChange &&
+      this.rememberedTag?.transportDeviceId === transportDeviceId
     ) {
-      throw new Error("The selected device is no longer available.");
+      await this.forgetTag();
     }
-    const advertisedRole = discovery.presence?.role;
-    if (advertisedRole !== "anchor" && !confirmRoleChange) {
-      throw new Error("Confirm changing this device from a tag to an anchor.");
-    }
-    const devices = await runtime.repository.listDevices();
-    const existing = devices.find(
-      (device) => device.transportDeviceId === transportDeviceId,
-    );
-    let saved = await runtime.repository.saveDevice({
-      ...deviceFromDiscovery(discovery, existing, {
-        id: existing?.id ?? createLocalId("anchor"),
-        now: this.now(),
-      }),
-      role: advertisedRole ?? existing?.role,
+    return await this.inventoryController.persistDiscovery(transportDeviceId, {
+      role: "anchor",
+      confirmRoleChange,
+      targetNetworkId,
     });
-    await runtime.discovery.stop();
-    await this.runHardwareOperation(async () => {
-      const inspection = await runtime.configuration.inspectAndCache(saved.id);
-      if (inspection.operationMode.role !== "anchor") {
-        if (!confirmRoleChange) {
-          throw new Error(
-            "Confirm changing this device from a tag to an anchor.",
-          );
-        }
-        const result = await runtime.configuration.applyConfigurationDiff(
-          saved.id,
-          {
-            role: "anchor",
-            uwbMode: "active",
-            ledEnabled: true,
-            firmwareUpdateEnabled: true,
-            initiatorEnabled: false,
-          },
-        );
-        if (result.error || result.inspected?.operationMode.role !== "anchor") {
-          throw new Error(
-            result.error?.message ?? "The anchor role could not be verified.",
-          );
-        }
-        const reinspection = await runtime.configuration.inspectAndCache(
-          saved.id,
-        );
-        if (reinspection.operationMode.role !== "anchor") {
-          throw new Error(
-            "The anchor role did not persist after reconnecting.",
-          );
-        }
-      }
-      if (this.settings?.activeNetworkId) {
-        const assignment =
-          await runtime.commissioning.assignDeviceToNetworkProfile({
-            deviceId: saved.id,
-            targetNetworkId: this.settings.activeNetworkId,
-          });
-        if (assignment.outcome !== "assigned") {
-          throw new Error(
-            assignment.error?.message ??
-              "The anchor network could not be verified.",
-          );
-        }
-      }
-    });
-    saved = (await runtime.repository.getDevice(saved.id)) ?? saved;
-    await this.refreshNetworksAndDevices();
-    return saved;
   }
 
-  async assignDeviceToActiveNetwork(deviceId: string): Promise<void> {
-    const runtime = this.requireDeveloperRuntime();
-    const targetNetworkId = this.settings?.activeNetworkId;
-    if (!targetNetworkId) throw new Error("Select an active network first.");
-    await this.runHardwareOperation(async () => {
-      const result = await runtime.commissioning.assignDeviceToNetworkProfile({
-        deviceId,
-        targetNetworkId,
-      });
-      if (result.outcome !== "assigned") {
-        throw new Error(result.error?.message ?? "Network assignment failed.");
-      }
-    });
-    await this.refreshNetworksAndDevices();
+  async persistDiscoveredDevice(
+    transportDeviceId: string,
+  ): Promise<ManagedDevice> {
+    return await this.inventoryController.persistDiscovery(transportDeviceId);
   }
 
-  async setAnchorInitiator(anchorId: string): Promise<void> {
-    const runtime = this.requireDeveloperRuntime();
-    const activeNetworkId = this.settings?.activeNetworkId;
-    if (!activeNetworkId) throw new Error("Select an active network first.");
-    const anchors = (
-      await runtime.repository.listNetworkDevices(activeNetworkId)
-    ).filter(
-      (device) =>
-        device.lastKnownConfig?.role === "anchor" || device.role === "anchor",
-    );
-    const selected = anchors.find((anchor) => anchor.id === anchorId);
-    if (!selected)
-      throw new Error("The selected anchor is not in the active network.");
-    const unreachable: string[] = [];
-    await this.runHardwareOperation(async () => {
-      const setResult = await runtime.configuration.applyConfigurationDiff(
-        anchorId,
-        {
-          initiatorEnabled: true,
-        },
-      );
-      if (
-        setResult.error ||
-        setResult.writes.some(
-          (write) => write.status === "mismatch" || write.status === "failed",
-        )
-      ) {
-        throw new Error(
-          setResult.error?.message ?? "Initiator readback failed.",
-        );
-      }
-      for (const prior of anchors.filter((anchor) => anchor.id !== anchorId)) {
-        const reachable = this.discoveries.some(
-          (item) =>
-            !item.stale &&
-            normalizeTransportDeviceId(item.transportDeviceId) ===
-              normalizeTransportDeviceId(prior.transportDeviceId),
-        );
-        if (!reachable) {
-          unreachable.push(
-            prior.lastKnownConfig?.label ?? prior.label ?? prior.id,
-          );
-          continue;
-        }
-        const clearResult = await runtime.configuration.applyConfigurationDiff(
-          prior.id,
-          { initiatorEnabled: false },
-        );
-        if (
-          clearResult.error ||
-          clearResult.writes.some(
-            (write) => write.status === "mismatch" || write.status === "failed",
-          )
-        ) {
-          unreachable.push(
-            prior.lastKnownConfig?.label ?? prior.label ?? prior.id,
-          );
-        }
-      }
-      const verification =
-        await runtime.configuration.inspectAndCache(anchorId);
-      if (
-        verification.operationMode.role !== "anchor" ||
-        !verification.operationMode.initiatorEnabled
-      ) {
-        throw new Error("The selected initiator could not be verified.");
-      }
-    });
-    await this.refreshNetworksAndDevices();
-    this.publish({
-      ...this.snapshot,
-      commissioningWarning: unreachable.length
-        ? `Initiator set, but ${unreachable.length} prior anchor${unreachable.length === 1 ? " was" : "s were"} unreachable and could not be verified.`
-        : undefined,
-    });
+  async convertDeviceToPerformerTag(deviceId: string): Promise<ManagedDevice> {
+    return await this.inventoryController.convertDeviceToPerformerTag(deviceId);
+  }
+
+  async assignDeviceToNetwork(
+    deviceId: string,
+    networkId: string,
+  ): Promise<void> {
+    await this.inventoryController.assignDeviceToNetwork(deviceId, networkId);
+  }
+
+  async setNetworkInitiator(
+    networkId: string,
+    anchorId: string,
+  ): Promise<void> {
+    await this.inventoryController.setNetworkInitiator(networkId, anchorId);
   }
 
   async refreshDiagnostics(): Promise<PansDiagnosticsResult> {
@@ -694,22 +484,10 @@ export class MobilePansStore {
   }
 
   async refreshCachedAnchors(): Promise<readonly ManagedDevice[]> {
-    const runtime = this.requireRuntime();
-    const devices = await runtime.repository.listDevices();
-    const knownAnchors = sortedCachedAnchors(devices);
-    this.publish({ ...this.snapshot, knownAnchors });
-    return knownAnchors;
+    return (await this.inventoryController.refresh()).knownAnchors;
   }
 
   async renameAnchor(anchorId: string, label: string): Promise<ManagedDevice> {
-    if (!this.developerModeEnabled) {
-      throw new ManagerError(
-        "INVALID_CONFIGURATION",
-        "Enable Developer Mode before renaming anchors.",
-      );
-    }
-    const requestedLabel = label.trim();
-    assertValidLabel(requestedLabel);
     const runtime = this.requireRuntime();
     const anchor = await runtime.repository.getDevice(anchorId);
     if (
@@ -718,218 +496,21 @@ export class MobilePansStore {
     ) {
       throw new Error("The selected cached anchor does not exist.");
     }
-    try {
-      await this.runHardwareOperation(async () => {
-        const result = await runtime.configuration.applyConfigurationDiff(
-          anchor.id,
-          { label: requestedLabel },
-        );
-        const write = result.writes.find((item) => item.field === "label");
-        if (
-          result.error ||
-          write?.status === "failed" ||
-          write?.status === "mismatch"
-        ) {
-          throw new ManagerError(
-            result.error?.code ?? "WRITE_FAILED",
-            result.error?.message ?? "The anchor name could not be verified.",
-            { deviceId: anchor.id, operation: "rename anchor" },
-          );
-        }
-      });
-      await this.refreshCachedAnchors();
-      return (await runtime.repository.getDevice(anchor.id)) ?? anchor;
-    } catch (cause) {
-      throw normalizeManagerError(cause, {
-        deviceId: anchor.id,
-        operation: "rename anchor",
-      });
-    }
+    return await this.inventoryController.renameDevice(anchorId, label);
   }
 
   async writeAnchorPosition(
     anchorId: string,
     position: AnchorFieldPosition,
   ): Promise<void> {
-    if (this.anchorWritePromise) {
-      throw new ManagerError(
-        "OPERATION_CANCELLED",
-        "An anchor position write is already in progress.",
-      );
-    }
-    const operation = this.performAnchorPositionWrite(anchorId, position);
-    const tracked = operation.finally(() => {
-      if (this.anchorWritePromise === tracked)
-        this.anchorWritePromise = undefined;
-    });
-    this.anchorWritePromise = tracked;
-    return await tracked;
-  }
-
-  private async performAnchorPositionWrite(
-    anchorId: string,
-    position: AnchorFieldPosition,
-  ): Promise<void> {
-    const runtime = this.requireRuntime();
-    const anchor = await runtime.repository.getDevice(anchorId);
-    if (
-      !anchor ||
-      (anchor.role !== "anchor" && anchor.lastKnownConfig?.role !== "anchor")
-    ) {
-      throw new Error("The selected cached anchor does not exist.");
-    }
-    const cachedPosition =
-      anchor.lastKnownConfig?.role === "anchor"
-        ? anchor.lastKnownConfig.position
-        : undefined;
-    if (
-      cachedPosition?.xMeters === position.xMeters &&
-      cachedPosition.yMeters === position.yMeters &&
-      cachedPosition.zMeters === position.zMeters &&
-      cachedPosition.quality === 100
-    ) {
-      return;
-    }
-    const activeNetworkMatch =
-      this.developerModeEnabled &&
-      this.settings?.activeNetworkId !== undefined &&
-      anchor.networkId === this.settings.activeNetworkId;
-    const connectedTagMatch = Boolean(
-      this.rememberedTag &&
-      this.snapshot.connectionState === "connected" &&
-      areDevicesNetworkAssociated(this.rememberedTag, anchor),
-    );
-    if (!activeNetworkMatch && !connectedTagMatch) {
-      throw new ManagerError(
-        "INVALID_CONFIGURATION",
-        "The anchor is not verified on the active network.",
-        { deviceId: anchor.id, operation: "write anchor position" },
-      );
-    }
-    try {
-      await this.runHardwareOperation(async () => {
-        const result = await runtime.configuration.applyConfigurationDiff(
-          anchor.id,
-          {
-            position: { ...position, quality: 100 },
-          },
-        );
-        const write = result.writes.find((item) => item.field === "position");
-        if (result.error || write?.status !== "written-unverified") {
-          throw new ManagerError(
-            result.error?.code ?? "WRITE_FAILED",
-            result.error?.message ?? "The anchor rejected the position write.",
-            { deviceId: anchor.id, operation: "write anchor position" },
-          );
-        }
-      });
-      await this.refreshCachedAnchors();
-    } catch (cause) {
-      const error = normalizeManagerError(cause, {
-        deviceId: anchor.id,
-        operation: "write anchor position",
-      });
-      throw error;
-    }
+    await this.inventoryController.writeAnchorPosition(anchorId, position);
   }
 
   private async prepareSelectedTagForStreaming(): Promise<void> {
-    const runtime = this.requireRuntime();
     const tag = this.rememberedTag;
     if (!tag) throw new Error("Select a tag before connecting.");
-    await this.runHardwareOperation(async () => {
-      const inspection = await runtime.configuration.inspectAndCache(tag.id);
-      const profileChanges = diffPerformerTagProfile(inspection);
-      let reconnectVerificationRequired = false;
-      let locationModeWrittenUnverified = false;
-      if (Object.keys(profileChanges).length > 0) {
-        const configured = await runtime.configuration.applyConfigurationDiff(
-          tag.id,
-          profileChanges,
-        );
-        if (
-          configured.error ||
-          configured.writes.some(
-            (write) => write.status === "failed" || write.status === "mismatch",
-          )
-        ) {
-          throw new Error(
-            configured.error?.message ??
-              "The performer tag profile could not be verified.",
-          );
-        }
-        reconnectVerificationRequired = configured.writes.length > 0;
-        locationModeWrittenUnverified = configured.writes.some(
-          (write) =>
-            write.field === "locationDataMode" &&
-            write.status === "written-unverified",
-        );
-        if (configured.inspected) {
-          const remaining = diffPerformerTagProfile(configured.inspected);
-          if (
-            configured.inspected.locationDataMode === undefined &&
-            locationModeWrittenUnverified
-          ) {
-            delete remaining.locationDataMode;
-          }
-          if (Object.keys(remaining).length > 0) {
-            throw new Error(
-              "The performer tag profile readback did not match.",
-            );
-          }
-        }
-      }
-      const activeNetworkId = this.developerModeEnabled
-        ? this.settings?.activeNetworkId
-        : undefined;
-      if (activeNetworkId) {
-        const assignment =
-          await runtime.commissioning.assignDeviceToNetworkProfile({
-            deviceId: tag.id,
-            targetNetworkId: activeNetworkId,
-          });
-        if (assignment.outcome !== "assigned") {
-          throw new Error(
-            assignment.error?.message ??
-              "The tag network could not be verified.",
-          );
-        }
-        reconnectVerificationRequired =
-          reconnectVerificationRequired ||
-          Boolean(assignment.configuration?.writes.length);
-      }
-      if (reconnectVerificationRequired) {
-        const reinspection = await runtime.configuration.inspectAndCache(
-          tag.id,
-        );
-        const remaining = diffPerformerTagProfile(reinspection);
-        if (
-          reinspection.locationDataMode === undefined &&
-          locationModeWrittenUnverified
-        ) {
-          delete remaining.locationDataMode;
-        }
-        if (Object.keys(remaining).length > 0) {
-          throw new Error(
-            "The performer tag profile did not persist after reconnecting.",
-          );
-        }
-        if (activeNetworkId) {
-          const activeNetwork =
-            await runtime.repository.getNetwork(activeNetworkId);
-          if (activeNetwork && reinspection.panId !== activeNetwork.panId) {
-            throw new Error(
-              "The active network did not persist after reconnecting.",
-            );
-          }
-        }
-      }
-      // The native PANS gateway exposes no hardware-reset command. Closing the
-      // serialized configuration session here and opening the stream session
-      // below provides the required reconnect/readback boundary.
-      this.rememberedTag =
-        (await runtime.repository.getDevice(tag.id)) ?? this.rememberedTag;
-    });
+    this.rememberedTag =
+      await this.inventoryController.ensurePerformerTagProfile(tag.id);
     this.publish({ ...this.snapshot, rememberedTag: this.rememberedTag });
   }
 
@@ -962,17 +543,12 @@ export class MobilePansStore {
     return await tracked;
   }
 
-  private async refreshNetworksAndDevices(): Promise<void> {
-    const runtime = this.requireRuntime();
-    const [networks, devices] = await Promise.all([
-      runtime.repository.listNetworks(),
-      runtime.repository.listDevices(),
-    ]);
+  private publishInventory(inventory: MobilePansInventorySnapshot): void {
     this.publish({
       ...this.snapshot,
-      networks,
-      knownAnchors: sortedCachedAnchors(devices),
-      activeNetworkId: this.settings?.activeNetworkId,
+      networks: inventory.networks,
+      managedDevices: inventory.devices,
+      knownAnchors: inventory.knownAnchors,
     });
   }
 

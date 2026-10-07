@@ -43,6 +43,12 @@ const config: ExpoConfig = {
   scheme: "eight2five",
   platforms: ["ios", "android"],
   version: "0.1.0",
+  runtimeVersion: {
+    policy: "appVersion",
+  },
+  updates: {
+    url: "https://u.expo.dev/a26bddc3-6439-460b-b15b-51143e499c8a",
+  },
   // Field is the only route that opts into landscape; Drill and Settings
   // apply portrait locks through their nested native stacks.
   orientation: "default",

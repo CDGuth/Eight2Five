@@ -24,11 +24,14 @@ export default function SettingsLayout() {
         name="developer"
         options={{ title: "Developer Settings" }}
       />
-      <Stack.Screen name="networks" options={{ title: "PANS Networks" }} />
-      <Stack.Screen name="network/[networkId]" options={{ title: "Network" }} />
+      <Stack.Screen name="networks" options={{ title: "Networks & Devices" }} />
+      <Stack.Screen
+        name="network/[networkId]"
+        options={{ title: "Networks & Devices" }}
+      />
       <Stack.Screen
         name="network/[networkId]/anchors"
-        options={{ title: "Network Anchors" }}
+        options={{ title: "Networks & Devices" }}
       />
       <Stack.Screen name="anchors" options={{ title: "Cached Anchors" }} />
       <Stack.Screen name="anchor/[anchorId]" options={{ title: "Anchor" }} />

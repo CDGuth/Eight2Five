@@ -5,10 +5,12 @@ import {
   BookOpenText,
   Code2,
   Eye,
+  Hash,
   ListChecks,
   Map,
   Navigation,
   Palette,
+  Pin,
   Radio,
   Route,
   Rows3,
@@ -91,7 +93,7 @@ const DISTANCE_THRESHOLD_VALUES = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
 function distanceThresholdChoices(values: readonly number[]) {
   return values.map((value) => ({
-    label: value === 1 ? "one step" : `${value} steps`,
+    label: value === 1 ? "1 step" : `${value} steps`,
     value: String(value),
   }));
 }
@@ -134,7 +136,7 @@ export function SettingsScreen() {
         </SettingsMessage>
       ) : null}
 
-      <SettingsSection title="PANS">
+      <SettingsSection title="Tag">
         <SettingsNavigationRow
           icon={Radio}
           title="Tag connection"
@@ -219,6 +221,28 @@ export function SettingsScreen() {
           testID="coordinate-rounding-setting"
         />
         <SettingsSwitchRow
+          icon={Hash}
+          title="5-yard line numbers"
+          description="Show yard-line numbers at every 5-yard increment instead of only every 10 yards."
+          value={settings.showFiveYardNumbers}
+          onChange={(showFiveYardNumbers) =>
+            void update({ showFiveYardNumbers })
+          }
+          disabled={disabled}
+          testID="five-yard-numbers-setting"
+        />
+        <SettingsSwitchRow
+          icon={Pin}
+          title="Sticky yard-line numbers"
+          description="Keep the lower row of yard-line numbers visible near the bottom edge while panning and zooming."
+          value={settings.showStickyYardNumbers}
+          onChange={(showStickyYardNumbers) =>
+            void update({ showStickyYardNumbers })
+          }
+          disabled={disabled}
+          testID="sticky-yard-numbers-setting"
+        />
+        <SettingsSwitchRow
           icon={Rows3}
           title="Auxiliary field marks"
           description="Show the short one-yard sideline extensions. Inbounds hash ticks remain visible."
@@ -267,7 +291,7 @@ export function SettingsScreen() {
         <SettingsSelectRow<string>
           icon={RulerDimensionLine}
           title="Yellow distance threshold"
-          description="Show target distance as yellow through this value, then red."
+          description="Show target distance as yellow through this value, then red after that."
           value={String(settings.distanceYellowThresholdSteps)}
           choices={distanceThresholdChoices(
             Array.from(

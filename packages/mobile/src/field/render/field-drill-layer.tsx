@@ -1,5 +1,6 @@
 import React from "react";
 import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular";
+import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
 import {
   Circle,
   DashPathEffect,
@@ -26,6 +27,7 @@ import { resolveCurrentTargetPosition } from "./field-overlay-types";
 import {
   createDrillShapeGeometry,
   getDrillLabelTransformPolicy,
+  getDrillLabelVerticalOffsetUnits,
   getDrillShapeTransformPolicy,
   type DrillShapeIcon,
 } from "./drill-shape-policy";
@@ -33,6 +35,9 @@ import type { FieldRenderPalette } from "./field-render-tokens";
 import {
   DRILL_MARKER_COLORS,
   DRILL_MARKER_SIZE_METERS,
+  FIELD_CONNECTOR_STROKE_PX,
+  FIELD_NUMBER_OPACITY,
+  getClampedFieldTextScale,
 } from "./field-render-tokens";
 import { STANDARD_STEP_METERS } from "../units";
 
@@ -46,8 +51,10 @@ const EMPTY_TRANSITIONS = Object.freeze(
 ) as readonly PhysicalImmediateTransition[];
 const LABEL_FONT_SIZE_PX = 12;
 const LABEL_LINE_HEIGHT_PX = 14;
+const PERFORMER_LABEL_MIN_SCREEN_FONT_SIZE_PX = 15;
+const PERFORMER_LABEL_MAX_SCREEN_FONT_SIZE_PX = 30;
+const ACTIVE_PERFORMER_LABEL_SCALE_MULTIPLIER = 1.25;
 const MARKER_STROKE_METERS = STANDARD_STEP_METERS * 0.12;
-const CONNECTOR_STROKE_PX = 1.25;
 const DASH_LENGTH_METERS = STANDARD_STEP_METERS * 0.25;
 const DASH_GAP_METERS = STANDARD_STEP_METERS * 0.15;
 const EXTRA_TRANSITION_OPACITY = 0.68;
@@ -56,24 +63,27 @@ export interface FieldDrillLayerProps {
   readonly scene?: DrillRenderScene;
   /** Used only for legacy/manual drills that have no complete source document. */
   readonly fallbackTargetPosition?: FieldPoint;
+  readonly guidanceOverlay?: React.ReactNode;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
   readonly perspective: FieldCameraPerspective;
 }
 
 /**
- * Draws the selected-set model in explicit z-order. Static field and anchors
- * are owned by the parent scene; guidance and the live position are drawn
- * after this layer so they remain visible above every drill entity.
+ * Draws the selected-set model in explicit z-order. The optional guidance
+ * overlay is placed above ordinary performer/prop shapes but below their labels
+ * and every current/previous/next set marker.
  */
 export const FieldDrillLayer = React.memo(function FieldDrillLayer({
   scene,
   fallbackTargetPosition,
+  guidanceOverlay,
   metersPerPixel,
   palette,
   perspective,
 }: FieldDrillLayerProps) {
-  const labelFont = useFont(Montserrat_400Regular, LABEL_FONT_SIZE_PX);
+  const propLabelFont = useFont(Montserrat_400Regular, LABEL_FONT_SIZE_PX);
+  const performerLabelFont = useFont(Montserrat_500Medium, LABEL_FONT_SIZE_PX);
   const entities = scene?.entities ?? EMPTY_ENTITIES;
   const previousConnectors = scene?.previousConnectors ?? EMPTY_TRANSITIONS;
   const nextConnectors = scene?.nextConnectors ?? EMPTY_TRANSITIONS;
@@ -88,10 +98,21 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
   return (
     <>
       {entities.map((entity) => (
-        <OrdinaryEntity
-          key={`entity-${entity.entityId}`}
+        <OrdinaryEntityShape
+          key={`entity-shape-${entity.entityId}`}
           entity={entity}
-          labelFont={labelFont}
+          metersPerPixel={metersPerPixel}
+          palette={palette}
+        />
+      ))}
+      {guidanceOverlay}
+      {entities.map((entity) => (
+        <OrdinaryEntityLabel
+          key={`entity-label-${entity.entityId}`}
+          entity={entity}
+          labelFont={
+            entity.type === "performer" ? performerLabelFont : propLabelFont
+          }
           metersPerPixel={metersPerPixel}
           palette={palette}
           perspective={perspective}
@@ -142,22 +163,31 @@ export const FieldDrillLayer = React.memo(function FieldDrillLayer({
         />
       ) : null}
       {targetPoint ? <CurrentTargetMarker point={targetPoint} /> : null}
+      {targetPoint && scene?.currentEntity ? (
+        <EntityLabel
+          entity={scene.currentEntity}
+          font={performerLabelFont}
+          color={palette.fieldLines}
+          perspective={perspective}
+          metersPerPixel={metersPerPixel}
+          markerHalfHeightMeters={DRILL_MARKER_SIZE_METERS.currentDiameter / 2}
+          minimumScreenFontSizePx={PERFORMER_LABEL_MIN_SCREEN_FONT_SIZE_PX}
+          scaleMultiplier={ACTIVE_PERFORMER_LABEL_SCALE_MULTIPLIER}
+          opacityMultiplier={FIELD_NUMBER_OPACITY}
+        />
+      ) : null}
     </>
   );
 });
 
-function OrdinaryEntity({
+function OrdinaryEntityShape({
   entity,
-  labelFont,
   metersPerPixel,
   palette,
-  perspective,
 }: {
   readonly entity: DrillRenderEntity;
-  readonly labelFont: SkFont | null;
   readonly metersPerPixel: SharedValue<number>;
   readonly palette: FieldRenderPalette;
-  readonly perspective: FieldCameraPerspective;
 }) {
   const icon = entity.icon as string;
   const width =
@@ -196,57 +226,89 @@ function OrdinaryEntity({
   const outlineWidth = useDerivedValue(() => metersPerPixel.value);
 
   return (
-    <>
-      <Group
-        transform={transform}
-        origin={transformPolicy.origin}
-        opacity={entity.opacity}
-      >
-        {shapePath ? (
-          <>
-            <Path path={shapePath} color={entity.color} style="fill" />
-            {entity.type === "prop" ? (
-              <Path
-                path={shapePath}
-                color={palette.fieldLines}
-                style="stroke"
-                strokeWidth={outlineWidth}
-                opacity={0.8}
-              />
-            ) : null}
-          </>
-        ) : (
-          <Circle
-            cx={0}
-            cy={0}
-            r={shapeGeometry.kind === "circle" ? shapeGeometry.radius : 0}
-            color={entity.color}
-          />
-        )}
-      </Group>
-      <EntityLabel
-        entity={entity}
-        font={labelFont}
-        metersPerPixel={metersPerPixel}
-        color={palette.fieldLines}
-        perspective={perspective}
-      />
-    </>
+    <Group
+      transform={transform}
+      origin={transformPolicy.origin}
+      opacity={entity.opacity}
+    >
+      {shapePath ? (
+        <>
+          <Path path={shapePath} color={entity.color} style="fill" />
+          {entity.type === "prop" ? (
+            <Path
+              path={shapePath}
+              color={palette.fieldLines}
+              style="stroke"
+              strokeWidth={outlineWidth}
+              opacity={0.8}
+            />
+          ) : null}
+        </>
+      ) : (
+        <Circle
+          cx={0}
+          cy={0}
+          r={shapeGeometry.kind === "circle" ? shapeGeometry.radius : 0}
+          color={entity.color}
+        />
+      )}
+    </Group>
+  );
+}
+
+function OrdinaryEntityLabel({
+  entity,
+  labelFont,
+  metersPerPixel,
+  palette,
+  perspective,
+}: {
+  readonly entity: DrillRenderEntity;
+  readonly labelFont: SkFont | null;
+  readonly metersPerPixel: SharedValue<number>;
+  readonly palette: FieldRenderPalette;
+  readonly perspective: FieldCameraPerspective;
+}) {
+  const height =
+    entity.type === "prop" ? entity.lengthMeters : entity.diameterMeters;
+  return (
+    <EntityLabel
+      entity={entity}
+      font={labelFont}
+      color={palette.fieldLines}
+      perspective={perspective}
+      metersPerPixel={metersPerPixel}
+      markerHalfHeightMeters={height / 2}
+      minimumScreenFontSizePx={
+        entity.type === "performer"
+          ? PERFORMER_LABEL_MIN_SCREEN_FONT_SIZE_PX
+          : undefined
+      }
+      opacityMultiplier={entity.type === "performer" ? FIELD_NUMBER_OPACITY : 1}
+    />
   );
 }
 
 function EntityLabel({
   entity,
   font,
-  metersPerPixel,
   color,
   perspective,
+  metersPerPixel,
+  markerHalfHeightMeters,
+  minimumScreenFontSizePx = 10,
+  scaleMultiplier = 1,
+  opacityMultiplier = 1,
 }: {
   readonly entity: DrillRenderEntity;
   readonly font: SkFont | null;
-  readonly metersPerPixel: SharedValue<number>;
   readonly color: string;
   readonly perspective: FieldCameraPerspective;
+  readonly metersPerPixel: SharedValue<number>;
+  readonly markerHalfHeightMeters: number;
+  readonly minimumScreenFontSizePx?: number;
+  readonly scaleMultiplier?: number;
+  readonly opacityMultiplier?: number;
 }) {
   const lines = React.useMemo(
     () =>
@@ -257,33 +319,68 @@ function EntityLabel({
     [entity.labelText, entity.nameText],
   );
   const labelTransform = useDerivedValue(() => {
-    const labelScale = getDrillLabelTransformPolicy(
-      metersPerPixel.value,
-      perspective,
-    );
+    const scale =
+      getClampedFieldTextScale(
+        metersPerPixel.value,
+        LABEL_FONT_SIZE_PX,
+        minimumScreenFontSizePx,
+        entity.type === "performer"
+          ? PERFORMER_LABEL_MAX_SCREEN_FONT_SIZE_PX
+          : undefined,
+      ) * scaleMultiplier;
+    const labelScale = getDrillLabelTransformPolicy(perspective, scale);
     return [{ scaleX: labelScale.scaleX }, { scaleY: labelScale.scaleY }];
   });
 
-  if (!font || lines.length === 0) return null;
-  const widths = lines.map((line) => font.measureText(line.text).width);
+  const bounds = font ? lines.map((line) => font.measureText(line.text)) : [];
+  const widths = bounds.map((lineBounds) => lineBounds.width);
   const startY = -LABEL_LINE_HEIGHT_PX * (lines.length + 0.15);
+  const lastLineIndex = lines.length - 1;
+  const lastLineBounds = bounds[lastLineIndex];
+  const paintedBottomUnits = lastLineBounds
+    ? startY +
+      lastLineIndex * LABEL_LINE_HEIGHT_PX +
+      lastLineBounds.y +
+      lastLineBounds.height
+    : 0;
+  const labelOffsetTransform = useDerivedValue(() => {
+    const scale =
+      getClampedFieldTextScale(
+        metersPerPixel.value,
+        LABEL_FONT_SIZE_PX,
+        minimumScreenFontSizePx,
+        entity.type === "performer"
+          ? PERFORMER_LABEL_MAX_SCREEN_FONT_SIZE_PX
+          : undefined,
+      ) * scaleMultiplier;
+    const translateY = getDrillLabelVerticalOffsetUnits(
+      scale,
+      markerHalfHeightMeters,
+      paintedBottomUnits,
+    );
+    return [{ translateY }];
+  });
+
+  if (!font || lines.length === 0) return null;
 
   return (
     <Group
       origin={{ x: entity.position.xMeters, y: entity.position.yMeters }}
       transform={labelTransform}
-      opacity={entity.opacity}
+      opacity={entity.opacity * opacityMultiplier}
     >
-      {lines.map((line, index) => (
-        <Text
-          key={line.key}
-          x={entity.position.xMeters - widths[index] / 2}
-          y={entity.position.yMeters + startY + index * LABEL_LINE_HEIGHT_PX}
-          text={line.text}
-          font={font}
-          color={color}
-        />
-      ))}
+      <Group transform={labelOffsetTransform}>
+        {lines.map((line, index) => (
+          <Text
+            key={line.key}
+            x={entity.position.xMeters - widths[index] / 2}
+            y={entity.position.yMeters + startY + index * LABEL_LINE_HEIGHT_PX}
+            text={line.text}
+            font={font}
+            color={color}
+          />
+        ))}
+      </Group>
     </Group>
   );
 }
@@ -321,7 +418,7 @@ function ExtraTransitionConnector({
     [transition.geometry],
   );
   const connectorStrokeWidth = useDerivedValue(
-    () => metersPerPixel.value * CONNECTOR_STROKE_PX,
+    () => metersPerPixel.value * FIELD_CONNECTOR_STROKE_PX,
   );
   return (
     <Path
@@ -358,7 +455,7 @@ function ImmediateTransitionLayer({
   const midpointRadius = DRILL_MARKER_SIZE_METERS.midpointDiameter / 2;
   const centerRadius = DRILL_MARKER_SIZE_METERS.transitionDiameter * 0.18;
   const connectorStrokeWidth = useDerivedValue(
-    () => metersPerPixel.value * CONNECTOR_STROKE_PX,
+    () => metersPerPixel.value * FIELD_CONNECTOR_STROKE_PX,
   );
   const dashIntervals = [DASH_LENGTH_METERS, DASH_GAP_METERS];
   const connectorColor =

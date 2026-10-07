@@ -7,6 +7,7 @@ export * from "./device-sections";
 export * from "./profile-matching";
 export * from "./device-discovery";
 export * from "./performer-tag-profile";
+export * from "./anchor-profile";
 export * from "./PansManagerRepository";
 export * from "./InMemoryPansManagerRepository";
 export * from "./SqlitePansManagerRepository";

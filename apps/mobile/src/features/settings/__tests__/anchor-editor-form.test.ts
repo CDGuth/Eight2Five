@@ -65,13 +65,22 @@ describe("anchor editor form", () => {
     expect(
       validateMarchingAnchorDraft({ ...marching, height: "" }).errors,
     ).toHaveProperty("height");
+    const offField = validateStandardAnchorDraft({
+      reference: "side-1-front-corner",
+      unit: "meters",
+      sideToSideOffset: "-1",
+      frontToBackOffset: "0",
+      height: "1",
+    });
+    expect(offField.errors).toEqual({});
+    expect(offField.position).toBeDefined();
     expect(
       validateStandardAnchorDraft({
-        reference: "side-1-front-corner",
+        reference: "center-field",
         unit: "meters",
-        sideToSideOffset: "-1",
+        sideToSideOffset: "0",
         frontToBackOffset: "0",
-        height: "1",
+        height: "101",
       }).errors,
     ).toHaveProperty("position");
   });

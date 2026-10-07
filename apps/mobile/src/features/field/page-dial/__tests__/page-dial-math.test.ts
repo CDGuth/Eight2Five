@@ -5,6 +5,7 @@ import {
   pageDialAngleIsInValidArc,
   pageDialIndexForProgress,
   pageDialPointForProgress,
+  pageDialPointIsInKnobHitTarget,
   pageDialPointIsInRingHitRegion,
   pageDialProgressForAngle,
   pageDialProgressForPoint,
@@ -114,6 +115,39 @@ describe("page dial math", () => {
       ),
     ).toBe(false);
     expect(pageDialProgressForPoint(center, center, diameter)).toBe(0);
+  });
+
+  test("uses a circular knob hit target exactly 1.5 times the knob diameter", () => {
+    const diameter = 200;
+    const progress = 0.25;
+    const knob = pageDialPointForProgress(progress, diameter);
+    const knobDiameter = diameter * 0.16;
+    const hitRadius = (knobDiameter * 1.5) / 2;
+
+    expect(
+      pageDialPointIsInKnobHitTarget(
+        knob.x + hitRadius - 0.1,
+        knob.y,
+        diameter,
+        progress,
+      ),
+    ).toBe(true);
+    expect(
+      pageDialPointIsInKnobHitTarget(
+        knob.x + hitRadius + 0.1,
+        knob.y,
+        diameter,
+        progress,
+      ),
+    ).toBe(false);
+    expect(
+      pageDialPointIsInKnobHitTarget(
+        knob.x + hitRadius * 0.8,
+        knob.y + hitRadius * 0.8,
+        diameter,
+        progress,
+      ),
+    ).toBe(false);
   });
 
   test("disables unavailable first and last actions", () => {

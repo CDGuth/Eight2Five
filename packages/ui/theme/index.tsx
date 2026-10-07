@@ -9,7 +9,7 @@ import { SourceSans3_700Bold } from '@expo-google-fonts/source-sans-3/700Bold';
 import { COLOR_PRESETS } from '@eight2five/drill-schema';
 import { useFonts } from 'expo-font';
 import React from 'react';
-import { useColorScheme, type ColorSchemeName } from 'react-native';
+import { Appearance, type ColorSchemeName } from 'react-native';
 
 export const eight2FiveDrillColors = COLOR_PRESETS;
 
@@ -98,7 +98,7 @@ function colorWithOpacity(color: `#${string}`, opacity: number): string {
 export const eight2FiveThemes = {
   light: {
     raw: eight2FiveLightColors,
-    background: eight2FiveLightColors.light,
+    background: eight2FiveLightColors.tertiary,
     surface: eight2FiveLightColors.tertiary,
     surfaceRaised: eight2FiveLightColors.white,
     surfaceStrong: eight2FiveLightColors.secondary,
@@ -160,6 +160,26 @@ export function resolveEight2FiveThemeName(
   return systemColorScheme === 'dark' ? 'dark' : 'light';
 }
 
+export function useResolvedEight2FiveThemeName(
+  mode: Eight2FiveThemeMode,
+): Eight2FiveThemeName {
+  const subscribe = React.useCallback(
+    (onStoreChange: () => void) => {
+      if (mode !== 'system') return () => undefined;
+      const subscription = Appearance.addChangeListener(() => onStoreChange());
+      return () => subscription.remove();
+    },
+    [mode],
+  );
+  const systemColorScheme = React.useSyncExternalStore(
+    subscribe,
+    () => Appearance.getColorScheme(),
+    () => null,
+  );
+
+  return resolveEight2FiveThemeName(mode, systemColorScheme);
+}
+
 export function Eight2FiveThemeProvider({
   mode,
   children,
@@ -167,8 +187,7 @@ export function Eight2FiveThemeProvider({
   mode: Eight2FiveThemeMode;
   children: React.ReactNode;
 }) {
-  const systemColorScheme = useColorScheme();
-  const themeName = resolveEight2FiveThemeName(mode, systemColorScheme);
+  const themeName = useResolvedEight2FiveThemeName(mode);
 
   return (
     <Eight2FiveThemeNameContext.Provider value={themeName}>
@@ -179,11 +198,21 @@ export function Eight2FiveThemeProvider({
 
 export function useEight2FiveThemeName(): Eight2FiveThemeName {
   const providedThemeName = React.useContext(Eight2FiveThemeNameContext);
-  const systemColorScheme = useColorScheme();
-  return (
-    providedThemeName ??
-    resolveEight2FiveThemeName('system', systemColorScheme)
+  const subscribe = React.useCallback(
+    (onStoreChange: () => void) => {
+      if (providedThemeName !== undefined) return () => undefined;
+      const subscription = Appearance.addChangeListener(() => onStoreChange());
+      return () => subscription.remove();
+    },
+    [providedThemeName],
   );
+  const fallbackThemeName = React.useSyncExternalStore(
+    subscribe,
+    () =>
+      resolveEight2FiveThemeName('system', Appearance.getColorScheme()),
+    () => 'light' as const,
+  );
+  return providedThemeName ?? fallbackThemeName;
 }
 
 export function useEight2FiveTheme(): Eight2FiveTheme {

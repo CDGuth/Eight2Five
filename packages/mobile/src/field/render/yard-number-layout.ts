@@ -17,13 +17,15 @@ export interface YardNumberTextLayout {
 
 /**
  * Centers measured glyph bounds at the origin and scales their visual height
- * to the schema-defined physical height. The field scene reflects world Y into
- * screen Y, so this layer always reflects text Y once more to keep every yard
- * number upright to the viewer regardless of which sideline row it belongs to.
+ * to the schema-defined physical height. Front- and back-sideline rows are
+ * physically opposed so the bottom of each number faces its nearest sideline,
+ * matching a real football field. Camera perspective then rotates the entire
+ * field naturally instead of re-orienting each number for the viewer.
  */
 export function createYardNumberTextLayout(
   bounds: TextVisualBounds,
   targetHeightMeters: number,
+  side: "front" | "back",
 ): YardNumberTextLayout {
   if (
     !Number.isFinite(targetHeightMeters) ||
@@ -41,11 +43,12 @@ export function createYardNumberTextLayout(
   }
 
   const scale = targetHeightMeters / bounds.height;
+  const orientation = side === "front" ? 1 : -1;
   return Object.freeze({
     x: -bounds.x - bounds.width / 2,
     y: -bounds.y - bounds.height / 2,
-    scaleX: scale,
-    scaleY: -scale,
+    scaleX: scale * orientation,
+    scaleY: -scale * orientation,
     visualWidthMeters: bounds.width * scale,
     visualHeightMeters: bounds.height * scale,
   });

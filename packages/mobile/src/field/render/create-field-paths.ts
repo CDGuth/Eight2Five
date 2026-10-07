@@ -4,12 +4,15 @@ import {
 } from "@eight2five/drill-schema";
 
 import {
+  DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT,
+  FIELD_YARD_LINE_SPACING_YARDS,
+} from "../camera/field-camera-policy";
+import {
   STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
   type StandardFootballFieldTemplate,
 } from "../template";
-import { yardsToMeters } from "../units";
+import { STANDARD_STEPS_PER_FIVE_YARDS, yardsToMeters } from "../units";
 
-const GRID_PADDING_YARDS = 10;
 const PATH_NUMBER_PRECISION = 1_000_000;
 const COORDINATE_EPSILON = 1e-9;
 const FOUR_STEP_INTERVAL = 4;
@@ -37,6 +40,19 @@ export interface FourStepGridPathMetadata {
   readonly horizontalSubdivisionCount: number;
   readonly segmentCount: number;
   readonly clippedToField: true;
+}
+
+export interface PerimeterFourStepGridPathMetadata {
+  readonly spacingSteps: 4;
+  readonly verticalSubdivisionCount: number;
+  readonly horizontalSubdivisionCount: number;
+  readonly segmentCount: number;
+  readonly clippedByFieldBackground: true;
+}
+
+export interface PerimeterBoundaryPathMetadata {
+  readonly segmentCount: 1;
+  readonly usesFourStepStyle: boolean;
 }
 
 export interface YardLinesPathMetadata {
@@ -71,6 +87,8 @@ export interface BoundaryPathMetadata {
 export interface FieldPathCounts {
   readonly stepGrid: MarchingGridPathMetadata;
   readonly perimeterStepGrid: PerimeterMarchingGridPathMetadata;
+  readonly perimeterFourStepGrid: PerimeterFourStepGridPathMetadata;
+  readonly perimeterBoundary: PerimeterBoundaryPathMetadata;
   readonly fourStepGrid: FourStepGridPathMetadata;
   readonly yardLines: YardLinesPathMetadata;
   readonly hashMarks: HashMarksPathMetadata;
@@ -83,8 +101,14 @@ export interface FieldPathCounts {
 export interface FieldPaths {
   /** One marching-grid step, clipped to the physical field. */
   readonly stepGridPath: string;
-  /** One marching-grid step across the 10-yard camera perimeter. */
+  /** One marching-grid step across the configured field perimeter. */
   readonly perimeterStepGridPath: string;
+  /** Four marching-grid steps across the configured field perimeter. */
+  readonly perimeterFourStepGridPath: string;
+  /** Outer edge around the configured perimeter grid. */
+  readonly perimeterBoundaryPath: string;
+  /** Whether the outer edge lands on a standard four-step interval. */
+  readonly perimeterBoundaryUsesFourStepStyle: boolean;
   /** Four marching-grid steps, clipped to the physical field. */
   readonly fourStepGridPath: string;
   readonly yardLinesPath: string;
@@ -105,6 +129,8 @@ export interface FieldPaths {
 
   readonly stepGrid: string;
   readonly perimeterStepGrid: string;
+  readonly perimeterFourStepGrid: string;
+  readonly perimeterBoundary: string;
   readonly fourStepGrid: string;
   readonly yardLines: string;
   readonly hashMarks: string;
@@ -113,7 +139,10 @@ export interface FieldPaths {
   readonly boundary: string;
 }
 
-const PATH_CACHE = new WeakMap<StandardFootballFieldTemplate, FieldPaths>();
+const PATH_CACHE = new WeakMap<
+  StandardFootballFieldTemplate,
+  Map<number, FieldPaths>
+>();
 
 /**
  * Project the active drill schema's marching grid onto the exact physical
@@ -122,8 +151,14 @@ const PATH_CACHE = new WeakMap<StandardFootballFieldTemplate, FieldPaths>();
  */
 export function createFieldPaths(
   template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  perimeterYardLineCount = DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT,
 ): FieldPaths {
-  const cached = PATH_CACHE.get(template);
+  const normalizedPerimeterYardLineCount = Math.max(
+    0,
+    Math.floor(perimeterYardLineCount),
+  );
+  const templateCache = PATH_CACHE.get(template);
+  const cached = templateCache?.get(normalizedPerimeterYardLineCount);
   if (cached) return cached;
 
   const fieldExtent = freezeExtent({
@@ -132,7 +167,9 @@ export function createFieldPaths(
     minYMeters: template.bounds.minYMeters,
     maxYMeters: template.bounds.maxYMeters,
   });
-  const gridPaddingMeters = yardsToMeters(GRID_PADDING_YARDS);
+  const gridPaddingMeters = yardsToMeters(
+    normalizedPerimeterYardLineCount * FIELD_YARD_LINE_SPACING_YARDS,
+  );
   const gridExtent = freezeExtent({
     minXMeters: fieldExtent.minXMeters - gridPaddingMeters,
     maxXMeters: fieldExtent.maxXMeters + gridPaddingMeters,
@@ -170,6 +207,31 @@ export function createFieldPaths(
     perimeterXSteps,
     perimeterYSteps,
     gridExtent,
+  );
+  const perimeterFourStepXSteps = alignedStepIntervalCoordinates(
+    perimeterGridBounds.minXSteps,
+    perimeterGridBounds.maxXSteps,
+    FOUR_STEP_INTERVAL,
+    marchingBounds.minXSteps,
+  );
+  const perimeterFourStepYSteps = alignedStepIntervalCoordinates(
+    perimeterGridBounds.minYSteps,
+    perimeterGridBounds.maxYSteps,
+    FOUR_STEP_INTERVAL,
+    marchingBounds.minYSteps,
+  );
+  const perimeterFourStepGridPath = gridPathFromSteps(
+    template,
+    perimeterFourStepXSteps,
+    perimeterFourStepYSteps,
+    gridExtent,
+  );
+  const perimeterBoundaryPath = rectanglePath(gridExtent);
+  const perimeterPaddingSteps =
+    normalizedPerimeterYardLineCount * STANDARD_STEPS_PER_FIVE_YARDS;
+  const perimeterBoundaryUsesFourStepStyle = isMultipleOfSpacing(
+    perimeterPaddingSteps,
+    FOUR_STEP_INTERVAL,
   );
 
   const fourStepXSteps = stepIntervalCoordinates(
@@ -272,6 +334,18 @@ export function createFieldPaths(
       horizontalLineCount: perimeterYSteps.length,
       clippedByFieldBackground: true,
     }),
+    perimeterFourStepGrid: Object.freeze({
+      spacingSteps: 4,
+      verticalSubdivisionCount: perimeterFourStepXSteps.length,
+      horizontalSubdivisionCount: perimeterFourStepYSteps.length,
+      segmentCount:
+        perimeterFourStepXSteps.length + perimeterFourStepYSteps.length,
+      clippedByFieldBackground: true,
+    }),
+    perimeterBoundary: Object.freeze({
+      segmentCount: 1,
+      usesFourStepStyle: perimeterBoundaryUsesFourStepStyle,
+    }),
     fourStepGrid: Object.freeze({
       spacingSteps: 4,
       verticalSubdivisionCount: fourStepXSteps.length,
@@ -302,6 +376,9 @@ export function createFieldPaths(
   const paths: FieldPaths = Object.freeze({
     stepGridPath,
     perimeterStepGridPath,
+    perimeterFourStepGridPath,
+    perimeterBoundaryPath,
+    perimeterBoundaryUsesFourStepStyle,
     fourStepGridPath,
     yardLinesPath,
     hashMarksPath,
@@ -316,6 +393,8 @@ export function createFieldPaths(
     counts,
     stepGrid: stepGridPath,
     perimeterStepGrid: perimeterStepGridPath,
+    perimeterFourStepGrid: perimeterFourStepGridPath,
+    perimeterBoundary: perimeterBoundaryPath,
     fourStepGrid: fourStepGridPath,
     yardLines: yardLinesPath,
     hashMarks: hashMarksPath,
@@ -323,7 +402,9 @@ export function createFieldPaths(
     sidelineHashMarks: sidelineHashMarksPath,
     boundary: boundaryPath,
   });
-  PATH_CACHE.set(template, paths);
+  const cache = templateCache ?? new Map<number, FieldPaths>();
+  cache.set(normalizedPerimeterYardLineCount, paths);
+  if (!templateCache) PATH_CACHE.set(template, cache);
   return paths;
 }
 
@@ -432,6 +513,25 @@ function stepIntervalCoordinates(
     Math.abs(coordinates[coordinates.length - 1] - maximum) > COORDINATE_EPSILON
   ) {
     coordinates.push(maximum);
+  }
+  return Object.freeze(coordinates);
+}
+
+function alignedStepIntervalCoordinates(
+  minimum: number,
+  maximum: number,
+  interval: number,
+  origin: number,
+): readonly number[] {
+  const startIndex = Math.ceil(
+    (minimum - origin - COORDINATE_EPSILON) / interval,
+  );
+  const endIndex = Math.floor(
+    (maximum - origin + COORDINATE_EPSILON) / interval,
+  );
+  const coordinates: number[] = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    coordinates.push(origin + index * interval);
   }
   return Object.freeze(coordinates);
 }

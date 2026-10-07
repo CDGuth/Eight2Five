@@ -46,6 +46,7 @@ describe("Developer Mode", () => {
       lastUpdateAt: 1_700_000_000_000,
       effectiveUpdateRateHz: 9.5,
       diagnosticMessages: [],
+      managedDevices: [],
       knownAnchors: [],
       networks: [],
       discoveryRssiCutoff: -75,

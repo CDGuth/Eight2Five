@@ -62,10 +62,10 @@ const SIDE_RELATION_CHOICES = [
 function frontBackChoices(fieldPreset: FieldPresetId) {
   const hashPrefix = fieldHashPrefix(fieldPreset);
   return [
-    { label: "Front Sideline", value: "front-sideline" },
+    { label: "FS", value: "front-sideline" },
     { label: `${hashPrefix} FH`, value: "front-hash" },
     { label: `${hashPrefix} BH`, value: "back-hash" },
-    { label: "Back Sideline", value: "back-sideline" },
+    { label: "BS", value: "back-sideline" },
   ] as const;
 }
 
@@ -220,7 +220,7 @@ export function MarchingCoordinateForm({
           label="Yard line"
           value={draft.yardLine}
           choices={YARD_LINES.map((yardLine) => ({
-            label: yardLine === 0 ? "Goal Line" : `${yardLine} yard line`,
+            label: yardLine === 0 ? "goal line" : `${yardLine} yard line`,
             value: String(yardLine),
           }))}
           error={validation.errors.yardLine}

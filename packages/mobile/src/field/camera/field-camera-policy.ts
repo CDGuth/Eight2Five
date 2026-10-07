@@ -9,18 +9,26 @@ import type {
   FieldViewportSize,
 } from "./field-camera-types";
 
-export const FIELD_GRID_PERIMETER_YARDS = 10;
-export const FIELD_CAMERA_BLANK_MARGIN_YARDS = 20;
+export const FIELD_YARD_LINE_SPACING_YARDS = 5;
+export const DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT = 2;
+/** Default perimeter retained for compatibility with existing callers/tests. */
+export const FIELD_GRID_PERIMETER_YARDS =
+  DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT * FIELD_YARD_LINE_SPACING_YARDS;
+export const FIELD_CAMERA_BLANK_MARGIN_YARDS = 10;
 export const FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS =
   FIELD_GRID_PERIMETER_YARDS + FIELD_CAMERA_BLANK_MARGIN_YARDS;
 export const FIELD_MIN_METERS_PER_PIXEL = 0.02;
-export const FIELD_ZOOM_OUT_BREATHING_ROOM = 1.2;
+export const FIELD_ZOOM_OUT_BREATHING_ROOM = 1.08;
 export const FIELD_INITIAL_BREATHING_ROOM = 1.06;
 
 export function getFieldGridBounds(
   template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  perimeterYardLineCount = DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT,
 ): FieldCameraBounds {
-  const padding = yardsToMeters(FIELD_GRID_PERIMETER_YARDS);
+  const padding = yardsToMeters(
+    normalizePerimeterYardLineCount(perimeterYardLineCount) *
+      FIELD_YARD_LINE_SPACING_YARDS,
+  );
   return {
     minXMeters: template.bounds.minXMeters - padding,
     maxXMeters: template.bounds.maxXMeters + padding,
@@ -31,8 +39,9 @@ export function getFieldGridBounds(
 
 export function getFieldCameraBounds(
   template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  perimeterYardLineCount = DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT,
 ): FieldCameraBounds {
-  const gridBounds = getFieldGridBounds(template);
+  const gridBounds = getFieldGridBounds(template, perimeterYardLineCount);
   const margin = yardsToMeters(FIELD_CAMERA_BLANK_MARGIN_YARDS);
   return {
     minXMeters: gridBounds.minXMeters - margin,
@@ -69,8 +78,9 @@ export function getFieldMaximumMetersPerPixel(
 export function getInitialFieldViewport(
   size: FieldViewportSize,
   template: StandardFootballFieldTemplate = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE,
+  perimeterYardLineCount = DEFAULT_FIELD_GRID_PERIMETER_YARD_LINE_COUNT,
 ): FieldViewport {
-  const bounds = getFieldGridBounds(template);
+  const bounds = getFieldGridBounds(template, perimeterYardLineCount);
   return {
     centerXMeters: (bounds.minXMeters + bounds.maxXMeters) / 2,
     centerYMeters: (bounds.minYMeters + bounds.maxYMeters) / 2,
@@ -79,4 +89,9 @@ export function getInitialFieldViewport(
       fitFieldBoundsMetersPerPixel(bounds, size) * FIELD_INITIAL_BREATHING_ROOM,
     ),
   };
+}
+
+function normalizePerimeterYardLineCount(value: number): number {
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
 }

@@ -91,16 +91,14 @@ export function formatMarchingSteps(
 
 function stepWord(
   steps: number,
-  uppercase = true,
   roundingSteps = DEFAULT_MARCHING_COORDINATE_ROUNDING_STEPS,
 ): string {
   const value = formatMarchingSteps(steps, roundingSteps);
-  if (Math.abs(Number(value)) === 1) return uppercase ? "One Step" : "one step";
-  return uppercase ? `${value} Steps` : `${value} steps`;
+  return `${value} ${Math.abs(Number(value)) === 1 ? "step" : "steps"}`;
 }
 
 function yardLineText(yardLine: number): string {
-  return yardLine === 0 ? "Goal Line" : `${yardLine} yd ln`;
+  return yardLine === 0 ? "goal line" : `${yardLine} yd ln`;
 }
 
 interface XReference {
@@ -454,7 +452,7 @@ function formatSideCoordinate(
       ? `On ${line}`
       : `Side ${coordinate.side}: On ${line}`;
   }
-  const steps = stepWord(coordinate.offsetSteps, true, roundingSteps);
+  const steps = stepWord(coordinate.offsetSteps, roundingSteps);
   if (coordinate.side === "center") return `On ${line}`;
   return `Side ${coordinate.side}: ${steps} ${coordinate.relation} ${line}`;
 }
@@ -480,17 +478,17 @@ function lateralReferenceText(
 ): string {
   switch (reference) {
     case "front-sideline":
-      return "Front Sideline";
+      return "FS";
     case "front-hash": {
       const prefix = hashReferencePrefix(field);
-      return prefix ? `${prefix} FH` : "Front Hash";
+      return prefix ? `${prefix} FH` : "front hash";
     }
     case "back-hash": {
       const prefix = hashReferencePrefix(field);
-      return prefix ? `${prefix} BH` : "Back Hash";
+      return prefix ? `${prefix} BH` : "back hash";
     }
     case "back-sideline":
-      return "Back Sideline";
+      return "BS";
   }
 }
 
@@ -501,7 +499,7 @@ function formatFrontBackCoordinate(
 ): string {
   const reference = lateralReferenceText(coordinate.reference, field);
   if (coordinate.relation === "on") return `On ${reference}`;
-  return `${stepWord(coordinate.offsetSteps, true, roundingSteps)} ${
+  return `${stepWord(coordinate.offsetSteps, roundingSteps)} ${
     coordinate.relation === "behind" ? "behind" : "in front of"
   } ${reference}`;
 }
@@ -549,7 +547,7 @@ export function formatMarchingCoordinate(
   ];
   const formatted = parts.join("; ");
   return coordinate.outOfBounds?.length
-    ? `Out of Bounds — ${formatted}`
+    ? `Out of bounds — ${formatted}`
     : formatted;
 }
 

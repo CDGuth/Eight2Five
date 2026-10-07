@@ -73,6 +73,38 @@ describe("standard high-school field template", () => {
     );
   });
 
+  test("offers matching optional numbers at every five-yard line", () => {
+    const field = STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE;
+    expect(field.fiveYardNumbers).toHaveLength(42);
+    expect(
+      field.fiveYardNumbers
+        .filter((number) => number.side === "front")
+        .map((number) => number.label),
+    ).toEqual([
+      "0",
+      "5",
+      "10",
+      "15",
+      "20",
+      "25",
+      "30",
+      "35",
+      "40",
+      "45",
+      "50",
+      "45",
+      "40",
+      "35",
+      "30",
+      "25",
+      "20",
+      "15",
+      "10",
+      "5",
+      "0",
+    ]);
+  });
+
   test.each([
     ["football-nfhs", 24],
     ["football-ncaa", 24],

@@ -55,7 +55,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
            show_cached_anchor_geometry = ?,
            show_comfortable_anchor_range = ?,
            show_perimeter_step_grid = ?,
+           perimeter_grid_yard_line_count = ?,
            show_auxiliary_field_marks = ?,
+           show_five_yard_numbers = ?,
+           show_sticky_yard_numbers = ?,
            show_performer_labels = ?,
            show_performer_names = ?,
            show_prop_labels = ?,
@@ -86,7 +89,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         boolToSql(DEFAULT_APP_SETTINGS.showCachedAnchorGeometry),
         boolToSql(DEFAULT_APP_SETTINGS.showComfortableAnchorRange),
         boolToSql(DEFAULT_APP_SETTINGS.showPerimeterStepGrid),
+        DEFAULT_APP_SETTINGS.perimeterGridYardLineCount,
         boolToSql(DEFAULT_APP_SETTINGS.showAuxiliaryFieldMarks),
+        boolToSql(DEFAULT_APP_SETTINGS.showFiveYardNumbers),
+        boolToSql(DEFAULT_APP_SETTINGS.showStickyYardNumbers),
         boolToSql(DEFAULT_APP_SETTINGS.showPerformerLabels),
         boolToSql(DEFAULT_APP_SETTINGS.showPerformerNames),
         boolToSql(DEFAULT_APP_SETTINGS.showPropLabels),
@@ -124,7 +130,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
          show_perimeter_step_grid,
+         perimeter_grid_yard_line_count,
          show_auxiliary_field_marks,
+         show_five_yard_numbers,
+         show_sticky_yard_numbers,
          show_performer_labels,
          show_performer_names,
          show_prop_labels,
@@ -166,7 +175,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry,
          show_comfortable_anchor_range,
          show_perimeter_step_grid,
+         perimeter_grid_yard_line_count,
          show_auxiliary_field_marks,
+         show_five_yard_numbers,
+         show_sticky_yard_numbers,
          show_performer_labels,
          show_performer_names,
          show_prop_labels,
@@ -184,7 +196,7 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          comfortable_anchor_range_meters,
          active_drill_id,
          selected_drill_page_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(singleton_id) DO UPDATE SET
          appearance_mode = excluded.appearance_mode,
          drill_features_enabled = excluded.drill_features_enabled,
@@ -199,7 +211,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
          show_cached_anchor_geometry = excluded.show_cached_anchor_geometry,
          show_comfortable_anchor_range = excluded.show_comfortable_anchor_range,
          show_perimeter_step_grid = excluded.show_perimeter_step_grid,
+         perimeter_grid_yard_line_count = excluded.perimeter_grid_yard_line_count,
          show_auxiliary_field_marks = excluded.show_auxiliary_field_marks,
+         show_five_yard_numbers = excluded.show_five_yard_numbers,
+         show_sticky_yard_numbers = excluded.show_sticky_yard_numbers,
          show_performer_labels = excluded.show_performer_labels,
          show_performer_names = excluded.show_performer_names,
          show_prop_labels = excluded.show_prop_labels,
@@ -232,7 +247,10 @@ export class SqliteSettingsRepository implements AppSettingsRepository {
         boolToSql(normalized.showCachedAnchorGeometry),
         boolToSql(normalized.showComfortableAnchorRange),
         boolToSql(normalized.showPerimeterStepGrid),
+        normalized.perimeterGridYardLineCount,
         boolToSql(normalized.showAuxiliaryFieldMarks),
+        boolToSql(normalized.showFiveYardNumbers),
+        boolToSql(normalized.showStickyYardNumbers),
         boolToSql(normalized.showPerformerLabels),
         boolToSql(normalized.showPerformerNames),
         boolToSql(normalized.showPropLabels),
@@ -277,7 +295,10 @@ function fromRow(row: AppSettingsRow): AppSettings {
       row.show_comfortable_anchor_range,
     ),
     showPerimeterStepGrid: sqliteBoolean(row.show_perimeter_step_grid),
+    perimeterGridYardLineCount: row.perimeter_grid_yard_line_count,
     showAuxiliaryFieldMarks: sqliteBoolean(row.show_auxiliary_field_marks),
+    showFiveYardNumbers: sqliteBoolean(row.show_five_yard_numbers),
+    showStickyYardNumbers: sqliteBoolean(row.show_sticky_yard_numbers),
     showPerformerLabels: sqliteBoolean(row.show_performer_labels),
     showPerformerNames: sqliteBoolean(row.show_performer_names),
     showPropLabels: sqliteBoolean(row.show_prop_labels),
@@ -316,8 +337,13 @@ function isCanonicalRow(row: AppSettingsRow, settings: AppSettings): boolean {
       boolToSql(settings.showComfortableAnchorRange) &&
     row.show_perimeter_step_grid ===
       boolToSql(settings.showPerimeterStepGrid) &&
+    row.perimeter_grid_yard_line_count ===
+      settings.perimeterGridYardLineCount &&
     row.show_auxiliary_field_marks ===
       boolToSql(settings.showAuxiliaryFieldMarks) &&
+    row.show_five_yard_numbers === boolToSql(settings.showFiveYardNumbers) &&
+    row.show_sticky_yard_numbers ===
+      boolToSql(settings.showStickyYardNumbers) &&
     row.show_performer_labels === boolToSql(settings.showPerformerLabels) &&
     row.show_performer_names === boolToSql(settings.showPerformerNames) &&
     row.show_prop_labels === boolToSql(settings.showPropLabels) &&

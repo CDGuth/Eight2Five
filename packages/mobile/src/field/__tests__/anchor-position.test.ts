@@ -221,7 +221,7 @@ describe("shared anchor position domain", () => {
     },
   );
 
-  test("parses drafts and rejects empty, non-finite, out-of-field, and excessive values", () => {
+  test("parses drafts, permits off-field anchors, and rejects invalid heights", () => {
     expect(
       parseAnchorPositionDraft({
         reference: "center-field",
@@ -263,15 +263,15 @@ describe("shared anchor position domain", () => {
       frontToBackOffset: expect.any(String),
       height: expect.any(String),
     });
-    expect(
-      parseAnchorPositionDraft({
-        reference: "side-1-front-corner",
-        unit: "meters",
-        sideToSideOffset: "-0.01",
-        frontToBackOffset: "0",
-        height: "0",
-      }).errors.position,
-    ).toContain("standard field bounds");
+    const outside = parseAnchorPositionDraft({
+      reference: "side-1-front-corner",
+      unit: "meters",
+      sideToSideOffset: "-0.01",
+      frontToBackOffset: "0",
+      height: "0",
+    });
+    expect(outside.errors).toEqual({});
+    expect(outside.value?.xMeters).toBeLessThan(field.bounds.minXMeters);
     expect(
       parseAnchorPositionDraft({
         reference: "center-field",
@@ -292,16 +292,16 @@ describe("shared anchor position domain", () => {
     ).toContain("at most");
   });
 
-  test("throws instead of silently clamping invalid canonical and standard values", () => {
-    expect(() =>
+  test("allows off-field positions while still rejecting invalid canonical values", () => {
+    expect(
       anchorFieldPositionFromStandard({
         reference: "side-1-front-corner",
         unit: "meters",
         sideToSideOffset: -1,
         frontToBackOffset: 0,
         height: 0,
-      }),
-    ).toThrow("standard field bounds");
+      }).xMeters,
+    ).toBeLessThan(field.bounds.minXMeters);
     expect(() =>
       anchorFieldPositionFromStandard({
         reference: "center-field",
@@ -311,7 +311,7 @@ describe("shared anchor position domain", () => {
         height: -0.1,
       }),
     ).toThrow("negative");
-    expect(() =>
+    expect(
       anchorFieldPositionFromMarchingCoordinate(
         {
           side: {
@@ -327,8 +327,8 @@ describe("shared anchor position domain", () => {
           },
         },
         1,
-      ),
-    ).toThrow("standard field bounds");
+      ).xMeters,
+    ).toBeLessThan(field.bounds.minXMeters);
   });
 
   test("does not add a quality field to canonical positions", () => {

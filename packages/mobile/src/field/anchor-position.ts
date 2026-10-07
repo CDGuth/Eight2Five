@@ -282,7 +282,7 @@ export function parseAnchorPositionDraft(
 
 export function validateAnchorFieldPosition(
   position: unknown,
-  fieldPreset: FieldPresetId = "football-nfhs",
+  _fieldPreset: FieldPresetId = "football-nfhs",
 ): AnchorPositionDraftErrors {
   if (!position || typeof position !== "object") {
     return { position: "Anchor field position is required." };
@@ -294,17 +294,6 @@ export function validateAnchorFieldPosition(
     !Number.isFinite(value.zMeters)
   ) {
     return { position: "Anchor coordinates must be finite." };
-  }
-  const bounds = createStandardFootballFieldTemplate(fieldPreset).bounds;
-  if (
-    value.xMeters! < bounds.minXMeters ||
-    value.xMeters! > bounds.maxXMeters ||
-    value.yMeters! < bounds.minYMeters ||
-    value.yMeters! > bounds.maxYMeters
-  ) {
-    return {
-      position: "Anchor coordinates must be within the standard field bounds.",
-    };
   }
   if (value.zMeters! < 0) {
     return { position: "Anchor height cannot be negative." };

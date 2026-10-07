@@ -10,6 +10,7 @@ import {
   useEight2FiveFonts,
   useEight2FiveTheme,
   useEight2FiveThemeName,
+  useResolvedEight2FiveThemeName,
 } from "@eight2five/ui/theme";
 
 import { TabBarVisibilityProvider } from "../src/navigation/tab-bar-visibility-context";
@@ -68,9 +69,10 @@ function MobilePansWithSettings({ children }: { children: React.ReactNode }) {
 
 function MobileAppearance({ children }: { children: React.ReactNode }) {
   const { settings } = useAppSettingsSnapshot();
+  const resolvedMode = useResolvedEight2FiveThemeName(settings.appearanceMode);
   return (
-    <GluestackUIProvider mode={settings.appearanceMode}>
-      <Eight2FiveThemeProvider mode={settings.appearanceMode}>
+    <GluestackUIProvider mode={resolvedMode}>
+      <Eight2FiveThemeProvider mode={resolvedMode}>
         {children}
       </Eight2FiveThemeProvider>
     </GluestackUIProvider>

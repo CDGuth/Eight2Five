@@ -19,6 +19,10 @@ export function buildDeveloperDiagnosticRows(
   return [
     { label: "Connection state", value: snapshot.connectionState },
     {
+      label: "PANS native build",
+      value: snapshot.nativeBuildId ?? "Unavailable",
+    },
+    {
       label: "Node ID",
       value:
         diagnostics?.deviceInfo?.nodeIdHex ??

@@ -27,12 +27,12 @@ describe("marching coordinate conversion", () => {
       formatMarchingSide(
         fieldPointToMarchingCoordinate(gridPoint(-24 + 2, 0)).side,
       ),
-    ).toBe("Side 1: 2 Steps inside 35 yd ln");
+    ).toBe("Side 1: 2 steps inside 35 yd ln");
     expect(
       formatMarchingSide(
         fieldPointToMarchingCoordinate(gridPoint(16 + 1.25, 0)).side,
       ),
-    ).toBe("Side 2: 1.25 Steps outside 40 yd ln");
+    ).toBe("Side 2: 1.25 steps outside 40 yd ln");
     expect(
       formatMarchingSide(fieldPointToMarchingCoordinate(gridPoint(0, 0)).side),
     ).toBe("On 50 yd ln");
@@ -40,13 +40,13 @@ describe("marching coordinate conversion", () => {
 
   test("uses the conventional 0/28/56/84 NFHS marching grid", () => {
     const examples = [
-      [0, "On Front Sideline"],
-      [8, "8 Steps behind Front Sideline"],
-      [16, "12 Steps in front of HS FH"],
+      [0, "On FS"],
+      [8, "8 steps behind FS"],
+      [16, "12 steps in front of HS FH"],
       [28, "On HS FH"],
-      [32, "4 Steps behind HS FH"],
-      [52.5, "3.5 Steps in front of HS BH"],
-      [84, "On Back Sideline"],
+      [32, "4 steps behind HS FH"],
+      [52.5, "3.5 steps in front of HS BH"],
+      [84, "On BS"],
     ] as const;
 
     for (const [ySteps, expected] of examples) {
@@ -89,12 +89,12 @@ describe("marching coordinate conversion", () => {
     },
   );
 
-  test("spells a singular marching step as one step", () => {
+  test("formats a singular marching step numerically", () => {
     expect(
       formatMarchingFrontBack(
         fieldPointToMarchingCoordinate(gridPoint(0, 1)).frontBack,
       ),
-    ).toBe("One Step behind Front Sideline");
+    ).toBe("1 step behind FS");
   });
 
   test("keeps canonical fractional values while formatting quarter steps", () => {
@@ -103,10 +103,10 @@ describe("marching coordinate conversion", () => {
     );
     expect(coordinate.side.offsetSteps).toBeCloseTo(1.249999999);
     expect(formatMarchingSide(coordinate.side)).toBe(
-      "Side 1: 1.25 Steps inside 35 yd ln",
+      "Side 1: 1.25 steps inside 35 yd ln",
     );
     expect(formatMarchingFrontBack(coordinate.frontBack)).toBe(
-      "2.5 Steps behind HS FH",
+      "2.5 steps behind HS FH",
     );
   });
 
@@ -125,7 +125,7 @@ describe("marching coordinate conversion", () => {
   test("uses a side and outside terminology when the 50 is nearest", () => {
     const coordinate = fieldPointToMarchingCoordinate(gridPoint(-1.5, 0));
     expect(formatMarchingSide(coordinate.side)).toBe(
-      "Side 1: 1.5 Steps outside 50 yd ln",
+      "Side 1: 1.5 steps outside 50 yd ln",
     );
     expect(marchingCoordinateToDrillGridPoint(coordinate).xSteps).toBeCloseTo(
       -1.5,
@@ -138,7 +138,7 @@ describe("marching coordinate conversion", () => {
   test("marks out-of-bounds points explicitly while retaining nearest references", () => {
     const coordinate = fieldPointToMarchingCoordinate(gridPoint(-82, 85.25));
     expect(formatMarchingCoordinate(coordinate)).toBe(
-      "Out of Bounds — Side 1: 2 Steps outside Goal Line; 1.25 Steps behind Back Sideline",
+      "Out of bounds — Side 1: 2 steps outside goal line; 1.25 steps behind BS",
     );
     expect(coordinate.outOfBounds).toEqual(["goal-to-goal", "front-back"]);
   });

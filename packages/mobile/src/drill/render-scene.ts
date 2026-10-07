@@ -72,8 +72,8 @@ export interface DrillRenderEntityBase {
   readonly nameText?: string;
   readonly position: PhysicalFieldPoint;
   readonly facingDegrees?: number;
-  /** Ordinary entities intentionally remain fully opaque. */
-  readonly opacity: 1;
+  /** Props are intentionally de-emphasized while performers stay fully opaque. */
+  readonly opacity: 0.5 | 1;
   readonly resolvedEntity: ResolvedDrillEntity;
 }
 
@@ -136,6 +136,8 @@ export interface DrillRenderScene {
   readonly selectedSourceSetId: number;
   /** Null means that the selected performer has no position in this set. */
   readonly current: PhysicalFieldPoint | null;
+  /** Selected performer metadata/label presentation at the current set. */
+  readonly currentEntity: PerformerRenderEntity | null;
   /** Other performers and props in the selected source set. */
   readonly entities: readonly DrillRenderEntity[];
   readonly previous?: PhysicalImmediateTransition;
@@ -153,13 +155,13 @@ export interface DrillRenderScene {
 export const DRILL_RENDER_LAYER_ORDER = Object.freeze([
   "static",
   "anchors",
+  "guidance",
   "entities",
   "extra-connectors",
   "extra-dots",
   "previous",
   "next",
   "current-target",
-  "guidance",
   "live-position",
 ] as const);
 
@@ -187,6 +189,28 @@ export function buildDrillRenderScene(
     if (position.setId !== input.selectedSourceSetId) continue;
     positionsByEntityId.set(position.entityId, position);
   }
+
+  const selectedResolvedPerformer = resolvedEntities.find(
+    (
+      resolved,
+    ): resolved is ResolvedDrillEntity & { readonly type: "performer" } =>
+      resolved.type === "performer" &&
+      resolved.id === input.selectedPerformerEntityId,
+  );
+  const selectedPosition = positionsByEntityId.get(
+    input.selectedPerformerEntityId,
+  );
+  const selectedRenderEntity =
+    selectedResolvedPerformer && selectedPosition
+      ? createRenderEntity(
+          selectedResolvedPerformer,
+          selectedPosition,
+          field,
+          input.settings,
+        )
+      : null;
+  const currentEntity =
+    selectedRenderEntity?.type === "performer" ? selectedRenderEntity : null;
 
   const entities: DrillRenderEntity[] = [];
   for (const resolved of resolvedEntities) {
@@ -224,6 +248,7 @@ export function buildDrillRenderScene(
     current: transitionScene.current
       ? projectPoint(transitionScene.current, field)
       : null,
+    currentEntity,
     entities,
     ...(transitionScene.previous
       ? {
@@ -362,6 +387,7 @@ function createRenderEntity(
     return {
       ...base,
       type: "prop",
+      opacity: 0.5,
       ...size,
     };
   }
@@ -461,6 +487,7 @@ function freezeScene(scene: {
   readonly selectedPerformerEntityId: number;
   readonly selectedSourceSetId: number;
   readonly current: PhysicalFieldPoint | null;
+  readonly currentEntity: PerformerRenderEntity | null;
   readonly entities: readonly DrillRenderEntity[];
   readonly previous?: PhysicalImmediateTransition;
   readonly next?: PhysicalImmediateTransition;
@@ -472,6 +499,9 @@ function freezeScene(scene: {
   return Object.freeze({
     ...scene,
     current: scene.current ? Object.freeze({ ...scene.current }) : null,
+    currentEntity: scene.currentEntity
+      ? Object.freeze({ ...scene.currentEntity })
+      : null,
     entities: Object.freeze(
       scene.entities.map((entity) => Object.freeze(entity)),
     ),

@@ -97,7 +97,10 @@ export interface StandardFootballFieldTemplate {
   /** The 21 multiples of five yards, including the two goal lines. */
   readonly allFiveYardLines: readonly FieldLine[];
   readonly yardLines: readonly FieldLine[];
+  /** Standard football numbers at 10-yard increments. */
   readonly yardNumbers: readonly FieldYardNumber[];
+  /** Optional overlay numbers at every 5-yard increment. */
+  readonly fiveYardNumbers: readonly FieldYardNumber[];
 }
 
 /** @deprecated Use StandardFootballFieldTemplate. */
@@ -168,9 +171,10 @@ function yLine(
 function makeYardNumbers(
   bounds: StandardFootballFieldTemplate["bounds"],
   markings: FieldMarkingDefinition,
+  incrementYards: 5 | 10 = 10,
 ): readonly FieldYardNumber[] {
   const numbers: FieldYardNumber[] = [];
-  for (const xYards of [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]) {
+  for (let xYards = -50; xYards <= 50; xYards += incrementYards) {
     const sideRelativeYards = xYards === 0 ? 50 : 50 - Math.abs(xYards);
     const label = String(sideRelativeYards);
     const xMeters = yardsToMeters(xYards);
@@ -312,7 +316,8 @@ export function createStandardFootballFieldTemplate(
     fiveYardLines,
     allFiveYardLines,
     yardLines: fiveYardLines,
-    yardNumbers: makeYardNumbers(bounds, markings),
+    yardNumbers: makeYardNumbers(bounds, markings, 10),
+    fiveYardNumbers: makeYardNumbers(bounds, markings, 5),
   });
   TEMPLATE_CACHE.set(fieldPreset, template);
   return template;

@@ -14,8 +14,8 @@ import {
   normalizePageIndex,
   pageDialIndexForProgress,
   pageDialPointIsInControlHitTarget,
+  pageDialPointIsInKnobHitTarget,
   pageDialProgressForPointNearReference,
-  pageDialPointIsInRingHitRegion,
 } from "./page-dial-math";
 
 function setSharedValue<T>(sharedValue: SharedValue<T>, value: T): void {
@@ -97,7 +97,12 @@ export function usePageDialGesture({
       if (
         touch &&
         pageCount > 0 &&
-        pageDialPointIsInRingHitRegion(touch.x, touch.y, diameter) &&
+        pageDialPointIsInKnobHitTarget(
+          touch.x,
+          touch.y,
+          diameter,
+          provisionalProgress.value,
+        ) &&
         !pageDialPointIsInControlHitTarget(touch.x, touch.y, diameter)
       ) {
         manager.activate();
@@ -107,11 +112,15 @@ export function usePageDialGesture({
     })
     .minDistance(1)
     .onBegin((event) => {
-      const touchesRing =
-        pageDialPointIsInRingHitRegion(event.x, event.y, diameter) &&
-        !pageDialPointIsInControlHitTarget(event.x, event.y, diameter);
-      setSharedValue(ringActive, touchesRing && pageCount > 0);
-      if (!touchesRing || pageCount <= 0) return;
+      const touchesKnob =
+        pageDialPointIsInKnobHitTarget(
+          event.x,
+          event.y,
+          diameter,
+          provisionalProgress.value,
+        ) && !pageDialPointIsInControlHitTarget(event.x, event.y, diameter);
+      setSharedValue(ringActive, touchesKnob && pageCount > 0);
+      if (!touchesKnob || pageCount <= 0) return;
       cancelAnimation(provisionalProgress);
       setSharedValue(gestureStartProgress, provisionalProgress.value);
       setSharedValue(

@@ -13,6 +13,7 @@ export const PAGE_DIAL_RING_THICKNESS_RATIO = 0.075;
 export const PAGE_DIAL_INNER_DISK_DIAMETER_RATIO = 0.86;
 export const PAGE_DIAL_CENTER_DISK_DIAMETER_RATIO = 0.3;
 export const PAGE_DIAL_KNOB_DIAMETER_RATIO = 0.16;
+export const PAGE_DIAL_KNOB_HIT_DIAMETER_MULTIPLIER = 1.5;
 export const PAGE_DIAL_CONTROL_CENTER_OFFSET_RATIO = 0.29;
 export const PAGE_DIAL_MIN_CONTROL_SIZE = 44;
 
@@ -273,6 +274,26 @@ export function pageDialPointIsInRingHitRegion(
 }
 
 export const isPageDialRingHit = pageDialPointIsInRingHitRegion;
+
+/**
+ * Circular drag-start target centered on the currently rendered knob. The
+ * target is intentionally larger than the visual knob without turning the
+ * entire ring into a drag surface.
+ */
+export function pageDialPointIsInKnobHitTarget(
+  x: number,
+  y: number,
+  diameter: number,
+  progress: number,
+): boolean {
+  "worklet";
+  const knobCenter = pageDialPointForProgress(progress, diameter);
+  const hitDiameter =
+    diameter *
+    PAGE_DIAL_KNOB_DIAMETER_RATIO *
+    PAGE_DIAL_KNOB_HIT_DIAMETER_MULTIPLIER;
+  return Math.hypot(x - knobCenter.x, y - knobCenter.y) <= hitDiameter / 2;
+}
 
 export function getPageDialCardinalPoints(
   diameter: number,

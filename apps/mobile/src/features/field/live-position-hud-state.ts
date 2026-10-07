@@ -62,7 +62,7 @@ export function getTargetDistancePresentation({
   const roundedSteps = formatMarchingSteps(steps, roundingSteps);
   return {
     steps,
-    value: Number(roundedSteps) === 1 ? "one step" : `${roundedSteps} steps`,
+    value: `${roundedSteps} ${Number(roundedSteps) === 1 ? "step" : "steps"}`,
     tone:
       steps <= greenThresholdSteps
         ? "success"

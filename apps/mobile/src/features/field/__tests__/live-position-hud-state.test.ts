@@ -25,7 +25,7 @@ describe("live position HUD state", () => {
         greenThresholdSteps: 0.5,
         yellowThresholdSteps: 1,
       }),
-    ).toMatchObject({ value: "one step", tone: "warning" });
+    ).toMatchObject({ value: "1 step", tone: "warning" });
     expect(
       getTargetDistancePresentation({
         live,

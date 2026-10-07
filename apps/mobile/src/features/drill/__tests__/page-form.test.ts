@@ -56,10 +56,10 @@ describe("structured marching coordinate form", () => {
     expect(result.errors).toEqual({});
     expect(result.value).toBeDefined();
     expect(formatMarchingSide(result.value!.coordinate.side)).toBe(
-      "Side 2: 2.25 Steps inside 40 yd ln",
+      "Side 2: 2.25 steps inside 40 yd ln",
     );
     expect(formatMarchingFrontBack(result.value!.coordinate.frontBack)).toBe(
-      "4.5 Steps in front of HS FH",
+      "4.5 steps in front of HS FH",
     );
     expect(result.value).toMatchObject({
       number: 31,

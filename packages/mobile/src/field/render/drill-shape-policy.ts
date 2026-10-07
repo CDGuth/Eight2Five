@@ -1,5 +1,9 @@
 import type { EntityIcon } from "@eight2five/drill-schema";
 import type { FieldCameraPerspective } from "../camera/field-camera-types";
+import { FIELD_LABEL_METERS_PER_FONT_UNIT } from "./field-render-tokens";
+
+/** One sixth of a standard marching step, matching the label system's base scale. */
+export const PERFORMER_LABEL_GAP_METERS = FIELD_LABEL_METERS_PER_FONT_UNIT * 4;
 
 /** Icons that can be rendered as a directional path or as a circle. */
 export type DrillShapeIcon = EntityIcon | "circle";
@@ -34,18 +38,47 @@ export interface DrillLabelTransformPolicy {
 }
 
 /**
- * Label text is drawn in screen pixels inside the world-space camera group.
- * The negative Y scale both cancels the camera reflection and keeps the text
- * upright while the magnitude keeps its size constant across zoom levels.
+ * Moves a label so the bottom of its painted glyphs stays a fixed world-space
+ * distance above the top of its marker. The gap therefore remains locked to
+ * the marching grid rather than changing relative to it as the camera zooms.
+ */
+export function getDrillLabelVerticalOffsetUnits(
+  labelScale: number,
+  markerHalfHeightMeters: number,
+  paintedBottomUnits: number,
+  gapMeters?: number,
+): number {
+  "worklet";
+  const resolvedGapMeters = gapMeters ?? 0.09525;
+  if (
+    !Number.isFinite(labelScale) ||
+    labelScale <= 0 ||
+    !Number.isFinite(markerHalfHeightMeters) ||
+    markerHalfHeightMeters < 0 ||
+    !Number.isFinite(paintedBottomUnits) ||
+    !Number.isFinite(resolvedGapMeters) ||
+    resolvedGapMeters < 0
+  ) {
+    return 0;
+  }
+  const targetBottomUnits =
+    -(markerHalfHeightMeters + resolvedGapMeters) / labelScale;
+  return targetBottomUnits - paintedBottomUnits;
+}
+
+/**
+ * Label text is converted into fixed world-space meters, so labels scale with
+ * the field instead of remaining a constant size on screen. The signs only
+ * cancel the camera reflection/rotation needed to keep text readable.
  */
 export function getDrillLabelTransformPolicy(
-  metersPerPixel: number,
   perspective: FieldCameraPerspective = "director",
+  scale = FIELD_LABEL_METERS_PER_FONT_UNIT,
 ): DrillLabelTransformPolicy {
   "worklet";
   return perspective === "performer"
-    ? { scaleX: -metersPerPixel, scaleY: metersPerPixel }
-    : { scaleX: metersPerPixel, scaleY: -metersPerPixel };
+    ? { scaleX: -scale, scaleY: scale }
+    : { scaleX: scale, scaleY: -scale };
 }
 
 /**

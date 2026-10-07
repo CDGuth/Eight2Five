@@ -17,6 +17,9 @@ export const MIN_TRANSITION_SET_COUNT = 0;
 export const MAX_TRANSITION_SET_COUNT = 5;
 export const DEFAULT_DISTANCE_GREEN_THRESHOLD_STEPS = 0.5;
 export const DEFAULT_DISTANCE_YELLOW_THRESHOLD_STEPS = 1;
+export const MIN_PERIMETER_GRID_YARD_LINE_COUNT = 0;
+export const MAX_PERIMETER_GRID_YARD_LINE_COUNT = 10;
+export const DEFAULT_PERIMETER_GRID_YARD_LINE_COUNT = 2;
 
 /** App preferences plus persisted drill/set selection pointers. */
 export interface AppSettings {
@@ -33,7 +36,10 @@ export interface AppSettings {
   readonly showCachedAnchorGeometry: boolean;
   readonly showComfortableAnchorRange: boolean;
   readonly showPerimeterStepGrid: boolean;
+  readonly perimeterGridYardLineCount: number;
   readonly showAuxiliaryFieldMarks: boolean;
+  readonly showFiveYardNumbers: boolean;
+  readonly showStickyYardNumbers: boolean;
   readonly showPerformerLabels: boolean;
   readonly showPerformerNames: boolean;
   readonly showPropLabels: boolean;
@@ -69,7 +75,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   showCachedAnchorGeometry: false,
   showComfortableAnchorRange: false,
   showPerimeterStepGrid: false,
+  perimeterGridYardLineCount: DEFAULT_PERIMETER_GRID_YARD_LINE_COUNT,
   showAuxiliaryFieldMarks: true,
+  showFiveYardNumbers: false,
+  showStickyYardNumbers: true,
   showPerformerLabels: true,
   showPerformerNames: false,
   showPropLabels: true,
@@ -104,7 +113,10 @@ export const APP_PREFERENCE_KEYS = Object.freeze([
   "showCachedAnchorGeometry",
   "showComfortableAnchorRange",
   "showPerimeterStepGrid",
+  "perimeterGridYardLineCount",
   "showAuxiliaryFieldMarks",
+  "showFiveYardNumbers",
+  "showStickyYardNumbers",
   "showPerformerLabels",
   "showPerformerNames",
   "showPropLabels",
@@ -198,9 +210,23 @@ export function normalizeAppSettings(value?: unknown): AppSettings {
       candidate.showPerimeterStepGrid,
       DEFAULT_APP_SETTINGS.showPerimeterStepGrid,
     ),
+    perimeterGridYardLineCount: boundedIntegerOrDefault(
+      candidate.perimeterGridYardLineCount,
+      DEFAULT_APP_SETTINGS.perimeterGridYardLineCount,
+      MIN_PERIMETER_GRID_YARD_LINE_COUNT,
+      MAX_PERIMETER_GRID_YARD_LINE_COUNT,
+    ),
     showAuxiliaryFieldMarks: booleanOrDefault(
       candidate.showAuxiliaryFieldMarks,
       DEFAULT_APP_SETTINGS.showAuxiliaryFieldMarks,
+    ),
+    showFiveYardNumbers: booleanOrDefault(
+      candidate.showFiveYardNumbers,
+      DEFAULT_APP_SETTINGS.showFiveYardNumbers,
+    ),
+    showStickyYardNumbers: booleanOrDefault(
+      candidate.showStickyYardNumbers,
+      DEFAULT_APP_SETTINGS.showStickyYardNumbers,
     ),
     showPerformerLabels: booleanOrDefault(
       candidate.showPerformerLabels,
@@ -298,6 +324,7 @@ export interface EffectiveDeveloperOverlaySettings {
   readonly showCachedAnchorGeometry: boolean;
   readonly showComfortableAnchorRange: boolean;
   readonly showPerimeterStepGrid: boolean;
+  readonly perimeterGridYardLineCount: number;
 }
 
 export function getEffectiveDeveloperOverlaySettings(
@@ -309,6 +336,7 @@ export function getEffectiveDeveloperOverlaySettings(
     showComfortableAnchorRange:
       settings.showCachedAnchorGeometry && settings.showComfortableAnchorRange,
     showPerimeterStepGrid: settings.showPerimeterStepGrid,
+    perimeterGridYardLineCount: settings.perimeterGridYardLineCount,
   };
 }
 
@@ -325,6 +353,10 @@ export function selectShowComfortableAnchorRange(value: AppSettings): boolean {
 
 export function selectShowPerimeterStepGrid(value: AppSettings): boolean {
   return getEffectiveAppSettings(value).showPerimeterStepGrid;
+}
+
+export function selectPerimeterGridYardLineCount(value: AppSettings): number {
+  return getEffectiveAppSettings(value).perimeterGridYardLineCount;
 }
 
 function isCoordinateRoundingSteps(

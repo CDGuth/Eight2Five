@@ -156,13 +156,13 @@ describe("field camera math", () => {
     expect(cameraBounds.maxYMeters).toBeGreaterThan(gridBounds.maxYMeters);
   });
 
-  test("keeps the rendered grid at 10 yards and allows 30 yards outside the field", () => {
+  test("keeps the rendered grid at 10 yards and limits camera centers to 20 yards outside the field", () => {
     const gridBounds = getFieldGridBounds();
     const cameraBounds = getFieldCameraBounds();
 
     expect(FIELD_GRID_PERIMETER_YARDS).toBe(10);
-    expect(FIELD_CAMERA_BLANK_MARGIN_YARDS).toBe(20);
-    expect(FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS).toBe(30);
+    expect(FIELD_CAMERA_BLANK_MARGIN_YARDS).toBe(10);
+    expect(FIELD_CAMERA_TOTAL_EXTERIOR_ALLOWANCE_YARDS).toBe(20);
     expect(
       metersToYards(
         STANDARD_HIGH_SCHOOL_FIELD_TEMPLATE.bounds.minXMeters -

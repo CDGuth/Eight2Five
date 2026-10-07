@@ -160,11 +160,34 @@ describe("aggregate field paths", () => {
       const template = createStandardFootballFieldTemplate(preset);
       const paths = createFieldPaths(template);
       const subpaths = parseSubpaths(paths.perimeterStepGridPath);
+      const fourStepSubpaths = parseSubpaths(paths.perimeterFourStepGridPath);
 
       expect(paths.counts.perimeterStepGrid.spacingSteps).toBe(1);
       expect(paths.counts.perimeterStepGrid.clippedByFieldBackground).toBe(
         true,
       );
+      expect(paths.counts.perimeterFourStepGrid).toMatchObject({
+        spacingSteps: 4,
+        clippedByFieldBackground: true,
+      });
+      expect(fourStepSubpaths.length).toBeGreaterThan(0);
+      expect(
+        fourStepSubpaths.some(
+          ({ x1, x2, y1, y2 }) =>
+            (x1 === x2 &&
+              (x1 < template.bounds.minXMeters ||
+                x1 > template.bounds.maxXMeters)) ||
+            (y1 === y2 &&
+              (y1 < template.bounds.minYMeters ||
+                y1 > template.bounds.maxYMeters)),
+        ),
+      ).toBe(true);
+      expect(paths.perimeterBoundaryPath).not.toBe("");
+      expect(paths.perimeterBoundaryUsesFourStepStyle).toBe(true);
+      expect(paths.counts.perimeterBoundary).toEqual({
+        segmentCount: 1,
+        usesFourStepStyle: true,
+      });
       expect(
         subpaths.some(
           ({ x1, x2 }) => x1 === x2 && x1 < template.bounds.minXMeters,

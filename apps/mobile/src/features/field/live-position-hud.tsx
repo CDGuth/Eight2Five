@@ -35,6 +35,10 @@ import {
 import { CoordinateLinesView } from "./coordinate-lines-view";
 import { FrostedFieldSurface } from "./field-frosted-surface";
 
+const LIVE_POSITION_REFERENCE_DIAMETER = 156;
+const MIN_VISUAL_SCALE = 0.85;
+const MAX_VISUAL_SCALE = 1.15;
+
 export function LivePositionSquare({
   diameter,
   live,
@@ -63,13 +67,18 @@ export function LivePositionSquare({
     roundingSteps: coordinateRoundingSteps,
   });
   const distanceColor = colorForDistanceTone(distance.tone, theme);
+  const visualScale = Math.min(
+    MAX_VISUAL_SCALE,
+    Math.max(MIN_VISUAL_SCALE, diameter / LIVE_POSITION_REFERENCE_DIAMETER),
+  );
   const dividerThickness = 1;
   const iconColumnWidth = 32;
-  const lowerSectionHeight = Math.max(0, (diameter - dividerThickness) / 3);
+  const lowerSectionHeight = Math.max(0, (diameter - dividerThickness) * 0.28);
   const sectionPadding = Math.max(
     0,
     (lowerSectionHeight - iconColumnWidth) / 2,
   );
+  const horizontalSectionPadding = sectionPadding * 0.5;
   const rowGap = eight2FiveSpacing.sm;
 
   const radius = Math.min(eight2FiveRadii.lg, diameter * 0.16);
@@ -80,14 +89,16 @@ export function LivePositionSquare({
       testID="live-position-square"
     >
       <VStack className="flex-1">
-        <VStack style={{ flex: 2 }}>
+        <VStack style={{ flex: 18 }}>
           <LivePositionHeader
             live={live}
             fieldPreset={fieldPreset}
             compact
             horizontalPadding={sectionPadding}
+            leftPadding={sectionPadding}
             gap={rowGap}
             iconColumnWidth={iconColumnWidth}
+            visualScale={visualScale}
             coordinateRoundingSteps={coordinateRoundingSteps}
             onOpenTagConnection={onOpenTagConnection}
           />
@@ -101,9 +112,11 @@ export function LivePositionSquare({
         <HStack
           className="items-center"
           style={{
-            flex: 1,
+            flex: 7,
             gap: rowGap,
-            padding: sectionPadding,
+            paddingLeft: sectionPadding,
+            paddingRight: horizontalSectionPadding,
+            paddingVertical: sectionPadding * 0.25,
           }}
         >
           <HStack
@@ -124,7 +137,7 @@ export function LivePositionSquare({
             style={{
               color: distanceColor,
               fontFamily: eight2FiveFonts.utilitySemibold,
-              fontSize: Math.max(14, diameter * 0.11),
+              fontSize: LIVE_POSITION_REFERENCE_DIAMETER * 0.11 * visualScale,
               fontVariant: ["tabular-nums"],
             }}
           >
@@ -170,8 +183,10 @@ function LivePositionHeader({
   fieldPreset,
   compact = false,
   horizontalPadding,
+  leftPadding,
   gap,
   iconColumnWidth,
+  visualScale = 1,
   coordinateRoundingSteps,
   onOpenTagConnection,
 }: {
@@ -179,8 +194,10 @@ function LivePositionHeader({
   readonly fieldPreset: FieldPresetId;
   readonly compact?: boolean;
   readonly horizontalPadding?: number;
+  readonly leftPadding?: number;
   readonly gap?: number;
   readonly iconColumnWidth?: number;
+  readonly visualScale?: number;
   readonly coordinateRoundingSteps: CoordinateRoundingSteps;
   readonly onOpenTagConnection: () => void;
 }) {
@@ -195,7 +212,8 @@ function LivePositionHeader({
       className="flex-1 items-center"
       style={{
         gap: gap ?? (compact ? 6 : eight2FiveSpacing.sm),
-        paddingHorizontal: horizontalPadding ?? (compact ? 8 : 12),
+        paddingLeft: leftPadding ?? horizontalPadding ?? (compact ? 8 : 12),
+        paddingRight: horizontalPadding ?? (compact ? 8 : 12),
         paddingVertical: 8,
       }}
     >
@@ -209,9 +227,10 @@ function LivePositionHeader({
           coordinate={coordinate}
           color={theme.text}
           mutedColor={theme.textMuted}
-          fontSize={compact ? 15 : 18}
-          lineHeight={compact ? 18 : 22}
-          iconSize={compact ? 13 : 15}
+          fontSize={(compact ? 14 : 18) * visualScale}
+          lineHeight={(compact ? 18 : 22) * visualScale}
+          iconSize={(compact ? 13 : 15) * visualScale}
+          maxLinesPerAxis={compact ? 3 : 2}
         />
       </VStack>
     </HStack>

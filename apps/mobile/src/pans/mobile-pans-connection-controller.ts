@@ -214,9 +214,9 @@ export class MobilePansConnectionController {
       const available = await this.ensureDiscovered(tag, generation);
       if (!this.isConnectionCurrent(generation)) return;
       this.host.publishState(state);
-      await runtime.discovery.stop();
       await this.host.prepareTagForStreaming();
       if (!this.isConnectionCurrent(generation)) return;
+      await runtime.discovery.stop();
       this.host.positionPublisher.resetStreamState();
       await runtime.stream.start({
         deviceId: tag.id,

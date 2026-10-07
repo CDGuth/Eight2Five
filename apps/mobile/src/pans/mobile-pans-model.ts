@@ -41,9 +41,10 @@ export interface MobilePansSnapshot {
   readonly effectiveUpdateRateHz: number;
   readonly counters?: Readonly<PansPositionStreamCounters>;
   readonly hardwareDiagnostics?: PansDiagnosticsResult;
+  readonly nativeBuildId?: string;
+  readonly managedDevices: readonly ManagedDevice[];
   readonly knownAnchors: readonly ManagedDevice[];
   readonly networks: readonly ManagedNetwork[];
-  readonly activeNetworkId?: string;
   readonly discoveryRssiCutoff: number;
   readonly commissioningWarning?: string;
   readonly diagnosticMessages: readonly string[];
@@ -78,6 +79,7 @@ export const INITIAL_MOBILE_PANS_SNAPSHOT: MobilePansSnapshot = Object.freeze({
   }),
   effectiveUpdateRateHz: 0,
   diagnosticMessages: Object.freeze([]),
+  managedDevices: Object.freeze([]),
   knownAnchors: Object.freeze([]),
   networks: Object.freeze([]),
   discoveryRssiCutoff: DEFAULT_DISCOVERY_RSSI_CUTOFF,
