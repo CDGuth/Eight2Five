@@ -2,54 +2,132 @@
 description: General-purpose subagent for parallel implementation and
   well-scoped multi-step tasks that can be fully described and executed
   autonomously.
+model: openai/gpt-6.1-sol#high
 mode: subagent
-permission:
-  "*": allow
-  doom_loop: ask
-  question: deny
-  todowrite: deny
-  external_directory:
-    "*": ask
-    ~/.local/share/opencode/tool-output/*: allow
-    /tmp/opencode/*: allow
-  read:
-    "*": allow
-    "*.env": ask
-    "*.env.*": ask
-    "*.env.example": allow
-  bash:
-    "*": allow
-    git add*: ask
-    git rm*: ask
-    git mv*: ask
-    git commit*: ask
-    git merge*: ask
-    git rebase*: ask
-    git reset*: ask
-    git revert*: ask
-    git cherry-pick*: ask
-    git push*: ask
-    git pull*: ask
-    git stash*: ask
-    git checkout*: ask
-    git switch*: ask
-    git restore*: ask
-    git clean*: ask
-    git tag*: ask
-    git update-index*: ask
-    git apply*: ask
-    git am*: ask
-    git filter-branch*: ask
-    git submodule*: ask
-    git branch -d*: ask
-    git branch -D*: ask
-    git branch -m*: ask
-    gh pr merge*: ask
-    gh pr close*: ask
-    gh pr edit*: ask
-    gh release*: ask
-model: openai/gpt-5.6-luna
-variant: max
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: allow
+  - action: doom_loop
+    resource: "*"
+    effect: ask
+  - action: question
+    resource: "*"
+    effect: deny
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: external_directory
+    resource: "*"
+    effect: ask
+  - action: external_directory
+    resource: ~/.local/share/opencode/tool-output/*
+    effect: allow
+  - action: external_directory
+    resource: /tmp/opencode/*
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*.env"
+    effect: ask
+  - action: read
+    resource: "*.env.*"
+    effect: ask
+  - action: read
+    resource: "*.env.example"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: git add*
+    effect: ask
+  - action: shell
+    resource: git rm*
+    effect: ask
+  - action: shell
+    resource: git mv*
+    effect: ask
+  - action: shell
+    resource: git commit*
+    effect: ask
+  - action: shell
+    resource: git merge*
+    effect: ask
+  - action: shell
+    resource: git rebase*
+    effect: ask
+  - action: shell
+    resource: git reset*
+    effect: ask
+  - action: shell
+    resource: git revert*
+    effect: ask
+  - action: shell
+    resource: git cherry-pick*
+    effect: ask
+  - action: shell
+    resource: git push*
+    effect: ask
+  - action: shell
+    resource: git pull*
+    effect: ask
+  - action: shell
+    resource: git stash*
+    effect: ask
+  - action: shell
+    resource: git checkout*
+    effect: ask
+  - action: shell
+    resource: git switch*
+    effect: ask
+  - action: shell
+    resource: git restore*
+    effect: ask
+  - action: shell
+    resource: git clean*
+    effect: ask
+  - action: shell
+    resource: git tag*
+    effect: ask
+  - action: shell
+    resource: git update-index*
+    effect: ask
+  - action: shell
+    resource: git apply*
+    effect: ask
+  - action: shell
+    resource: git am*
+    effect: ask
+  - action: shell
+    resource: git filter-branch*
+    effect: ask
+  - action: shell
+    resource: git submodule*
+    effect: ask
+  - action: shell
+    resource: git branch -d*
+    effect: ask
+  - action: shell
+    resource: git branch -D*
+    effect: ask
+  - action: shell
+    resource: git branch -m*
+    effect: ask
+  - action: shell
+    resource: gh pr merge*
+    effect: ask
+  - action: shell
+    resource: gh pr close*
+    effect: ask
+  - action: shell
+    resource: gh pr edit*
+    effect: ask
+  - action: shell
+    resource: gh release*
+    effect: ask
 ---
 
 You are a general-purpose subagent assisting the primary engineer agent with well-scoped implementation tasks.

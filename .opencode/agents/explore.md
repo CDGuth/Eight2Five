@@ -1,79 +1,207 @@
 ---
 description: Explore agent for codebase investigation, external documentation,
   temporary repository cloning, dependency research, and general web research.
+model: openai/gpt-6-luna#high
 mode: subagent
-permission:
-  "*": allow
-  doom_loop: ask
-  edit: deny
-  write: deny
-  patch: deny
-  apply_patch: deny
-  task: deny
-  todowrite: deny
-  question: deny
-  expo_add_library: deny
-  expo_appstore_delete_review_response: deny
-  expo_appstore_reply_review: deny
-  expo_playstore_reply_review: deny
-  expo_build_cancel: deny
-  expo_build_run: deny
-  expo_build_submit: deny
-  expo_workflow_cancel: deny
-  expo_workflow_create: deny
-  expo_workflow_run: deny
-  external_directory:
-    "*": ask
-    ~/.local/share/opencode/tool-output/*: allow
-    /tmp/opencode/*: allow
-  read:
-    "*": allow
-    "*.env": ask
-    "*.env.*": ask
-    "*.env.example": allow
-  grep: allow
-  glob: allow
-  list: allow
-  bash:
-    "*": allow
-    git add*: ask
-    git rm*: ask
-    git mv*: ask
-    git commit*: ask
-    git merge*: ask
-    git rebase*: ask
-    git reset*: ask
-    git revert*: ask
-    git cherry-pick*: ask
-    git push*: ask
-    git pull*: ask
-    git stash*: ask
-    git checkout*: ask
-    git switch*: ask
-    git restore*: ask
-    git clean*: ask
-    git tag*: ask
-    git update-index*: ask
-    git apply*: ask
-    git am*: ask
-    git filter-branch*: ask
-    git submodule*: ask
-    git branch -d*: ask
-    git branch -D*: ask
-    git branch -m*: ask
-    gh pr merge*: ask
-    gh pr close*: ask
-    gh pr edit*: ask
-    gh release*: ask
-  webfetch: allow
-  websearch: allow
-  lsp: allow
-  skill: allow
-  context7_resolve-library-id: allow
-  context7_query-docs: allow
-  markitdown_convert_to_markdown: allow
-model: openai/gpt-5.6-luna
-variant: high
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: allow
+  - action: doom_loop
+    resource: "*"
+    effect: ask
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: apply_patch
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: todowrite
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: deny
+  - action: expo_add_library
+    resource: "*"
+    effect: deny
+  - action: expo_appstore_delete_review_response
+    resource: "*"
+    effect: deny
+  - action: expo_appstore_reply_review
+    resource: "*"
+    effect: deny
+  - action: expo_playstore_reply_review
+    resource: "*"
+    effect: deny
+  - action: expo_build_cancel
+    resource: "*"
+    effect: deny
+  - action: expo_build_run
+    resource: "*"
+    effect: deny
+  - action: expo_build_submit
+    resource: "*"
+    effect: deny
+  - action: expo_workflow_cancel
+    resource: "*"
+    effect: deny
+  - action: expo_workflow_create
+    resource: "*"
+    effect: deny
+  - action: expo_workflow_run
+    resource: "*"
+    effect: deny
+  - action: external_directory
+    resource: "*"
+    effect: ask
+  - action: external_directory
+    resource: ~/.local/share/opencode/tool-output/*
+    effect: allow
+  - action: external_directory
+    resource: /tmp/opencode/*
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*.env"
+    effect: ask
+  - action: read
+    resource: "*.env.*"
+    effect: ask
+  - action: read
+    resource: "*.env.example"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: list
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: git add*
+    effect: ask
+  - action: shell
+    resource: git rm*
+    effect: ask
+  - action: shell
+    resource: git mv*
+    effect: ask
+  - action: shell
+    resource: git commit*
+    effect: ask
+  - action: shell
+    resource: git merge*
+    effect: ask
+  - action: shell
+    resource: git rebase*
+    effect: ask
+  - action: shell
+    resource: git reset*
+    effect: ask
+  - action: shell
+    resource: git revert*
+    effect: ask
+  - action: shell
+    resource: git cherry-pick*
+    effect: ask
+  - action: shell
+    resource: git push*
+    effect: ask
+  - action: shell
+    resource: git pull*
+    effect: ask
+  - action: shell
+    resource: git stash*
+    effect: ask
+  - action: shell
+    resource: git checkout*
+    effect: ask
+  - action: shell
+    resource: git switch*
+    effect: ask
+  - action: shell
+    resource: git restore*
+    effect: ask
+  - action: shell
+    resource: git clean*
+    effect: ask
+  - action: shell
+    resource: git tag*
+    effect: ask
+  - action: shell
+    resource: git update-index*
+    effect: ask
+  - action: shell
+    resource: git apply*
+    effect: ask
+  - action: shell
+    resource: git am*
+    effect: ask
+  - action: shell
+    resource: git filter-branch*
+    effect: ask
+  - action: shell
+    resource: git submodule*
+    effect: ask
+  - action: shell
+    resource: git branch -d*
+    effect: ask
+  - action: shell
+    resource: git branch -D*
+    effect: ask
+  - action: shell
+    resource: git branch -m*
+    effect: ask
+  - action: shell
+    resource: gh pr merge*
+    effect: ask
+  - action: shell
+    resource: gh pr close*
+    effect: ask
+  - action: shell
+    resource: gh pr edit*
+    effect: ask
+  - action: shell
+    resource: gh release*
+    effect: ask
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: lsp
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: context7_resolve-library-id
+    resource: "*"
+    effect: allow
+  - action: context7_query-docs
+    resource: "*"
+    effect: allow
+  - action: markitdown_convert_to_markdown
+    resource: "*"
+    effect: allow
 ---
 
 You are a read-only exploration and research specialist supporting the primary engineer agent.
